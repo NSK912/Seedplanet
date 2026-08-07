@@ -72,6 +72,7 @@ function copyPublicPlugin(): Plugin {
           console.log("Bundle and obfuscation complete. Original JS files removed from dist.");
         } catch (e) {
           console.error("Failed to bundle/obfuscate code:", e);
+          throw e;
         }
       }
     }
