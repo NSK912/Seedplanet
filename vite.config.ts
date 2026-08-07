@@ -12,9 +12,9 @@ function copyPublicPlugin(): Plugin {
       if (fs.existsSync(src)) {
         fs.cpSync(src, dest, { recursive: true });
         
-        // Obfuscate JS files in dist/public after copying
+        // Minify JS files in dist/public after copying
         try {
-          const JavaScriptObfuscator = (await import('javascript-obfuscator')).default;
+          const { minify: terserMinify } = await import('terser');
           
           // 1. Read loader.js to get the order
           const loaderPath = path.resolve(__dirname, 'public/js/loader.js');
@@ -22,7 +22,7 @@ function copyPublicPlugin(): Plugin {
           
           // Extract paths
           const scriptPaths: string[] = [];
-          const regex = /'([^']+)'/g;
+          const regex = /["']([^"']+)["']/g;
           let match;
           while ((match = regex.exec(loaderContent)) !== null) {
             if (match[1].endsWith('.js')) {
@@ -39,18 +39,12 @@ function copyPublicPlugin(): Plugin {
             }
           }
           
-          console.log("Obfuscating bundled game code (this may take a moment)...");
-          const obfuscatedCode = JavaScriptObfuscator.obfuscate(bundledCode, {
-            compact: true,
-            controlFlowFlattening: true,
-            controlFlowFlatteningThreshold: 0.75,
-            numbersToExpressions: true,
-            simplify: true,
-            stringArrayShuffle: true,
-            splitStrings: false,
-            stringArrayThreshold: 0.75,
-            deadCodeInjection: false,
-          }).getObfuscatedCode();
+          console.log("Minifying bundled game code (this may take a moment)...");
+          const minified = await terserMinify(bundledCode, {
+            compress: true,
+            mangle: true
+          });
+          const finalCode = minified.code || bundledCode;
           
           // 3. Cleanup the dist/public/js directory to remove individual files
           const distJsPath = path.resolve(__dirname, 'dist/public/js');
@@ -59,7 +53,7 @@ function copyPublicPlugin(): Plugin {
           
           // 4. Save bundled code
           const bundlePath = path.join(distJsPath, 'game-bundle.js');
-          fs.writeFileSync(bundlePath, obfuscatedCode);
+          fs.writeFileSync(bundlePath, finalCode);
           
           // 5. Update index.html
           const indexPath = path.resolve(__dirname, 'dist/index.html');
