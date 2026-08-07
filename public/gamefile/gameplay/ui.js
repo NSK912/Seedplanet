@@ -758,6 +758,11 @@ window.addEventListener("keyup", (e) => {
         if (requestFullScreen) {
           try {
             const res = requestFullScreen.call(docEl);
+            const lockLandscape = () => {
+              if (screen.orientation && typeof screen.orientation.lock === "function") {
+                screen.orientation.lock("landscape").catch((e) => console.log("Orientation lock failed", e));
+              }
+            };
             if (res && typeof res.then === "function") {
               res.then(() => {
                 if (navigator.keyboard && navigator.keyboard.lock) {
@@ -765,22 +770,42 @@ window.addEventListener("keyup", (e) => {
                     .lock(["Escape"])
                     .catch((e) => console.log("Keyboard lock failed", e));
                 }
-                if (screen.orientation && typeof screen.orientation.lock === "function") {
-                  screen.orientation.lock("landscape").catch((e) => console.log("Orientation lock failed", e));
-                }
+                lockLandscape();
               })
               .catch((err) => {
                 console.warn("Fullscreen request failed safely:", err);
               });
             } else {
-              if (screen.orientation && typeof screen.orientation.lock === "function") {
-                screen.orientation.lock("landscape").catch((e) => console.log("Orientation lock failed", e));
-              }
+              lockLandscape();
             }
           } catch (err) {
             console.warn("enterFullscreen failed safely:", err);
           }
         }
+      }
+      window.enterFullscreen = enterFullscreen;
+
+      // Auto fullscreen & landscape on mobile touch
+      const isMobileOrTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+      if (isMobileOrTouch) {
+        const triggerMobileFullscreen = (e) => {
+          const doc = document;
+          const isFull = !!(
+            doc.fullscreenElement ||
+            doc.mozFullScreenElement ||
+            doc.webkitFullscreenElement ||
+            doc.msFullscreenElement
+          );
+          if (!isFull) {
+            enterFullscreen();
+          }
+        };
+        window.addEventListener("touchstart", triggerMobileFullscreen, { passive: true });
+        window.addEventListener("pointerdown", (e) => {
+          if (e.pointerType === "touch") {
+            triggerMobileFullscreen(e);
+          }
+        }, { passive: true });
       }
 
       function exitFullscreen() {

@@ -54,8 +54,6 @@ function startGameWithSlot(loadedData, devMode = false) {
   }
   if (isCurrentFullscreen) {
     setTimeout(enterFullscreen, 100);
-  } else if (screen.orientation && typeof screen.orientation.lock === "function") {
-    screen.orientation.lock("landscape").catch(() => {});
   }
 
   // เล่นเสียงดนตรี / เริ่มต้นระบบเสียง
