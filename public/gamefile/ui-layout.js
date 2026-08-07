@@ -480,6 +480,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               class="close-btn game-ui"
               id="quitGameBtn"
               style="
+                display: none !important;
                 color: #ff5555;
                 border-color: rgba(255, 60, 60, 0.4);
                 position: relative;

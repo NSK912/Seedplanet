@@ -65,7 +65,7 @@
     'gamefile/Engine/shaders.js',
     'gamefile/Engine/renderer.js',
     'gamefile/gameplay/ui.js',
-    'devtool.js',
+    'devgame.js',
     'gamefile/gameplay/savesplyer_not_Developer.js',
     'gamefile/gameplay/Start.js'
   ];

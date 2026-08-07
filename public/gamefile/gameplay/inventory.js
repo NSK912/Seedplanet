@@ -625,7 +625,8 @@
 
       
       function closeInventoryActually() {
-        if (!isAndroidProfile) document.getElementById("quitGameBtn").style.display = ""; else document.getElementById("quitGameBtn").style.display = "none";
+        const qBtn = document.getElementById("quitGameBtn");
+        if (qBtn) qBtn.style.display = "none";
         const overlay = document.getElementById("inventoryOverlay");
         overlay.classList.remove("open");
         
@@ -1071,7 +1072,8 @@
           closeInventoryActually();
         } else {
           overlay.classList.add("open");
-          if (!isAndroidProfile) document.getElementById("quitGameBtn").style.display = ""; else document.getElementById("quitGameBtn").style.display = "none";
+          const qBtn = document.getElementById("quitGameBtn");
+          if (qBtn) qBtn.style.display = "none";
           // คืนค่าการแสดงผลแท็บและปุ่มออกไปหน้าหลัก
           document.getElementById("tabInventory").style.display = "inline-flex";
           document.getElementById("tabCrafting").style.display = "inline-flex";

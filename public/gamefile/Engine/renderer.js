@@ -971,7 +971,7 @@ function setF32(target, source) {
                 if (bowComboActive) {
                     drawPower = Math.min(1.0, Math.max(0.0, (1.2 - useAnimTimer) / 0.9));
                 }
-                const isClicking = isActionDown && document.pointerLockElement === canvas;
+                const isClicking = isActionDown && (document.pointerLockElement === canvas || window.simulatedPointerLock);
                 if (isClicking || drawPower < 0.15) {
                     useAnimTimer = Math.max(0.3, useAnimTimer - delta / 1000);
                 } else {
@@ -999,7 +999,7 @@ function setF32(target, source) {
                 activeItem = null;
                 
                 // If action button is still held down, trigger again (but not for BOW to prevent auto-fire)
-                if (isActionDown && document.pointerLockElement === canvas) {
+                if (isActionDown && (document.pointerLockElement === canvas || window.simulatedPointerLock)) {
                     if (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex]) {
                         const slotItem = actionSlotsItems[selectedActionSlotIndex];
                         if (slotItem && slotItem.name !== "BOW") {
@@ -3210,7 +3210,7 @@ function setF32(target, source) {
             if (closestDemolishItem) {
               const isStoneFloor = closestDemolishItem.type === "stone_floor";
               if (isStoneFloor) {
-                const isHeld = isActionDown && document.pointerLockElement === canvas;
+                const isHeld = isActionDown && (document.pointerLockElement === canvas || window.simulatedPointerLock);
                 if (isHeld) {
                   demolishHoldTimer += delta / 1000;
                   if (demolishHoldTimer >= 1.0) {

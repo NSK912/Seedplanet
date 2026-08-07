@@ -492,9 +492,13 @@ window.addEventListener("keyup", (e) => {
       let quitHoldProgress = 0;
       let quitHoldInterval = null;
       const quitGameBtn = document.getElementById("quitGameBtn");
-      if (typeof isAndroidProfile !== "undefined" && isAndroidProfile && quitGameBtn) {
-        quitGameBtn.style.display = "none";
-      }
+        if (typeof isAndroidProfile !== "undefined" && isAndroidProfile && quitGameBtn) {
+          // Keep it hidden everywhere
+          // quitGameBtn.style.display = "none";
+        }
+        if (quitGameBtn) {
+          quitGameBtn.style.display = "none !important";
+        }
       const quitGameProgress = document.getElementById("quitGameProgress");
 
       function startQuitHold(e) {
@@ -1257,7 +1261,7 @@ window.addEventListener("keyup", (e) => {
 
       canvas?.addEventListener("mousedown", (e) => {
         initAudio();
-        const isPointerLocked = document.pointerLockElement === canvas;
+        const isPointerLocked = (document.pointerLockElement === canvas || window.simulatedPointerLock);
         if (!isPointerLocked && gameStarted && e.button === 0) {
           requestPointerLockSafe();
         }
@@ -1336,7 +1340,7 @@ window.addEventListener("keyup", (e) => {
       });
 
       window.addEventListener("mousemove", (e) => {
-        const isPointerLocked = document.pointerLockElement === canvas;
+        const isPointerLocked = (document.pointerLockElement === canvas || window.simulatedPointerLock);
         const isCursorHidden = !!window.isVirtualCursorManualHidden;
 
         let dx = 0;

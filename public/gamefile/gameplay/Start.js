@@ -39,6 +39,13 @@ function startGameWithSlot(loadedData, devMode = false) {
   if (gameStarted) return;
   gameStarted = true;
   isDevMode = devMode;
+  
+  if (isDevMode || loadedData) {
+    if (typeof window.isVirtualCursorManualHidden !== "undefined") {
+      window.isVirtualCursorManualHidden = true;
+      if (typeof window.updateVirtualCursorVisibility === "function") window.updateVirtualCursorVisibility();
+    }
+  }
 
   // Apply fullscreen gesture fallback on startup click
   const startupSettings = loadedData ? loadedData : DEFAULT_SETTINGS;

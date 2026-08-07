@@ -2616,7 +2616,7 @@
             pendingCollectibleRefresh = true;
           }
         }
-        if (e.key === "Alt" || e.code === "AltLeft" || e.code === "AltRight") {
+        if (e.key === "Alt" || e.code === "AltLeft" || e.code === "AltRight" || (typeof currentKeyBindings !== "undefined" && e.code === currentKeyBindings.toggleMouse)) {
           e.preventDefault();
           if (!e.repeat) {
             if (typeof window.toggleVirtualCursorVisibility === "function") {
@@ -2729,7 +2729,7 @@
         keysPressed[e.code] = true;
       });
       window.addEventListener("keyup", (e) => {
-        if (e.key === "Alt" || e.code === "AltLeft" || e.code === "AltRight") {
+        if (e.key === "Alt" || e.code === "AltLeft" || e.code === "AltRight" || (typeof currentKeyBindings !== "undefined" && e.code === currentKeyBindings.toggleMouse)) {
           e.preventDefault();
         }
         keysPressed[e.code] = false;

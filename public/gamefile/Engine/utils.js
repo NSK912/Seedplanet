@@ -335,12 +335,10 @@ function updateVirtualCursorVisibility() {
 
   if (uiOpen) {
     cursor.style.opacity = "1";
+  } else if (window.isVirtualCursorManualHidden) {
+    cursor.style.opacity = "0";
   } else {
-    if (window.isVirtualCursorManualHidden) {
-      cursor.style.opacity = "0";
-    } else {
-      cursor.style.opacity = "1";
-    }
+    cursor.style.opacity = "1";
   }
 }
 window.updateVirtualCursorVisibility = updateVirtualCursorVisibility;
@@ -349,7 +347,21 @@ window.updateVirtualCursorVisibility = updateVirtualCursorVisibility;
 if (typeof window !== "undefined") {
   const initUIObserver = () => {
     if (document.body && typeof MutationObserver !== "undefined") {
+      let lastUIOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
       const observer = new MutationObserver(() => {
+        const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
+        
+        if (uiOpen !== lastUIOpen) {
+          if (uiOpen) {
+            if (typeof window.resetVirtualCursorToCenter === "function") window.resetVirtualCursorToCenter();
+          } else {
+            if (window.isVirtualCursorManualHidden) {
+              if (typeof requestPointerLockSafe === "function") requestPointerLockSafe();
+            }
+          }
+          lastUIOpen = uiOpen;
+        }
+        
         updateVirtualCursorVisibility();
       });
       observer.observe(document.body, {
@@ -366,16 +378,23 @@ if (typeof window !== "undefined") {
   }
 }
 
+window.resetVirtualCursorToCenter = function() {
+  virtualCursorX = window.innerWidth / 2;
+  virtualCursorY = window.innerHeight / 2;
+  const cursor = typeof ensureCustomCursor === "function" ? ensureCustomCursor() : document.getElementById("customVirtualCursor");
+  if (cursor) {
+    cursor.style.left = virtualCursorX + "px";
+    cursor.style.top = virtualCursorY + "px";
+  }
+};
+
 function toggleVirtualCursorVisibility() {
   window.isVirtualCursorManualHidden = !window.isVirtualCursorManualHidden;
   if (!window.isVirtualCursorManualHidden) {
-    virtualCursorX = window.innerWidth / 2;
-    virtualCursorY = window.innerHeight / 2;
-    const cursor = ensureCustomCursor();
-    if (cursor) {
-      cursor.style.left = virtualCursorX + "px";
-      cursor.style.top = virtualCursorY + "px";
-    }
+    if (typeof window.resetVirtualCursorToCenter === "function") window.resetVirtualCursorToCenter();
+  } else {
+    // When hiding the virtual cursor, we MUST request native pointer lock so the user can look around!
+    if (typeof requestPointerLockSafe === "function") requestPointerLockSafe();
   }
   updateVirtualCursorVisibility();
 }
@@ -399,22 +418,23 @@ function handleVirtualMouseMove(e) {
   }
 
   const isNativeLocked = !!(Object.getOwnPropertyDescriptor(Document.prototype, 'pointerLockElement')?.get?.call(document));
-
-  if (isNativeLocked || simulatedPointerLock) {
-    if (e.movementX !== undefined && (e.movementX !== 0 || e.movementY !== 0)) {
-      virtualCursorX += e.movementX;
-      virtualCursorY += e.movementY;
-    } else if (!isNativeLocked && e.clientX !== undefined && e.clientX !== 0) {
+  const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
+  if (window.isVirtualCursorManualHidden && !uiOpen) {
+    virtualCursorX = window.innerWidth / 2;
+    virtualCursorY = window.innerHeight / 2;
+  } else {
+    if (isNativeLocked) {
+      if (e.movementX !== undefined) {
+        virtualCursorX += e.movementX;
+        virtualCursorY += e.movementY;
+      }
+    } else if (e.clientX !== undefined && e.clientX !== 0) {
       virtualCursorX = e.clientX;
       virtualCursorY = e.clientY;
     }
-  } else if (e.clientX !== undefined && e.clientX !== 0) {
-    virtualCursorX = e.clientX;
-    virtualCursorY = e.clientY;
+    virtualCursorX = Math.max(0, Math.min(window.innerWidth, virtualCursorX));
+    virtualCursorY = Math.max(0, Math.min(window.innerHeight, virtualCursorY));
   }
-
-  virtualCursorX = Math.max(0, Math.min(window.innerWidth, virtualCursorX));
-  virtualCursorY = Math.max(0, Math.min(window.innerHeight, virtualCursorY));
 
   cursor.style.left = virtualCursorX + "px";
   cursor.style.top = virtualCursorY + "px";
@@ -582,6 +602,15 @@ function redirectMouseEventToVirtualCursor(e) {
     try { window.focus(); } catch(err){}
   }
 
+  const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
+  if (window.isVirtualCursorManualHidden && !uiOpen) {
+    if (e.target !== canvas) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+    }
+    return;
+  }
   const isLocked = !!document.pointerLockElement || simulatedPointerLock;
   if (!isLocked && !isUIOpen()) return;
 
@@ -604,8 +633,6 @@ function redirectMouseEventToVirtualCursor(e) {
       activeVirtualDragInput = null;
     }
   }
-
-  const uiOpen = isUIOpen();
   const clickable = getInteractiveTarget(targetEl);
   const isTargetUI = targetEl !== canvas && targetEl !== document.body && targetEl !== document.documentElement;
 
