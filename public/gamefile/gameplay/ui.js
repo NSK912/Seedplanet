@@ -765,10 +765,17 @@ window.addEventListener("keyup", (e) => {
                     .lock(["Escape"])
                     .catch((e) => console.log("Keyboard lock failed", e));
                 }
+                if (screen.orientation && typeof screen.orientation.lock === "function") {
+                  screen.orientation.lock("landscape").catch((e) => console.log("Orientation lock failed", e));
+                }
               })
               .catch((err) => {
                 console.warn("Fullscreen request failed safely:", err);
               });
+            } else {
+              if (screen.orientation && typeof screen.orientation.lock === "function") {
+                screen.orientation.lock("landscape").catch((e) => console.log("Orientation lock failed", e));
+              }
             }
           } catch (err) {
             console.warn("enterFullscreen failed safely:", err);
