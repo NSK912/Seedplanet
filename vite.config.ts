@@ -16,7 +16,6 @@ function copyPublicPlugin(): Plugin {
         fs.cpSync(src, dest, { recursive: true });
         
         try {
-          const JavaScriptObfuscator = (await import('javascript-obfuscator')).default;
           
           // 1. Read loader.js to get the order
           const loaderPath = path.resolve(__dirname, 'public/js/loader.js');
@@ -41,18 +40,24 @@ function copyPublicPlugin(): Plugin {
             }
           }
           
-          console.log("Obfuscating bundled game code (this may take a moment)...");
-          const obfuscatedCode = JavaScriptObfuscator.obfuscate(bundledCode, {
-            compact: true,
-            controlFlowFlattening: true,
-            controlFlowFlatteningThreshold: 0.75,
-            numbersToExpressions: true,
-            simplify: true,
-            stringArrayShuffle: true,
-            splitStrings: true,
-            stringArrayThreshold: 0.75,
-            deadCodeInjection: false,
-          }).getObfuscatedCode();
+          let obfuscatedCode = bundledCode;
+          try {
+            const JavaScriptObfuscator = (await import('javascript-obfuscator')).default;
+            console.log("Obfuscating bundled game code (this may take a moment)...");
+            obfuscatedCode = JavaScriptObfuscator.obfuscate(bundledCode, {
+              compact: true,
+              controlFlowFlattening: true,
+              controlFlowFlatteningThreshold: 0.75,
+              numbersToExpressions: true,
+              simplify: true,
+              stringArrayShuffle: true,
+              splitStrings: true,
+              stringArrayThreshold: 0.75,
+              deadCodeInjection: false,
+            }).getObfuscatedCode();
+          } catch (obfErr) {
+            console.warn("javascript-obfuscator not available or failed, using bundled code without obfuscation:", obfErr);
+          }
           
           // 3. Cleanup the dist/public/js directory to remove individual files
           const distJsPath = path.resolve(__dirname, 'dist/public/js');
