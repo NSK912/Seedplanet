@@ -1,5 +1,6 @@
 (function() {
   const scripts = [
+    'public/js/ui-layout.js',
     'public/js/Engine/utils.js',
     'public/js/gameplay/settings.js',
     'public/js/Engine/audio.js',
