@@ -1433,3 +1433,15 @@
         margin-top: 10px;
         line-height: 1.4;
       }
+
+      /* Hide screen mode settings from all platforms */
+      #screenModeSettingContainer {
+        display: none !important;
+      }
+
+      /* Hide gameplay fullscreen button on mobile/touch devices */
+      @media (max-width: 768px), (pointer: coarse), (hover: none) {
+        #gameplayFullscreenBtn {
+          display: none !important;
+        }
+      }

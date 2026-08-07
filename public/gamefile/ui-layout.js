@@ -308,6 +308,43 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <button id="fullscreenBtn" class="fullscreen-btn" style="display: none;">📺 เต็มจอ</button>
     </div>
 
+    <!-- ปุ่มเต็มจอส่วนเกมเพย์ มุมขวาบน (Gameplay Fullscreen Button Top-Right) -->
+    <button
+      id="gameplayFullscreenBtn"
+      class="game-ui"
+      title="เต็มจอ / ย่อจอ (Toggle Fullscreen)"
+      style="
+        position: fixed;
+        top: calc(10px + var(--ui-margin, 0px));
+        right: calc(10px + var(--ui-margin, 0px));
+        width: 36px;
+        height: 36px;
+        z-index: 10001;
+        background: rgba(10, 10, 15, 0.85);
+        color: #dfb76c;
+        border: 1px solid rgba(223, 183, 108, 0.4);
+        border-radius: 0;
+        --cut: 6px;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+        padding: 0;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        transition: background 0.2s, border-color 0.2s, transform 0.15s;
+      "
+      onmouseover="this.style.background='rgba(223, 183, 108, 0.25)'; this.style.borderColor='rgba(223, 183, 108, 0.8)';"
+      onmouseout="this.style.background='rgba(10, 10, 15, 0.85)'; this.style.borderColor='rgba(223, 183, 108, 0.4)';"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path>
+      </svg>
+    </button>
+
     <!-- Virtual Joystick - ปุ่มเดียวลากได้ -->
     <div class="joystick-container game-ui" id="joystickContainer">
       <div class="joystick-base" id="joystickBase">
@@ -740,7 +777,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่าโหมดแสดงผล (Screen Mode) -->
-          <div id="screenModeSettingContainer" style="display: flex; flex-direction: column; gap: 6px">
+          <div id="screenModeSettingContainer" style="display: none !important; flex-direction: column; gap: 6px">
             <span style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
               >โหมดแสดงผล (Screen Mode)</span
             >

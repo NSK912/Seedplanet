@@ -858,14 +858,17 @@ window.addEventListener("keyup", (e) => {
           exitFullscreen();
         });
 
+      const isMobileOrTouchDevice = () => {
+        return ('ontouchstart' in window) ||
+               (navigator.maxTouchPoints > 0) ||
+               /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) ||
+               (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+      };
+
       window.syncScreenModeUI = async function() {
         const screenModeContainer = document.getElementById("screenModeSettingContainer");
         if (screenModeContainer) {
-            if (typeof showScreenModeUI !== 'undefined') {
-                screenModeContainer.style.display = showScreenModeUI ? "flex" : "none";
-            } else {
-                screenModeContainer.style.display = "flex";
-            }
+          screenModeContainer.style.setProperty("display", "none", "important");
         }
 
         let isFullscreen = !!(
@@ -899,8 +902,8 @@ window.addEventListener("keyup", (e) => {
             btnWindowed.style.borderColor = "rgba(255,255,255,0.2)";
             btnWindowed.style.color = "rgba(255,255,255,0.6)";
             btnWindowed.style.textShadow = "none";
-            }
-          } else {
+          }
+        } else {
           if (btnWindowed) {
             btnWindowed.style.background = "rgba(223,183,108,0.15)";
             btnWindowed.style.borderColor = "#dfb76c";
@@ -915,6 +918,16 @@ window.addEventListener("keyup", (e) => {
           }
         }
         isCurrentFullscreen = isFullscreen;
+        const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
+        if (gameplayFullscreenBtn) {
+          if (isMobileOrTouchDevice()) {
+            gameplayFullscreenBtn.style.setProperty("display", "none", "important");
+          } else {
+            gameplayFullscreenBtn.innerHTML = isFullscreen
+              ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h5V3M20 8h-5V3M4 16h5v5M20 16h-5v5"></path></svg>`
+              : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>`;
+          }
+        }
         if (typeof saveSettingsToLocalStorage === "function") {
           saveSettingsToLocalStorage();
         }
@@ -1270,6 +1283,14 @@ window.addEventListener("keyup", (e) => {
       const fullscreenBtn = document.getElementById("fullscreenBtn");
       if (fullscreenBtn) {
         fullscreenBtn?.addEventListener("click", () => {
+          initAudio();
+          toggleFullscreen();
+        });
+      }
+
+      const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
+      if (gameplayFullscreenBtn) {
+        gameplayFullscreenBtn?.addEventListener("click", () => {
           initAudio();
           toggleFullscreen();
         });
@@ -1967,7 +1988,9 @@ window.addEventListener("keyup", (e) => {
           const toggleControlsBtn = document.getElementById("toggleControlsBtn");
           const devByNskLink = document.getElementById("devByNskLink");
           const compassContainer = document.getElementById("compassContainer");
+          const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
 
+          document.documentElement.style.setProperty("--ui-margin", margin + "px");
           if (topLeftMenu) { topLeftMenu.style.top = margin + "px"; topLeftMenu.style.left = margin + "px"; }
           if (mainControls) { mainControls.style.top = (margin > 0 ? margin + 35 : 45) + "px"; mainControls.style.right = margin + "px"; }
           if (toggleControlsBtn) { toggleControlsBtn.style.top = margin + "px"; toggleControlsBtn.style.right = margin + "px"; }
@@ -1975,6 +1998,14 @@ window.addEventListener("keyup", (e) => {
           if (actionSlots) { actionSlots.style.bottom = margin + "px"; actionSlots.style.right = margin + "px"; }
           if (devByNskLink) { devByNskLink.style.bottom = margin + "px"; devByNskLink.style.right = margin + "px"; }
           if (compassContainer) { compassContainer.style.top = (margin + 10) + "px"; }
+          if (gameplayFullscreenBtn) {
+            if (isMobileOrTouchDevice()) {
+              gameplayFullscreenBtn.style.setProperty("display", "none", "important");
+            } else {
+              gameplayFullscreenBtn.style.top = (margin + 10) + "px";
+              gameplayFullscreenBtn.style.right = (margin + 10) + "px";
+            }
+          }
         };
 
         uiMarginDistSlider?.addEventListener("input", () => {
