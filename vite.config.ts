@@ -65,8 +65,7 @@ function copyPublicPlugin(): Plugin {
           const indexPath = path.resolve(__dirname, 'dist/index.html');
           if (fs.existsSync(indexPath)) {
             let indexHtml = fs.readFileSync(indexPath, 'utf8');
-            indexHtml = indexHtml.replace(/<script src="public\/js\/loader\.js"><\/script>/g, '<script src="public/js/game-bundle.js"></script>');
-            indexHtml = indexHtml.replace(/<script src="\/public\/js\/loader\.js"><\/script>/g, '<script src="public/js/game-bundle.js"></script>');
+            indexHtml = indexHtml.replace(/<script[^>]*src=["']?\/?public\/js\/loader\.js["']?[^>]*><\/script>/g, '<script src="public/js/game-bundle.js"></script>');
             fs.writeFileSync(indexPath, indexHtml);
           }
           
