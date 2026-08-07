@@ -15,34 +15,64 @@ function copyPublicPlugin(): Plugin {
         // Obfuscate JS files in dist/public after copying
         try {
           const JavaScriptObfuscator = (await import('javascript-obfuscator')).default;
-          function obfuscateDirectory(dir: string) {
-            const files = fs.readdirSync(dir);
-            for (const file of files) {
-              const fullPath = path.join(dir, file);
-              if (fs.statSync(fullPath).isDirectory()) {
-                obfuscateDirectory(fullPath);
-              } else if (fullPath.endsWith('.js')) {
-                const code = fs.readFileSync(fullPath, 'utf8');
-                const obfuscatedCode = JavaScriptObfuscator.obfuscate(code, {
-                  compact: true,
-                  controlFlowFlattening: true,
-                  controlFlowFlatteningThreshold: 0.75,
-                  numbersToExpressions: true,
-                  simplify: true,
-                  stringArrayShuffle: true,
-                  splitStrings: true,
-                  stringArrayThreshold: 0.75,
-                  deadCodeInjection: false,
-                }).getObfuscatedCode();
-                fs.writeFileSync(fullPath, obfuscatedCode);
-              }
+          
+          // 1. Read loader.js to get the order
+          const loaderPath = path.resolve(__dirname, 'public/js/loader.js');
+          let loaderContent = fs.readFileSync(loaderPath, 'utf8');
+          
+          // Extract paths
+          const scriptPaths: string[] = [];
+          const regex = /'([^']+)'/g;
+          let match;
+          while ((match = regex.exec(loaderContent)) !== null) {
+            if (match[1].endsWith('.js')) {
+              scriptPaths.push(match[1]);
             }
           }
-          console.log("Obfuscating game code in dist/public/js...");
-          obfuscateDirectory(path.resolve(__dirname, 'dist/public/js'));
-          console.log("Obfuscation complete.");
+          
+          // 2. Concatenate all JS
+          let bundledCode = '';
+          for (const sp of scriptPaths) {
+            const fullPath = path.resolve(__dirname, sp);
+            if (fs.existsSync(fullPath)) {
+              bundledCode += `\n/* File: ${sp} */\n` + fs.readFileSync(fullPath, 'utf8') + ';\n';
+            }
+          }
+          
+          console.log("Obfuscating bundled game code (this may take a moment)...");
+          const obfuscatedCode = JavaScriptObfuscator.obfuscate(bundledCode, {
+            compact: true,
+            controlFlowFlattening: true,
+            controlFlowFlatteningThreshold: 0.75,
+            numbersToExpressions: true,
+            simplify: true,
+            stringArrayShuffle: true,
+            splitStrings: true,
+            stringArrayThreshold: 0.75,
+            deadCodeInjection: false,
+          }).getObfuscatedCode();
+          
+          // 3. Cleanup the dist/public/js directory to remove individual files
+          const distJsPath = path.resolve(__dirname, 'dist/public/js');
+          fs.rmSync(distJsPath, { recursive: true, force: true });
+          fs.mkdirSync(distJsPath, { recursive: true });
+          
+          // 4. Save bundled code
+          const bundlePath = path.join(distJsPath, 'game-bundle.js');
+          fs.writeFileSync(bundlePath, obfuscatedCode);
+          
+          // 5. Update index.html
+          const indexPath = path.resolve(__dirname, 'dist/index.html');
+          if (fs.existsSync(indexPath)) {
+            let indexHtml = fs.readFileSync(indexPath, 'utf8');
+            indexHtml = indexHtml.replace(/<script src="public\/js\/loader\.js"><\/script>/g, '<script src="public/js/game-bundle.js"></script>');
+            indexHtml = indexHtml.replace(/<script src="\/public\/js\/loader\.js"><\/script>/g, '<script src="public/js/game-bundle.js"></script>');
+            fs.writeFileSync(indexPath, indexHtml);
+          }
+          
+          console.log("Bundle and obfuscation complete. Original JS files removed from dist.");
         } catch (e) {
-          console.error("Failed to obfuscate code:", e);
+          console.error("Failed to bundle/obfuscate code:", e);
         }
       }
     }
