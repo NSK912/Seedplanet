@@ -1,0 +1,6 @@
+{
+  "name": "seedplanet เวอร์ 2.0.0.0",
+  "description": "A planet-seeding simulation game.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
