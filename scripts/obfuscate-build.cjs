@@ -8,22 +8,21 @@ if (fs.existsSync(distLoaderPath)) {
   const code = fs.readFileSync(distLoaderPath, 'utf8');
   const obfuscatedResult = JavaScriptObfuscator.obfuscate(code, {
     compact: true,
-    controlFlowFlattening: true,
-    controlFlowFlatteningThreshold: 0.75,
+    controlFlowFlattening: false,
     deadCodeInjection: false,
     debugProtection: false,
     disableConsoleOutput: false,
     identifierNamesGenerator: 'hexadecimal',
     log: false,
-    numbersToExpressions: true,
+    numbersToExpressions: false,
     renameGlobals: false,
     selfDefending: false,
     simplify: true,
     splitStrings: true,
-    splitStringsChunkLength: 4,
+    splitStringsChunkLength: 3,
     stringArray: true,
     stringArrayCallsTransform: true,
-    stringArrayCallsTransformThreshold: 0.5,
+    stringArrayCallsTransformThreshold: 0.75,
     stringArrayEncoding: ['base64'],
     stringArrayIndexShift: true,
     stringArrayRotate: true,
@@ -32,7 +31,7 @@ if (fs.existsSync(distLoaderPath)) {
     stringArrayWrappersChainedCalls: true,
     stringArrayWrappersParametersMaxCount: 4,
     stringArrayWrappersType: 'function',
-    stringArrayThreshold: 0.8,
+    stringArrayThreshold: 1.0,
     unicodeEscapeSequence: false
   });
 
