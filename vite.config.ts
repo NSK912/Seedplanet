@@ -6,11 +6,44 @@ import {defineConfig, Plugin} from 'vite';
 function copyPublicPlugin(): Plugin {
   return {
     name: 'copy-public-folder',
-    closeBundle() {
+    async closeBundle() {
       const src = path.resolve(__dirname, 'public');
       const dest = path.resolve(__dirname, 'dist/public');
       if (fs.existsSync(src)) {
         fs.cpSync(src, dest, { recursive: true });
+        
+        // Obfuscate JS files in dist/public after copying
+        try {
+          const JavaScriptObfuscator = (await import('javascript-obfuscator')).default;
+          function obfuscateDirectory(dir: string) {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+              const fullPath = path.join(dir, file);
+              if (fs.statSync(fullPath).isDirectory()) {
+                obfuscateDirectory(fullPath);
+              } else if (fullPath.endsWith('.js')) {
+                const code = fs.readFileSync(fullPath, 'utf8');
+                const obfuscatedCode = JavaScriptObfuscator.obfuscate(code, {
+                  compact: true,
+                  controlFlowFlattening: true,
+                  controlFlowFlatteningThreshold: 0.75,
+                  numbersToExpressions: true,
+                  simplify: true,
+                  stringArrayShuffle: true,
+                  splitStrings: true,
+                  stringArrayThreshold: 0.75,
+                  deadCodeInjection: false,
+                }).getObfuscatedCode();
+                fs.writeFileSync(fullPath, obfuscatedCode);
+              }
+            }
+          }
+          console.log("Obfuscating game code in dist/public/js...");
+          obfuscateDirectory(path.resolve(__dirname, 'dist/public/js'));
+          console.log("Obfuscation complete.");
+        } catch (e) {
+          console.error("Failed to obfuscate code:", e);
+        }
       }
     }
   };
