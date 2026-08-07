@@ -66,6 +66,22 @@ function copyPublicPlugin(): Plugin {
           if (fs.existsSync(indexPath)) {
             let indexHtml = fs.readFileSync(indexPath, 'utf8');
             indexHtml = indexHtml.replace(/<script[^>]*src=["']?\/?public\/js\/loader\.js["']?[^>]*><\/script>/g, '<script src="public/js/game-bundle.js"></script>');
+            
+            // Minify HTML to hide internals
+            try {
+              const { minify } = await import('html-minifier-terser');
+              indexHtml = await minify(indexHtml, {
+                collapseWhitespace: true,
+                removeComments: true,
+                minifyCSS: true,
+                minifyJS: true,
+                removeAttributeQuotes: true
+              });
+              console.log("HTML minified successfully.");
+            } catch (minifyError) {
+              console.error("Failed to minify HTML:", minifyError);
+            }
+
             fs.writeFileSync(indexPath, indexHtml);
           }
           
