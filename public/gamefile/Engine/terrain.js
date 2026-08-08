@@ -80,7 +80,8 @@
       let charVertexBuffer,
         charNormalBuffer,
         charIndexBuffer,
-        charLocalVertexBuffer;
+        charLocalVertexBuffer,
+        charColorBuffer;
       let charIndicesLength = 0;
       
       let equipVertexBuffer, equipColorBuffer, equipIndexBuffer, equipNormalBuffer;

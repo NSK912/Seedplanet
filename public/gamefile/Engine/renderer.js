@@ -215,7 +215,7 @@ function setF32(target, source) {
         "uMaxRenderDist",
       );
 
-      let charLocalPosLoc;
+      let charLocalPosLoc, charColorLoc;
 
       const charVS = createShader(
         characterVertexShaderSource,
@@ -233,6 +233,7 @@ function setF32(target, source) {
       const charPosLoc = gl.getAttribLocation(charProgram, "aPosition");
       charLocalPosLoc = gl.getAttribLocation(charProgram, "aLocalPos");
       const charNormLoc = gl.getAttribLocation(charProgram, "aNormal");
+      charColorLoc = gl.getAttribLocation(charProgram, "aColor");
       const charMVLoc = gl.getUniformLocation(charProgram, "uModelViewMatrix");
       const charProjLoc = gl.getUniformLocation(
         charProgram,
@@ -4590,6 +4591,12 @@ function setF32(target, source) {
           gl.enableVertexAttribArray(charNormLoc);
           gl.vertexAttribPointer(charNormLoc, 3, gl.FLOAT, false, 0, 0);
 
+          if (charColorLoc !== -1 && typeof charColorBuffer !== "undefined" && charColorBuffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, charColorBuffer);
+            gl.enableVertexAttribArray(charColorLoc);
+            gl.vertexAttribPointer(charColorLoc, 3, gl.FLOAT, false, 0, 0);
+          }
+
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
 
           if (supportUint32 && charIndicesLength > 65535) {
@@ -4814,6 +4821,12 @@ function setF32(target, source) {
                 gl.bindBuffer(gl.ARRAY_BUFFER, charNormalBuffer);
                 gl.enableVertexAttribArray(charNormLoc);
                 gl.vertexAttribPointer(charNormLoc, 3, gl.FLOAT, false, 0, 0);
+
+                if (charColorLoc !== -1 && typeof charColorBuffer !== "undefined" && charColorBuffer) {
+                  gl.bindBuffer(gl.ARRAY_BUFFER, charColorBuffer);
+                  gl.enableVertexAttribArray(charColorLoc);
+                  gl.vertexAttribPointer(charColorLoc, 3, gl.FLOAT, false, 0, 0);
+                }
 
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
 

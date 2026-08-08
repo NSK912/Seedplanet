@@ -457,25 +457,134 @@
       function mergeMeshes(meshes) {
         const combinedVertices = [];
         const combinedNormals = [];
+        const combinedColors = [];
         const combinedIndices = [];
         let vertexOffset = 0;
 
         for (let mesh of meshes) {
+          if (!mesh) continue;
+          const vertCount = mesh.vertices.length / 3;
           for (let i = 0; i < mesh.vertices.length; i++) {
             combinedVertices.push(mesh.vertices[i]);
             combinedNormals.push(mesh.normals[i]);
           }
+          for (let i = 0; i < vertCount; i++) {
+            if (mesh.colors && mesh.colors.length >= (i + 1) * 3) {
+              combinedColors.push(mesh.colors[i * 3], mesh.colors[i * 3 + 1], mesh.colors[i * 3 + 2]);
+            } else {
+              combinedColors.push(0.96, 0.96, 0.96);
+            }
+          }
           for (let idx of mesh.indices) {
             combinedIndices.push(idx + vertexOffset);
           }
-          vertexOffset += mesh.vertices.length / 3;
+          vertexOffset += vertCount;
         }
 
         return {
           vertices: combinedVertices,
           normals: combinedNormals,
+          colors: combinedColors,
           indices: combinedIndices,
         };
+      }
+
+      function buildHandAndFingers(pElbow, pHand, isLeft, scaleFactor) {
+        const dX = pHand[0] - pElbow[0];
+        const dY = pHand[1] - pElbow[1];
+        const dZ = pHand[2] - pElbow[2];
+        let len = Math.sqrt(dX * dX + dY * dY + dZ * dZ);
+        let dArm = len > 1e-4 ? [dX / len, dY / len, dZ / len] : [0, -1, 0];
+
+        let up = [0, 1, 0];
+        if (Math.abs(dArm[1]) > 0.95) up = [0, 0, 1];
+        let rArm = [
+          up[1] * dArm[2] - up[2] * dArm[1],
+          up[2] * dArm[0] - up[0] * dArm[2],
+          up[0] * dArm[1] - up[1] * dArm[0],
+        ];
+        let rLen = Math.sqrt(rArm[0] * rArm[0] + rArm[1] * rArm[1] + rArm[2] * rArm[2]);
+        rArm = rLen > 1e-4 ? [rArm[0] / rLen, rArm[1] / rLen, rArm[2] / rLen] : [1, 0, 0];
+
+        const sf = scaleFactor;
+        const palmTip = [
+          pHand[0] + dArm[0] * 0.02 * sf,
+          pHand[1] + dArm[1] * 0.02 * sf,
+          pHand[2] + dArm[2] * 0.02 * sf,
+        ];
+
+        const palm = generateCapsule(pHand, palmTip, 0.022 * sf, 8, 8);
+        const parts = [palm];
+
+        // 5 Chibi Fingers (Thumb, Index, Middle, Ring, Pinky)
+        const fingerOffsets = isLeft ? [-0.012, -0.005, 0.002, 0.008, 0.014] : [0.012, 0.005, -0.002, -0.008, -0.014];
+        const fingerLengths = [0.015, 0.019, 0.021, 0.018, 0.014];
+        const fingerRadii = [0.0075, 0.007, 0.007, 0.0065, 0.0055];
+
+        for (let f = 0; f < 5; f++) {
+          const off = fingerOffsets[f] * sf;
+          const flen = fingerLengths[f] * sf;
+          const frad = fingerRadii[f] * sf;
+
+          let fBase, fTip;
+          if (f === 0) { // Thumb
+            fBase = [
+              pHand[0] + dArm[0] * 0.008 * sf + rArm[0] * off,
+              pHand[1] + dArm[1] * 0.008 * sf + rArm[1] * off,
+              pHand[2] + dArm[2] * 0.008 * sf + rArm[2] * off,
+            ];
+            fTip = [
+              fBase[0] + dArm[0] * flen + rArm[0] * (isLeft ? -0.008 : 0.008) * sf,
+              fBase[1] + dArm[1] * flen + rArm[1] * (isLeft ? -0.008 : 0.008) * sf,
+              fBase[2] + dArm[2] * flen + rArm[2] * (isLeft ? -0.008 : 0.008) * sf,
+            ];
+          } else {
+            fBase = [
+              palmTip[0] + rArm[0] * off,
+              palmTip[1] + rArm[1] * off,
+              palmTip[2] + rArm[2] * off,
+            ];
+            fTip = [
+              fBase[0] + dArm[0] * flen,
+              fBase[1] + dArm[1] * flen,
+              fBase[2] + dArm[2] * flen,
+            ];
+          }
+          parts.push(generateCapsule(fBase, fTip, frad, 6, 6));
+        }
+        return parts;
+      }
+
+      function buildFootAnkleToes(pKnee, pFoot, isLeft, scaleFactor) {
+        const sf = scaleFactor;
+        // 1. Ankle Joint
+        const ankle = generateCapsule(pFoot, [pFoot[0], pFoot[1] - 0.008 * sf, pFoot[2]], 0.032 * sf, 8, 8);
+
+        // 2. Foot Body
+        const footTip = [
+          pFoot[0],
+          pFoot[1] - 0.012 * sf,
+          pFoot[2] + 0.040 * sf,
+        ];
+        const footBody = generateCapsule([pFoot[0], pFoot[1] - 0.008 * sf, pFoot[2]], footTip, 0.026 * sf, 8, 8);
+
+        const parts = [ankle, footBody];
+
+        // 3. 5 Chibi Toes
+        const toeXOffsets = isLeft ? [0.012, 0.006, 0.0, -0.006, -0.011] : [-0.012, -0.006, 0.0, 0.006, 0.011];
+        const toeLengths = [0.014, 0.013, 0.012, 0.010, 0.008];
+        const toeRadii = [0.008, 0.007, 0.007, 0.006, 0.005];
+
+        for (let t = 0; t < 5; t++) {
+          const tx = toeXOffsets[t] * sf;
+          const tlen = toeLengths[t] * sf;
+          const trad = toeRadii[t] * sf;
+
+          const tBase = [footTip[0] + tx, footTip[1], footTip[2]];
+          const tTip = [tBase[0], tBase[1] - 0.002 * sf, tBase[2] + tlen];
+          parts.push(generateCapsule(tBase, tTip, trad, 6, 6));
+        }
+        return parts;
       }
 
       function initRagdoll(px, py, pz, rx_scaled, ry_scaled, rz_scaled, phase) {
@@ -2011,11 +2120,226 @@
           10,
         );
 
+        // Build Chibi detailed hands, fingers, ankles, feet, toes
+        const leftHandParts = buildHandAndFingers(leftElbowRot, leftHandRot, true, scaleFactor);
+        const rightHandParts = buildHandAndFingers(rightElbowRot, rightHandRot, false, scaleFactor);
+        const leftFootParts = buildFootAnkleToes(leftKneeRot, leftFootRot, true, scaleFactor);
+        const rightFootParts = buildFootAnkleToes(rightKneeRot, rightFootRot, false, scaleFactor);
+
+        // === Build 3D Anime Hair for Player Character (High Performance Cached) ===
+        if (!window._cachedHairState) {
+          window._cachedHairState = { key: "", baseMesh: null, localDummyV: null };
+        }
+
+        function getBaseLocalHairMesh() {
+          const style = window.playerHairStyle !== undefined ? window.playerHairStyle : 0;
+          if (!window.playerHairColor) {
+            const colors = window.ANIME_HAIR_COLORS || [[0.85, 0.90, 0.96]];
+            window.playerHairColor = colors[0];
+          }
+          const color = window.playerHairColor;
+          const key = `${style}_${color.join(",")}_${scaleFactor}`;
+
+          if (window._cachedHairState.baseMesh && window._cachedHairState.key === key) {
+            return window._cachedHairState;
+          }
+
+          const localV = [], c = [], i = [];
+          if (typeof window.build3DAnimeHair === "function") {
+            const identityPtFn = (lx, ly, lz) => [lx, ly, lz];
+            window.build3DAnimeHair(
+              style,
+              color,
+              scaleFactor,
+              identityPtFn,
+              0, // headTilt
+              localV,
+              c,
+              i
+            );
+          }
+
+          if (localV.length === 0) {
+            window._cachedHairState = {
+              key,
+              baseMesh: { localV: [], colors: [], normals: [], indices: [] },
+              localDummyV: []
+            };
+            return window._cachedHairState;
+          }
+
+          const normals = new Float32Array(localV.length);
+          for (let k = 0; k < i.length; k += 3) {
+            const i0 = i[k], i1 = i[k+1], i2 = i[k+2];
+            if (i0 * 3 + 2 >= localV.length || i1 * 3 + 2 >= localV.length || i2 * 3 + 2 >= localV.length) continue;
+            const p0 = [localV[i0*3], localV[i0*3+1], localV[i0*3+2]];
+            const p1 = [localV[i1*3], localV[i1*3+1], localV[i1*3+2]];
+            const p2 = [localV[i2*3], localV[i2*3+1], localV[i2*3+2]];
+
+            const ux = p1[0]-p0[0], uy = p1[1]-p0[1], uz = p1[2]-p0[2];
+            const wx = p2[0]-p0[0], wy = p2[1]-p0[1], wz = p2[2]-p0[2];
+
+            const nx = uy*wz - uz*wy;
+            const ny = uz*wx - ux*wz;
+            const nz = ux*wy - uy*wx;
+
+            normals[i0*3] += nx; normals[i0*3+1] += ny; normals[i0*3+2] += nz;
+            normals[i1*3] += nx; normals[i1*3+1] += ny; normals[i1*3+2] += nz;
+            normals[i2*3] += nx; normals[i2*3+1] += ny; normals[i2*3+2] += nz;
+          }
+
+          for (let k = 0; k < normals.length; k += 3) {
+            const len = Math.sqrt(normals[k]**2 + normals[k+1]**2 + normals[k+2]**2);
+            if (len > 0.0001) {
+              normals[k] /= len;
+              normals[k+1] /= len;
+              normals[k+2] /= len;
+            } else {
+              normals[k+1] = 1.0;
+            }
+          }
+
+          const localDummyV = new Array(localV.length);
+          for (let k = 0; k < localV.length; k += 3) {
+            localDummyV[k] = 0;
+            localDummyV[k+1] = -999.0;
+            localDummyV[k+2] = 0;
+          }
+
+          window._cachedHairState = {
+            key,
+            baseMesh: {
+              localV,
+              colors: c,
+              normals: Array.from(normals),
+              indices: i
+            },
+            localDummyV
+          };
+
+          return window._cachedHairState;
+        }
+
+        function createHairMesh(isLocal) {
+          const cached = getBaseLocalHairMesh();
+          const bm = cached.baseMesh;
+          if (!bm || !bm.localV || bm.localV.length === 0) {
+            return { vertices: [], colors: [], normals: [], indices: [] };
+          }
+
+          if (isLocal) {
+            return {
+              vertices: cached.localDummyV,
+              colors: bm.colors,
+              normals: bm.normals,
+              indices: bm.indices
+            };
+          }
+
+          const targetHeadP = headP1;
+          const numCoords = bm.localV.length;
+          const worldV = new Array(numCoords);
+          const hx = targetHeadP[0];
+          const hy = targetHeadP[1];
+          const hz = targetHeadP[2];
+          const scale = scaleFactor;
+
+          const timeSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.0028;
+
+          // Action & Jump physics parameters
+          const vertVel = (typeof playerVerticalVel !== "undefined") ? playerVerticalVel : 0.0;
+          const isGrounded = (typeof isPlayerGrounded !== "undefined") ? isPlayerGrounded : true;
+
+          // Landing spring simulation
+          if (!window._hairSpring) {
+            window._hairSpring = { y: 0.0, vy: 0.0, lastGrounded: true };
+          }
+          const spring = window._hairSpring;
+
+          if (isGrounded && !spring.lastGrounded) {
+            // Landing impact
+            spring.vy = -0.016;
+          }
+          spring.lastGrounded = isGrounded;
+
+          // Update spring oscillator (harmonic damping)
+          spring.vy += (-180.0 * spring.y - 12.0 * spring.vy) * 0.016;
+          spring.y += spring.vy * 0.016;
+          const bounceY = spring.y;
+
+          // Air displacement from vertical jump velocity
+          let airY = 0.0;
+          let airFlare = 0.0;
+          if (vertVel > 0.0005) {
+            // Ascending jump (lag downward)
+            airY = -vertVel * 6.5;
+            airFlare = vertVel * 2.5;
+          } else if (vertVel < -0.0005) {
+            // Descending / falling (float upward & flare outward)
+            const fallSpeed = Math.abs(vertVel);
+            airY = fallSpeed * 9.0;
+            airFlare = fallSpeed * 5.0;
+          }
+
+          // Walk / Run cycle sway
+          const walkX = Math.sin(phase) * 0.014;
+          const walkZ = Math.cos(phase * 2.0) * 0.010;
+          const walkY = -Math.abs(Math.sin(phase)) * 0.006;
+
+          // Item / Tool swing action whip
+          let actionZ = 0.0;
+          let actionY = 0.0;
+          if (typeof isUsingItem !== "undefined" && isUsingItem && typeof useAnimTimer !== "undefined") {
+            const swingFactor = Math.sin((1.0 - useAnimTimer) * Math.PI);
+            actionZ = swingFactor * 0.024;
+            actionY = -Math.abs(swingFactor) * 0.008;
+          }
+
+          for (let k = 0; k < numCoords; k += 3) {
+            const lx = bm.localV[k];
+            const ly = bm.localV[k+1];
+            const lz = bm.localV[k+2];
+
+            // Flex factor increases naturally towards hair tips (scalp root lx,ly is anchored)
+            const flex = Math.max(0.0, (0.24 - ly) * 1.5);
+            const flexSq = flex * flex;
+
+            // Outward direction vector from skull center for flare outwards during jump
+            const distXZ = Math.sqrt(lx * lx + lz * lz) || 0.001;
+            const dirX = lx / distXZ;
+            const dirZ = lz / distXZ;
+
+            // Gentle organic ambient breeze
+            const breezeX = Math.sin(timeSec * 2.6 + ly * 12.0 + lx * 5.0) * 0.006 * flexSq;
+            const breezeZ = Math.cos(timeSec * 2.1 + ly * 10.0 + lz * 5.0) * 0.006 * flexSq;
+
+            // Combine all physical forces
+            const totalDx = breezeX + walkX * flexSq + dirX * airFlare * flexSq;
+            const totalDy = (walkY + actionY + airY + bounceY) * flexSq - Math.abs(totalDx) * 0.12;
+            const totalDz = breezeZ + walkZ * flexSq + actionZ * flexSq + dirZ * airFlare * flexSq;
+
+            worldV[k]   = hx + (lx + totalDx) * scale;
+            worldV[k+1] = hy + (ly + totalDy) * scale;
+            worldV[k+2] = hz + (lz + totalDz) * scale;
+          }
+
+          return {
+            vertices: worldV,
+            colors: bm.colors,
+            normals: bm.normals,
+            indices: bm.indices
+          };
+        }
+
+        const playerHairMesh = createHairMesh(false);
+        const playerLocalHairMesh = createHairMesh(true);
+
         let meshesToMerge = [
           chest,
           pelvis,
           neck,
           head,
+          playerHairMesh,
           leftEar,
           rightEar,
           leftArmUpper,
@@ -2026,6 +2350,10 @@
           leftLegLower,
           rightLegUpper,
           rightLegLower,
+          ...leftHandParts,
+          ...rightHandParts,
+          ...leftFootParts,
+          ...rightFootParts,
         ];
 
         let localMeshesToMerge = [
@@ -2033,6 +2361,7 @@
           localPelvis,
           localNeck,
           localHead,
+          playerLocalHairMesh,
           localLeftEar,
           localRightEar,
           leftArmUpper,
@@ -2043,6 +2372,10 @@
           leftLegLower,
           rightLegUpper,
           rightLegLower,
+          ...leftHandParts,
+          ...rightHandParts,
+          ...leftFootParts,
+          ...rightFootParts,
         ];
         
         if (isUsingItem && (isSmashing || (activeItem && (activeItem.name === "AXE" || activeItem.name === "PICKAXE" || activeItem.name === "SHOVEL" || activeItem.name === "BOW")))) {
@@ -2339,6 +2672,14 @@
           gl.DYNAMIC_DRAW,
         );
 
+        if (!charColorBuffer) charColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, charColorBuffer);
+        gl.bufferData(
+          gl.ARRAY_BUFFER,
+          new Float32Array(merged.colors),
+          gl.DYNAMIC_DRAW,
+        );
+
         if (!charIndexBuffer) charIndexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
         if (supportUint32 && charIndicesLength > 65535) {
@@ -2573,6 +2914,22 @@
       let reusableWaterFloat32Array = null;
 
 
+      // Hair style cycle handler
+      window.cyclePlayerHair = function() {
+        const numStyles = window.NUM_HAIR_STYLES || 8;
+        if (window.playerHairStyle === undefined) {
+          window.playerHairStyle = 0;
+        } else {
+          window.playerHairStyle = (window.playerHairStyle + 1) % numStyles;
+        }
+        const colors = window.ANIME_HAIR_COLORS || [[0.85, 0.90, 0.96]];
+        window.playerHairColor = colors[window.playerHairStyle % colors.length];
+        const name = window.HAIR_STYLE_NAMES ? window.HAIR_STYLE_NAMES[window.playerHairStyle] : `Style #${window.playerHairStyle + 1}`;
+        if (typeof showNotice === "function") {
+          showNotice(`💇‍♀️ เปลี่ยนทรงผมแล้ว: ${name}`);
+        }
+      };
+
       // ============================================
       // ระบบควบคุมตัวละครและกล้องติดตาม
       // ============================================
@@ -2580,6 +2937,9 @@
       window.clearKeysPressed = () => { for (let k in keysPressed) keysPressed[k] = false; };
       window.addEventListener("keydown", (e) => {
         initAudio();
+        if (e.code === "KeyH") {
+          window.cyclePlayerHair();
+        }
         if (e.code === currentKeyBindings.demolish || e.code === "CapsLock") {
           isDemolishModeEnabled = !isDemolishModeEnabled;
           if (isDemolishModeEnabled) {

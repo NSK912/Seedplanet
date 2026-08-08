@@ -53,6 +53,7 @@
     'gamefile/items/fried_bug.js',
 
     // --- NPCs ---
+    'gamefile/gameplay/hairstyles.js',
     'gamefile/npcs/registry.js',
     'gamefile/npcs/meganeura.js',
     'gamefile/npcs/georgiacetus.js',

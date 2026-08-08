@@ -638,6 +638,7 @@
             attribute vec3 aPosition;
             attribute vec3 aLocalPos;
             attribute vec3 aNormal;
+            attribute vec3 aColor;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
             uniform mat4 uModelMatrix;
@@ -648,12 +649,14 @@
             varying vec3 vWorldNormal;
             varying vec3 vWorldPos;
             varying vec4 vPositionLightSpace;
-                        void main() {
+            varying vec3 vColor;
+            void main() {
                 vec4 mvPosition = uModelViewMatrix * vec4(aPosition, 1.0);
                 gl_Position = uProjectionMatrix * mvPosition;
                 vPosition = mvPosition.xyz;
                 vNormal = mat3(uModelViewMatrix) * aNormal;
                 vLocalPos = aLocalPos;
+                vColor = aColor;
                 
                 vec4 worldPos = uModelMatrix * vec4(aPosition, 1.0);
                 vWorldNormal = normalize(mat3(uModelMatrix) * aNormal);
@@ -670,6 +673,7 @@
             varying vec3 vWorldNormal;
             varying vec3 vWorldPos;
             varying vec4 vPositionLightSpace;
+            varying vec3 vColor;
             uniform vec3 uLightDir;
             uniform vec3 uCameraPos;
             uniform sampler2D uShadowMap;
@@ -737,38 +741,101 @@
                 
                 float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0) * 0.25;
                 
-                vec3 baseColor = vec3(0.96, 0.96, 0.96);
+                vec3 baseColor = vColor;
 
-                if (vLocalPos.y > 0.22 && vLocalPos.z > 0.04) {
+                if (vLocalPos.y > 0.22 && vLocalPos.y < 0.67 && vLocalPos.z > 0.04 && vLocalPos.z < 0.28) {
                     vec2 uv = vec2(vLocalPos.x, vLocalPos.y - 0.43) / 0.24;
                     
-                    float sLeftCheek = smoothstep(0.015, 0.0, abs(length(uv - vec2(-0.42, -0.15)) - 0.065));
-                    float sRightCheek = smoothstep(0.015, 0.0, abs(length(uv - vec2(0.42, -0.15)) - 0.065));
+                    // --- 1. Rosy ChiBi Blush Cheeks ---
+                    float dLeftCheek = length(vec2(uv.x - (-0.38), (uv.y - (-0.18)) * 1.3));
+                    float dRightCheek = length(vec2(uv.x - 0.38, (uv.y - (-0.18)) * 1.3));
+                    float sCheeks = max(smoothstep(0.14, 0.02, dLeftCheek), smoothstep(0.14, 0.02, dRightCheek)) * 0.55;
+                    vec3 cheekColor = vec3(1.0, 0.52, 0.60);
                     
-                    float sLeftEye = smoothstep(0.04, 0.03, length(uv - vec2(-0.21, 0.01)));
-                    float sRightEye = smoothstep(0.04, 0.03, length(uv - vec2(0.21, 0.01)));
+                    // --- 2. Large Anime Chibi Eyes ---
+                    vec2 leftEyeUv = vec2(uv.x - (-0.23), (uv.y - 0.01) * 0.75);
+                    vec2 rightEyeUv = vec2(uv.x - 0.23, (uv.y - 0.01) * 0.75);
+                    float dLeftEye = length(leftEyeUv);
+                    float dRightEye = length(rightEyeUv);
                     
-                    float sLeftBrow = smoothstep(0.018, 0.0, distToSegment(uv, vec2(-0.26, 0.12), vec2(-0.16, 0.21)));
-                    float sRightBrow = smoothstep(0.018, 0.0, distToSegment(uv, vec2(0.16, 0.21), vec2(0.26, 0.12)));
+                    // Sclera / Eye White
+                    float eyeRadius = 0.125;
+                    float sEyeWhite = max(smoothstep(eyeRadius, eyeRadius - 0.015, dLeftEye),
+                                          smoothstep(eyeRadius, eyeRadius - 0.015, dRightEye));
                     
-                    float sMouth1 = distToSegment(uv, vec2(-0.11, -0.15), vec2(0.0, -0.04));
-                    float sMouth2 = distToSegment(uv, vec2(0.0, -0.04), vec2(0.11, -0.15));
-                    float sMouth = smoothstep(0.018, 0.0, min(sMouth1, sMouth2));
-                     
-                    float sLeftP = 0.0;
-                    if (uv.x < -0.52 && uv.y > -0.35 && uv.y < 0.35) {
-                        sLeftP = smoothstep(0.018, 0.0, abs(length(uv - vec2(0.12, 0.0)) - 0.72));
+                    // Large Warm Amber Gradient Iris
+                    float dLeftIris = length(vec2(leftEyeUv.x, leftEyeUv.y * 0.88));
+                    float dRightIris = length(vec2(rightEyeUv.x, rightEyeUv.y * 0.88));
+                    float irisRadius = 0.098;
+                    float sIris = max(smoothstep(irisRadius, irisRadius - 0.015, dLeftIris),
+                                      smoothstep(irisRadius, irisRadius - 0.015, dRightIris));
+                    
+                    float irisY = clamp((uv.y - 0.01) / 0.12, -1.0, 1.0);
+                    vec3 irisColor = mix(vec3(0.85, 0.52, 0.18), vec3(0.24, 0.11, 0.05), irisY * 0.5 + 0.5);
+                    
+                    // Dark Pupil
+                    float dLeftPupil = length(vec2(leftEyeUv.x, leftEyeUv.y - 0.01));
+                    float dRightPupil = length(vec2(rightEyeUv.x, rightEyeUv.y - 0.01));
+                    float sPupil = max(smoothstep(0.045, 0.028, dLeftPupil),
+                                       smoothstep(0.045, 0.028, dRightPupil));
+                    vec3 pupilColor = vec3(0.08, 0.04, 0.02);
+                    
+                    // Dual Glossy White Sparkle Catchlights
+                    float dLeftH1 = length(leftEyeUv - vec2(-0.038, 0.038));
+                    float dRightH1 = length(rightEyeUv - vec2(-0.038, 0.038));
+                    float sH1 = max(smoothstep(0.035, 0.018, dLeftH1),
+                                    smoothstep(0.035, 0.018, dRightH1));
+                                    
+                    float dLeftH2 = length(leftEyeUv - vec2(0.032, -0.038));
+                    float dRightH2 = length(rightEyeUv - vec2(0.032, -0.038));
+                    float sH2 = max(smoothstep(0.020, 0.008, dLeftH2),
+                                    smoothstep(0.020, 0.008, dRightH2));
+                                    
+                    // Eyelashes & Eyeliner
+                    float dLeftLash = distToSegment(uv, vec2(-0.35, 0.08), vec2(-0.11, 0.13));
+                    float dRightLash = distToSegment(uv, vec2(0.11, 0.13), vec2(0.35, 0.08));
+                    float sEyelash = max(smoothstep(0.032, 0.010, dLeftLash),
+                                         smoothstep(0.032, 0.010, dRightLash));
+                    
+                    // --- 3. Anime Eyebrows ---
+                    float dLeftBrow = distToSegment(uv, vec2(-0.32, 0.18), vec2(-0.14, 0.22));
+                    float dRightBrow = distToSegment(uv, vec2(0.14, 0.22), vec2(0.32, 0.18));
+                    float sEyebrow = max(smoothstep(0.020, 0.006, dLeftBrow),
+                                         smoothstep(0.020, 0.006, dRightBrow));
+                    vec3 browColor = vec3(0.32, 0.18, 0.10);
+                    
+                    // --- 4. Cute Open Chibi Mouth ---
+                    vec2 mouthUv = vec2(uv.x, (uv.y - (-0.17)) * 1.3);
+                    float dMouthOpen = length(vec2(mouthUv.x, max(0.0, mouthUv.y)));
+                    float sMouthOutline = smoothstep(0.060, 0.042, dMouthOpen) * step(-0.035, mouthUv.y);
+                    float sMouthInner = smoothstep(0.042, 0.028, dMouthOpen) * step(-0.025, mouthUv.y);
+                    
+                    float dTongue = length(vec2(mouthUv.x, mouthUv.y - (-0.015)));
+                    float sTongue = smoothstep(0.032, 0.015, dTongue) * sMouthInner;
+                    
+                    vec3 mouthBorderColor = vec3(0.22, 0.08, 0.08);
+                    vec3 mouthInnerColor = vec3(0.88, 0.32, 0.38);
+                    vec3 tongueColor = vec3(0.98, 0.58, 0.65);
+                    
+                    // Apply Face Composite Layers
+                    baseColor = mix(baseColor, cheekColor, sCheeks);
+                    
+                    if (sEyeWhite > 0.01) {
+                        vec3 eyeCol = vec3(0.98, 0.98, 0.98);
+                        eyeCol = mix(eyeCol, irisColor, sIris);
+                        eyeCol = mix(eyeCol, pupilColor, sPupil);
+                        eyeCol = mix(eyeCol, vec3(1.0), max(sH1, sH2));
+                        baseColor = mix(baseColor, eyeCol, sEyeWhite);
                     }
-                    float sRightP = 0.0;
-                    if (uv.x > 0.52 && uv.y > -0.35 && uv.y < 0.35) {
-                        sRightP = smoothstep(0.018, 0.0, abs(length(uv - vec2(-0.12, 0.0)) - 0.72));
+                    
+                    baseColor = mix(baseColor, vec3(0.15, 0.10, 0.08), sEyelash);
+                    baseColor = mix(baseColor, browColor, sEyebrow);
+                    
+                    if (sMouthOutline > 0.01) {
+                        vec3 mCol = mix(mouthBorderColor, mouthInnerColor, clamp(sMouthInner / max(0.001, sMouthOutline), 0.0, 1.0));
+                        mCol = mix(mCol, tongueColor, sTongue);
+                        baseColor = mix(baseColor, mCol, sMouthOutline);
                     }
-                    
-                    float faceAlpha = max(max(max(sLeftCheek, sRightCheek), max(sLeftEye, sRightEye)), 
-                                          max(max(sLeftBrow, sRightBrow), max(sMouth, max(sLeftP, sRightP))));
-                    
-                    vec3 faceColor = vec3(0.15, 0.15, 0.15);
-                    baseColor = mix(baseColor, faceColor, faceAlpha);
                 }
                 vec3 finalColor = baseColor * diffuse + vec3(1.0) * spec + vec3(0.92, 0.95, 1.0) * fresnel;
 
