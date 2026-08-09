@@ -129,6 +129,22 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
           tz = z * tRadius;
       }
       
+            // Prevent creating holes in the sky
+      const tLen = Math.sqrt(tx*tx + ty*ty + tz*tz);
+      if (tLen > 0.001) {
+          const ux = tx / tLen;
+          const uy = ty / tLen;
+          const uz = tz / tLen;
+          const theta = Math.acos(Math.max(-1.0, Math.min(1.0, uy)));
+          const phi = Math.atan2(uz, ux);
+          const surfaceRadius = (typeof RADIUS !== 'undefined' ? RADIUS : 1.0) + (typeof getHeightOnSphere !== 'undefined' ? getHeightOnSphere(theta, phi, globalSeed) * HEIGHT_SCALE : 0);
+          if (tLen > surfaceRadius + 0.05) {
+              tx = ux * (surfaceRadius - 0.02);
+              ty = uy * (surfaceRadius - 0.02);
+              tz = uz * (surfaceRadius - 0.02);
+          }
+      }
+      
       const tr = (customR !== null ? customR * 1.5 : 0.09) * voxelHoleRadiusMultiplier;
       
       let exists = false;

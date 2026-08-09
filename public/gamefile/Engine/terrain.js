@@ -214,22 +214,32 @@
         const playerRadius = (typeof playerCenterRadius !== 'undefined' && playerCenterRadius !== null) 
           ? playerCenterRadius 
           : (RADIUS + getHeightOnSphere(charTheta, charPhi, globalSeed) * HEIGHT_SCALE);
-        
+          
         const East = [-sinPhi, 0, cosPhi];
         const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
         
         const cosH = Math.cos(charHeading);
         const sinH = Math.sin(charHeading);
-        const aimDir = [
+        const flatAimDir = [
             North[0] * cosH + East[0] * sinH,
             North[1] * cosH + East[1] * sinH,
             North[2] * cosH + East[2] * sinH,
         ];
         
+        // Pitch the aim direction based on camera rotationX
+        const pitch = typeof rotationX !== 'undefined' ? rotationX : 0;
+        const cp = Math.cos(-pitch);
+        const sp = Math.sin(-pitch);
+        const aimDir = [
+            flatAimDir[0] * cp + nx * sp,
+            flatAimDir[1] * cp + ny * sp,
+            flatAimDir[2] * cp + nz * sp
+        ];
+        
         // Raymarch forward to find the wall/cliff of the existing hole
         // This ensures right-click digging targets the wall of the hole to expand it, rather than empty air or the floor
-        let bestReach = actionReachDistance * 1.1; // Safe default forward reach that is close and connects holes
-        const maxSearch = actionReachDistance * 1.1; // Limit search/dig distance for right-click to prevent infinite chaining
+        let bestReach = -1;
+        const maxSearch = actionReachDistance * 1.5; // Limit search/dig distance for right-click to prevent infinite chaining
         const stepSize = 0.02;
         
         for (let d = 0.03; d <= maxSearch; d += stepSize) {
@@ -260,6 +270,8 @@
                 break;
             }
         }
+        
+        if (bestReach < 0) return null; // Didn't hit anything
         
         return [
             nx * playerRadius + aimDir[0] * bestReach,

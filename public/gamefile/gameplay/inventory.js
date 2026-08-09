@@ -1970,7 +1970,9 @@ function cancelFloorPlacement() {
           if (isAltAction) {
               const forwardPoint = calculateForwardTarget();
               // Use a reasonable radius (0.05 rad = 40cm) to cleanly expand and connect with the existing hole (0.08 rad = 64cm)
-              modTerrainAtPlayer(-0.35, true, forwardPoint, 0.05, "trench");
+              if (forwardPoint) {
+                  modTerrainAtPlayer(-0.35, true, forwardPoint, 0.05, "trench");
+              }
           } else {
               // Trigger the digging terrain modifications (dig down)!
               modTerrainAtPlayer(-0.35, true);
