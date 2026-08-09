@@ -490,7 +490,36 @@
         }
         
         const depth = terrainRadius - d;
-        if (Math.abs(depth) < t.r * 1.2) {
+        let exposed = false;
+        if (Math.abs(depth) < t.r * 2.5) exposed = true;
+        
+        if (!exposed) {
+            const r_sample = t.r * 1.5;
+            const samples = [
+                {x: t.x + r_sample, y: t.y, z: t.z},
+                {x: t.x - r_sample, y: t.y, z: t.z},
+                {x: t.x, y: t.y + r_sample, z: t.z},
+                {x: t.x, y: t.y - r_sample, z: t.z},
+                {x: t.x, y: t.y, z: t.z + r_sample},
+                {x: t.x, y: t.y, z: t.z - r_sample}
+            ];
+            for (let s of samples) {
+                const sd = Math.sqrt(s.x*s.x + s.y*s.y + s.z*s.z) || 1;
+                const sux = s.x / sd;
+                const suy = s.y / sd;
+                const suz = s.z / sd;
+                const stheta = Math.acos(Math.max(-1.0, Math.min(1.0, suy)));
+                const sphi = Math.atan2(suz, sux);
+                let sh = global.RADIUS + global.getHeightOnSphere(stheta, sphi, global.globalSeed) * global.HEIGHT_SCALE;
+                if (typeof global.getFloorTopRadiusAt === "function") sh = global.getFloorTopRadiusAt(sux, suy, suz, sh);
+                if (sh < sd || Math.abs(sh - sd) < t.r * 1.5) {
+                    exposed = true;
+                    break;
+                }
+            }
+        }
+        
+        if (exposed) {
           const collarStartIdx = vertexOffset;
           
           let rx, ry, rz;

@@ -455,10 +455,7 @@ window.setCameraMode = function(mode) {
   if (typeof cameraSpringArm !== "undefined" && cameraSpringArm) {
     cameraSpringArm.setMode(cameraMode);
   }
-  const modeSelect = document.getElementById("cameraModeSelect");
-  if (modeSelect) {
-    modeSelect.value = cameraMode;
-  }
+  // Optional UI sync for buttons can be added here if needed
   const invFollowBtn = document.getElementById("invCameraFollowToggle");
   if (invFollowBtn) {
     if (cameraMode === "fps") {
@@ -482,11 +479,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: false });
   }
 
-  // Camera settings select change listener
-  const cameraModeSelect = document.getElementById("cameraModeSelect");
-  if (cameraModeSelect) {
-    cameraModeSelect?.addEventListener("change", (e) => {
-      setCameraMode(e.target.value);
-    });
-  }
+  // Camera mode button listeners
+  const btnTPS = document.getElementById("btnCameraModeTPS");
+  if (btnTPS) btnTPS.addEventListener("click", () => setCameraMode("tps"));
+  
+  const btnThirdPerson = document.getElementById("btnCameraModeThirdPerson");
+  if (btnThirdPerson) btnThirdPerson.addEventListener("click", () => setCameraMode("thirdperson"));
+  
+  const btnFPS = document.getElementById("btnCameraModeFPS");
+  if (btnFPS) btnFPS.addEventListener("click", () => setCameraMode("fps"));
+  
+  const btnPlanet = document.getElementById("btnCameraModePlanet");
+  if (btnPlanet) btnPlanet.addEventListener("click", () => setCameraMode("planet"));
 });

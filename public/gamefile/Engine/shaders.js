@@ -564,8 +564,8 @@
                                 // Skip the owner tunnel of this vertex
                                 if (length(t.xyz - vTunnelCenter) < 0.01) continue;
                                 vec3 diff = vWorldPos - t.xyz;
-                                // More aggressive discard for outer shell
-                                if (dot(diff, diff) < (t.w * 0.98) * (t.w * 0.98)) {
+                                // Less aggressive discard so collars can intersect and form a seam
+                                if (dot(diff, diff) < (t.w * 0.88) * (t.w * 0.88)) {
                                     discard;
                                 }
                             }

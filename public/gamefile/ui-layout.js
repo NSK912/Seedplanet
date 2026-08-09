@@ -1354,12 +1354,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
       <div class="control-group">
         <label>👤 มุมมองกล้องสปริงอาร์ม (Camera Mode)</label>
-        <select id="cameraModeSelect" style="margin-top: 4px; padding: 6px; border-radius: 4px; background: #1a1a1a; color: white; border: 1px solid #444; width: 100%; margin-bottom: 8px;">
-          <option value="tps">🎥 TPS (มุมมองข้างไหล่)</option>
-          <option value="thirdperson">🎥 มุมมองที่ 3 (ตรงกลาง)</option>
-          <option value="fps">🎥 FPS (บุคคลที่ 1)</option>
-          <option value="planet">🌍 กล้องจับดาวทั้งดวง (Planet Overview)</option>
-        </select>
+        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px; margin-bottom: 8px;">
+          <button class="btn-random" id="btnCameraModeTPS" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🎥 TPS (มุมมองข้างไหล่)</button>
+          <button class="btn-random" id="btnCameraModeThirdPerson" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🎥 มุมมองที่ 3 (ตรงกลาง)</button>
+          <button class="btn-random" id="btnCameraModeFPS" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🎥 FPS (บุคคลที่ 1)</button>
+          <button class="btn-random" id="btnCameraModePlanet" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🌍 กล้องจับดาวทั้งดวง (Planet Overview)</button>
+        </div>
         <button
           class="btn-toggle active"
           id="cameraCollisionToggle"
@@ -1583,26 +1583,15 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
       <div class="control-group" id="devSpawnItemContainer">
         <label>🧪 เสกของเข้ากระเป๋า (Spawn Items)</label>
-        <select id="devSpawnItemSelect" style="
-          width: 100%;
-          background: rgba(10, 10, 15, 0.95);
-          border: 1px solid rgba(223, 183, 108, 0.4);
-          color: #fff;
-          padding: 6px;
-          border-radius: 4px;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 11px;
-          margin-top: 4px;
-          outline: none;
+        <div id="devSpawnItemList" style="
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          margin-top: 6px;
+          max-height: 200px;
+          overflow-y: auto;
+          padding-right: 4px;
         ">
-        </select>
-        <div style="display: flex; gap: 4px; margin-top: 6px;">
-          <button class="btn-random" id="devSpawnItemBtn" style="background-image: linear-gradient(135deg, #e65100, #ff9800); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
-            🪄 เสกเข้าตัว
-          </button>
-          <button class="btn-random" id="devSpawnItemBtnX50" style="background-image: linear-gradient(135deg, #bf360c, #ff5722); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
-            🪄 เสก x50
-          </button>
         </div>
       </div>
       <div class="control-group" id="devDigTerrainContainer" style="margin-top: 8px;">
@@ -1619,22 +1608,15 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       
       <div class="control-group" id="devNpcTeleportContainer" style="margin-top: 8px;">
         <label>👀 ย้ายกล้องไปหา NPC</label>
-        <div style="display: flex; gap: 4px; margin-top: 6px; width: 100%;">
-          <select id="devNpcSelect" style="
-            flex: 1;
-            min-width: 0;
-            background: rgba(10, 10, 15, 0.95);
-            border: 1px solid rgba(223, 183, 108, 0.4);
-            color: #fff;
-            padding: 6px;
-            border-radius: 4px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            outline: none;
-          "></select>
-          <button class="btn-random" id="devNpcTeleportBtn" style="background-image: linear-gradient(135deg, #0288d1, #29b6f6); flex: 0 0 60px; margin: 0; padding: 0 4px; font-size: 11px; white-space: nowrap;">
-            🚀 วาร์ป
-          </button>
+        <div id="devNpcList" style="
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          margin-top: 6px;
+          max-height: 200px;
+          overflow-y: auto;
+          padding-right: 4px;
+        ">
         </div>
       </div>
 

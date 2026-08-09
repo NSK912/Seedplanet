@@ -4,44 +4,48 @@
 // ระบบเครื่องมือพัฒนาเสกของ (Dev Tool Spawn Items) - Don't use LocalStorage
 // ============================================
 (function() {
-  const selectEl = document.getElementById("devSpawnItemSelect");
-  if (selectEl) {
-    selectEl.innerHTML = "";
+  const listEl = document.getElementById("devSpawnItemList");
+  if (listEl) {
+    listEl.innerHTML = "";
     ALL_ITEMS.forEach(item => {
-      const opt = document.createElement("option");
-      opt.value = item.name;
-      opt.textContent = `${item.icon} ${item.name}`;
-      selectEl.appendChild(opt);
-    });
-  }
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.gap = "4px";
+      
+      const btn1 = document.createElement("button");
+      btn1.className = "btn-random";
+      btn1.style.flex = "1";
+      btn1.style.margin = "0";
+      btn1.style.padding = "4px";
+      btn1.style.fontSize = "11px";
+      btn1.style.backgroundImage = "linear-gradient(135deg, #e65100, #ff9800)";
+      btn1.style.textAlign = "left";
+      btn1.innerHTML = `${item.icon} ${item.name}`;
+      
+      const btn50 = document.createElement("button");
+      btn50.className = "btn-random";
+      btn50.style.flex = "0 0 40px";
+      btn50.style.margin = "0";
+      btn50.style.padding = "4px";
+      btn50.style.fontSize = "11px";
+      btn50.style.backgroundImage = "linear-gradient(135deg, #bf360c, #ff5722)";
+      btn50.textContent = "x50";
 
-  const btn1 = document.getElementById("devSpawnItemBtn");
-  if (btn1) {
-    btn1?.addEventListener("click", () => {
-      if (!isDevMode) return; // ปิดระบบเสกของ
-      const itemName = selectEl.value;
-      const foundItem = ALL_ITEMS.find(i => i.name === itemName);
-      if (foundItem) {
-        const added = addItemToInventory({ name: foundItem.name, icon: foundItem.icon, label: foundItem.name }, false);
+      btn1.addEventListener("click", () => {
+        if (!isDevMode) return;
+        const added = addItemToInventory({ name: item.name, icon: item.icon, label: item.name }, false);
         if (added) {
-          showNotice(`เสกสำเร็จ: ได้รับ ${foundItem.icon} ${foundItem.name} x1 !`);
+          showNotice(`เสกสำเร็จ: ได้รับ ${item.icon} ${item.name} x1 !`);
         } else {
           showNotice("❌ กระเป๋าเต็มแล้ว! (Inventory is full)");
         }
-      }
-    });
-  }
+      });
 
-  const btn50 = document.getElementById("devSpawnItemBtnX50");
-  if (btn50) {
-    btn50?.addEventListener("click", () => {
-      if (!isDevMode) return; // ปิดระบบเสกของ
-      const itemName = selectEl.value;
-      const foundItem = ALL_ITEMS.find(i => i.name === itemName);
-      if (foundItem) {
+      btn50.addEventListener("click", () => {
+        if (!isDevMode) return;
         let successCount = 0;
         for (let i = 0; i < 50; i++) {
-          const added = addItemToInventory({ name: foundItem.name, icon: foundItem.icon, label: foundItem.name }, false, false);
+          const added = addItemToInventory({ name: item.name, icon: item.icon, label: item.name }, false, false);
           if (added) {
             successCount++;
           } else {
@@ -49,13 +53,16 @@
           }
         }
         if (successCount > 0) {
-          renderInventory();
-          updateBadge();
-          showNotice(`เสกสำเร็จ: ได้รับ ${foundItem.icon} ${foundItem.name} x${successCount} !`);
+          if (typeof renderInventory === "function") renderInventory();
+          showNotice(`เสกสำเร็จ: ได้รับ ${item.icon} ${item.name} x${successCount} !`);
         } else {
           showNotice("❌ กระเป๋าเต็มแล้ว! (Inventory is full)");
         }
-      }
+      });
+      
+      row.appendChild(btn1);
+      row.appendChild(btn50);
+      listEl.appendChild(row);
     });
   }
 })();
@@ -353,99 +360,68 @@ if (toggleControlsBtn && mainControls) {
 
 // --- ระบบย้ายกล้องไปหา NPC (Teleport to NPC) ---
 (function initDevNpcTeleport() {
-  const selectEl = document.getElementById("devNpcSelect");
-  const btnEl = document.getElementById("devNpcTeleportBtn");
-  
-  if (!selectEl || !btnEl) return;
+  const listEl = document.getElementById("devNpcList");
+  if (!listEl) return;
 
-  // ฟังก์ชันสำหรับอัปเดตรายชื่อ NPC ใน dropdown
   const updateNpcList = () => {
     if (!isDevMode || typeof amphibians === 'undefined') return;
     
-    // เก็บค่าเดิมที่เลือกไว้
-    const currentVal = selectEl.value;
-    
-    // ตรวจสอบว่าจำเป็นต้องอัปเดตไหมเพื่อไม่ให้ dropdown ปิดเวลากำลังเลือก
     let aliveCount = 0;
     amphibians.forEach(npc => {
       if (npc.hp === undefined || npc.hp > 0) aliveCount++;
     });
-    
-    // ถ้ารายการเท่าเดิม ให้ข้ามไป (วิธีแบบง่ายเพื่อลดปัญหา dropdown ปิดเอง)
-    if (selectEl.options.length > 0 && selectEl.options.length === aliveCount) {
-      if (aliveCount > 0 && selectEl.options[0].value !== "") {
-        return; 
-      }
-    }
 
-    selectEl.innerHTML = "";
+    listEl.innerHTML = "";
     
     if (amphibians.length === 0 || aliveCount === 0) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "ไม่มี NPC ในขณะนี้";
-      selectEl.appendChild(opt);
+      listEl.innerHTML = "<div style='color:#ccc; font-size:11px; padding:4px;'>ไม่มี NPC ในขณะนี้</div>";
       return;
     }
     
     amphibians.forEach((npc, index) => {
-      // ข้าม NPC ที่ตายแล้ว (ถ้ามี hp <= 0)
       if (npc.hp !== undefined && npc.hp <= 0) return;
       
-      const opt = document.createElement("option");
-      opt.value = index;
+      const btn = document.createElement("button");
+      btn.className = "btn-random";
+      btn.style.width = "100%";
+      btn.style.margin = "0";
+      btn.style.padding = "4px";
+      btn.style.fontSize = "11px";
+      btn.style.backgroundImage = "linear-gradient(135deg, #0288d1, #29b6f6)";
+      btn.style.textAlign = "left";
+      btn.style.display = "block";
       
       const icon = npc.type === 'human' ? '👨' : (npc.type === 'meganeura' ? '🪰' : '🦎');
-      opt.textContent = `${icon} ${npc.type} #${index}`;
+      btn.innerHTML = `${icon} ${npc.type} #${index} 🚀`;
       
-      selectEl.appendChild(opt);
+      btn.addEventListener("click", () => {
+        if (!isDevMode) return;
+        charTheta = npc.theta;
+        charPhi = npc.phi;
+        if (typeof playerVelocityX !== 'undefined') playerVelocityX = 0;
+        if (typeof playerVelocityY !== 'undefined') playerVelocityY = 0;
+        if (typeof playerVelocityZ !== 'undefined') playerVelocityZ = 0;
+        showNotice(`🚀 วาร์ปไปหา ${npc.type} #${index} เรียบร้อย!`);
+      });
+      
+      listEl.appendChild(btn);
     });
-    
-    // พยายามเซ็ตค่าเดิมกลับถ้ามี
-    if (currentVal) {
-      selectEl.value = currentVal;
-    }
   };
 
-  // อัปเดตรายการเมื่อคลิกที่ select
-  selectEl?.addEventListener("focus", updateNpcList);
-  selectEl?.addEventListener("click", updateNpcList);
-  btnEl?.addEventListener("mouseenter", updateNpcList);
-  
-  // อัปเดตอัตโนมัติเมื่อเปิดเมนูค้างไว้
+  // Update when expanding dev menu or periodically
   setInterval(() => {
-    if (isDevMode && selectEl.offsetParent !== null) {
-      updateNpcList();
+    if (isDevMode && listEl.offsetParent !== null) {
+        let aliveCount = 0;
+        amphibians.forEach(npc => {
+            if (npc.hp === undefined || npc.hp > 0) aliveCount++;
+        });
+        if (listEl.children.length !== aliveCount && !(listEl.children.length === 1 && aliveCount === 0)) {
+            updateNpcList();
+        }
     }
   }, 2000);
   
-  // จัดการการคลิกปุ่มวาร์ป
-  btnEl?.addEventListener("click", () => {
-    if (!isDevMode || typeof amphibians === 'undefined') return;
-    
-    const index = parseInt(selectEl.value, 10);
-    if (isNaN(index)) {
-      showNotice("⚠️ กรุณาเลือก NPC ก่อน");
-      return;
-    }
-    
-    const npc = amphibians[index];
-    if (npc) {
-      // เปลี่ยนตำแหน่งผู้เล่นไปยัง NPC
-      charTheta = npc.theta;
-      charPhi = npc.phi;
-      
-      // รีเซ็ตความเร็วเพื่อไม่ให้กระเด็น
-      if (typeof playerVelocityX !== 'undefined') playerVelocityX = 0;
-      if (typeof playerVelocityY !== 'undefined') playerVelocityY = 0;
-      if (typeof playerVelocityZ !== 'undefined') playerVelocityZ = 0;
-      
-      showNotice(`🚀 วาร์ปไปหา ${npc.type} #${index} เรียบร้อย!`);
-    } else {
-      showNotice("❌ ไม่พบ NPC ที่เลือก");
-      updateNpcList();
-    }
-  });
+  setTimeout(updateNpcList, 1000);
 })();
 
 // --- ระบบปรับระยะห่าง Clouds3D จากดาว (Clouds3D Distance System) ---
