@@ -1151,13 +1151,21 @@
 
         if (activeRidingBoat) {
           // Sitting and rowing pose
-          const rowPhase = typeof boatRowTimer !== "undefined" ? boatRowTimer : 0;
-          armAngle = Math.sin(rowPhase) * 0.5 - 0.5; // Arms forward and back
-          leftElbowFlex = 0.3 + Math.cos(rowPhase) * 0.2;
-          rightArmAngle = Math.sin(rowPhase) * 0.5 - 0.5; // Synchronized in-phase pull
-          rightElbowFlex = 0.3 + Math.cos(rowPhase) * 0.2;
-          
-          torsoTilt = Math.sin(rowPhase) * 0.25; // Leaning forward and backward with rowing phase
+          let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+          if (isLandVehicle) {
+            armAngle = -0.4;
+            leftElbowFlex = 0.5;
+            rightArmAngle = -0.4;
+            rightElbowFlex = 0.5;
+            torsoTilt = 0;
+          } else {
+            const rowPhase = typeof boatRowTimer !== "undefined" ? boatRowTimer : 0;
+            armAngle = Math.sin(rowPhase) * 0.5 - 0.5; // Arms forward and back
+            leftElbowFlex = 0.3 + Math.cos(rowPhase) * 0.2;
+            rightArmAngle = Math.sin(rowPhase) * 0.5 - 0.5; // Synchronized in-phase pull
+            rightElbowFlex = 0.3 + Math.cos(rowPhase) * 0.2;
+            torsoTilt = Math.sin(rowPhase) * 0.25; // Leaning forward and backward with rowing phase
+          }
           
           legAngle = -1.5; // Legs forward (sitting)
           leftKneeFlex = 1.0; // Knees bent
@@ -2763,16 +2771,22 @@
             groundRadius = playerCenterRadius;
         } else {
           if (activeRidingBoat) {
-            let baseRadius = (waterEnabled && terrainRadius < waterRadius) ? waterRadius : terrainRadius;
-            if (waterEnabled && terrainRadius < waterRadius) {
-              const wave = getWaterWave(nx * waterRadius, ny * waterRadius, nz * waterRadius, waterAnimTime, waveStrength);
-              baseRadius += wave;
+            let boatRad = activeRidingBoat.position ? Math.sqrt(activeRidingBoat.position[0]**2 + activeRidingBoat.position[1]**2 + activeRidingBoat.position[2]**2) : 0;
+            if (boatRad > 1.0) {
+              groundRadius = boatRad + 0.46 * charScale;
+            } else {
+              let baseRadius = (waterEnabled && terrainRadius < waterRadius) ? waterRadius : terrainRadius;
+              if (waterEnabled && terrainRadius < waterRadius) {
+                const wave = getWaterWave(nx * waterRadius, ny * waterRadius, nz * waterRadius, waterAnimTime, waveStrength);
+                baseRadius += wave;
+              }
+              // Since the boat sits at baseRadius - 0.04, the player stands at baseRadius - 0.04 + 0.46 * charScale
+              groundRadius = baseRadius - 0.04 + 0.46 * charScale;
             }
-            // Since the boat sits at baseRadius - 0.04, the player stands at baseRadius - 0.04 + 0.46 * charScale
-            groundRadius = baseRadius - 0.04 + 0.46 * charScale;
           } else if (typeof activeRidingMech !== "undefined" && activeRidingMech) {
             groundRadius = terrainRadius + (typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71);
           } else if (swimFactor > 0.0) {
+
             const targetSwimRadius =
               waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
             const subSwimRadius = targetSwimRadius - playerDiveDepth;
@@ -2797,9 +2811,9 @@
           }
         }
 
-        const px = groundRadius * nx;
-        const py = groundRadius * ny;
-        const pz = groundRadius * nz;
+        let px = groundRadius * nx;
+        let py = groundRadius * ny;
+        let pz = groundRadius * nz;
 
         const N = [nx, ny, nz];
 
@@ -2846,6 +2860,15 @@
 
           finalR = [r0, r1, r2];
           finalF = [f0, f1, f2];
+        } else if (activeRidingBoat && activeRidingBoat.normal && activeRidingBoat.F && activeRidingBoat.R) {
+          finalN = [activeRidingBoat.normal[0], activeRidingBoat.normal[1], activeRidingBoat.normal[2]];
+          finalF = [activeRidingBoat.F[0], activeRidingBoat.F[1], activeRidingBoat.F[2]];
+          finalR = [activeRidingBoat.R[0], activeRidingBoat.R[1], activeRidingBoat.R[2]];
+          if (activeRidingBoat.position) {
+            px = activeRidingBoat.position[0] + finalN[0] * 0.46 * charScale;
+            py = activeRidingBoat.position[1] + finalN[1] * 0.46 * charScale;
+            pz = activeRidingBoat.position[2] + finalN[2] * 0.46 * charScale;
+          }
         } else if (swimFactor > 0.0) {
           // Sinks neck-deep when stationary, tilts forward smoothly when swimming
           let tiltAngle =
@@ -3044,7 +3067,7 @@
               // 2. Action Reach check for other collectibles
               for (let item of collectibles) {
                 if (!item.active) continue;
-                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "wood_wheel" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const reachInfo = isTargetWithinReach(item.position, actionReachDistance);
                 if (reachInfo.valid) {
@@ -3072,6 +3095,7 @@
               else if (item.type === "stone_floor") { icon = "🪨"; label = "STONE_FLOOR"; }
               else if (item.type === "campfire") { icon = "🔥"; label = "CAMPFIRE"; }
               else if (item.type === "wood_boat") { icon = "🛶"; label = "WOOD_BOAT"; }
+              else if (item.type === "wood_wheel") { icon = "🛞"; label = "WOOD_WHEEL"; }
               else if (item.type === "meganeura_item") { icon = "🦟"; label = "MEGANEURA"; }
               
               const itemData = {

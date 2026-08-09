@@ -1339,7 +1339,7 @@ window.addEventListener("keyup", (e) => {
           } else if (isDemolishModeEnabled) {
             if (!isAltAction) {
                 // Trigger demolition logic on click!
-                const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "campfire", "wood_boat", "wood_wall", "wood_window", "wood_door", "wood_chest", "meganeura_item"];
+                const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "campfire", "wood_boat", "wood_wheel", "wood_wall", "wood_window", "wood_door", "wood_chest", "meganeura_item"];
                 let closestDemolishItem = null;
                 let bestT = Infinity;
                 for (let item of collectibles) {

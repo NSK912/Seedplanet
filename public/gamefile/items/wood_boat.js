@@ -8,27 +8,17 @@ window.ItemRegistry["wood_boat"] = {
     const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
     
     let n = item.normal || [0, 1, 0];
-    let r = item.R || [1, 0, 0];
-    let f = item.F || [0, 0, 1];
-    
-    if (item.angle !== undefined) {
+    let baseR = item.R || [1, 0, 0];
+    let baseF = item.F || [0, 0, 1];
+
+    let r = baseR;
+    let f = baseF;
+
+    if (item.angle !== undefined && item.angle !== 0) {
       const cosH = Math.cos(item.angle);
       const sinH = Math.sin(item.angle);
-      let pnx = n[0], pny = n[1], pnz = n[2];
-      let pEast = [-pnz, 0, pnx];
-      let lenE = Math.sqrt(pEast[0]*pEast[0] + pEast[2]*pEast[2]);
-      if (lenE < 0.001) pEast = [1, 0, 0];
-      else { pEast[0]/=lenE; pEast[2]/=lenE; }
-      let pNorth = [
-         pEast[1] * pnz - pEast[2] * pny,
-         pEast[2] * pnx - pEast[0] * pnz,
-         pEast[0] * pny - pEast[1] * pnx
-      ];
-      let lenN = Math.sqrt(pNorth[0]*pNorth[0] + pNorth[1]*pNorth[1] + pNorth[2]*pNorth[2]);
-      if (lenN < 0.001) pNorth = [0, 0, 1];
-      else { pNorth[0]/=lenN; pNorth[1]/=lenN; pNorth[2]/=lenN; }
-      r = [pEast[0] * cosH - pNorth[0] * sinH, pEast[1] * cosH - pNorth[1] * sinH, pEast[2] * cosH - pNorth[2] * sinH];
-      f = [pNorth[0] * cosH + pEast[0] * sinH, pNorth[1] * cosH + pEast[1] * sinH, pNorth[2] * cosH + pEast[2] * sinH];
+      r = [baseR[0] * cosH - baseF[0] * sinH, baseR[1] * cosH - baseF[1] * sinH, baseR[2] * cosH - baseF[2] * sinH];
+      f = [baseF[0] * cosH + baseR[0] * sinH, baseF[1] * cosH + baseR[1] * sinH, baseF[2] * cosH + baseR[2] * sinH];
     }
 
     const rawHull = getOrCreateRawBoatHull();
@@ -69,7 +59,7 @@ window.ItemRegistry["wood_boat"] = {
     const h = 0.2*bs;
     const t = 0.04*bs;
     
-    if (!isPreview && typeof boatRowTimer !== "undefined" && typeof activeRidingBoat !== "undefined" && activeRidingBoat === item) {
+    if (!isPreview && typeof boatRowTimer !== "undefined" && typeof activeRidingBoat !== "undefined" && activeRidingBoat === item && !(item.hasWheel || item.hasWheels || (item.wheelCount && item.wheelCount > 0))) {
       const oarCol = [0.65, 0.5, 0.35];
       const oarAngle = Math.sin(boatRowTimer) * 0.5;
       const r_oarL = [r[0]*Math.cos(oarAngle) - f[0]*Math.sin(oarAngle), r[1]*Math.cos(oarAngle) - f[1]*Math.sin(oarAngle), r[2]*Math.cos(oarAngle) - f[2]*Math.sin(oarAngle)];
@@ -132,6 +122,76 @@ window.ItemRegistry["wood_boat"] = {
         pivotR[2] + r_oarR_rotated[2]*shiftR
       ];
       addBox(centerR, L_oar, t/2, t, oarCol, r_oarR_rotated, n_oarR_rotated, f_oarR, vertices, colors, indices);
+    }
+
+    if (!isPreview && (item.hasWheel || item.hasWheels || (item.wheelCount && item.wheelCount > 0))) {
+      const wheelRadius = 0.16;
+      const wheelThick = 0.04;
+      const wheelCol = [0.55, 0.38, 0.22];
+      const darkWood = [0.4, 0.26, 0.14];
+      const metalCol = [0.3, 0.3, 0.3];
+
+      let spinAngle = item.spinAngle || 0;
+      let steerAngle = item.steerAngle || 0;
+      if (!item.spinAngle && typeof boatRowTimer !== "undefined" && typeof activeRidingBoat !== "undefined" && activeRidingBoat === item) {
+        spinAngle = boatRowTimer * 0.1;
+      }
+
+      const fAxleLen = typeof window.wheelFrontAxleLength === "number" ? window.wheelFrontAxleLength : 0.36;
+      const fSideOff = typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;
+      const fFwdOff  = typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18;
+      const fUpOff   = typeof window.wheelFrontUpOffset   === "number" ? window.wheelFrontUpOffset   : -0.03;
+
+      const rAxleLen = typeof window.wheelRearAxleLength === "number" ? window.wheelRearAxleLength : 0.36;
+      const rSideOff = typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18;
+      const rFwdOff  = typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
+      const rUpOff   = typeof window.wheelRearUpOffset   === "number" ? window.wheelRearUpOffset   : -0.03;
+
+      // Draw front cross axle bar
+      const fAxleCenter = [
+        px + ny0 * fUpOff + fz0 * fFwdOff,
+        py + ny1 * fUpOff + fz1 * fFwdOff,
+        pz + ny2 * fUpOff + fz2 * fFwdOff
+      ];
+      addBox(fAxleCenter, fAxleLen, 0.03, 0.03, metalCol, r, n, f, vertices, colors, indices);
+
+      // Draw rear cross axle bar
+      const rAxleCenter = [
+        px + ny0 * rUpOff + fz0 * (-rFwdOff),
+        py + ny1 * rUpOff + fz1 * (-rFwdOff),
+        pz + ny2 * rUpOff + fz2 * (-rFwdOff)
+      ];
+      addBox(rAxleCenter, rAxleLen, 0.03, 0.03, metalCol, r, n, f, vertices, colors, indices);
+
+      const wheelOffsets = [
+        { side: -1, forward: fFwdOff,  sideOff: fSideOff, upOff: fUpOff, isFront: true },
+        { side: 1,  forward: fFwdOff,  sideOff: fSideOff, upOff: fUpOff, isFront: true },
+        { side: -1, forward: -rFwdOff, sideOff: rSideOff, upOff: rUpOff, isFront: false },
+        { side: 1,  forward: -rFwdOff, sideOff: rSideOff, upOff: rUpOff, isFront: false }
+      ];
+
+      for (let wo of wheelOffsets) {
+        const sideOffset = wo.side * wo.sideOff;
+        const fwdOffset = wo.forward;
+        const upOffset = wo.upOff;
+
+        const wCenter = [
+          px + rx0 * sideOffset + ny0 * upOffset + fz0 * fwdOffset,
+          py + rx1 * sideOffset + ny1 * upOffset + fz1 * fwdOffset,
+          pz + rx2 * sideOffset + ny2 * upOffset + fz2 * fwdOffset
+        ];
+
+        if (typeof window.drawDetailedWoodenWheel === "function") {
+          window.drawDetailedWoodenWheel(
+            wCenter, wheelRadius, wheelThick,
+            r, n, f, spinAngle,
+            wheelCol, darkWood, metalCol,
+            vertices, colors, indices,
+            isPreview, previewColor,
+            wo.isFront ? steerAngle : 0
+          );
+        }
+      }
     }
   }
 };

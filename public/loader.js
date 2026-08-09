@@ -46,6 +46,7 @@
     'gamefile/items/wood_chest.js',
     'gamefile/items/campfire.js',
     'gamefile/items/wood_boat.js',
+    'gamefile/items/wood_wheel.js',
     'gamefile/items/axe.js',
     'gamefile/items/pickaxe.js',
     'gamefile/items/shovel.js',

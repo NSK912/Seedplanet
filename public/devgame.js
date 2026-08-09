@@ -531,3 +531,52 @@ if (toggleControlsBtn && mainControls) {
     });
   }
 })();
+
+// --- ระบบปรับความยาวเพาล้อและตำแหน่งล้อเรือ แยกคู่หน้า-หลัง (Front/Rear Wheel Pair Controls) ---
+(function initDevWheelAxleControls() {
+  if (typeof window.wheelFrontAxleLength !== "number") window.wheelFrontAxleLength = 0.36;
+  if (typeof window.wheelFrontSideOffset !== "number") window.wheelFrontSideOffset = 0.18;
+  if (typeof window.wheelFrontFwdOffset !== "number") window.wheelFrontFwdOffset = 0.18;
+  if (typeof window.wheelFrontUpOffset !== "number") window.wheelFrontUpOffset = -0.03;
+
+  if (typeof window.wheelRearAxleLength !== "number") window.wheelRearAxleLength = 0.36;
+  if (typeof window.wheelRearSideOffset !== "number") window.wheelRearSideOffset = 0.18;
+  if (typeof window.wheelRearFwdOffset !== "number") window.wheelRearFwdOffset = 0.18;
+  if (typeof window.wheelRearUpOffset !== "number") window.wheelRearUpOffset = -0.03;
+
+  function bindSlider(sliderId, labelId, getVal, setVal, isUpOffset = false) {
+    const slider = document.getElementById(sliderId);
+    const label = document.getElementById(labelId);
+    if (!slider) return;
+
+    if (isUpOffset) {
+      slider.value = Math.round((getVal() + 0.5) * 100);
+    } else {
+      slider.value = Math.round(getVal() * 100);
+    }
+    if (label) label.textContent = getVal().toFixed(2);
+
+    slider.addEventListener("input", (e) => {
+      let val;
+      if (isUpOffset) {
+        val = (parseInt(e.target.value, 10) / 100) - 0.5;
+      } else {
+        val = parseInt(e.target.value, 10) / 100;
+      }
+      setVal(val);
+      if (label) label.textContent = val.toFixed(2);
+    });
+  }
+
+  // Front Pair
+  bindSlider("devWheelFrontAxleLengthSlider", "devWheelFrontAxleLengthLabel", () => window.wheelFrontAxleLength, v => window.wheelFrontAxleLength = v);
+  bindSlider("devWheelFrontSideOffsetSlider", "devWheelFrontSideOffsetLabel", () => window.wheelFrontSideOffset, v => window.wheelFrontSideOffset = v);
+  bindSlider("devWheelFrontFwdOffsetSlider", "devWheelFrontFwdOffsetLabel", () => window.wheelFrontFwdOffset, v => window.wheelFrontFwdOffset = v);
+  bindSlider("devWheelFrontUpOffsetSlider", "devWheelFrontUpOffsetLabel", () => window.wheelFrontUpOffset, v => window.wheelFrontUpOffset = v, true);
+
+  // Rear Pair
+  bindSlider("devWheelRearAxleLengthSlider", "devWheelRearAxleLengthLabel", () => window.wheelRearAxleLength, v => window.wheelRearAxleLength = v);
+  bindSlider("devWheelRearSideOffsetSlider", "devWheelRearSideOffsetLabel", () => window.wheelRearSideOffset, v => window.wheelRearSideOffset = v);
+  bindSlider("devWheelRearFwdOffsetSlider", "devWheelRearFwdOffsetLabel", () => window.wheelRearFwdOffset, v => window.wheelRearFwdOffset = v);
+  bindSlider("devWheelRearUpOffsetSlider", "devWheelRearUpOffsetLabel", () => window.wheelRearUpOffset, v => window.wheelRearUpOffset = v, true);
+})();

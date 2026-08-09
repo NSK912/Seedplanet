@@ -674,7 +674,7 @@ function buildCollectibles(count, seed) {
         const isInventoryOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
         if (isPlacingFloor && !isInventoryOpen) {
           const placingItemName = floorPlacementInfo && floorPlacementInfo.item ? floorPlacementInfo.item.name : "";
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))));
 
           if (!floorPreviewCollectible || floorPreviewCollectible.type !== typeToPlace) {
             // Remove mismatched preview if it exists
@@ -696,7 +696,7 @@ function buildCollectibles(count, seed) {
               isPreview: true,
               seed: Math.random()
             };
-            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace.startsWith("robot_")) {
+            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -1358,6 +1358,45 @@ function buildCollectibles(count, seed) {
              pN = [pnx, pny, pnz];
              pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
              pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
+          } else if (typeToPlace === "wood_wheel") {
+             let nearestBoat = null;
+             let bestDist = Infinity;
+             for (let other of collectibles) {
+               if (other.active && other.type === "wood_boat" && !other.isPreview) {
+                 const dx = other.position[0] - targetPos[0];
+                 const dy = other.position[1] - targetPos[1];
+                 const dz = other.position[2] - targetPos[2];
+                 const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                 if (dist < bestDist) {
+                   bestDist = dist;
+                   nearestBoat = other;
+                 }
+               }
+             }
+
+             if (nearestBoat && bestDist < 3.5) {
+               const bP = nearestBoat.position;
+               const bN = nearestBoat.normal || [0, 1, 0];
+               const bR = nearestBoat.R || [1, 0, 0];
+               const bF = nearestBoat.F || [0, 0, 1];
+
+               targetPos = [bP[0], bP[1], bP[2]];
+               pN = [bN[0], bN[1], bN[2]];
+               pR = [bR[0], bR[1], bR[2]];
+               pF = [bF[0], bF[1], bF[2]];
+               isSnapped = true;
+               floorPreviewCollectible.isValidPlacement = true;
+               floorPreviewCollectible.isBoatSnapped = true;
+               floorPreviewCollectible.targetBoat = nearestBoat;
+               floorPreviewCollectible.size = 0.25;
+             } else {
+               floorPreviewCollectible.isValidPlacement = !isUnderWater;
+               floorPreviewCollectible.isBoatSnapped = false;
+               floorPreviewCollectible.size = 0.25;
+               pN = [pnx, pny, pnz];
+               pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
+               pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
+             }
           } else if (typeToPlace === "stone_floor") {
             const w = 0.25 * 12.0;
             const d = 0.25 * 12.0;
@@ -2427,7 +2466,77 @@ function buildCollectibles(count, seed) {
           }
           
           let collisionRadius = groundRadius;
-          if (isInWater && (c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "wood_boat")) {
+          let pitchGrade = 0;
+          let rollGrade = 0;
+          
+          if (c.type === "wood_boat" && (c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0)) && !isInWater) {
+              const fSideOff = typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;
+              const fFwdOff  = typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18;
+              const fUpOff   = typeof window.wheelFrontUpOffset   === "number" ? window.wheelFrontUpOffset   : -0.03;
+
+              const rSideOff = typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18;
+              const rFwdOff  = typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
+              const rUpOff   = typeof window.wheelRearUpOffset   === "number" ? window.wheelRearUpOffset   : -0.03;
+
+              const wheelRadius = 0.16;
+
+              const nx = c.position[0] / (r || 1);
+              const ny = c.position[1] / (r || 1);
+              const nz = c.position[2] / (r || 1);
+              const bF = c.F, bR_vec = c.R;
+
+              const wheelOffsets = [
+                  { side: -1, fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
+                  { side: 1,  fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
+                  { side: -1, fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff },
+                  { side: 1,  fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff }
+              ];
+              
+              let maxWheelRequiredRadius = -Infinity;
+              let wHeights = [];
+              
+              for (let wo of wheelOffsets) {
+                  let wOffX = bR_vec[0] * (wo.side * wo.sOff) + nx * wo.uOff + bF[0] * wo.fwd;
+                  let wOffY = bR_vec[1] * (wo.side * wo.sOff) + ny * wo.uOff + bF[1] * wo.fwd;
+                  let wOffZ = bR_vec[2] * (wo.side * wo.sOff) + nz * wo.uOff + bF[2] * wo.fwd;
+                  let wWorldX = terrainRadius * nx + wOffX;
+                  let wWorldY = terrainRadius * ny + wOffY;
+                  let wWorldZ = terrainRadius * nz + wOffZ;
+                  let wR = Math.sqrt(wWorldX*wWorldX + wWorldY*wWorldY + wWorldZ*wWorldZ) || 1;
+                  let wTheta = Math.acos(Math.max(-1, Math.min(1, wWorldY / wR)));
+                  let wPhi = Math.atan2(wWorldZ, wWorldX);
+                  let wTerrainRad = RADIUS + getHeightOnSphere(wTheta, wPhi, globalSeed) * HEIGHT_SCALE;
+                  
+                  let wSurfaceRad = wTerrainRad;
+                  if (waterEnabled && wTerrainRad < waterRadius) {
+                      let waveVal = getWaterWave ? getWaterWave(wWorldX, wWorldY, wWorldZ, waterAnimTime, waveStrength) : 0;
+                      let depth = waterRadius - wTerrainRad;
+                      let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
+                      wSurfaceRad = waterRadius + waveVal * fade;
+                  }
+                  wHeights.push(wSurfaceRad);
+
+                  let requiredBoatRad = wTerrainRad + wheelRadius - wo.uOff;
+                  if (requiredBoatRad > maxWheelRequiredRadius) {
+                      maxWheelRequiredRadius = requiredBoatRad;
+                  }
+              }
+              
+              collisionRadius = Math.max(terrainRadius + wheelRadius - fUpOff, maxWheelRequiredRadius);
+              
+              let fl = wHeights[0], fr = wHeights[1], rl = wHeights[2], rr = wHeights[3];
+              let fAvg = (fl + fr) * 0.5;
+              let rAvg = (rl + rr) * 0.5;
+              let lAvg = (fl + rl) * 0.5;
+              let rSideAvg = (fr + rr) * 0.5;
+
+              pitchGrade = (fAvg - rAvg) / (fFwdOff + rFwdOff + 0.001);
+              rollGrade = (rSideAvg - lAvg) / (fSideOff + rSideOff + 0.001);
+              
+              pitchGrade = Math.max(-0.5, Math.min(0.5, pitchGrade));
+              rollGrade  = Math.max(-0.5, Math.min(0.5, rollGrade));
+              
+          } else if (isInWater && (c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "wood_boat")) {
               // Logs don't collide with the water surface as hard ground, they collide with the terrain below it
               collisionRadius = terrainRadius;
           }
@@ -2444,14 +2553,83 @@ function buildCollectibles(count, seed) {
             
             // bounce and friction
             const dot = c.vel[0] * nx + c.vel[1] * ny + c.vel[2] * nz;
+            let isWheeledBoat = c.type === "wood_boat" && (c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0)) && !isInWater;
             if (dot < 0) {
-                c.vel[0] -= dot * nx * 1.3;
-                c.vel[1] -= dot * ny * 1.3;
-                c.vel[2] -= dot * nz * 1.3;
+                let restitution = isWheeledBoat ? 1.0 : 1.3;
+                c.vel[0] -= dot * nx * restitution;
+                c.vel[1] -= dot * ny * restitution;
+                c.vel[2] -= dot * nz * restitution;
             }
-            Physics.applyFriction(c.vel, 0.6);
+            let friction = 0.6;
+            if (isWheeledBoat) {
+                friction = 1.0; // Speed is handled by vehSpeed instead of c.vel friction
+                c.spinSpeed = 0; // Wheeled boats align to terrain instead of spinning
+
+                const bF = c.F, bR_vec = c.R;
+                
+                let pSpeed = typeof window.playerSpeed !== "undefined" ? window.playerSpeed : 0.005;
+                let vehSpeed = typeof c.vehicleSpeed !== "undefined" ? c.vehicleSpeed : 0;
+                let dt = typeof window.timeScale !== "undefined" ? window.timeScale : 1.0;
+
+                // 1. Apply gravity to vehSpeed
+                let gravityRollPower = pitchGrade * pSpeed * 0.5 * dt;
+                vehSpeed -= gravityRollPower;
+
+                // 2. Apply coast friction
+                vehSpeed *= Math.pow(0.98, dt);
+                if (Math.abs(vehSpeed) < 0.00001) vehSpeed = 0;
+                c.vehicleSpeed = vehSpeed;
+
+                // 3. Move along forward vector
+                c.vel[0] = bF[0] * vehSpeed;
+                c.vel[1] = bF[1] * vehSpeed;
+                c.vel[2] = bF[2] * vehSpeed;
+
+                // 4. Update wheel spin visually
+                let moveDir = vehSpeed >= 0 ? 1 : -1;
+                const wheelRadius = 0.16;
+                const distTraveled = vehSpeed * dt;
+                c.spinAngle = (c.spinAngle || 0) + (distTraveled / wheelRadius);
+
+                // 5. Normal tilt calculation
+                let tiltNx = nx + bF[0] * pitchGrade * 0.4 + bR_vec[0] * rollGrade * 0.4;
+                let tiltNy = ny + bF[1] * pitchGrade * 0.4 + bR_vec[1] * rollGrade * 0.4;
+                let tiltNz = nz + bF[2] * pitchGrade * 0.4 + bR_vec[2] * rollGrade * 0.4;
+                let tiltLen = Math.sqrt(tiltNx*tiltNx + tiltNy*tiltNy + tiltNz*tiltNz) || 1;
+                c.normal = [tiltNx/tiltLen, tiltNy/tiltLen, tiltNz/tiltLen];
+
+                // 6. Turn based on steer angle
+                let currentSteer = c.steerAngle || 0;
+                if (Math.abs(vehSpeed) > 0.001 && Math.abs(currentSteer) > 0.01) {
+                    const topFwdSpeed = pSpeed * 5.0;
+                    const turnRate = currentSteer * (Math.abs(vehSpeed) / topFwdSpeed) * 0.03 * moveDir;
+                    
+                    // Rotate F and R around normal by turnRate
+                    let cosT = Math.cos(turnRate * dt);
+                    let sinT = Math.sin(turnRate * dt);
+                    
+                    let rx = c.R[0]*cosT + c.F[0]*sinT;
+                    let ry = c.R[1]*cosT + c.F[1]*sinT;
+                    let rz = c.R[2]*cosT + c.F[2]*sinT;
+                    
+                    let fx = -c.R[0]*sinT + c.F[0]*cosT;
+                    let fy = -c.R[1]*sinT + c.F[1]*cosT;
+                    let fz = -c.R[2]*sinT + c.F[2]*cosT;
+                    
+                    c.R = [rx, ry, rz];
+                    c.F = [fx, fy, fz];
+                }
+
+                // 7. Orthogonalize F and R
+                let fDot = c.F[0]*c.normal[0] + c.F[1]*c.normal[1] + c.F[2]*c.normal[2];
+                let newF = [c.F[0] - fDot*c.normal[0], c.F[1] - fDot*c.normal[1], c.F[2] - fDot*c.normal[2]];
+                let lenF = Math.sqrt(newF[0]**2 + newF[1]**2 + newF[2]**2);
+                if (lenF > 0.001) { c.F = [newF[0]/lenF, newF[1]/lenF, newF[2]/lenF]; }
+                c.R = [c.normal[1]*c.F[2] - c.normal[2]*c.F[1], c.normal[2]*c.F[0] - c.normal[0]*c.F[2], c.normal[0]*c.F[1] - c.normal[1]*c.F[0]];
+            }
+            Physics.applyFriction(c.vel, friction);
             
-            c.spinSpeed *= 0.6;
+            c.spinSpeed *= friction;
 
             // Stop moving if very slow
             const speedSq = c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2;

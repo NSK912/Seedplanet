@@ -943,7 +943,7 @@ function setF32(target, source) {
         // Synchronize active action slot with floor placement mode
         const selectedItem = (selectedActionSlotIndex !== -1) ? actionSlotsItems[selectedActionSlotIndex] : null;
         
-        const isPlacementItem = selectedItem && (selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "MEGANEURA" || selectedItem.name.startsWith("ROBOT_"));
+        const isPlacementItem = selectedItem && (selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "MEGANEURA" || selectedItem.name.startsWith("ROBOT_"));
 
         if (isPlacementItem) {
           if (!isPlacingFloor || floorPlacementInfo?.index !== selectedActionSlotIndex) {
@@ -1279,15 +1279,15 @@ function setF32(target, source) {
         )
           moveForwardInput = -1;
         if (!isUIOpen && (keysPressed[currentKeyBindings.right] || keysPressed["ArrowRight"]))
-          moveSidewaysInput = -1;
-        if (!isUIOpen && (keysPressed[currentKeyBindings.left] || keysPressed["ArrowLeft"]))
           moveSidewaysInput = 1;
+        if (!isUIOpen && (keysPressed[currentKeyBindings.left] || keysPressed["ArrowLeft"]))
+          moveSidewaysInput = -1;
 
         // Joystick input
         const joyLen = Math.sqrt(joystickX * joystickX + joystickY * joystickY);
         if (!isUIOpen && joyLen > 0.05) {
           moveForwardInput = joystickY;
-          moveSidewaysInput = -joystickX;
+          moveSidewaysInput = joystickX;
 
           const speedFactor = Math.min(1.0, joyLen * 1.2);
           moveForwardInput *= speedFactor;
@@ -1476,8 +1476,8 @@ function setF32(target, source) {
         if (activeRidingBoat) {
           const tRadius = RADIUS + getHeightOnSphere(charTheta, charPhi, globalSeed) * HEIGHT_SCALE;
           const baseRadius = (waterEnabled && tRadius < waterRadius) ? waterRadius : tRadius;
-          // Since the boat sits at baseRadius - 0.04, the player stands at baseRadius - 0.04 + 0.46 * charScale
-          standGroundRadius = baseRadius - 0.04 + 0.46 * charScale;
+          let bR = activeRidingBoat.currentRadius !== undefined ? activeRidingBoat.currentRadius : (baseRadius - 0.04);
+          standGroundRadius = bR + 0.46 * charScale;
         } else if (activeRidingMech) {
           const tRadius = RADIUS + getHeightOnSphere(charTheta, charPhi, globalSeed) * HEIGHT_SCALE;
           standGroundRadius = tRadius + (typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71);
@@ -1622,11 +1622,81 @@ function setF32(target, source) {
         let East = [-sinPhi, 0, cosPhi];
 
         if (activeRidingBoat) {
-          // Boat turns with A/D
           let boatDepth = waterRadius - terrainRadius;
-          let canRow = waterEnabled && boatDepth > 0.48 * charScale;
-          if (canRow) {
-            charHeading += moveSidewaysInput * 0.05 * timeScale;
+          let isInWater = waterEnabled && boatDepth > 0.48 * charScale;
+          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+
+          if (isLandBoat) {
+            // === GTA REALISTIC VEHICLE DRIVING PHYSICS ===
+            const dt = timeScale;
+            
+            // 1. Front Wheel Steering Angle (A / D keys)
+            const maxSteerRad = 0.52; // ~30 degrees
+            const targetSteer = -moveSidewaysInput * maxSteerRad;
+            let currentSteer = activeRidingBoat.steerAngle || 0;
+            currentSteer += (targetSteer - currentSteer) * Math.min(1.0, 0.2 * dt);
+            activeRidingBoat.steerAngle = currentSteer;
+
+            // 2. Acceleration, Braking, Reversing & Handbrake (W / S / Space)
+            let vehSpeed = activeRidingBoat.vehicleSpeed || 0;
+            const pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
+            const topFwdSpeed = pSpeed * 5.0;
+            const topRevSpeed = pSpeed * 2.0;
+            const accelPower = pSpeed * 0.15 * dt;
+            const brakePower = pSpeed * 0.30 * dt;
+            const coastFriction = Math.pow(0.98, dt);
+
+            const isHandbrake = (typeof keys !== "undefined" && (keys["Space"] || keys[" "]));
+            activeRidingBoat.isHandbraking = isHandbrake;
+            
+            // Add Gravity Roll
+            const currentPitch = activeRidingBoat.pitchGrade || 0;
+            const gravityRollPower = currentPitch * pSpeed * 0.5 * dt; 
+            
+            if (!isHandbrake) {
+                vehSpeed -= gravityRollPower;
+            }
+
+            if (isHandbrake) {
+              vehSpeed *= Math.pow(0.85, dt);
+            } else if (moveForwardInput > 0.1) {
+              if (vehSpeed < -0.01) {
+                vehSpeed += brakePower;
+              } else {
+                vehSpeed = Math.min(topFwdSpeed, vehSpeed + accelPower);
+              }
+            } else if (moveForwardInput < -0.1) {
+              if (vehSpeed > 0.01) {
+                vehSpeed -= brakePower;
+              } else {
+                vehSpeed = Math.max(-topRevSpeed, vehSpeed - accelPower);
+              }
+            } else {
+              vehSpeed *= coastFriction;
+              // Remove the strict zeroing here so it can roll slowly
+              if (Math.abs(vehSpeed) < 0.00001) vehSpeed = 0;
+            }
+
+            activeRidingBoat.vehicleSpeed = vehSpeed;
+
+            // 3. Vehicle Turning / Steering Heading (GTA Car Physics)
+            // Car turns proportionally to speed and steer angle; reverses turn direction in reverse
+            if (Math.abs(vehSpeed) > 0.001) {
+              const turnDir = vehSpeed >= 0 ? 1 : -1;
+              const driftMultiplier = isHandbrake ? 2.4 : 1.0;
+              const turnRate = currentSteer * (Math.abs(vehSpeed) / topFwdSpeed) * 0.03 * turnDir * driftMultiplier;
+              charHeading += turnRate * dt;
+            }
+
+            // 4. Wheel Spin Angle
+            const wheelRadius = 0.16;
+            const distTraveled = vehSpeed * dt;
+            activeRidingBoat.spinAngle = (activeRidingBoat.spinAngle || 0) + (distTraveled / wheelRadius);
+          } else {
+            let canRow = isInWater || isLandBoat;
+            if (canRow) {
+              charHeading += -moveSidewaysInput * 0.05 * timeScale;
+            }
           }
         }
 
@@ -1646,21 +1716,22 @@ function setF32(target, source) {
         let moveEastFactor = 0;
         
         if (activeRidingBoat) {
-          // Boat controls: W/S move forward/backward (heading already updated)
-          // Since we want the boat to move locally forward, and we calculate global move factors...
-          // Wait, F_3d is the forward direction. moveNorthFactor and moveEastFactor are the *world* space inputs.
-          // In world space (North/East), moving forward means North=cos(heading) and East=sin(heading).
           let boatDepth = waterRadius - terrainRadius;
-          let canRow = waterEnabled && boatDepth > 0.48 * charScale;
-          if (canRow) {
+          let isInWater = waterEnabled && boatDepth > 0.48 * charScale;
+          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+
+          if (isLandBoat) {
+            let speedRatio = (activeRidingBoat.vehicleSpeed || 0) / (typeof playerSpeed !== "undefined" ? playerSpeed : 0.005);
+            moveNorthFactor = Math.cos(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : 0);
+            moveEastFactor = Math.sin(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : 0);
+          } else if (isInWater || isLandBoat) {
             moveNorthFactor = Math.cos(charHeading) * moveForwardInput;
             moveEastFactor = Math.sin(charHeading) * moveForwardInput;
           } else {
-            // Show prompt or just prevent movement
             moveNorthFactor = 0;
             moveEastFactor = 0;
             if (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1) {
-              showNotice("ระดับน้ำไม่เพียงพอที่จะพายเรือ! (Water too shallow to row)");
+              showNotice("เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
             }
           }
         } else if (activeRidingMech) {
@@ -1673,23 +1744,15 @@ function setF32(target, source) {
               }
             }
           } else {
-            moveNorthFactor =
-              Math.cos(rotationY) * moveForwardInput -
-              Math.sin(rotationY) * moveSidewaysInput;
-            moveEastFactor =
-              Math.sin(rotationY) * moveForwardInput +
-              Math.cos(rotationY) * moveSidewaysInput;
+            moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
+            moveEastFactor  = Math.sin(rotationY) * moveForwardInput - Math.cos(rotationY) * moveSidewaysInput;
           }
         } else if (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") {
-          moveNorthFactor =
-            Math.cos(rotationY) * moveForwardInput -
-            Math.sin(rotationY) * moveSidewaysInput;
-          moveEastFactor =
-            Math.sin(rotationY) * moveForwardInput +
-            Math.cos(rotationY) * moveSidewaysInput;
+          moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
+          moveEastFactor  = Math.sin(rotationY) * moveForwardInput - Math.cos(rotationY) * moveSidewaysInput;
         } else {
           moveNorthFactor = moveForwardInput;
-          moveEastFactor = moveSidewaysInput;
+          moveEastFactor = -moveSidewaysInput;
         }
 
         const moveLen = Math.sqrt(
@@ -1700,8 +1763,9 @@ function setF32(target, source) {
           const moveEastNorm = moveEastFactor / moveLen;
 
           const currentRadius = RADIUS + charHeight * HEIGHT_SCALE;
-          let currentSpeedVal = playerSpeed * (1.0 - 0.4 * currentSwimFactor);
-          if (activeRidingBoat) currentSpeedVal = playerSpeed * 1.5;
+          let pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
+          let currentSpeedVal = pSpeed * (1.0 - 0.4 * currentSwimFactor);
+          if (activeRidingBoat) { let _bDepth = waterRadius - terrainRadius; let _isInWater = waterEnabled && _bDepth > 0.48 * charScale; let _isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0); if (_isLandBoat) { currentSpeedVal = Math.abs(activeRidingBoat.vehicleSpeed || 0); } else { currentSpeedVal = pSpeed * 1.5; } }
           const speed = currentSpeedVal / currentRadius;
           if (activeRidingBoat) boatRowTimer += speed * 50.0;
 
@@ -2641,9 +2705,12 @@ function setF32(target, source) {
               let baseRadius = (waterEnabled && tRadius < wRadius) ? wRadius : tRadius;
               if (waterEnabled && tRadius < wRadius) {
                   const wave = getWaterWave(nx * wRadius, ny * wRadius, nz * wRadius, waterAnimTime, waveStrength);
-                  baseRadius += wave;
+                  let depth = wRadius - tRadius;
+                  let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
+                  baseRadius += wave * fade;
               }
-              groundRadius = baseRadius - 0.03 + 0.46 * charScale;
+              let bR = activeRidingBoat.currentRadius !== undefined ? (activeRidingBoat.currentRadius + 0.01) : (baseRadius - 0.03);
+              groundRadius = bR + 0.46 * charScale;
             } else if (activeRidingMech) {
               const isMechWalking = typeof isWalking !== "undefined" && isWalking;
               const wPhase = typeof walkPhase !== "undefined" ? walkPhase : 0.0;
@@ -2723,7 +2790,8 @@ function setF32(target, source) {
               playerCenterRadius = tRadius + (typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71);
             } else if (activeRidingBoat) {
               const baseRadius = (waterEnabled && tRadius < waterRadius) ? waterRadius : tRadius;
-              playerCenterRadius = baseRadius - 0.04 + 0.46 * charScale;
+              let bR = activeRidingBoat.currentRadius !== undefined ? activeRidingBoat.currentRadius : (baseRadius - 0.04);
+              playerCenterRadius = bR + 0.46 * charScale;
             }
             isPlayerGrounded = true;
             playerVerticalVel = 0.0;
@@ -2845,27 +2913,158 @@ function setF32(target, source) {
             let baseRadius = (waterEnabled && tRadius < wRadius) ? wRadius : tRadius;
             if (waterEnabled && tRadius < wRadius) {
                 const wave = getWaterWave(nx * wRadius, ny * wRadius, nz * wRadius, waterAnimTime, waveStrength);
-                baseRadius += wave;
+                let depth = wRadius - tRadius;
+                let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
+                baseRadius += wave * fade;
             }
-            // To make the boat float halfway submerged when riding, we place it at exactly baseRadius - 0.04
-            const bR = baseRadius - 0.04;
-            activeRidingBoat.position = [bR * nx, bR * ny, bR * nz];
-            activeRidingBoat.normal = [nx, ny, nz];
-            activeRidingBoat.angle = undefined; // clear fixed placement angle
-            
+            // Gravity system for wheeled boat
+            let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+            let bR = baseRadius - 0.04;
+            let targetGroundRadius = bR;
+
             // Recalculate F_3d and R for the boat based on the updated charHeading and nx,ny,nz
             let cNorth = [-Math.cos(charTheta) * Math.cos(charPhi), Math.sin(charTheta), -Math.cos(charTheta) * Math.sin(charPhi)];
             let cEast = [-Math.sin(charPhi), 0, Math.cos(charPhi)];
-            activeRidingBoat.F = [
+            let bF = [
                 cNorth[0] * Math.cos(charHeading) + cEast[0] * Math.sin(charHeading),
                 cNorth[1] * Math.cos(charHeading) + cEast[1] * Math.sin(charHeading),
                 cNorth[2] * Math.cos(charHeading) + cEast[2] * Math.sin(charHeading)
             ];
-            activeRidingBoat.R = [
+            let bR_vec = [
                 cEast[0] * Math.cos(charHeading) - cNorth[0] * Math.sin(charHeading),
                 cEast[1] * Math.cos(charHeading) - cNorth[1] * Math.sin(charHeading),
                 cEast[2] * Math.cos(charHeading) - cNorth[2] * Math.sin(charHeading)
             ];
+
+            if (activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0)) {
+                const fSideOff = typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;
+                const fFwdOff  = typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18;
+                const fUpOff   = typeof window.wheelFrontUpOffset   === "number" ? window.wheelFrontUpOffset   : -0.03;
+
+                const rSideOff = typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18;
+                const rFwdOff  = typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
+                const rUpOff   = typeof window.wheelRearUpOffset   === "number" ? window.wheelRearUpOffset   : -0.03;
+
+                const wheelRadius = 0.16;
+
+                const wheelOffsets = [
+                    { id: "FL", side: -1, fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
+                    { id: "FR", side: 1,  fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
+                    { id: "RL", side: -1, fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff },
+                    { id: "RR", side: 1,  fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff }
+                ];
+
+                let maxWheelRequiredRadius = -Infinity;
+                let wHeights = [];
+
+                for (let wo of wheelOffsets) {
+                    let wOffX = bR_vec[0] * (wo.side * wo.sOff) + nx * wo.uOff + bF[0] * wo.fwd;
+                    let wOffY = bR_vec[1] * (wo.side * wo.sOff) + ny * wo.uOff + bF[1] * wo.fwd;
+                    let wOffZ = bR_vec[2] * (wo.side * wo.sOff) + nz * wo.uOff + bF[2] * wo.fwd;
+
+                    let wWorldX = tRadius * nx + wOffX;
+                    let wWorldY = tRadius * ny + wOffY;
+                    let wWorldZ = tRadius * nz + wOffZ;
+
+                    let wR = Math.sqrt(wWorldX*wWorldX + wWorldY*wWorldY + wWorldZ*wWorldZ) || 1;
+                    let wTheta = Math.acos(Math.max(-1, Math.min(1, wWorldY / wR)));
+                    let wPhi = Math.atan2(wWorldZ, wWorldX);
+
+                    let wTerrainH = getHeightOnSphere(wTheta, wPhi, globalSeed);
+                    let wTerrainRad = RADIUS + wTerrainH * HEIGHT_SCALE;
+                    
+                    let wSurfaceRad = wTerrainRad;
+                    if (waterEnabled && wTerrainRad < wRadius) {
+                        let waveVal = getWaterWave(wWorldX, wWorldY, wWorldZ, waterAnimTime, waveStrength);
+                        let depth = wRadius - wTerrainRad;
+                        let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
+                        wSurfaceRad = wRadius + waveVal * fade;
+                    }
+                    wHeights.push(wSurfaceRad); // Use surface (water or terrain) for pitch/roll
+
+                    let requiredBoatRad = wTerrainRad + wheelRadius - wo.uOff; // Use actual terrain for physical lift
+                    if (requiredBoatRad > maxWheelRequiredRadius) {
+                        maxWheelRequiredRadius = requiredBoatRad;
+                    }
+                }
+
+                if (maxWheelRequiredRadius > -Infinity) {
+                    targetGroundRadius = Math.max(targetGroundRadius, maxWheelRequiredRadius);
+                }
+
+                // Pitch & Roll slope alignment from 4 wheel contacts
+                if (wHeights.length === 4) {
+                    let fl = wHeights[0], fr = wHeights[1], rl = wHeights[2], rr = wHeights[3];
+                    let fAvg = (fl + fr) * 0.5;
+                    let rAvg = (rl + rr) * 0.5;
+                    let lAvg = (fl + rl) * 0.5;
+                    let rSideAvg = (fr + rr) * 0.5;
+
+                    let pitchGrade = (fAvg - rAvg) / (fFwdOff + rFwdOff + 0.001);
+                    let rollGrade  = (rSideAvg - lAvg) / (fSideOff + rSideOff + 0.001);
+
+                    pitchGrade = Math.max(-0.5, Math.min(0.5, pitchGrade));
+                    rollGrade  = Math.max(-0.5, Math.min(0.5, rollGrade));
+                    
+                    activeRidingBoat.pitchGrade = pitchGrade;
+
+                    let tiltNx = nx + bF[0] * pitchGrade * 0.4 + bR_vec[0] * rollGrade * 0.4;
+                    let tiltNy = ny + bF[1] * pitchGrade * 0.4 + bR_vec[1] * rollGrade * 0.4;
+                    let tiltNz = nz + bF[2] * pitchGrade * 0.4 + bR_vec[2] * rollGrade * 0.4;
+                    let tiltLen = Math.sqrt(tiltNx*tiltNx + tiltNy*tiltNy + tiltNz*tiltNz) || 1;
+                    
+                    let newNx = tiltNx / tiltLen;
+                    let newNy = tiltNy / tiltLen;
+                    let newNz = tiltNz / tiltLen;
+
+                    let dotFN = bF[0]*newNx + bF[1]*newNy + bF[2]*newNz;
+                    bF = [bF[0] - newNx*dotFN, bF[1] - newNy*dotFN, bF[2] - newNz*dotFN];
+                    let fLen = Math.sqrt(bF[0]*bF[0] + bF[1]*bF[1] + bF[2]*bF[2]) || 1;
+                    bF = [bF[0]/fLen, bF[1]/fLen, bF[2]/fLen];
+
+                    bR_vec = [
+                        newNy*bF[2] - newNz*bF[1],
+                        newNz*bF[0] - newNx*bF[2],
+                        newNx*bF[1] - newNy*bF[0]
+                    ];
+                    
+                    activeRidingBoat.normal = [newNx, newNy, newNz];
+                }
+            }
+
+            if (isLandVehicle) {
+                if (activeRidingBoat.currentRadius === undefined) {
+                    activeRidingBoat.currentRadius = targetGroundRadius;
+                    activeRidingBoat.verticalVel = 0;
+                }
+                
+                // Apply Gravity
+                activeRidingBoat.verticalVel = Physics.applyVerticalGravity(activeRidingBoat.verticalVel, 1.0, Physics.gravityAccel);
+                activeRidingBoat.currentRadius += activeRidingBoat.verticalVel;
+                
+                // Ground collision
+                if (activeRidingBoat.currentRadius <= targetGroundRadius) {
+                    // Slight bounce or just stop
+                    activeRidingBoat.currentRadius = targetGroundRadius;
+                    activeRidingBoat.verticalVel = 0;
+                }
+                
+                bR = activeRidingBoat.currentRadius;
+            }
+
+            activeRidingBoat.position = [bR * nx, bR * ny, bR * nz];
+            playerCenterRadius = bR + 0.46 * charScale;
+            px = playerCenterRadius * nx;
+            py = playerCenterRadius * ny;
+            pz = playerCenterRadius * nz;
+
+            // let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+            if (!isLandVehicle || !activeRidingBoat.normal) {
+                activeRidingBoat.normal = [nx, ny, nz];
+            }
+            activeRidingBoat.angle = undefined; // clear fixed placement angle
+            activeRidingBoat.F = bF;
+            activeRidingBoat.R = bR_vec;
         } else if (activeRidingMech) {
             let height = getHeightOnSphere(charTheta, charPhi, globalSeed);
             let tRadius = RADIUS + height * HEIGHT_SCALE;
@@ -3192,7 +3391,7 @@ function setF32(target, source) {
             r * Math.sin(px) * Math.sin(py),
           ];
           if (isDemolishModeEnabled) {
-            const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "campfire", "wood_boat", "wood_wall", "wood_window", "wood_door", "wood_chest", "meganeura_item"];
+            const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "campfire", "wood_boat", "wood_wheel", "wood_wall", "wood_window", "wood_door", "wood_chest", "meganeura_item"];
             let closestDemolishItem = null;
             let minDemolishDist = actionReachDistance;
             let currentBestDist = Infinity;
@@ -3288,7 +3487,8 @@ function setF32(target, source) {
               let bTerrainRadius = RADIUS + bHeight * HEIGHT_SCALE;
               const bWaterRadius = RADIUS + waterLevel * 0.15;
               const bDepth = bWaterRadius - bTerrainRadius;
-              const canRideBoat = waterEnabled && bDepth > 0.48 * playerScale;
+              const hasWheels = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+              const canRideBoat = (waterEnabled && bDepth > 0.48 * playerScale) || hasWheels;
 
               const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
               if (isInteractHeld) {
@@ -3655,7 +3855,7 @@ function setF32(target, source) {
                   let bTerrainRadius = RADIUS + bHeight * HEIGHT_SCALE;
                   const bWaterRadius = RADIUS + waterLevel * 0.15;
                   const bDepth = bWaterRadius - bTerrainRadius;
-                  const canRideBoat = waterEnabled && bDepth > 0.48 * playerScale;
+                  const canRideBoat = (waterEnabled && bDepth > 0.48 * playerScale) || closestBoat.hasWheel || closestBoat.hasWheels;
 
                   const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
                   if (isInteractHeld) {
@@ -3688,7 +3888,7 @@ function setF32(target, source) {
                     chestHoldTimer = 0.0;
                   }
                   const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-                  let actionText = "กด [E] ค้าง เพื่อ ขึ้นเรือพาย<br>Hold [E] to Ride Boat";
+                  let actionText = (closestBoat.hasWheel || closestBoat.hasWheels) ? "ขึ้นขับเรือบก<br>Drive Land Boat" : (canRideBoat ? "ขึ้นเรือพาย<br>Ride Boat" : "ติดล้อไม้เพื่อขับเรือบนบก<br>Attach Wooden Wheel for Land");
                   let extraStatus = "";
 
                   prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">

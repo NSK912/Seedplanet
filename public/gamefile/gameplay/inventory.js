@@ -31,6 +31,7 @@
         { name: "WOOD_STAIRS", icon: "🪜" },
         { name: "CAMPFIRE", icon: "🔥" },
         { name: "WOOD_BOAT", icon: "🛶" },
+        { name: "WOOD_WHEEL", icon: "🛞" },
         { name: "WOOD_WALL", icon: "🧱" },
         { name: "WOOD_WINDOW", icon: "🪟" },
         { name: "WOOD_DOOR", icon: "🚪" },
@@ -187,6 +188,8 @@
             scaleFactor = 1.15;
           } else if (name === "WOOD_BOAT") {
             scaleFactor = 1.05;
+          } else if (name === "WOOD_WHEEL") {
+            scaleFactor = 1.2;
           } else if (name === "MEGANEURA") {
             scaleFactor = 2.5;
             mockItem.seed = 1234;
@@ -1539,6 +1542,33 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.type = "wood_boat";
           floorPreviewCollectible.angle = placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+        } else if (placingItemName === "WOOD_WHEEL") {
+          floorPreviewCollectible.type = "wood_wheel";
+          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+
+          let nearestBoat = null;
+          let bestDist = Infinity;
+          for (let c of collectibles) {
+            if (c.active && !c.isPreview && c.type === "wood_boat") {
+              const dx = c.position[0] - floorPreviewCollectible.position[0];
+              const dy = c.position[1] - floorPreviewCollectible.position[1];
+              const dz = c.position[2] - floorPreviewCollectible.position[2];
+              const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+              if (dist < bestDist) {
+                bestDist = dist;
+                nearestBoat = c;
+              }
+            }
+          }
+          if (nearestBoat && bestDist < 3.5) {
+            nearestBoat.hasWheel = true;
+            nearestBoat.hasWheels = true;
+            floorPreviewCollectible.active = false;
+            if (typeof showNotice === "function") {
+              showNotice("⚙️ ติดล้อไม้กับเรือเรียบร้อย! เรือสามารถขับบนบกได้แล้ว (Wooden Wheel attached! Boat can now drive on land)");
+            }
+          }
         } else if (placingItemName === "WOOD_WALL") {
           floorPreviewCollectible.type = "wood_wall";
           floorPreviewCollectible.angle = placementRotationAngle;
@@ -1602,7 +1632,7 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))));
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -1618,7 +1648,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -1961,7 +1991,7 @@ function cancelFloorPlacement() {
           activeItem = item;
           isUsingItem = true;
           arrowShotInCurrentAnim = false;
-        } else if (item && (item.name === "STONE_FLOOR" || item.name === "WOOD_FLOOR" || item.name === "THIN_WOOD_FLOOR" || item.name === "WOOD_STAIRS" || item.name === "CAMPFIRE" || item.name === "WOOD_BOAT" || item.name === "WOOD_WALL" || item.name === "WOOD_WINDOW" || item.name === "WOOD_DOOR" || item.name === "WOOD_CHEST" || item.name === "MEGANEURA" || item.name.startsWith("ROBOT_"))) {
+        } else if (item && (item.name === "STONE_FLOOR" || item.name === "WOOD_FLOOR" || item.name === "THIN_WOOD_FLOOR" || item.name === "WOOD_STAIRS" || item.name === "CAMPFIRE" || item.name === "WOOD_BOAT" || item.name === "WOOD_WHEEL" || item.name === "WOOD_WALL" || item.name === "WOOD_WINDOW" || item.name === "WOOD_DOOR" || item.name === "WOOD_CHEST" || item.name === "MEGANEURA" || item.name.startsWith("ROBOT_"))) {
           isPlacingFloor = true;
           placementRotationAngle = 0.0;
           floorPlacementInfo = { item, index, source };
@@ -2452,6 +2482,13 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "wood_wheel",
+            output: { name: "WOOD_WHEEL", icon: "🛞", count: 1, label: "ล้อไม้ (WOODEN WHEEL) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" }
+            ]
+          },
+          {
             id: "stone_floor", output: { name: "STONE_FLOOR", icon: "🪨", count: 1, label: "พื้นหิน (STONE FLOOR) x1" }, ingredients: [ { name: "BIG_ROCK", icon: "🪨", count: 10, label: "หินใหญ่ (BIG ROCK)" } ]
           },
           {
@@ -2744,6 +2781,13 @@ function cancelFloorPlacement() {
             output: { name: "WOOD_BOAT", icon: "🛶", count: 1 },
             ingredients: [
               { name: "LOG", count: 3 }
+            ]
+          },
+          {
+            id: "wood_wheel",
+            output: { name: "WOOD_WHEEL", icon: "🛞", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 1 }
             ]
           },
           {
@@ -3474,6 +3518,8 @@ function cancelFloorPlacement() {
           itemData = { name: "CAMPFIRE", icon: "🔥", label: "CAMPFIRE" };
         } else if (closestDemolishItem.type === "wood_boat") {
           itemData = { name: "WOOD_BOAT", icon: "🛶", label: "WOOD_BOAT" };
+        } else if (closestDemolishItem.type === "wood_wheel") {
+          itemData = { name: "WOOD_WHEEL", icon: "🛞", label: "WOOD_WHEEL" };
         } else if (closestDemolishItem.type === "wood_wall") {
           itemData = { name: "WOOD_WALL", icon: "🧱", label: "WOOD_WALL" };
         } else if (closestDemolishItem.type === "wood_window") {
