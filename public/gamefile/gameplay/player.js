@@ -496,15 +496,18 @@
         let len = Math.sqrt(dX * dX + dY * dY + dZ * dZ);
         let dArm = len > 1e-4 ? [dX / len, dY / len, dZ / len] : [0, -1, 0];
 
-        let up = [0, 1, 0];
-        if (Math.abs(dArm[1]) > 0.95) up = [0, 0, 1];
+        const sideVec = isLeft ? [-1, 0, 0] : [1, 0, 0];
         let rArm = [
-          up[1] * dArm[2] - up[2] * dArm[1],
-          up[2] * dArm[0] - up[0] * dArm[2],
-          up[0] * dArm[1] - up[1] * dArm[0],
+          dArm[1] * sideVec[2] - dArm[2] * sideVec[1],
+          dArm[2] * sideVec[0] - dArm[0] * sideVec[2],
+          dArm[0] * sideVec[1] - dArm[1] * sideVec[0],
         ];
         let rLen = Math.sqrt(rArm[0] * rArm[0] + rArm[1] * rArm[1] + rArm[2] * rArm[2]);
-        rArm = rLen > 1e-4 ? [rArm[0] / rLen, rArm[1] / rLen, rArm[2] / rLen] : [1, 0, 0];
+        if (rLen < 1e-3) {
+          rArm = isLeft ? [0, 0, -1] : [0, 0, 1];
+        } else {
+          rArm = [rArm[0] / rLen, rArm[1] / rLen, rArm[2] / rLen];
+        }
 
         const sf = scaleFactor;
         const palmTip = [
