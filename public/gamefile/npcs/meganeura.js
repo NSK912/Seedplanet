@@ -225,6 +225,63 @@ window.buildMeganeuraModel = function(
 window.NpcRegistry["meganeura"] = {
   maxHp: 3,
   updateBehavior: function(c, deltaTime, seed, gRadius, wRadius, npcCaveData) {
+    let pTheta, pPhi, pBoat, pMech;
+    try { pTheta = charTheta; } catch(e) {}
+    try { pPhi = charPhi; } catch(e) {}
+    try { pBoat = activeRidingBoat; } catch(e) {}
+    try { pMech = activeRidingMech; } catch(e) {}
+    
+    const isDriving = pBoat || pMech;
+
+    if (c.attachedToPlayer) {
+      if (isDriving) {
+        c.attachedToPlayer = false; // Shake off when driving boat or mech
+      } else if (pTheta !== undefined && pPhi !== undefined) {
+        // Attach to player and attack
+        c.theta = pTheta;
+        c.phi = pPhi;
+        let pr = gRadius;
+        try { 
+            pr = (typeof RADIUS !== "undefined" ? RADIUS : 200) + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(pTheta, pPhi, seed) * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 10) : 0);
+        } catch(e) {}
+        c.r = pr + 0.15; // Position slightly above player center
+        c.isSwimming = false;
+        c.animPhase += deltaTime * 25.0; // Frantic wing flap
+        
+        // Attack logic
+        try {
+            if (typeof damagePlayer === 'function') damagePlayer(1);
+        } catch(e) {}
+        
+        return; // Skip normal wandering behavior
+      } else {
+        c.attachedToPlayer = false;
+      }
+    } else {
+      // Attempt to attach if close and not driving
+      if (pTheta !== undefined && pPhi !== undefined && !isDriving) {
+        let pr = gRadius;
+        try { 
+            pr = (typeof RADIUS !== "undefined" ? RADIUS : 200) + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(pTheta, pPhi, seed) * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 10) : 0);
+        } catch(e) {}
+        
+        const px = pr * Math.sin(pTheta) * Math.cos(pPhi);
+        const py = pr * Math.cos(pTheta);
+        const pz = pr * Math.sin(pTheta) * Math.sin(pPhi);
+        
+        const cx = c.r * Math.sin(c.theta) * Math.cos(c.phi);
+        const cy = c.r * Math.cos(c.theta);
+        const cz = c.r * Math.sin(c.theta) * Math.sin(c.phi);
+        
+        const distSq = (px-cx)**2 + (py-cy)**2 + (pz-cz)**2;
+        
+        if (distSq < 0.25) { // distance < 0.5
+            c.attachedToPlayer = true;
+            return;
+        }
+      }
+    }
+
     c.isSwimming = false;
     const baseR = Math.max(gRadius, wRadius);
     let targetR = baseR + 0.3 + Math.sin(c.animPhase * 2.0) * 0.05;

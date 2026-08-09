@@ -552,39 +552,19 @@
                     float actualTerrainRadius = abs(vTerrainRadius);
                     bool isCollar = vTerrainRadius < 0.0;
                     
-                    if (uIsTunnelMesh > 1.5) { // Shell
-                        // Discard the clamped flat roof of the cave sphere (which is exactly at actualTerrainRadius)
-                        if (!isCollar && distToCenter > actualTerrainRadius - 0.02) {
-                            discard;
-                        }
-                        // If overlapping with another tunnel, discard the wall
-                        for (int i = 0; i < 64; i++) {
-                            if (i < uTunnelCount) {
-                                vec4 t = uTunnels[i];
-                                // Skip the owner tunnel of this vertex
-                                if (length(t.xyz - vTunnelCenter) < 0.01) continue;
-                                vec3 diff = vWorldPos - t.xyz;
-                                // Less aggressive discard so collars can intersect and form a seam
-                                if (dot(diff, diff) < (t.w * 0.88) * (t.w * 0.88)) {
-                                    discard;
-                                }
-                            }
-                        }
-                    } else { // Inner cave
-                        // Discard the clamped flat roof of the cave sphere (which is exactly at actualTerrainRadius)
-                        if (!isCollar && distToCenter > actualTerrainRadius - 0.02) {
-                            discard;
-                        }
-                        // If overlapping with another tunnel, discard the wall
-                        for (int i = 0; i < 64; i++) {
-                            if (i < uTunnelCount) {
-                                vec4 t = uTunnels[i];
-                                // Skip the owner tunnel of this vertex
-                                if (length(t.xyz - vTunnelCenter) < 0.01) continue;
-                                vec3 diff = vWorldPos - t.xyz;
-                                if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
-                                    discard;
-                                }
+                    // Discard only the clamped flat roof of the cave sphere (which is exactly at actualTerrainRadius)
+                    if (!isCollar && distToCenter > actualTerrainRadius - 0.02) {
+                        discard;
+                    }
+                    // If overlapping with another tunnel, discard the inner wall so tunnels connect smoothly
+                    for (int i = 0; i < 64; i++) {
+                        if (i < uTunnelCount) {
+                            vec4 t = uTunnels[i];
+                            // Skip the owner tunnel sphere of this vertex
+                            if (length(t.xyz - vTunnelCenter) < 0.05) continue;
+                            vec3 diff = vWorldPos - t.xyz;
+                            if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
+                                discard;
                             }
                         }
                     }

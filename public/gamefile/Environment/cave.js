@@ -809,9 +809,7 @@
       const tunnelCenterAttrLoc = locations.tunnelCenterAttrLoc;
       const useUint32 = locations.supportUint32 && tunnelIndicesCount > 65535;
 
-      gl.enable(gl.CULL_FACE);
-      gl.frontFace(gl.CCW);
-      gl.cullFace(gl.BACK);
+      gl.disable(gl.CULL_FACE);
 
       if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 1.0);
 

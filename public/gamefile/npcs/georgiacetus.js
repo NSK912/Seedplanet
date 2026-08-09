@@ -403,8 +403,34 @@ window.buildGeorgiacetusModel = function(
 };
 
 window.NpcRegistry["georgiacetus"] = {
-  maxHp: 1,
+  maxHp: 10,
   updateBehavior: function(c, deltaTime, seed, gRadius, wRadius, npcCaveData) {
+    let pTheta, pPhi, pBoat, pMech, pR;
+    let distToPlayer = 999;
+    let dx = 0, dy = 0, dz = 0;
+    try { 
+        pTheta = charTheta;
+        pPhi = charPhi;
+        pBoat = activeRidingBoat;
+        pMech = activeRidingMech;
+        pR = (typeof RADIUS !== "undefined" ? RADIUS : 200) + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(pTheta, pPhi, seed) * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 10) : 0);
+        
+        const px = pR * Math.sin(pTheta) * Math.cos(pPhi);
+        const py = pR * Math.cos(pTheta);
+        const pz = pR * Math.sin(pTheta) * Math.sin(pPhi);
+        
+        const cx = c.r * Math.sin(c.theta) * Math.cos(c.phi);
+        const cy = c.r * Math.cos(c.theta);
+        const cz = c.r * Math.sin(c.theta) * Math.sin(c.phi);
+        
+        dx = px - cx;
+        dy = py - cy;
+        dz = pz - cz;
+        distToPlayer = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    } catch(e) {}
+
+    const isDriving = pBoat || pMech;
+
     if (gRadius > wRadius - 0.02) {
       // On land
       c.isSwimming = false;
@@ -427,6 +453,36 @@ window.NpcRegistry["georgiacetus"] = {
     } else {
       // Swimming
       c.isSwimming = true;
+      
+      if (distToPlayer < 15.0 && !isDriving) { // Chase player!
+        const dot_E = dx * (-Math.sin(c.phi)) + dz * Math.cos(c.phi);
+        const dot_N = dx * (-Math.cos(c.theta) * Math.cos(c.phi)) + dy * Math.sin(c.theta) + dz * (-Math.cos(c.theta) * Math.sin(c.phi));
+        const targetHeading = Math.atan2(dot_E, dot_N);
+        
+        let diff = targetHeading - c.heading;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        c.heading += Math.sign(diff) * Math.min(Math.abs(diff), 3.0 * deltaTime);
+        
+        const dashSpeed = 1.5 * deltaTime;
+        const move_theta = dashSpeed * Math.cos(c.heading) / c.r;
+        let move_phi = 0;
+        if (Math.sin(c.theta) > 0.01) {
+             move_phi = dashSpeed * Math.sin(c.heading) / (c.r * Math.sin(c.theta));
+        }
+        c.theta += move_theta;
+        c.phi += move_phi;
+        
+        c.animPhase += deltaTime * 20.0; // Fast animation when chasing
+        
+        if (distToPlayer < 0.8) {
+            try {
+                if (typeof damagePlayer === 'function' && typeof playerDamageCooldown !== 'undefined' && playerDamageCooldown <= 0 && typeof playerControlsLocked !== 'undefined' && !playerControlsLocked && typeof playerHP !== 'undefined' && playerHP > 0) {
+                    damagePlayer(5);
+                }
+            } catch(e) {}
+        }
+      }
 
       // Initialize diving state if not exists
       if (c.diveDepth === undefined) c.diveDepth = 0.0;
