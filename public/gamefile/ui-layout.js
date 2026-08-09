@@ -81,7 +81,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- Version Info -->
           <div style="color: #64748b; font-size: 12px; font-weight: 500; font-family: monospace; margin-left: 8px;">
             <span style="font-weight: 700; margin-right: 4px;">NSK App</span>
-            ver 2.0.0.0
+            ver 2.0.0.1
           </div>
         </div>
       </div>
