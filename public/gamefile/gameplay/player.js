@@ -3107,7 +3107,11 @@
               if (addItemToInventory(itemData)) {
                 item.active = false;
                 collectedCount[item.type] = (collectedCount[item.type] || 0) + 1;
-                pendingCollectibleRefresh = true;
+                if (item.isDynamic) {
+                  window.pendingDynamicCollectibleRefresh = true;
+                } else {
+                  pendingCollectibleRefresh = true;
+                }
                 found = true;
               }
             }

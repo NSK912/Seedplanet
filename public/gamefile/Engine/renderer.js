@@ -1540,48 +1540,27 @@ function setF32(target, source) {
             playerVerticalVel = Physics.applyVerticalGravity(playerVerticalVel, 1.0, Physics.gravityAccel);
             playerCenterRadius += playerVerticalVel;
 
-            // Enforce cave floor/ceiling or heightmap floor
-            if (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel) {
-              const minCenter = caveData.ground + 0.46 * charScale;
-              const maxCenter = (caveData.ceiling !== Infinity) ? (caveData.ceiling - 0.46 * charScale) : Infinity;
+            const minGroundRadius = (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel)
+              ? (caveData.ground + 0.46 * charScale)
+              : standGroundRadius;
 
-              if (playerCenterRadius <= minCenter) {
-                const impactVelocity = -playerVerticalVel;
-                playerCenterRadius = minCenter;
-                playerVerticalVel = 0.0;
-                isPlayerGrounded = true;
+            if (playerCenterRadius <= minGroundRadius) {
+              const impactVelocity = -playerVerticalVel;
+              playerCenterRadius = minGroundRadius;
+              playerVerticalVel = 0.0;
+              isPlayerGrounded = true;
 
-                // Check for heavy landing (ragdoll/falling effect)
-                if (impactVelocity > 0.025) {
-                  setRagdoll(true);
-                  if (typeof playSplashSound === "function") {
-                    playSplashSound(0.5);
-                  }
+              if (impactVelocity > 0.025) {
+                setRagdoll(true);
+                if (typeof playSplashSound === "function") {
+                  playSplashSound(0.5);
                 }
-              } else if (playerCenterRadius > maxCenter && maxCenter !== Infinity) {
-                playerCenterRadius = maxCenter;
-                playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2); // Head bump bounce
-              } else {
-                isPlayerGrounded = false;
               }
+            } else if (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel && caveData.ceiling !== Infinity && playerCenterRadius > (caveData.ceiling - 0.46 * charScale)) {
+              playerCenterRadius = caveData.ceiling - 0.46 * charScale;
+              playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2); // Ceiling bump bounce
             } else {
-              // Surface physics
-              if (playerCenterRadius <= standGroundRadius) {
-                const impactVelocity = -playerVerticalVel;
-                playerCenterRadius = standGroundRadius;
-                playerVerticalVel = 0.0;
-                isPlayerGrounded = true;
-
-                // Check for heavy landing (ragdoll/falling effect)
-                if (impactVelocity > 0.025) {
-                  setRagdoll(true);
-                  if (typeof playSplashSound === "function") {
-                    playSplashSound(0.5);
-                  }
-                }
-              } else {
-                isPlayerGrounded = false;
-              }
+              isPlayerGrounded = false;
             }
           }
         }
@@ -2755,21 +2734,6 @@ function setF32(target, source) {
                 // Stepping on slope/ground/stairs smoothly
                 playerCenterRadius = groundRadius;
               }
-            } else {
-              // Airborne (falling or jumping)
-              if (playerCenterRadius <= groundRadius) {
-                const impactVelocity = -playerVerticalVel;
-                playerCenterRadius = groundRadius;
-                isPlayerGrounded = true;
-                playerVerticalVel = 0.0;
-
-                if (impactVelocity > 0.025) {
-                  setRagdoll(true);
-                  if (typeof playSplashSound === "function") {
-                    playSplashSound(0.5);
-                  }
-                }
-              }
             }
 
             px = playerCenterRadius * nx;
@@ -3254,7 +3218,7 @@ function setF32(target, source) {
         }
 
         const charInterval = 1000 / charAnimFps;
-        const needsEveryFrame = ragdollEnabled || jumpBlend > 0.0 || !isPlayerGrounded;
+        const needsEveryFrame = ragdollEnabled;
         
         if (!isPlayerGrounded && !ragdollEnabled && !activeRidingBoat && !activeRidingMech && currentSwimFactor === 0.0) {
             jumpBlend = Math.min(1.0, jumpBlend + 10.0 * dt);

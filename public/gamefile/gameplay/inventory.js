@@ -1284,7 +1284,7 @@
                gl.bindBuffer(gl.ARRAY_BUFFER, natureVertexBuffer);
                gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, new Float32Array(natureRawVertices.slice(startF, endF)));
            }
-           refreshCollectiblesVBO();
+           // refreshCollectiblesVBO();
        }
     }
 }
@@ -1319,6 +1319,7 @@ function spawnDrop(pos, type, normal, tangent, bitangent, color, size, isHand=fa
    }
    
    collectibles.push(collectible);
+   if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
 }
 
 function cancelFloorPlacement() {
@@ -1498,9 +1499,9 @@ function cancelFloorPlacement() {
                 }
             }
 
-            if (obstaclesChanged && typeof refreshCollectiblesVBO === "function") {
-                refreshCollectiblesVBO();
-            }
+            // if (obstaclesChanged && typeof refreshCollectiblesVBO === "function") {
+            //    refreshCollectiblesVBO();
+            // }
         }
         
         if (placingItemName === "WOOD_BOAT") {

@@ -2116,6 +2116,8 @@ function buildCollectibles(count, seed) {
 
         for (let c of collectibles) {
           if (!c.active || !c.isDynamic) continue;
+          const _oldP = c.position ? [c.position[0], c.position[1], c.position[2]] : null;
+          const _oldR = c.R ? [c.R[0], c.R[1], c.R[2]] : null;
 
           if ((typeof activeRidingBoat !== "undefined" && c === activeRidingBoat) || 
               (typeof activeRidingMech !== "undefined" && activeRidingMech && (c === activeRidingMech || (activeRidingMech.attachedParts && activeRidingMech.attachedParts.some(ep => ep.item === c))))) {
@@ -2256,8 +2258,7 @@ function buildCollectibles(count, seed) {
                  p[1] = ny * (coreRadius + 0.001);
                  p[2] = nz * (coreRadius + 0.001);
                  c.vel = [0, 0, 0];
-                 c.isDynamic = false;
-                 pendingCollectibleRefresh = true;
+                 
                  if (typeof playPlaceSound === "function") {
                      playPlaceSound();
                  }
@@ -2271,8 +2272,6 @@ function buildCollectibles(count, seed) {
                  p[2] = nz * (terrainRad + 0.001);
                  
                  c.vel = [0, 0, 0];
-                 c.isDynamic = false;
-                 pendingCollectibleRefresh = true;
                  
                  if (typeof playPlaceSound === "function") {
                      playPlaceSound();
@@ -2634,8 +2633,8 @@ function buildCollectibles(count, seed) {
             // Stop moving if very slow
             const speedSq = c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2;
             if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
-                c.isDynamic = false;
-                needMainRefresh = true;
+                
+                
                 
                 // Align normal to the surface
                 c.normal = [nx, ny, nz];
@@ -2683,7 +2682,8 @@ function buildCollectibles(count, seed) {
              c.normal = rotateVec(c.normal);
           }
           
-          needRefresh = true;
+          if (_oldP && (Math.abs(c.position[0]-_oldP[0])>1e-6 || Math.abs(c.position[1]-_oldP[1])>1e-6 || Math.abs(c.position[2]-_oldP[2])>1e-6)) needRefresh = true;
+          if (_oldR && c.R && (Math.abs(c.R[0]-_oldR[0])>1e-6 || Math.abs(c.R[1]-_oldR[1])>1e-6 || Math.abs(c.R[2]-_oldR[2])>1e-6)) needRefresh = true;
         }
         
         if (activeRidingBoat) {
@@ -2691,9 +2691,9 @@ function buildCollectibles(count, seed) {
         }
 
         if (needMainRefresh) {
-            refreshCollectiblesVBO('main');
+            window.pendingCollectibleRefresh = true;
         }
         if (needRefresh) {
-            refreshCollectiblesVBO('dynamic');
+            window.pendingDynamicCollectibleRefresh = true;
         }
       }
