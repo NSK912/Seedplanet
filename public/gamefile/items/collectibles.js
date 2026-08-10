@@ -2428,8 +2428,8 @@ function buildCollectibles(count, seed) {
                   c.R[0]*c.normal[1] - c.R[1]*c.normal[0]
                 ];
             } else {
-                // Air friction
-                Physics.applyFriction(c.vel, 0.98);
+                // Air friction (dampen quickly to land smoothly)
+                Physics.applyFriction(c.vel, 0.82);
             }
 
             c.vel[0] -= nx * force;
@@ -2633,7 +2633,7 @@ function buildCollectibles(count, seed) {
 
             // Stop moving if very slow
             const speedSq = c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2;
-            if (speedSq < 0.00001 && Math.abs(c.spinSpeed) < 0.005 && c.type !== "wood_boat") {
+            if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
                 c.isDynamic = false;
                 needMainRefresh = true;
                 

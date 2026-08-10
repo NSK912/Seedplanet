@@ -3254,7 +3254,7 @@ function setF32(target, source) {
         }
 
         const charInterval = 1000 / charAnimFps;
-        const needsEveryFrame = ragdollEnabled || isUsingItem || jumpBlend > 0.0 || !isPlayerGrounded;
+        const needsEveryFrame = ragdollEnabled || jumpBlend > 0.0 || !isPlayerGrounded;
         
         if (!isPlayerGrounded && !ragdollEnabled && !activeRidingBoat && !activeRidingMech && currentSwimFactor === 0.0) {
             jumpBlend = Math.min(1.0, jumpBlend + 10.0 * dt);

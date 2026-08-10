@@ -1242,9 +1242,9 @@
            ];
 
            if (toolType === "AXE" && hitType === "tree") {
-               const numLogs = obs.partsCount || (3 + Math.floor(Math.random() * 2));
+               const numLogs = 2 + Math.floor(Math.random() * 2);
                for (let i = 0; i < numLogs; i++) spawnDrop(obs.position, "log", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.075 + Math.random() * 0.025);
-               const numBranches = obs.branchCount || 0;
+               const numBranches = 1 + Math.floor(Math.random() * 2);
                for (let i = 0; i < numBranches; i++) spawnDrop(obs.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
            } else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore")) {
                if (hitType === "iron_ore") {
@@ -1258,7 +1258,7 @@
                    const numSmall = 1 + Math.floor(Math.random() * 1);
                    for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
                } else {
-                   const numBig = 5 + Math.floor(Math.random() * 3);
+                   const numBig = 2 + Math.floor(Math.random() * 2);
                    for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "big_rock", tNormal, tTangent, tBitangent, [0.5, 0.5, 0.5], 0.05 + Math.random() * 0.03);
                    const numSmall = 2 + Math.floor(Math.random() * 2);
                    for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);

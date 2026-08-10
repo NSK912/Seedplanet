@@ -1988,43 +1988,43 @@
           chestP1,
           chestP2,
           (0.09 + bRadius) * scaleFactor,
-          20,
-          20,
+          8,
+          8,
         );
         const pelvis = generateCapsule(
           pelvisP1,
           pelvisP2,
           0.085 * scaleFactor,
-          20,
-          20,
+          8,
+          8,
         );
         const neck = generateCapsule(
           neckP1,
           neckP2,
           0.045 * scaleFactor,
-          12,
-          12,
+          6,
+          6,
         );
         const head = generateCapsule(
           headP1,
           headP2,
           0.24 * scaleFactor,
-          20,
-          20,
+          8,
+          8,
         );
         const leftEar = generateCapsule(
           leftEarP1,
           leftEarP2,
           0.035 * scaleFactor,
-          12,
-          12,
+          6,
+          6,
         );
         const rightEar = generateCapsule(
           rightEarP1,
           rightEarP2,
           0.035 * scaleFactor,
-          12,
-          12,
+          6,
+          6,
         );
 
         // Generate unpitched, un-yawed counterparts for local coordinate face mapping
@@ -2032,103 +2032,103 @@
           localChestP1,
           localChestP2,
           (0.09 + bRadius) * scaleFactor,
-          20,
-          20,
+          8,
+          8,
         );
         const localPelvis = (ragdollEnabled && ragdollInitialized) ? pelvis : generateCapsule(
           localPelvisP1,
           localPelvisP2,
           0.085 * scaleFactor,
-          20,
-          20,
+          8,
+          8,
         );
         const localNeck = (ragdollEnabled && ragdollInitialized) ? neck : generateCapsule(
           localNeckP1,
           localNeckP2,
           0.045 * scaleFactor,
-          12,
-          12,
+          6,
+          6,
         );
         const localHead = (ragdollEnabled && ragdollInitialized) ? head : generateCapsule(
           localHeadP1,
           localHeadP2,
           0.24 * scaleFactor,
-          20,
-          20,
+          8,
+          8,
         );
         const localLeftEar = (ragdollEnabled && ragdollInitialized) ? leftEar : generateCapsule(
           localLeftEarP1,
           localLeftEarP2,
           0.035 * scaleFactor,
-          12,
-          12,
+          6,
+          6,
         );
         const localRightEar = (ragdollEnabled && ragdollInitialized) ? rightEar : generateCapsule(
           localRightEarP1,
           localRightEarP2,
           0.035 * scaleFactor,
-          12,
-          12,
+          6,
+          6,
         );
 
         const leftArmUpper = generateCapsule(
           leftArmPivot,
           leftElbowRot,
           0.038 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
         const leftArmLower = generateCapsule(
           leftElbowRot,
           leftHandRot,
           0.032 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
 
         const rightArmUpper = generateCapsule(
           rightArmPivot,
           rightElbowRot,
           0.038 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
         const rightArmLower = generateCapsule(
           rightElbowRot,
           rightHandRot,
           0.032 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
 
         const leftLegUpper = generateCapsule(
           leftLegPivot,
           leftKneeRot,
           0.048 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
         const leftLegLower = generateCapsule(
           leftKneeRot,
           leftFootRot,
           0.04 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
 
         const rightLegUpper = generateCapsule(
           rightLegPivot,
           rightKneeRot,
           0.048 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
         const rightLegLower = generateCapsule(
           rightKneeRot,
           rightFootRot,
           0.04 * scaleFactor,
-          10,
-          10,
+          6,
+          6,
         );
 
         // Build Chibi detailed hands, fingers, ankles, feet, toes
