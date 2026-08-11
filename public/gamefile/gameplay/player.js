@@ -1,5 +1,19 @@
 // === SEEDPLANET MODULE: JS/PLAYER.JS ===
 
+      function getHeldItem() {
+        if (typeof selectedActionSlotIndex !== "undefined" && selectedActionSlotIndex !== -1 && typeof actionSlotsItems !== "undefined" && actionSlotsItems && actionSlotsItems[selectedActionSlotIndex]) {
+          const item = actionSlotsItems[selectedActionSlotIndex];
+          if (item && (item.count === undefined || item.count > 0)) {
+            return item;
+          }
+        }
+        if (typeof activeItem !== "undefined" && activeItem && activeItem.name !== "HAND") {
+          return activeItem;
+        }
+        return null;
+      }
+      window.getHeldItem = getHeldItem;
+
       function updatePlayerHPUI() {
         const hpContainer = document.getElementById("playerHpVerticalContainer");
         if (!hpContainer) return;
@@ -1114,6 +1128,7 @@
 
 
       function updateCharacterMesh(phase) {
+        const heldItem = getHeldItem();
         let chestP1,
           chestP2,
           pelvisP1,
@@ -1308,32 +1323,44 @@
             torsoTilt = torsoTilt * (1.0 - jumpBlend) + (velFactor * 0.1) * jumpBlend;
         }
         
-        if (isUsingItem && (isSmashing || (activeItem && (activeItem.name === "AXE" || activeItem.name === "PICKAXE" || activeItem.name === "SHOVEL" || activeItem.name === "BOW")))) {
-             if (activeItem && activeItem.name === "BOW") {
-                 armAngle = -1.57;
-                 leftElbowFlex = 0.0;
-                 rightArmAngle = 0;
-                 rightElbowFlex = 0;
-             } else {
-                 // Swing animation for axe / pickaxe
-                 let swingPhase = useAnimTimer;
-                 let targetArmAngle = 0;
-                 let targetElbowFlex = 0;
-                 if (swingPhase > 0.8) {
-                     let t = (1.0 - swingPhase) / 0.2;
-                     targetArmAngle = -1.5 * t;
-                     targetElbowFlex = 0.5 * t;
-                 } else if (swingPhase > 0.4) {
-                     let t = (0.8 - swingPhase) / 0.4;
-                     targetArmAngle = -1.5 + 2.5 * t;
-                     targetElbowFlex = 0.5 - 0.4 * t;
+        if (heldItem) {
+             if (heldItem.name === "BOW") {
+                 if (isUsingItem && useAnimTimer > 0) {
+                     armAngle = -1.57;
+                     leftElbowFlex = 0.0;
+                     rightArmAngle = 0;
+                     rightElbowFlex = 0;
                  } else {
-                     let t = (0.4 - swingPhase) / 0.4;
-                     targetArmAngle = 1.0 * (1.0 - t);
-                     targetElbowFlex = 0.1 * (1.0 - t);
+                     armAngle = -0.8;
+                     leftElbowFlex = 0.3;
+                     rightArmAngle = 0.2;
+                     rightElbowFlex = 0.2;
                  }
-                 rightArmAngle = targetArmAngle;
-                 rightElbowFlex = targetElbowFlex;
+             } else {
+                 if (isUsingItem && useAnimTimer > 0) {
+                     // Swing animation for axe / pickaxe / shovel / items
+                     let swingPhase = useAnimTimer;
+                     let targetArmAngle = 0;
+                     let targetElbowFlex = 0;
+                     if (swingPhase > 0.8) {
+                         let t = (1.0 - swingPhase) / 0.2;
+                         targetArmAngle = -1.5 * t;
+                         targetElbowFlex = 0.5 * t;
+                     } else if (swingPhase > 0.4) {
+                         let t = (0.8 - swingPhase) / 0.4;
+                         targetArmAngle = -1.5 + 2.5 * t;
+                         targetElbowFlex = 0.5 - 0.4 * t;
+                     } else {
+                         let t = (0.4 - swingPhase) / 0.4;
+                         targetArmAngle = 1.0 * (1.0 - t);
+                         targetElbowFlex = 0.1 * (1.0 - t);
+                     }
+                     rightArmAngle = targetArmAngle;
+                     rightElbowFlex = targetElbowFlex;
+                 } else {
+                     rightArmAngle = -0.3;
+                     rightElbowFlex = 0.5;
+                 }
              }
         }
 
@@ -1490,8 +1517,8 @@
         let shovelD1Rot, shovelD2Rot, shovelLeftBranchRot, shovelRightBranchRot;
         let bowGripRot, bowUpperTipRot, bowLowerTipRot;
         
-        if (isUsingItem && (isSmashing || (activeItem && (activeItem.name === "AXE" || activeItem.name === "PICKAXE" || activeItem.name === "SHOVEL" || activeItem.name === "BOW")))) {
-             if (activeItem && activeItem.name === "BOW") {
+        if (heldItem) {
+             if (heldItem.name === "BOW") {
                  let t = 0.0;
                  let drawT = 0.0;
                  if (arrowShotInCurrentAnim) {
@@ -1783,7 +1810,7 @@
                  // Hand is at [0.18, -0.09 + bOffset, 0.04]
                  // Handle goes forward (along Z axis) so it's perpendicular to the arm
                  let axeHandleP1Base, axeHandleP2Base, axeBladeP1Base, axeBladeP2Base;
-                 if (activeItem.name === "SHOVEL") {
+                 if (heldItem.name === "SHOVEL") {
                      // Shovel stick: continuous from Z = -0.04 to Z = 0.28
                      axeHandleP1Base = [0.18, -0.09 + bOffset, -0.04];
                      axeHandleP2Base = [0.18, -0.09 + bOffset, 0.28];
@@ -1823,7 +1850,7 @@
                  axeBladeP1Rot = rotatePointX(rightArmPivot, b1L, rightArmAngle);
                  axeBladeP2Rot = rotatePointX(rightArmPivot, b2L, rightArmAngle);
 
-                 if (activeItem.name === "PICKAXE") {
+                 if (heldItem.name === "PICKAXE") {
                      const axeBlade2P1Base = [0.18, -0.09 + bOffset, 0.21]; // Base of blade (same)
                      const axeBlade2P2Base = [0.18, 0.03 + bOffset, 0.21]; // Tip of blade (other side, UP)
                      const b2_1L = rotatePointX(rightElbowBase, axeBlade2P1Base, -rightElbowFlex);
@@ -1965,8 +1992,8 @@
           rightKneeRot = toWorld(rightKneeRot, 0.048, 0.05);
           rightFootRot = toWorld(rightFootRot, 0.04, 0.1);
           
-          if (isUsingItem && (isSmashing || (activeItem && (activeItem.name === "AXE" || activeItem.name === "PICKAXE" || activeItem.name === "SHOVEL" || activeItem.name === "BOW")))) {
-              if (activeItem.name === "BOW") {
+          if (heldItem) {
+              if (heldItem.name === "BOW") {
                   bowGripRot = toWorld(bowGripRot, 0.03, 0.1);
                   bowUpperTipRot = toWorld(bowUpperTipRot, 0.03, 0.1);
                   bowLowerTipRot = toWorld(bowLowerTipRot, 0.03, 0.1);
@@ -1975,7 +2002,7 @@
                   axeHandleP2Rot = toWorld(axeHandleP2Rot, 0.03, 0.1);
                   axeBladeP1Rot = toWorld(axeBladeP1Rot, 0.04, 0.1);
                   axeBladeP2Rot = toWorld(axeBladeP2Rot, 0.04, 0.1);
-                  if (activeItem.name === "PICKAXE") {
+                  if (heldItem.name === "PICKAXE") {
                       axeBlade2P1Rot = toWorld(axeBlade2P1Rot, 0.04, 0.1);
                       axeBlade2P2Rot = toWorld(axeBlade2P2Rot, 0.04, 0.1);
                   }
@@ -2389,16 +2416,11 @@
           ...rightFootParts,
         ];
         
-        if (isUsingItem && (isSmashing || (activeItem && (activeItem.name === "AXE" || activeItem.name === "PICKAXE" || activeItem.name === "SHOVEL" || activeItem.name === "BOW")))) {
+        if (heldItem) {
             const charMat = getCharacterMatrix();
             const transformPt = (p) => {
                 if (!p) return [0, 0, 0];
-                const x = p[0], y = p[1], z = p[2];
-                return [
-                    charMat[0]*x + charMat[4]*y + charMat[8]*z + charMat[12],
-                    charMat[1]*x + charMat[5]*y + charMat[9]*z + charMat[13],
-                    charMat[2]*x + charMat[6]*y + charMat[10]*z + charMat[14]
-                ];
+                return [p[0], p[1], p[2]];
             };
 
             const rawV = [], rawC = [], rawI = [];
@@ -2418,8 +2440,8 @@
                 const l = Math.sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
                 const f = normalize(dir); // points from base to tip
                 // up vector - assuming blade is flat along X, so X is right
-                const charX = [charMat[0], charMat[1], charMat[2]];
-                const charZ = [charMat[8], charMat[9], charMat[10]];
+                const charX = (ragdollEnabled && ragdollInitialized) ? [charMat[0], charMat[1], charMat[2]] : [1, 0, 0];
+                const charZ = (ragdollEnabled && ragdollInitialized) ? [charMat[8], charMat[9], charMat[10]] : [0, 0, 1];
                 
                 // let's use charX as thickness direction, charZ as width direction
                 const right = normalize(charX); 
@@ -2462,7 +2484,7 @@
                 }
             };
 
-            if (activeItem && activeItem.name === "BOW") {
+            if (heldItem && heldItem.name === "BOW") {
                 const isRag = (ragdollEnabled && ragdollInitialized);
                 const wGrip = isRag ? bowGripRot : transformPt(bowGripRot);
                 const wUpperTip = isRag ? bowUpperTipRot : transformPt(bowUpperTipRot);
@@ -2547,6 +2569,21 @@
                         arrowDir[0] /= arrowLen;
                         arrowDir[1] /= arrowLen;
                         arrowDir[2] /= arrowLen;
+                        if (!ragdollEnabled || !ragdollInitialized) {
+                            window.lastBowGripPos = [
+                                charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
+                                charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
+                                charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
+                            ];
+                            window.lastBowAimDir = [
+                                charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
+                                charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
+                                charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
+                            ];
+                        } else {
+                            window.lastBowGripPos = [wGrip[0], wGrip[1], wGrip[2]];
+                            window.lastBowAimDir = [arrowDir[0], arrowDir[1], arrowDir[2]];
+                        }
                     }
                     const arrowTipPos = [
                         wGrip[0] + arrowDir[0] * 0.12 * bowScale,
@@ -2584,17 +2621,17 @@
                 
                 const bladeColor = [0.65, 0.65, 0.65];
                 
-                if (activeItem.name === "AXE") {
+                if (heldItem.name === "AXE") {
                     // The wedge is wide at tip, narrow at base for axe
                     addWedge(wBladeBase, wBladeTip, 0.04 * playerScale, 0.08 * playerScale, 0.01 * playerScale, bladeColor);
-                } else if (activeItem.name === "PICKAXE") {
+                } else if (heldItem.name === "PICKAXE") {
                     // The wedge is pointy for pickaxe (narrow at tip)
                     addWedge(wBladeBase, wBladeTip, 0.03 * playerScale, 0.005 * playerScale, 0.01 * playerScale, bladeColor);
                     
                     const wBlade2Base = transformPt(axeBlade2P1Rot);
                     const wBlade2Tip = transformPt(axeBlade2P2Rot);
                     addWedge(wBlade2Base, wBlade2Tip, 0.03 * playerScale, 0.005 * playerScale, 0.01 * playerScale, bladeColor);
-                } else if (activeItem.name === "SHOVEL") {
+                } else if (heldItem.name === "SHOVEL") {
                     // 1. Draw D-handle components at the back of the handle
                     const wD1 = transformPt(shovelD1Rot);
                     const wD2 = transformPt(shovelD2Rot);
@@ -2629,6 +2666,19 @@
                     addWedge(wBladeSocketEnd, wBladeMid, 0.07 * playerScale, 0.065 * playerScale, 0.012 * playerScale, bladeColor);
                     // Scoop pointy tip (pointed wedge)
                     addWedge(wBladeMid, wBladeTip, 0.065 * playerScale, 0.01 * playerScale, 0.01 * playerScale, bladeColor);
+                } else {
+                    let itemColor = [0.55, 0.38, 0.22];
+                    const name = (heldItem && heldItem.name) ? heldItem.name : "";
+                    if (name.includes("STONE") || name.includes("ROCK") || name.includes("ORE")) {
+                        itemColor = [0.5, 0.5, 0.5];
+                    } else if (name.includes("GOLD")) {
+                        itemColor = [0.9, 0.8, 0.2];
+                    } else if (name.includes("ROBOT")) {
+                        itemColor = [0.3, 0.6, 0.9];
+                    } else if (name.includes("CAMPFIRE")) {
+                        itemColor = [0.8, 0.3, 0.1];
+                    }
+                    buildTaperedSegment(wHandleP1, wBladeBase, 0.035 * playerScale, 0.035 * playerScale, 5, itemColor, rawV, rawC, rawI);
                 }
             }
             
@@ -3095,6 +3145,12 @@
               else if (item.type === "stone_floor") { icon = "🪨"; label = "STONE_FLOOR"; }
               else if (item.type === "campfire") { icon = "🔥"; label = "CAMPFIRE"; }
               else if (item.type === "wood_boat") { icon = "🛶"; label = "WOOD_BOAT"; }
+              else if (item.type === "robot_stand") { icon = "🏗️"; label = "ROBOT_STAND"; }
+              else if (item.type === "robot_cockpit") { icon = "🤖"; label = "ROBOT_COCKPIT"; }
+              else if (item.type === "robot_left_arm") { icon = "🦾"; label = "ROBOT_LEFT_ARM"; }
+              else if (item.type === "robot_right_arm") { icon = "🦾"; label = "ROBOT_RIGHT_ARM"; }
+              else if (item.type === "robot_left_leg") { icon = "🦿"; label = "ROBOT_LEFT_LEG"; }
+              else if (item.type === "robot_right_leg") { icon = "🦿"; label = "ROBOT_RIGHT_LEG"; }
               else if (item.type === "wood_wheel") { icon = "🛞"; label = "WOOD_WHEEL"; }
               else if (item.type === "meganeura_item") { icon = "🦟"; label = "MEGANEURA"; }
               

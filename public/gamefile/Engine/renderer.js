@@ -1668,7 +1668,8 @@ function setF32(target, source) {
             }
 
             // 4. Wheel Spin Angle
-            const wheelRadius = 0.16;
+            const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+            const wheelRadius = 0.16 * wheelScale;
             const distTraveled = vehSpeed * dt;
             activeRidingBoat.spinAngle = (activeRidingBoat.spinAngle || 0) + (distTraveled / wheelRadius);
           } else {
@@ -1723,8 +1724,83 @@ function setF32(target, source) {
               }
             }
           } else {
-            moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
-            moveEastFactor  = Math.sin(rotationY) * moveForwardInput - Math.cos(rotationY) * moveSidewaysInput;
+            // Mech is fully assembled!
+            if (activeRidingMech.dockedStand) {
+              // Currently docked on Robot Stand
+              const isHoldingForwardOnly = (moveForwardInput > 0.2) && (Math.abs(moveSidewaysInput) < 0.3);
+              if (isHoldingForwardOnly) {
+                activeRidingMech._undockHoldTimer = (activeRidingMech._undockHoldTimer || 0) + dt;
+                if (activeRidingMech._undockHoldTimer >= 0.35) {
+                  // Undock / Break away from stand!
+                  const prevStand = activeRidingMech.dockedStand;
+                  activeRidingMech.dockedStand = null;
+                  activeRidingMech._undockedFromStand = prevStand;
+                  activeRidingMech._hasLeftStand = false;
+                  if (prevStand) {
+                    prevStand.isDynamic = false;
+                    if (prevStand.vel) prevStand.vel = [0, 0, 0];
+                  }
+                  if (activeRidingMech.attachedParts) {
+                    activeRidingMech.attachedParts = activeRidingMech.attachedParts.filter(entry => entry.item && entry.item.type !== "robot_stand");
+                  }
+                  activeRidingMech._undockHoldTimer = 0;
+                  activeRidingMech._redockCooldown = 3.0; // 3 seconds cooldown before can re-dock
+                  if (typeof showNotice === "function") {
+                    showNotice("🔓 ปลดล็อคออกจากฐานตั้งแล้ว! / Undocked from Stand!");
+                  }
+                  moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
+                  moveEastFactor  = Math.sin(rotationY) * moveForwardInput - Math.cos(rotationY) * moveSidewaysInput;
+                } else {
+                  moveNorthFactor = 0;
+                  moveEastFactor = 0;
+                }
+              } else {
+                activeRidingMech._undockHoldTimer = 0;
+                moveNorthFactor = 0;
+                moveEastFactor = 0;
+
+                // Anchor position & orientation smoothly to stand
+                const stand = activeRidingMech.dockedStand;
+                if (stand && stand.position) {
+                  const sPos = stand.position;
+                  const sLen = Math.sqrt(sPos[0]*sPos[0] + sPos[1]*sPos[1] + sPos[2]*sPos[2]) || 1;
+                  const snx = sPos[0]/sLen, sny = sPos[1]/sLen, snz = sPos[2]/sLen;
+                  charTheta = Math.acos(Math.max(-1.0, Math.min(1.0, sny)));
+                  charPhi = Math.atan2(snz, snx);
+                  if (charPhi < 0) charPhi += Math.PI * 2;
+                  if (stand.F) {
+                    const North = [-Math.cos(charTheta) * Math.cos(charPhi), Math.sin(charTheta), -Math.cos(charTheta) * Math.sin(charPhi)];
+                    const East = [-Math.sin(charPhi), 0, Math.cos(charPhi)];
+                    const fNorth = stand.F[0]*North[0] + stand.F[1]*North[1] + stand.F[2]*North[2];
+                    const fEast = stand.F[0]*East[0] + stand.F[1]*East[1] + stand.F[2]*East[2];
+                    charHeading = Math.atan2(fEast, fNorth);
+                  }
+                }
+              }
+            } else {
+              // Undocked, driving freely!
+              moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
+              moveEastFactor  = Math.sin(rotationY) * moveForwardInput - Math.cos(rotationY) * moveSidewaysInput;
+
+              // Check proximity to Robot Stand for manual re-docking via holding [E]
+              let closestStand = null;
+              let minStandDistSq = 0.81; // within 0.9 meters (close proximity)
+              if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+                for (let item of collectibles) {
+                  if (item.active && !item.isPreview && item.type === "robot_stand") {
+                    const dx = item.position[0] - activeRidingMech.position[0];
+                    const dy = item.position[1] - activeRidingMech.position[1];
+                    const dz = item.position[2] - activeRidingMech.position[2];
+                    const distSq = dx*dx + dy*dy + dz*dz;
+                    if (distSq < minStandDistSq) {
+                      minStandDistSq = distSq;
+                      closestStand = item;
+                    }
+                  }
+                }
+              }
+              activeRidingMech._nearbyStand = closestStand;
+            }
           }
         } else if (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") {
           moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
@@ -2909,7 +2985,8 @@ function setF32(target, source) {
                 const rFwdOff  = typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
                 const rUpOff   = typeof window.wheelRearUpOffset   === "number" ? window.wheelRearUpOffset   : -0.03;
 
-                const wheelRadius = 0.16;
+                const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+                const wheelRadius = 0.16 * wheelScale;
 
                 const wheelOffsets = [
                     { id: "FL", side: -1, fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
@@ -3035,7 +3112,11 @@ function setF32(target, source) {
             const isMechWalking = typeof isWalking !== "undefined" && isWalking;
             const wPhase = typeof walkPhase !== "undefined" ? walkPhase : 0.0;
             const stepBob = 0.0; // Steady mech height to keep camera smooth
-            const mR = tRadius + 0.64 + stepBob;
+            const hasLegs = activeRidingMech.attachedParts && activeRidingMech.attachedParts.some(entry =>
+              entry.item && entry.item.active && entry.item.type && entry.item.type.includes("leg")
+            );
+            const mechHeight = (activeRidingMech.dockedStand || hasLegs) ? 0.66 : 0.20;
+            const mR = tRadius + mechHeight + stepBob;
             activeRidingMech.position = [mR * nx, mR * ny, mR * nz];
             activeRidingMech.normal = [nx, ny, nz];
             activeRidingMech.angle = undefined;
@@ -3054,9 +3135,12 @@ function setF32(target, source) {
             ];
 
             if (activeRidingMech.attachedParts) {
+                // Ensure robot_stand is never in attachedParts
+                activeRidingMech.attachedParts = activeRidingMech.attachedParts.filter(entry => entry.item && entry.item.type !== "robot_stand");
+
                 if (typeof collectibles !== "undefined" && collectibles) {
                     for (let p of collectibles) {
-                        if (p.active && !p.isPreview && p.type.startsWith("robot_") && p !== activeRidingMech) {
+                        if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech) {
                             if (!activeRidingMech.attachedParts.some(entry => entry.item === p)) {
                                 const dx = p.position[0] - activeRidingMech.position[0];
                                 const dy = p.position[1] - activeRidingMech.position[1];
@@ -3497,67 +3581,107 @@ function setF32(target, source) {
             } else if (activeRidingMech) {
               window.tryAutoAssembleMechParts(activeRidingMech);
               const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
-              if (isInteractHeld) {
-                chestHoldTimer += delta / 1000;
-                if (chestHoldTimer >= 0.8) {
+
+              if (activeRidingMech._nearbyStand && !activeRidingMech.dockedStand) {
+                // Holding [E] near a robot stand re-docks the mech
+                if (isInteractHeld) {
+                  activeRidingMech._dockingTimer = (activeRidingMech._dockingTimer || 0) + delta / 1000;
                   chestHoldTimer = 0.0;
-                  const mechToDismount = activeRidingMech;
-                  if (mechToDismount.R) {
-                     const sideOffset = 0.65;
-                     const p3d = [
-                       mechToDismount.position[0] + mechToDismount.R[0] * sideOffset,
-                       mechToDismount.position[1] + mechToDismount.R[1] * sideOffset,
-                       mechToDismount.position[2] + mechToDismount.R[2] * sideOffset
-                     ];
-                     const pLen = Math.sqrt(p3d[0]*p3d[0] + p3d[1]*p3d[1] + p3d[2]*p3d[2]) || 1;
-                     charTheta = Math.acos(Math.max(-1.0, Math.min(1.0, p3d[1] / pLen)));
-                     charPhi = Math.atan2(p3d[2], p3d[0]);
-                     if (charPhi < 0) charPhi += Math.PI * 2;
-                  }
-                  mechToDismount.isDynamic = false;
-                  mechToDismount.vel = [0, 0, 0];
-
-                  if (mechToDismount.position) {
-                    const mPos = mechToDismount.position;
-                    const mLen = Math.sqrt(mPos[0]*mPos[0] + mPos[1]*mPos[1] + mPos[2]*mPos[2]) || 1;
-                    const mnx = mPos[0] / mLen, mny = mPos[1] / mLen, mnz = mPos[2] / mLen;
-                    let mTheta = Math.acos(Math.max(-1.0, Math.min(1.0, mny)));
-                    let mPhi = Math.atan2(mnz, mnx);
-                    let mGroundRad = RADIUS + getHeightOnSphere(mTheta, mPhi, globalSeed) * HEIGHT_SCALE;
-                    const wRad = RADIUS + waterLevel * 0.15;
-                    if (waterEnabled && mGroundRad < wRad) mGroundRad = wRad;
-                    const unmountedRad = mGroundRad + 0.14;
-                    mechToDismount.position = [mnx * unmountedRad, mny * unmountedRad, mnz * unmountedRad];
-                  }
-
-                  if (mechToDismount.attachedParts) {
-                    for (let entry of mechToDismount.attachedParts) {
-                      if (entry.item) {
-                        entry.item.isDynamic = false;
-                        entry.item.vel = [0, 0, 0];
-                        const mR = mechToDismount.R || [1, 0, 0];
-                        const mN = mechToDismount.normal || mechToDismount.U || [0, 1, 0];
-                        const mF = mechToDismount.F || [0, 0, 1];
-                        entry.item.position = [
-                          mechToDismount.position[0] + mR[0]*entry.localR + mN[0]*entry.localN + mF[0]*entry.localF,
-                          mechToDismount.position[1] + mR[1]*entry.localR + mN[1]*entry.localN + mF[1]*entry.localF,
-                          mechToDismount.position[2] + mR[2]*entry.localR + mN[2]*entry.localN + mF[2]*entry.localF
-                        ];
-                      }
+                  if (activeRidingMech._dockingTimer >= 0.8) {
+                    activeRidingMech.dockedStand = activeRidingMech._nearbyStand;
+                    activeRidingMech._dockingTimer = 0.0;
+                    activeRidingMech._nearbyStand = null;
+                    if (typeof showNotice === "function") {
+                      showNotice("⚙️ กลับเข้าสู่โหมดประกอบกับฐานตั้งแล้ว / Docked to Stand");
                     }
                   }
-                  activeRidingMech = null;
-                  pendingCollectibleRefresh = true;
+                } else {
+                  activeRidingMech._dockingTimer = 0.0;
+                  chestHoldTimer = 0.0;
                 }
               } else {
-                chestHoldTimer = 0.0;
+                activeRidingMech._dockingTimer = 0.0;
+                if (isInteractHeld) {
+                  chestHoldTimer += delta / 1000;
+                  if (chestHoldTimer >= 0.8) {
+                    chestHoldTimer = 0.0;
+                    const mechToDismount = activeRidingMech;
+                    if (mechToDismount.R) {
+                       const sideOffset = 0.65;
+                       const p3d = [
+                         mechToDismount.position[0] + mechToDismount.R[0] * sideOffset,
+                         mechToDismount.position[1] + mechToDismount.R[1] * sideOffset,
+                         mechToDismount.position[2] + mechToDismount.R[2] * sideOffset
+                       ];
+                       const pLen = Math.sqrt(p3d[0]*p3d[0] + p3d[1]*p3d[1] + p3d[2]*p3d[2]) || 1;
+                       charTheta = Math.acos(Math.max(-1.0, Math.min(1.0, p3d[1] / pLen)));
+                       charPhi = Math.atan2(p3d[2], p3d[0]);
+                       if (charPhi < 0) charPhi += Math.PI * 2;
+                    }
+                    mechToDismount.isDynamic = false;
+                    mechToDismount.vel = [0, 0, 0];
+
+                    if (mechToDismount.position) {
+                      const mPos = mechToDismount.position;
+                      const mLen = Math.sqrt(mPos[0]*mPos[0] + mPos[1]*mPos[1] + mPos[2]*mPos[2]) || 1;
+                      const mnx = mPos[0] / mLen, mny = mPos[1] / mLen, mnz = mPos[2] / mLen;
+                      let mTheta = Math.acos(Math.max(-1.0, Math.min(1.0, mny)));
+                      let mPhi = Math.atan2(mnz, mnx);
+                      let mGroundRad = RADIUS + getHeightOnSphere(mTheta, mPhi, globalSeed) * HEIGHT_SCALE;
+                      const wRad = RADIUS + waterLevel * 0.15;
+                      if (waterEnabled && mGroundRad < wRad) mGroundRad = wRad;
+
+                      // Check if mech has legs or stand attached
+                      const hasLegsOrStand = mechToDismount.attachedParts && mechToDismount.attachedParts.some(entry =>
+                        entry.item && entry.item.active && entry.item.type && (
+                          entry.item.type.includes("leg") ||
+                          entry.item.type.includes("stand")
+                        )
+                      );
+
+                      const unmountedRad = hasLegsOrStand ? (mGroundRad + 0.66) : (mGroundRad + 0.20);
+                      mechToDismount.position = [mnx * unmountedRad, mny * unmountedRad, mnz * unmountedRad];
+                    }
+
+                    if (mechToDismount.attachedParts) {
+                      for (let entry of mechToDismount.attachedParts) {
+                        if (entry.item) {
+                          entry.item.isDynamic = false;
+                          entry.item.vel = [0, 0, 0];
+                          const mR = mechToDismount.R || [1, 0, 0];
+                          const mN = mechToDismount.normal || mechToDismount.U || [0, 1, 0];
+                          const mF = mechToDismount.F || [0, 0, 1];
+                          entry.item.position = [
+                            mechToDismount.position[0] + mR[0]*entry.localR + mN[0]*entry.localN + mF[0]*entry.localF,
+                            mechToDismount.position[1] + mR[1]*entry.localR + mN[1]*entry.localN + mF[1]*entry.localF,
+                            mechToDismount.position[2] + mR[2]*entry.localR + mN[2]*entry.localN + mF[2]*entry.localF
+                          ];
+                        }
+                      }
+                    }
+                    activeRidingMech = null;
+                    pendingCollectibleRefresh = true;
+                  }
+                } else {
+                  chestHoldTimer = 0.0;
+                }
               }
-              const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
+
+              let holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
               let actionText = "ลงจากหุ่นยนต์<br>Dismount Mech";
               
+              if (activeRidingMech && activeRidingMech._nearbyStand && !activeRidingMech.dockedStand) {
+                const dockPct = Math.min(100, Math.floor(((activeRidingMech._dockingTimer || 0) / 0.8) * 100));
+                holdPercent = dockPct;
+                actionText = "ยึดหุ่นเข้ากับฐานตั้ง<br>Dock Mech to Stand";
+              }
+
               const fullyAssembled = window.isMechFullyAssembled(activeRidingMech);
               let extraStatus = "";
-              if (!fullyAssembled && activeRidingMech) {
+              if (activeRidingMech && activeRidingMech._nearbyStand && !activeRidingMech.dockedStand) {
+                const dockPct = Math.min(100, Math.floor(((activeRidingMech._dockingTimer || 0) / 0.8) * 100));
+                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">⚙️ อยู่ใกล้ฐานตั้ง! กด [E] ค้าง เพื่อยึดหุ่นเข้ากับฐาน ${dockPct > 0 ? '(' + dockPct + '%)' : ''}</span>`;
+              } else if (!fullyAssembled && activeRidingMech) {
                 let missing = [];
                 const attached = activeRidingMech.attachedParts || [];
                 if (!attached.some(p => p.item && p.item.active && p.item.type === "robot_left_leg")) missing.push("ขาซ้าย");
@@ -3565,6 +3689,9 @@ function setF32(target, source) {
                 if (!attached.some(p => p.item && p.item.active && p.item.type === "robot_left_arm")) missing.push("แขนซ้าย");
                 if (!attached.some(p => p.item && p.item.active && p.item.type === "robot_right_arm")) missing.push("แขนขวา");
                 extraStatus = `<br><span style="color: #ff8888; font-size: 10px;">⚠️ หุ่นยังประกอบไม่ครบ (ขาด: ${missing.join(", ")}) — วางชิ้นส่วนใส่หุ่นยนต์ให้ครบ 4 ชิ้นก่อนจึงจะขับได้</span>`;
+              } else if (activeRidingMech && activeRidingMech.dockedStand) {
+                let holdPct = Math.min(100, Math.floor(((activeRidingMech._undockHoldTimer || 0) / 0.35) * 100));
+                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">🏗️ กด [W] ค้าง (เดินหน้าอย่างเดียว) เพื่อปลดล็อคออกจากฐานตั้ง ${holdPct > 0 ? '(' + holdPct + '%)' : ''}</span>`;
               }
 
               prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
@@ -3627,7 +3754,7 @@ function setF32(target, source) {
                   if (item.active && item.type === "robot_cockpit" && !item.isPreview) {
                     let mechParts = [item];
                     for (let p of collectibles) {
-                      if (p.active && !p.isPreview && p !== item && p.type.startsWith("robot_")) {
+                      if (p.active && !p.isPreview && p !== item && p.type.startsWith("robot_") && p.type !== "robot_stand") {
                         const dx = p.position[0] - item.position[0];
                         const dy = p.position[1] - item.position[1];
                         const dz = p.position[2] - item.position[2];
@@ -3886,9 +4013,28 @@ function setF32(target, source) {
                       activeRidingMech = closestMech;
                       activeRidingMech.isDynamic = true;
 
+                      let mStand = null;
+                      if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+                        for (let item of collectibles) {
+                          if (item.active && !item.isPreview && item.type === "robot_stand") {
+                            const dx = item.position[0] - activeRidingMech.position[0];
+                            const dy = item.position[1] - activeRidingMech.position[1];
+                            const dz = item.position[2] - activeRidingMech.position[2];
+                            if (dx*dx + dy*dy + dz*dz < 1.0) {
+                              mStand = item;
+                              break;
+                            }
+                          }
+                        }
+                      }
+                      activeRidingMech.dockedStand = mStand;
+                      activeRidingMech._undockHoldTimer = 0;
+                      activeRidingMech._dockingTimer = 0;
+                      activeRidingMech._redockCooldown = 0;
+
                       activeRidingMech.attachedParts = [];
                       for (let p of collectibles) {
-                        if (p.active && !p.isPreview && p.type.startsWith("robot_") && p !== activeRidingMech) {
+                        if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech) {
                           const dx = p.position[0] - activeRidingMech.position[0];
                           const dy = p.position[1] - activeRidingMech.position[1];
                           const dz = p.position[2] - activeRidingMech.position[2];
@@ -3978,6 +4124,73 @@ function setF32(target, source) {
               }
             }
           }
+        }
+
+        // Mech Stand System 8-Slot UI Update
+        let nearbyStand = null;
+        let standParts = [];
+        let bestStandDistSq = 1.0; // within 1.0 meters
+
+        if (activeRidingMech) {
+          if (activeRidingMech.dockedStand) {
+            nearbyStand = activeRidingMech.dockedStand;
+          } else {
+            nearbyStand = null; // Undocked mech walking freely -> hide stand UI
+          }
+        } else if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+          let player3D = [0, 0, 0];
+          if (typeof charTheta !== "undefined" && typeof charPhi !== "undefined") {
+            const pRad = (typeof RADIUS !== "undefined" ? RADIUS : 100) + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(charTheta, charPhi, typeof globalSeed !== "undefined" ? globalSeed : 0) * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1) : 0);
+            player3D = [
+              Math.sin(charTheta) * Math.cos(charPhi) * pRad,
+              Math.cos(charTheta) * pRad,
+              Math.sin(charTheta) * Math.sin(charPhi) * pRad
+            ];
+          }
+
+          for (let item of collectibles) {
+            if (item.active && !item.isPreview && item.type === "robot_stand") {
+              const dx = item.position[0] - player3D[0];
+              const dy = item.position[1] - player3D[1];
+              const dz = item.position[2] - player3D[2];
+              const distSq = dx*dx + dy*dy + dz*dz;
+              if (distSq < bestStandDistSq) {
+                bestStandDistSq = distSq;
+                nearbyStand = item;
+              }
+            }
+          }
+        }
+
+        if (nearbyStand) {
+          for (let p of collectibles) {
+            if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand") {
+              const dx = p.position[0] - nearbyStand.position[0];
+              const dy = p.position[1] - nearbyStand.position[1];
+              const dz = p.position[2] - nearbyStand.position[2];
+              if (dx*dx + dy*dy + dz*dz < 6.0) {
+                standParts.push(p);
+              }
+            }
+          }
+
+          // If riding a docked mech, guarantee cockpit and attached parts are included in UI
+          if (activeRidingMech && activeRidingMech.dockedStand === nearbyStand) {
+            if (activeRidingMech.active && !activeRidingMech.isPreview && !standParts.includes(activeRidingMech)) {
+              standParts.push(activeRidingMech);
+            }
+            if (activeRidingMech.attachedParts) {
+              for (let entry of activeRidingMech.attachedParts) {
+                if (entry && entry.item && entry.item.active && !entry.item.isPreview && !standParts.includes(entry.item)) {
+                  standParts.push(entry.item);
+                }
+              }
+            }
+          }
+        }
+
+        if (typeof window.updateMechStandUI === "function") {
+          window.updateMechStandUI(nearbyStand, standParts);
         }
 
         // Check distance to closest alive NPC for Kill Prompt
@@ -4457,10 +4670,11 @@ function setF32(target, source) {
         if (equipVertexBuffer && equipIndexBuffer && equipIndicesLength > 0) {
           gl.uniform1f(depthSwayFactorLoc, 0.0);
           gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
+          const equipCharModelMatrix = (ragdollEnabled && ragdollInitialized) ? createIdentity() : getCharacterMatrix();
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
-            new Float32Array(createIdentity()),
+            setF32(f32_charModelMatrix, equipCharModelMatrix),
           );
           gl.bindBuffer(gl.ARRAY_BUFFER, equipVertexBuffer);
           gl.enableVertexAttribArray(depthPosLoc);
@@ -5553,8 +5767,12 @@ function setF32(target, source) {
           equipIndicesLength > 0
         ) {
           gl.useProgram(modelProgram);
-          gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
-          gl.uniformMatrix4fv(modelMVLoc, false, new Float32Array(modelViewMatrix));
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+
+          const equipCharModelMatrix = (ragdollEnabled && ragdollInitialized) ? createIdentity() : getCharacterMatrix();
+          const equipModelViewMatrix = multiplyMatrices(equipCharModelMatrix, viewMatrix);
+
+          gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, equipModelViewMatrix));
           gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
           gl.uniformMatrix4fv(
             gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),

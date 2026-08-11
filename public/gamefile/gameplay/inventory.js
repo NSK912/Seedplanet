@@ -39,6 +39,7 @@
         { name: "MEGANEURA", icon: "🦟" },
         { name: "FRIED_BUG", icon: "🍤" },
         { name: "SHOVEL", icon: "🥄" },
+        { name: "ROBOT_STAND", icon: "🏗️" },
         { name: "ROBOT_COCKPIT", icon: "🤖" },
         { name: "ROBOT_LEFT_ARM", icon: "🦾" },
         { name: "ROBOT_RIGHT_ARM", icon: "🦾" },
@@ -1732,7 +1733,7 @@ function cancelFloorPlacement() {
         ];
         
         const headOffset = 0.6 * playerScale;
-        const startPos = [
+        let startPos = [
           nx * (groundRadius + headOffset) + F_char[0] * 0.2 * playerScale,
           ny * (groundRadius + headOffset) + F_char[1] * 0.2 * playerScale,
           nz * (groundRadius + headOffset) + F_char[2] * 0.2 * playerScale
@@ -1863,11 +1864,24 @@ function cancelFloorPlacement() {
             ];
         }
 
-        let dLen = Math.sqrt(arrowDir[0]**2 + arrowDir[1]**2 + arrowDir[2]**2);
-        if (dLen > 0) {
-          arrowDir[0] /= dLen;
-          arrowDir[1] /= dLen;
-          arrowDir[2] /= dLen;
+        if (window.lastBowGripPos && window.lastBowAimDir && (window.lastBowAimDir[0] !== 0 || window.lastBowAimDir[1] !== 0 || window.lastBowAimDir[2] !== 0)) {
+            startPos = [
+                window.lastBowGripPos[0] + window.lastBowAimDir[0] * 0.05,
+                window.lastBowGripPos[1] + window.lastBowAimDir[1] * 0.05,
+                window.lastBowGripPos[2] + window.lastBowAimDir[2] * 0.05
+            ];
+            arrowDir = [
+                window.lastBowAimDir[0],
+                window.lastBowAimDir[1],
+                window.lastBowAimDir[2]
+            ];
+        } else {
+            let dLen = Math.sqrt(arrowDir[0]**2 + arrowDir[1]**2 + arrowDir[2]**2);
+            if (dLen > 0) {
+              arrowDir[0] /= dLen;
+              arrowDir[1] /= dLen;
+              arrowDir[2] /= dLen;
+            }
         }
 
         // Add a slight arc upwards (counteract gravity slightly depending on draw power)
@@ -2488,7 +2502,8 @@ function cancelFloorPlacement() {
             id: "wood_wheel",
             output: { name: "WOOD_WHEEL", icon: "🛞", count: 1, label: "ล้อไม้ (WOODEN WHEEL) x1" },
             ingredients: [
-              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" }
+              { name: "LOG", icon: "🪵", count: 4, label: "ท่อนไม้ (LOG)" },
+              { name: "IRON_ORE", icon: "🟥", count: 5, label: "แร่เหล็ก (IRON ORE)" }
             ]
           },
           {
@@ -2549,6 +2564,13 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" },
               { name: "BIG_ROCK", icon: "🪨", count: 1, label: "หินใหญ่ (BIG ROCK)" }
+            ]
+          },
+          {
+            id: "robot_stand",
+            output: { name: "ROBOT_STAND", icon: "🏗️", count: 1, label: "ฐานตั้งหุ่นยนต์ (ROBOT STAND) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 3, label: "ท่อนไม้ (LOG)" }
             ]
           },
           {
@@ -2790,7 +2812,8 @@ function cancelFloorPlacement() {
             id: "wood_wheel",
             output: { name: "WOOD_WHEEL", icon: "🛞", count: 1 },
             ingredients: [
-              { name: "LOG", count: 1 }
+              { name: "LOG", count: 4 },
+              { name: "IRON_ORE", count: 5 }
             ]
           },
           {
@@ -2859,6 +2882,13 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "LOG", count: 1 },
               { name: "BIG_ROCK", count: 1 }
+            ]
+          },
+          {
+            id: "robot_stand",
+            output: { name: "ROBOT_STAND", icon: "🏗️", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 3 }
             ]
           },
           {
@@ -3533,6 +3563,8 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_CHEST", icon: "📦", label: "WOOD_CHEST" };
         } else if (closestDemolishItem.type === "meganeura_item") {
           itemData = { name: "MEGANEURA", icon: "🦟", label: "MEGANEURA" };
+        } else if (closestDemolishItem.type === "robot_stand") {
+          itemData = { name: "ROBOT_STAND", icon: "🏗️", label: "ROBOT_STAND" };
         } else if (closestDemolishItem.type === "robot_cockpit") {
           itemData = { name: "ROBOT_COCKPIT", icon: "🤖", label: "ROBOT_COCKPIT" };
         } else if (closestDemolishItem.type === "robot_left_arm") {
@@ -3569,5 +3601,242 @@ function cancelFloorPlacement() {
         }
         return false;
       }
+
+      // Robot Stand 8-Slot UI Manager
+      window.updateMechStandUI = function(activeStand, attachedCollectibles) {
+        const uiContainer = document.getElementById("mechStandUI");
+        const gridContainer = document.getElementById("mechStandGrid");
+        const statusBadge = document.getElementById("mechStandStatusBadge");
+
+        if (!uiContainer || !gridContainer) return;
+
+        if (!activeStand) {
+          uiContainer.classList.remove("visible");
+          window._lastMechStandStateKey = null;
+          return;
+        }
+
+        uiContainer.classList.add("visible");
+
+        function getRobotPartLabel(typeOrName) {
+          const t = (typeOrName || "").toLowerCase();
+          if (t.includes("cockpit")) return "ห้องนักบิน";
+          if (t.includes("left_arm")) return "แขนซ้าย";
+          if (t.includes("right_arm")) return "แขนขวา";
+          if (t.includes("left_leg")) return "ขาซ้าย";
+          if (t.includes("right_leg")) return "ขาขวา";
+          if (t.includes("stand")) return "ฐานตั้ง";
+          if (t.includes("core")) return "คอร์พลังงาน";
+          if (t.includes("module")) return "โมดูลเสริม";
+          return typeOrName || "ชิ้นส่วนหุ่นยนต์";
+        }
+
+        const equippedItems = [];
+        if (activeStand) {
+          equippedItems.push({
+            item: activeStand,
+            type: "robot_stand",
+            itemName: "ROBOT_STAND",
+            label: "ฐานตั้ง"
+          });
+        }
+
+        const listToSearch = Array.isArray(attachedCollectibles) ? attachedCollectibles : [];
+        listToSearch.forEach(c => {
+          if (c && c.active && !c.isPreview && c.type && c.type !== "robot_stand") {
+            equippedItems.push({
+              item: c,
+              type: c.type,
+              itemName: c.type.toUpperCase(),
+              label: getRobotPartLabel(c.type)
+            });
+          }
+        });
+
+        // Prevent unnecessary DOM teardowns every frame if state key has not changed
+        const standId = activeStand.id || (activeStand.position ? activeStand.position.map(n => n.toFixed(2)).join(",") : "stand");
+        const itemsKey = equippedItems.map(eq => eq.type).join("|");
+        const currentStateKey = `${standId}_${itemsKey}`;
+
+        if (window._lastMechStandStateKey === currentStateKey) {
+          return;
+        }
+        window._lastMechStandStateKey = currentStateKey;
+
+        gridContainer.innerHTML = "";
+
+        const renderMechStandUI = (stand, parts) => {
+          window._lastMechStandStateKey = null;
+          window.updateMechStandUI(stand, parts);
+        };
+        window.renderMechStandUI = renderMechStandUI;
+
+        // 8 Dynamic slots
+        for (let i = 0; i < 8; i++) {
+          const slotId = i + 1;
+          const equippedData = equippedItems[i] || null;
+          const matchingItem = equippedData ? equippedData.item : null;
+
+          const slotEl = document.createElement("div");
+          slotEl.className = "mech-stand-slot" + (matchingItem ? " equipped" : "");
+          slotEl.title = matchingItem ? `คลิกเพื่อถอด ${equippedData.label}` : "ช่องว่าง (คลิกเพื่อประกอบชิ้นส่วน)";
+
+          slotEl.innerHTML = `
+            <span class="mech-slot-number">#0${slotId}</span>
+            <div class="mech-slot-icon"></div>
+            <span class="mech-slot-label">${matchingItem ? equippedData.label : ''}</span>
+            <span class="mech-slot-status ${matchingItem ? '' : 'empty'}">${matchingItem ? '✔ ประกอบแล้ว' : '✚ ว่าง'}</span>
+          `;
+
+          const iconContainer = slotEl.querySelector(".mech-slot-icon");
+          if (matchingItem && iconContainer && typeof create3DIconCanvas === "function") {
+            const icon3D = create3DIconCanvas(matchingItem.type || equippedData.itemName, 38, 38);
+            if (icon3D) {
+              iconContainer.appendChild(icon3D);
+            }
+          }
+
+          slotEl.onclick = () => {
+            if (matchingItem) {
+              if (equippedData.type === "robot_stand") {
+                showNotice("ไม่สามารถถอดฐานตั้งขณะใช้งาน UI ได้! (Cannot remove stand while active)");
+                return;
+              }
+              const itemData = { name: equippedData.itemName, icon: "🤖", label: equippedData.label, count: 1 };
+              if (addItemToInventory(itemData)) {
+                matchingItem.active = false;
+                const idx = collectibles.indexOf(matchingItem);
+                if (idx !== -1) collectibles.splice(idx, 1);
+                const attIdx = listToSearch.indexOf(matchingItem);
+                if (attIdx !== -1) listToSearch.splice(attIdx, 1);
+
+                // If currently riding mech, also remove from attachedParts
+                if (typeof activeRidingMech !== "undefined" && activeRidingMech && activeRidingMech.attachedParts) {
+                  activeRidingMech.attachedParts = activeRidingMech.attachedParts.filter(e => e.item !== matchingItem);
+                }
+
+                pendingCollectibleRefresh = true;
+                if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("demolish");
+                showNotice(`ถอด ${equippedData.label} เรียบร้อย!`);
+                renderMechStandUI(activeStand, listToSearch);
+              } else {
+                showNotice("กระเป๋าเต็ม! ไม่สามารถถอดได้ (Inventory full)");
+              }
+            } else {
+              // Equip next available robot part from inventory
+              const cockpitItem = listToSearch.find(c => c && c.active && !c.isPreview && c.type === "robot_cockpit");
+              const equippedTypes = listToSearch.map(c => c.type ? c.type.toLowerCase() : "");
+              
+              const invIndex = inventory.findIndex(i => {
+                if (!i || !i.name || !i.name.startsWith("ROBOT_") || i.name === "ROBOT_STAND") return false;
+                
+                const typeName = i.name.toLowerCase();
+                if (equippedTypes.includes(typeName)) return false; // Prevent duplicates
+                
+                // Require cockpit for arms and legs
+                if ((typeName.includes("arm") || typeName.includes("leg")) && !cockpitItem) {
+                  return false;
+                }
+                
+                return true;
+              });
+
+              if (invIndex === -1) {
+                const hasArmsLegs = inventory.some(i => i && i.name && (i.name.includes("ARM") || i.name.includes("LEG")));
+                if (hasArmsLegs && !cockpitItem) {
+                  showNotice("ต้องประกอบห้องนักบิน (Cockpit) ก่อนประกอบแขนหรือขา!");
+                } else {
+                  showNotice("ไม่มีชิ้นส่วนใหม่ที่สามารถประกอบได้! (No new parts to equip)");
+                }
+                return;
+              }
+
+              if (invIndex !== -1) {
+                const itemToEquip = inventory[invIndex];
+                itemToEquip.count--;
+                if (itemToEquip.count <= 0) inventory[invIndex] = null;
+                renderInventory();
+                renderActionSlots();
+
+                let pN = activeStand.normal || activeStand.U || [0,1,0];
+                let pR = activeStand.R || [1,0,0];
+                let pF = activeStand.F || [0,0,1];
+
+                const cockpitItem = listToSearch.find(c => c && c.active && !c.isPreview && c.type === "robot_cockpit");
+                let basePos = cockpitItem ? cockpitItem.position : activeStand.position;
+                let baseN = cockpitItem ? (cockpitItem.normal || pN) : pN;
+                let baseR = cockpitItem ? (cockpitItem.R || pR) : pR;
+                let baseF = cockpitItem ? (cockpitItem.F || pF) : pF;
+
+                const itemType = itemToEquip.name.toLowerCase();
+                let rOff = 0, nOff = 0, fOff = 0;
+                if (itemType === "robot_cockpit") {
+                  nOff = 0.66;
+                } else if (itemType === "robot_left_leg") {
+                  rOff = -0.030;
+                  nOff = cockpitItem ? -0.5025 : (0.66 - 0.5025);
+                } else if (itemType === "robot_right_leg") {
+                  rOff = 0.030;
+                  nOff = cockpitItem ? -0.5025 : (0.66 - 0.5025);
+                } else if (itemType === "robot_left_arm") {
+                  rOff = -0.1875;
+                  nOff = cockpitItem ? -0.16875 : (0.66 - 0.16875);
+                } else if (itemType === "robot_right_arm") {
+                  rOff = 0.1875;
+                  nOff = cockpitItem ? -0.16875 : (0.66 - 0.16875);
+                } else {
+                  nOff = 0.35;
+                }
+
+                let newPos = [
+                  basePos[0] + baseR[0]*rOff + baseN[0]*nOff + baseF[0]*fOff,
+                  basePos[1] + baseR[1]*rOff + baseN[1]*nOff + baseF[1]*fOff,
+                  basePos[2] + baseR[2]*rOff + baseN[2]*nOff + baseF[2]*fOff
+                ];
+
+                const newCol = {
+                  type: itemType,
+                  position: newPos,
+                  normal: [...baseN],
+                  R: [...baseR],
+                  F: [...baseF],
+                  active: true,
+                  size: 0.25,
+                  color: [1, 1, 1],
+                  isDynamic: false
+                };
+                collectibles.push(newCol);
+                if (Array.isArray(attachedCollectibles)) {
+                  attachedCollectibles.push(newCol);
+                }
+
+                // If currently riding mech, also push to attachedParts
+                if (typeof activeRidingMech !== "undefined" && activeRidingMech) {
+                  if (!activeRidingMech.attachedParts) activeRidingMech.attachedParts = [];
+                  activeRidingMech.attachedParts.push({
+                    item: newCol,
+                    localR: rOff,
+                    localN: nOff,
+                    localF: fOff
+                  });
+                }
+
+                pendingCollectibleRefresh = true;
+                if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("place");
+                showNotice(`ประกอบ ${getRobotPartLabel(itemType)} สำเร็จ!`);
+                renderMechStandUI(activeStand, attachedCollectibles);
+              } else {
+                showNotice("ไม่มีชิ้นส่วนหุ่นยนต์ในกระเป๋า! (No robot parts in inventory)");
+              }
+            }
+          };
+
+          gridContainer.appendChild(slotEl);
+        }
+
+        if (statusBadge) {
+          statusBadge.style.display = "none";
+        }
+      };
 
 

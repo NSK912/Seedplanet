@@ -1641,32 +1641,41 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <input type="range" id="devMechCameraDistSlider" min="0" max="1500" value="50" style="width: 100%; margin-top: 4px;" />
       </div>
 
+      <div class="control-group" id="devBoatCameraContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+        <label>⛵ ปรับระยะกล้องขับเรือ <span id="devBoatCameraDistLabel">0.37</span></label>
+        <input type="range" id="devBoatCameraDistSlider" min="0" max="1500" value="37" style="width: 100%; margin-top: 4px;" />
+      </div>
+
       <div class="control-group" id="devWheelAxleContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 4px;">🛞 ปรับล้อไม้ (Wooden Wheel)</div>
+        <label>ขนาดย่อขยายล้อ (Scale) <span id="devWheelScaleLabel">0.56</span>x</label>
+        <input type="range" id="devWheelScaleSlider" min="10" max="300" value="56" style="width: 100%; margin-top: 2px; margin-bottom: 10px;" />
+
         <div style="font-weight: bold; color: #dfb76c; margin-bottom: 4px;">🛞 ปรับคู่ล้อหน้า (Front Pair)</div>
-        <label>ยาวเพาล้อหน้า <span id="devWheelFrontAxleLengthLabel">0.36</span></label>
-        <input type="range" id="devWheelFrontAxleLengthSlider" min="5" max="100" value="36" style="width: 100%; margin-top: 2px;" />
+        <label>ยาวเพาล้อหน้า <span id="devWheelFrontAxleLengthLabel">0.28</span></label>
+        <input type="range" id="devWheelFrontAxleLengthSlider" min="5" max="100" value="28" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 4px; display: block;">ระยะล้อหน้า ซ้าย-ขวา <span id="devWheelFrontSideOffsetLabel">0.18</span></label>
-        <input type="range" id="devWheelFrontSideOffsetSlider" min="0" max="60" value="18" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 4px; display: block;">ระยะล้อหน้า ซ้าย-ขวา <span id="devWheelFrontSideOffsetLabel">0.14</span></label>
+        <input type="range" id="devWheelFrontSideOffsetSlider" min="0" max="60" value="14" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 4px; display: block;">ตำแหน่งล้อหน้า Forward <span id="devWheelFrontFwdOffsetLabel">0.18</span></label>
-        <input type="range" id="devWheelFrontFwdOffsetSlider" min="0" max="80" value="18" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 4px; display: block;">ตำแหน่งล้อหน้า Forward <span id="devWheelFrontFwdOffsetLabel">0.16</span></label>
+        <input type="range" id="devWheelFrontFwdOffsetSlider" min="0" max="80" value="16" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 4px; display: block;">สูง-ต่ำล้อหน้า Up <span id="devWheelFrontUpOffsetLabel">-0.03</span></label>
-        <input type="range" id="devWheelFrontUpOffsetSlider" min="0" max="100" value="47" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 4px; display: block;">สูง-ต่ำล้อหน้า Up <span id="devWheelFrontUpOffsetLabel">0.01</span></label>
+        <input type="range" id="devWheelFrontUpOffsetSlider" min="0" max="100" value="51" style="width: 100%; margin-top: 2px;" />
 
         <div style="font-weight: bold; color: #dfb76c; margin-top: 10px; margin-bottom: 4px;">🛞 ปรับคู่ล้อหลัง (Rear Pair)</div>
-        <label>ยาวเพาล้อหลัง <span id="devWheelRearAxleLengthLabel">0.36</span></label>
-        <input type="range" id="devWheelRearAxleLengthSlider" min="5" max="100" value="36" style="width: 100%; margin-top: 2px;" />
+        <label>ยาวเพาล้อหลัง <span id="devWheelRearAxleLengthLabel">0.28</span></label>
+        <input type="range" id="devWheelRearAxleLengthSlider" min="5" max="100" value="28" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 4px; display: block;">ระยะล้อหลัง ซ้าย-ขวา <span id="devWheelRearSideOffsetLabel">0.18</span></label>
-        <input type="range" id="devWheelRearSideOffsetSlider" min="0" max="60" value="18" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 4px; display: block;">ระยะล้อหลัง ซ้าย-ขวา <span id="devWheelRearSideOffsetLabel">0.14</span></label>
+        <input type="range" id="devWheelRearSideOffsetSlider" min="0" max="60" value="14" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 4px; display: block;">ตำแหน่งล้อหลัง Forward <span id="devWheelRearFwdOffsetLabel">0.18</span></label>
-        <input type="range" id="devWheelRearFwdOffsetSlider" min="0" max="80" value="18" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 4px; display: block;">ตำแหน่งล้อหลัง Forward <span id="devWheelRearFwdOffsetLabel">0.16</span></label>
+        <input type="range" id="devWheelRearFwdOffsetSlider" min="0" max="80" value="16" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 4px; display: block;">สูง-ต่ำล้อหลัง Up <span id="devWheelRearUpOffsetLabel">-0.03</span></label>
-        <input type="range" id="devWheelRearUpOffsetSlider" min="0" max="100" value="47" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 4px; display: block;">สูง-ต่ำล้อหลัง Up <span id="devWheelRearUpOffsetLabel">0.01</span></label>
+        <input type="range" id="devWheelRearUpOffsetSlider" min="0" max="100" value="51" style="width: 100%; margin-top: 2px;" />
       </div>
     </div>
 
@@ -1725,5 +1734,18 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <!-- Player HP Minimalist Vertical -->
       <div class="player-hp-vertical-container game-ui" id="playerHpVerticalContainer">
         <!-- Dynamically populated -->
+      </div>
+    </div>
+
+    <!-- Mech Stand System UI (8 horizontal slots in 2 rows, bottom-center) -->
+    <div class="mech-stand-container game-ui" id="mechStandUI">
+      <div class="mech-stand-header">
+        <div class="mech-stand-title">
+          <span>⚙️</span>
+          <span>ระบบฐานตั้งหุ่นยนต์ (ROBOT STAND)</span>
+        </div>
+      </div>
+      <div class="mech-stand-grid" id="mechStandGrid">
+        <!-- 8 Slots generated dynamically -->
       </div>
     </div>`);

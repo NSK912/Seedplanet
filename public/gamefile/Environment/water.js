@@ -724,26 +724,6 @@
       let r = item.R || [1, 0, 0];
       let f = item.F || [0, 0, 1];
 
-      if (item.angle !== undefined) {
-        const cosH = Math.cos(item.angle);
-        const sinH = Math.sin(item.angle);
-        let pnx = n[0], pny = n[1], pnz = n[2];
-        let pEast = [-pnz, 0, pnx];
-        let lenE = Math.sqrt(pEast[0]*pEast[0] + pEast[2]*pEast[2]);
-        if (lenE < 0.001) pEast = [1, 0, 0];
-        else { pEast[0]/=lenE; pEast[2]/=lenE; }
-        let pNorth = [
-           pEast[1] * pnz - pEast[2] * pny,
-           pEast[2] * pnx - pEast[0] * pnz,
-           pEast[0] * pny - pEast[1] * pnx
-        ];
-        let lenN = Math.sqrt(pNorth[0]*pNorth[0] + pNorth[1]*pNorth[1] + pNorth[2]*pNorth[2]);
-        if (lenN < 0.001) pNorth = [0, 0, 1];
-        else { pNorth[0]/=lenN; pNorth[1]/=lenN; pNorth[2]/=lenN; }
-        r = [pEast[0] * cosH - pNorth[0] * sinH, pEast[1] * cosH - pNorth[1] * sinH, pEast[2] * cosH - pNorth[2] * sinH];
-        f = [pNorth[0] * cosH + pEast[0] * sinH, pNorth[1] * cosH + pEast[1] * sinH, pNorth[2] * cosH + pEast[2] * sinH];
-      }
-
       const lenR = Math.hypot(r[0], r[1], r[2]) || 1;
       const lenN = Math.hypot(n[0], n[1], n[2]) || 1;
       const lenF = Math.hypot(f[0], f[1], f[2]) || 1;

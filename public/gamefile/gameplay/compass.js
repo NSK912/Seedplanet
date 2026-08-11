@@ -266,6 +266,7 @@
           'wood_chest': { icon: '📦', label: 'Chest', color: '#dfb76c', priority: 80, itemType: 'WOOD_CHEST' },
           'chest': { icon: '📦', label: 'Chest', color: '#dfb76c', priority: 80, itemType: 'WOOD_CHEST' },
           'wood_boat': { icon: '🛶', label: 'Boat', color: '#40c4ff', priority: 70, itemType: 'WOOD_BOAT' },
+          'robot_stand': { icon: '🏗️', label: 'Robot Stand', color: '#ffb74d', priority: 75, itemType: 'ROBOT_STAND' },
           'meganeura_item': { icon: '🦟', label: 'Meganeura', color: '#81c784', priority: 60, itemType: 'MEGANEURA' },
           'stone_floor': { icon: '🪨', label: 'Stone Floor', color: '#a0a0a0', priority: 50, itemType: 'STONE_FLOOR' }
         };

@@ -231,6 +231,10 @@ class CameraSpringArm {
       const mechCamDist = (typeof window.mechCameraDistance === "number") ? window.mechCameraDistance : 0.5;
       targetDistance += mechCamDist;
     }
+    if (this.mode !== 'fps' && typeof activeRidingBoat !== "undefined" && activeRidingBoat) {
+      const boatCamDist = (typeof window.boatCameraDistance === "number") ? window.boatCameraDistance : 0.0;
+      targetDistance += boatCamDist;
+    }
 
     // 7. Perform collision check against separate layer masks (ทำงานแบบแยก layer)
     let actualDistance = targetDistance;

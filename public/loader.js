@@ -51,6 +51,7 @@
     'gamefile/items/pickaxe.js',
     'gamefile/items/shovel.js',
     'gamefile/items/robot_parts.js',
+    'gamefile/items/robot_stand.js',
     'gamefile/items/fried_bug.js',
 
     // --- NPCs ---

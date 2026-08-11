@@ -1445,3 +1445,157 @@
           display: none !important;
         }
       }
+
+      /* Mech Stand 8-Slot UI System (Matching Game HUD Aesthetic) */
+      .mech-stand-container {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translate(-50%, 20px) scale(0.95);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: rgba(10, 10, 15, 0.96);
+        border: 1px solid rgba(223, 183, 108, 0.45);
+        box-shadow: 0 0 35px rgba(0, 0, 0, 0.9), 0 0 20px rgba(223, 183, 108, 0.2);
+        padding: 12px 18px 16px 18px;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        backdrop-filter: blur(16px);
+        user-select: none;
+        opacity: 0;
+        pointer-events: none;
+        --cut: 12px;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+      }
+
+      .mech-stand-container.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, 0) scale(1);
+      }
+
+      .mech-stand-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(223, 183, 108, 0.25);
+      }
+
+      .mech-stand-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: 500;
+        color: #dfb76c;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-shadow: 0 0 10px rgba(223, 183, 108, 0.4);
+      }
+
+      .mech-stand-status {
+        font-size: 11px;
+        font-family: 'JetBrains Mono', monospace;
+        padding: 2px 8px;
+        background: rgba(223, 183, 108, 0.1);
+        color: #dfb76c;
+        border: 1px solid rgba(223, 183, 108, 0.3);
+      }
+
+      .mech-stand-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+        gap: 8px;
+      }
+
+      .mech-stand-slot {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        overflow: hidden;
+        --slot-cut: 6px;
+        clip-path: polygon(0 0, calc(100% - var(--slot-cut)) 0, 100% var(--slot-cut), 100% 100%, var(--slot-cut) 100%, 0 calc(100% - var(--slot-cut)));
+      }
+
+      .mech-stand-slot:hover {
+        border-color: #dfb76c;
+        background: rgba(223, 183, 108, 0.12);
+        box-shadow: 0 0 12px rgba(223, 183, 108, 0.3);
+      }
+
+      .mech-stand-slot.equipped {
+        border: 1px solid #dfb76c;
+        background: rgba(223, 183, 108, 0.18);
+        box-shadow: 0 0 12px rgba(223, 183, 108, 0.35);
+      }
+
+      .mech-stand-slot.equipped:hover {
+        border-color: #ffe090;
+        background: rgba(223, 183, 108, 0.28);
+        box-shadow: 0 0 16px rgba(223, 183, 108, 0.5);
+      }
+
+      .mech-slot-number {
+        position: absolute;
+        top: 3px;
+        left: 4px;
+        font-size: 9px;
+        font-family: 'JetBrains Mono', monospace;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      .mech-slot-icon {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 2px;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+      }
+
+      .mech-slot-icon canvas,
+      .mech-slot-icon img {
+        width: 36px !important;
+        height: 36px !important;
+        object-fit: contain;
+        display: block;
+      }
+
+      .mech-slot-label {
+        font-size: 9px;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 500;
+        color: #dfb76c;
+        margin-top: 2px;
+        text-align: center;
+        white-space: nowrap;
+        max-width: 58px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mech-slot-status {
+        font-size: 8px;
+        font-family: 'JetBrains Mono', monospace;
+        color: #4cd964;
+        margin-top: 1px;
+      }
+
+      .mech-slot-status.empty {
+        color: rgba(255, 255, 255, 0.3);
+      }

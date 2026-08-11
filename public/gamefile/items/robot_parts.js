@@ -334,16 +334,16 @@ function drawRobotPart(item, vertices, colors, indices, targetBuffer, partType) 
 
         // 5. Hand with carved articulated wooden fingers
         // Palm
-        addArmBox(xOff, -0.16, 0.05, 0.26, 0.12, 0.26, lightWood, true);
-        // Articulated Fingers
+        addArmBox(xOff, -0.16, 0.05, 0.16, 0.12, 0.26, lightWood, true);
+        // Articulated Fingers (rotated to face parallel to body)
         for (let fIdx = -1; fIdx <= 1; fIdx++) {
-            const fX = xOff + fIdx * 0.075;
-            addArmBox(fX, -0.28, 0.08, 0.05, 0.14, 0.06, darkWood, true); // Finger segment 1
-            addArmBox(fX, -0.34, 0.10, 0.04, 0.06, 0.05, lightWood, true); // Knuckle joint
-            addArmBox(fX, -0.40, 0.14, 0.05, 0.10, 0.06, woodColor, true); // Fingertip tip
+            const fZ = 0.05 + fIdx * 0.075;
+            addArmBox(xOff, -0.28, fZ, 0.06, 0.14, 0.05, darkWood, true); // Finger segment 1
+            addArmBox(xOff, -0.34, fZ, 0.05, 0.06, 0.04, lightWood, true); // Knuckle joint
+            addArmBox(xOff, -0.40, fZ, 0.06, 0.10, 0.05, woodColor, true); // Fingertip tip
         }
-        // Thumb
-        addArmBox(xOff - dir * 0.13, -0.22, 0.08, 0.06, 0.14, 0.06, accentWood, true);
+        // Thumb (Pointing forward)
+        addArmBox(xOff, -0.22, 0.05 - 0.13, 0.06, 0.14, 0.06, accentWood, true);
 
     } else if (partType === "left_leg" || partType === "right_leg") {
         // --- DETAILED ROBOT LEG MATCHING REFERENCE IMAGE ---
@@ -474,3 +474,5 @@ window.ItemRegistry["robot_left_arm"] = { render: (i, v, c, idx, t) => drawRobot
 window.ItemRegistry["robot_right_arm"] = { render: (i, v, c, idx, t) => drawRobotPart(i, v, c, idx, t, "right_arm") };
 window.ItemRegistry["robot_left_leg"] = { render: (i, v, c, idx, t) => drawRobotPart(i, v, c, idx, t, "left_leg") };
 window.ItemRegistry["robot_right_leg"] = { render: (i, v, c, idx, t) => drawRobotPart(i, v, c, idx, t, "right_leg") };
+window.ItemRegistry["robot_core"] = { render: (i, v, c, idx, t) => drawRobotPart(i, v, c, idx, t, "core") };
+window.ItemRegistry["robot_module"] = { render: (i, v, c, idx, t) => drawRobotPart(i, v, c, idx, t, "module") };

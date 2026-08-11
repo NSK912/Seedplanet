@@ -125,8 +125,9 @@ window.ItemRegistry["wood_boat"] = {
     }
 
     if (!isPreview && (item.hasWheel || item.hasWheels || (item.wheelCount && item.wheelCount > 0))) {
-      const wheelRadius = 0.16;
-      const wheelThick = 0.04;
+      const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+      const wheelRadius = 0.16 * wheelScale;
+      const wheelThick = 0.04 * wheelScale;
       const wheelCol = [0.55, 0.38, 0.22];
       const darkWood = [0.4, 0.26, 0.14];
       const metalCol = [0.3, 0.3, 0.3];

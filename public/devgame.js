@@ -103,7 +103,9 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
       const playerHeight = getHeightOnSphere(charTheta, charPhi, globalSeed);
       
       // We want the target terrain to match the player's ground level minus a tiny bit
-      const desiredHeight = playerHeight - (0.02 / HEIGHT_SCALE); 
+      const hs = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6;
+      const rad = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+      const desiredHeight = playerHeight - (0.02 / hs); 
       const neededDelta = desiredHeight - currentTargetHeight;
       
       // If the target is significantly higher than the player, we carve it down to the player's level
@@ -127,7 +129,7 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
       } else {
           const currentFeetRadius = (typeof playerCenterRadius !== 'undefined' && playerCenterRadius !== null) 
             ? (playerCenterRadius - 0.46 * playerScale) 
-            : (RADIUS + getHeightOnSphere(charTheta, charPhi, globalSeed) * HEIGHT_SCALE);
+            : (rad + getHeightOnSphere(charTheta, charPhi, globalSeed) * hs);
           
           // Center the digging sphere slightly below player's feet so they dig downwards
           const tRadius = currentFeetRadius - 0.02;
@@ -524,17 +526,38 @@ if (toggleControlsBtn && mainControls) {
   }
 })();
 
+// --- ระบบปรับระยะกล้องขับเรือ (Boat Camera Distance System) ---
+(function initDevBoatCameraDistance() {
+  if (typeof window.boatCameraDistance !== "number") window.boatCameraDistance = 0.37;
+
+  const slider = document.getElementById("devBoatCameraDistSlider");
+  const label = document.getElementById("devBoatCameraDistLabel");
+
+  if (slider) {
+    slider.value = Math.round(window.boatCameraDistance * 100);
+    if (label) label.textContent = window.boatCameraDistance.toFixed(2);
+
+    slider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10) / 100;
+      window.boatCameraDistance = val;
+      if (label) label.textContent = val.toFixed(2);
+    });
+  }
+})();
+
 // --- ระบบปรับความยาวเพาล้อและตำแหน่งล้อเรือ แยกคู่หน้า-หลัง (Front/Rear Wheel Pair Controls) ---
 (function initDevWheelAxleControls() {
-  if (typeof window.wheelFrontAxleLength !== "number") window.wheelFrontAxleLength = 0.36;
-  if (typeof window.wheelFrontSideOffset !== "number") window.wheelFrontSideOffset = 0.18;
-  if (typeof window.wheelFrontFwdOffset !== "number") window.wheelFrontFwdOffset = 0.18;
-  if (typeof window.wheelFrontUpOffset !== "number") window.wheelFrontUpOffset = -0.03;
+  if (typeof window.wheelScaleMultiplier !== "number") window.wheelScaleMultiplier = 0.56;
 
-  if (typeof window.wheelRearAxleLength !== "number") window.wheelRearAxleLength = 0.36;
-  if (typeof window.wheelRearSideOffset !== "number") window.wheelRearSideOffset = 0.18;
-  if (typeof window.wheelRearFwdOffset !== "number") window.wheelRearFwdOffset = 0.18;
-  if (typeof window.wheelRearUpOffset !== "number") window.wheelRearUpOffset = -0.03;
+  if (typeof window.wheelFrontAxleLength !== "number") window.wheelFrontAxleLength = 0.28;
+  if (typeof window.wheelFrontSideOffset !== "number") window.wheelFrontSideOffset = 0.14;
+  if (typeof window.wheelFrontFwdOffset !== "number") window.wheelFrontFwdOffset = 0.16;
+  if (typeof window.wheelFrontUpOffset !== "number") window.wheelFrontUpOffset = 0.01;
+
+  if (typeof window.wheelRearAxleLength !== "number") window.wheelRearAxleLength = 0.28;
+  if (typeof window.wheelRearSideOffset !== "number") window.wheelRearSideOffset = 0.14;
+  if (typeof window.wheelRearFwdOffset !== "number") window.wheelRearFwdOffset = 0.16;
+  if (typeof window.wheelRearUpOffset !== "number") window.wheelRearUpOffset = 0.01;
 
   function bindSlider(sliderId, labelId, getVal, setVal, isUpOffset = false) {
     const slider = document.getElementById(sliderId);
@@ -559,6 +582,9 @@ if (toggleControlsBtn && mainControls) {
       if (label) label.textContent = val.toFixed(2);
     });
   }
+
+  // Scale
+  bindSlider("devWheelScaleSlider", "devWheelScaleLabel", () => window.wheelScaleMultiplier, v => window.wheelScaleMultiplier = v);
 
   // Front Pair
   bindSlider("devWheelFrontAxleLengthSlider", "devWheelFrontAxleLengthLabel", () => window.wheelFrontAxleLength, v => window.wheelFrontAxleLength = v);

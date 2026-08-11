@@ -3,6 +3,14 @@ var canvas = null;
 var gl = null;
 var isWebGL2 = false;
 var supportUint32 = false;
+var RADIUS = 8.0;
+var HEIGHT_SCALE = 0.6;
+var globalSeed = 0;
+if (typeof window !== 'undefined') {
+  window.RADIUS = 8.0;
+  window.HEIGHT_SCALE = 0.6;
+  window.globalSeed = 0;
+}
 
 // === SEEDPLANET MODULE: JS/UTILS.JS ===
 

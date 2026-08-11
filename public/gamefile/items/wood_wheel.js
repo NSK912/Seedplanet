@@ -216,8 +216,9 @@ window.ItemRegistry["wood_wheel"] = {
     }
 
     if (isPreview && item.isBoatSnapped) {
-      const wheelRadius = 0.16;
-      const wheelThick = 0.04;
+      const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+      const wheelRadius = 0.16 * wheelScale;
+      const wheelThick = 0.04 * wheelScale;
 
       const fAxleLen = typeof window.wheelFrontAxleLength === "number" ? window.wheelFrontAxleLength : 0.36;
       const fSideOff = typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;

@@ -809,6 +809,7 @@ function buildCollectibles(count, seed) {
           let bob = typeToPlace === "campfire" ? 0.005 : (Math.sin(Date.now() * 0.003) * 0.01 + bobAmt); 
           if (typeToPlace === "robot_cockpit") bob = 0.14;
           else if (typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") bob = 0.14;
+          else if (typeToPlace === "robot_stand") bob = 0.0;
           else if (typeToPlace.startsWith("robot_")) bob = 0.35;
 
           let targetPos = [
@@ -1374,7 +1375,7 @@ function buildCollectibles(count, seed) {
                }
              }
 
-             if (nearestBoat && bestDist < 3.5) {
+             if (nearestBoat && bestDist < 0.6) {
                const bP = nearestBoat.position;
                const bN = nearestBoat.normal || [0, 1, 0];
                const bR = nearestBoat.R || [1, 0, 0];
@@ -1562,8 +1563,8 @@ function buildCollectibles(count, seed) {
           } else if (typeToPlace.startsWith("robot_")) {
             let robotSnapFound = false;
 
-            if (typeToPlace !== "robot_cockpit") {
-              // Placing Leg or Arm -> Snap to Cockpit
+            if (typeToPlace === "robot_stand") {
+              // Placing Robot Stand -> Snap directly under an unmounted Robot Cockpit
               let nearestCockpit = null;
               let bestCDist = Infinity;
               for (let c of collectibles) {
@@ -1579,24 +1580,61 @@ function buildCollectibles(count, seed) {
                 }
               }
 
-              if (nearestCockpit && bestCDist < 2.5) {
-                // Ensure Cockpit is elevated high enough (0.64 above ground) so attached legs rest on the surface
-                const cPos = nearestCockpit.position;
-                const cLen = Math.sqrt(cPos[0]*cPos[0] + cPos[1]*cPos[1] + cPos[2]*cPos[2]) || 1;
-                const pnx_c = cPos[0] / cLen, pny_c = cPos[1] / cLen, pnz_c = cPos[2] / cLen;
-
-                let cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, pny_c)));
-                let cPhi = Math.atan2(pnz_c, pnx_c);
-                let cGroundRad = RADIUS + getHeightOnSphere(cTheta, cPhi, globalSeed) * HEIGHT_SCALE;
-                const wRad = RADIUS + waterLevel * 0.15;
-                if (waterEnabled && cGroundRad < wRad) cGroundRad = wRad;
-
-                const minCockpitRad = cGroundRad + 0.64;
-                if (minCockpitRad - cLen > 0.01) {
-                  nearestCockpit.position = [pnx_c * minCockpitRad, pny_c * minCockpitRad, pnz_c * minCockpitRad];
-                  pendingCollectibleRefresh = true;
+              if (nearestCockpit && bestCDist < 0.6) {
+                const updatedCPos = nearestCockpit.position;
+                const cR = nearestCockpit.R || [1, 0, 0];
+                const cN = nearestCockpit.normal || nearestCockpit.U || [0, 1, 0];
+                const cF = nearestCockpit.F || [0, 0, 1];
+                const clampOffsetN = 0.66;
+                const clampOffsetF = 0.0;
+                targetPos = [
+                  updatedCPos[0] - cN[0] * clampOffsetN - cF[0] * clampOffsetF,
+                  updatedCPos[1] - cN[1] * clampOffsetN - cF[1] * clampOffsetF,
+                  updatedCPos[2] - cN[2] * clampOffsetN - cF[2] * clampOffsetF
+                ];
+                pN = [cN[0], cN[1], cN[2]];
+                pR = [cR[0], cR[1], cR[2]];
+                pF = [cF[0], cF[1], cF[2]];
+                floorPreviewCollectible.isValidPlacement = true;
+                floorPreviewCollectible.size = 0.25;
+                isSnapped = true;
+                robotSnapFound = true;
+              }
+            } else if (typeToPlace !== "robot_cockpit") {
+              // Placing Leg, Arm, or other Robot Part -> Snap ONLY to Cockpit that is mounted on a Robot Stand
+              let nearestCockpit = null;
+              let bestCDist = Infinity;
+              for (let c of collectibles) {
+                if (c.active && !c.isPreview && c.type === "robot_cockpit") {
+                  const dx = c.position[0] - targetPos[0];
+                  const dy = c.position[1] - targetPos[1];
+                  const dz = c.position[2] - targetPos[2];
+                  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                  if (dist < bestCDist) {
+                    bestCDist = dist;
+                    nearestCockpit = c;
+                  }
                 }
+              }
 
+              // Check if nearestCockpit is mounted on a Robot Stand
+              let cockpitOnStand = false;
+              if (nearestCockpit && bestCDist < 0.6) {
+                for (let s of collectibles) {
+                  if (s.active && !s.isPreview && s.type === "robot_stand") {
+                    const sdx = s.position[0] - nearestCockpit.position[0];
+                    const sdy = s.position[1] - nearestCockpit.position[1];
+                    const sdz = s.position[2] - nearestCockpit.position[2];
+                    const sdist = Math.sqrt(sdx*sdx + sdy*sdy + sdz*sdz);
+                    if (sdist < 1.2) {
+                      cockpitOnStand = true;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (nearestCockpit && bestCDist < 0.6 && cockpitOnStand) {
                 const updatedCPos = nearestCockpit.position;
                 const cR = nearestCockpit.R || [1, 0, 0];
                 const cN = nearestCockpit.normal || nearestCockpit.U || [0, 1, 0];
@@ -1629,49 +1667,37 @@ function buildCollectibles(count, seed) {
                 robotSnapFound = true;
               }
             } else {
-              // Placing Cockpit -> Snap to placed Leg or Arm
-              let nearestPart = null;
-              let bestPDist = Infinity;
+              // Placing Cockpit -> Snap ONLY to placed Stand
+              let nearestStand = null;
+              let bestSDist = Infinity;
               for (let c of collectibles) {
-                if (c.active && !c.isPreview && c.type.startsWith("robot_") && c.type !== "robot_cockpit") {
+                if (c.active && !c.isPreview && c.type === "robot_stand") {
                   const dx = c.position[0] - targetPos[0];
                   const dy = c.position[1] - targetPos[1];
                   const dz = c.position[2] - targetPos[2];
                   const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                  if (dist < bestPDist) {
-                    bestPDist = dist;
-                    nearestPart = c;
+                  if (dist < bestSDist) {
+                    bestSDist = dist;
+                    nearestStand = c;
                   }
                 }
               }
 
-              if (nearestPart && bestPDist < 2.5) {
-                const pPos = nearestPart.position;
-                const pR_vec = nearestPart.R || [1, 0, 0];
-                const pN_vec = nearestPart.normal || nearestPart.U || [0, 1, 0];
-                const pF_vec = nearestPart.F || [0, 0, 1];
-
-                let rOff = 0, nOff = 0, fOff = 0;
-                if (nearestPart.type === "robot_left_leg") {
-                  rOff = -0.030; nOff = -0.5025; fOff = 0.0;
-                } else if (nearestPart.type === "robot_right_leg") {
-                  rOff = 0.030; nOff = -0.5025; fOff = 0.0;
-                } else if (nearestPart.type === "robot_left_arm") {
-                  rOff = -0.1875; nOff = -0.16875; fOff = 0.0;
-                } else if (nearestPart.type === "robot_right_arm") {
-                  rOff = 0.1875; nOff = -0.16875; fOff = 0.0;
-                }
-
+              if (nearestStand && bestSDist < 0.6) {
+                const sPos = nearestStand.position;
+                const sR = nearestStand.R || [1, 0, 0];
+                const sN = nearestStand.normal || nearestStand.U || [0, 1, 0];
+                const sF = nearestStand.F || [0, 0, 1];
+                const clampOffsetN = 0.66;
+                const clampOffsetF = 0.0;
                 targetPos = [
-                  pPos[0] - pR_vec[0]*rOff - pN_vec[0]*nOff - pF_vec[0]*fOff,
-                  pPos[1] - pR_vec[1]*rOff - pN_vec[1]*nOff - pF_vec[1]*fOff,
-                  pPos[2] - pR_vec[2]*rOff - pN_vec[2]*nOff - pF_vec[2]*fOff
+                  sPos[0] + sN[0] * clampOffsetN + sF[0] * clampOffsetF,
+                  sPos[1] + sN[1] * clampOffsetN + sF[1] * clampOffsetF,
+                  sPos[2] + sN[2] * clampOffsetN + sF[2] * clampOffsetF
                 ];
-
-                pN = [pN_vec[0], pN_vec[1], pN_vec[2]];
-                pR = [pR_vec[0], pR_vec[1], pR_vec[2]];
-                pF = [pF_vec[0], pF_vec[1], pF_vec[2]];
-
+                pN = [sN[0], sN[1], sN[2]];
+                pR = [sR[0], sR[1], sR[2]];
+                pF = [sF[0], sF[1], sF[2]];
                 floorPreviewCollectible.isValidPlacement = true;
                 floorPreviewCollectible.size = 0.25;
                 isSnapped = true;
@@ -1680,66 +1706,71 @@ function buildCollectibles(count, seed) {
             }
 
             if (!robotSnapFound) {
-              // Standalone ground/floor placement
-              let nearestFloor = null;
-              let nearestDist = Infinity;
-              for (let other of collectibles) {
-                if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
-                  const dx = other.position[0] - targetPos[0];
-                  const dy = other.position[1] - targetPos[1];
-                  const dz = other.position[2] - targetPos[2];
-                  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                  if (dist < nearestDist) {
-                    nearestDist = dist;
-                    nearestFloor = other;
+              if (typeToPlace !== "robot_stand") {
+                floorPreviewCollectible.isValidPlacement = false;
+                floorPreviewCollectible.size = 0.25;
+              } else {
+                // Standalone ground/floor placement
+                let nearestFloor = null;
+                let nearestDist = Infinity;
+                for (let other of collectibles) {
+                  if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
+                    const dx = other.position[0] - targetPos[0];
+                    const dy = other.position[1] - targetPos[1];
+                    const dz = other.position[2] - targetPos[2];
+                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                    if (dist < nearestDist) {
+                      nearestDist = dist;
+                      nearestFloor = other;
+                    }
                   }
                 }
-              }
 
-              if (nearestFloor && nearestDist < 0.6) {
-                const sR = nearestFloor.R || [1, 0, 0];
-                const sF = nearestFloor.F || [0, 0, 1];
-                const sN = nearestFloor.normal || [0, 1, 0];
-                const sP = nearestFloor.position;
+                if (nearestFloor && nearestDist < 0.6) {
+                  const sR = nearestFloor.R || [1, 0, 0];
+                  const sF = nearestFloor.F || [0, 0, 1];
+                  const sN = nearestFloor.normal || [0, 1, 0];
+                  const sP = nearestFloor.position;
 
-                const dx = targetPos[0] - sP[0];
-                const dy = targetPos[1] - sP[1];
-                const dz = targetPos[2] - sP[2];
+                  const dx = targetPos[0] - sP[0];
+                  const dy = targetPos[1] - sP[1];
+                  const dz = targetPos[2] - sP[2];
 
-                const localX = dx * sR[0] + dy * sR[1] + dz * sR[2];
-                const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
+                  const localX = dx * sR[0] + dy * sR[1] + dz * sR[2];
+                  const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
 
-                if (Math.abs(localX) <= 0.35 && Math.abs(localZ) <= 0.35) {
-                  let gridX = Math.round(localX / 0.15);
-                  let gridZ = Math.round(localZ / 0.15);
+                  if (Math.abs(localX) <= 0.35 && Math.abs(localZ) <= 0.35) {
+                    let gridX = Math.round(localX / 0.15);
+                    let gridZ = Math.round(localZ / 0.15);
 
-                  floorPreviewCollectible.isValidPlacement = true;
-                  floorPreviewCollectible.size = 0.25;
+                    floorPreviewCollectible.isValidPlacement = true;
+                    floorPreviewCollectible.size = 0.25;
 
-                  let floorHH = 0;
-                  if (nearestFloor.type === "stone_floor") floorHH = nearestFloor.size * 0.15;
-                  else if (nearestFloor.type === "wood_floor") floorHH = woodFloorHeight + nearestFloor.size * 0.12;
-                  else if (nearestFloor.type === "thin_wood_floor") floorHH = nearestFloor.size * 0.04;
+                    let floorHH = 0;
+                    if (nearestFloor.type === "stone_floor") floorHH = nearestFloor.size * 0.15;
+                    else if (nearestFloor.type === "wood_floor") floorHH = woodFloorHeight + nearestFloor.size * 0.12;
+                    else if (nearestFloor.type === "thin_wood_floor") floorHH = nearestFloor.size * 0.04;
 
-                  let floatOffset = typeToPlace === "robot_cockpit" ? 0.14 : ((typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") ? 0.14 : 0.35);
+                    let floatOffset = typeToPlace === "robot_cockpit" ? 0.14 : ((typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") ? 0.14 : (typeToPlace === "robot_stand" ? 0.0 : 0.35));
 
-                  targetPos = [
-                    sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (floorHH / 2 + floatOffset),
-                    sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (floorHH / 2 + floatOffset),
-                    sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (floorHH / 2 + floatOffset)
-                  ];
+                    targetPos = [
+                      sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (floorHH / 2 + floatOffset),
+                      sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (floorHH / 2 + floatOffset),
+                      sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (floorHH / 2 + floatOffset)
+                    ];
 
-                  pN = [sN[0], sN[1], sN[2]];
-                  pR = [sR[0], sR[1], sR[2]];
-                  pF = [sF[0], sF[1], sF[2]];
-                  isSnapped = true;
+                    pN = [sN[0], sN[1], sN[2]];
+                    pR = [sR[0], sR[1], sR[2]];
+                    pF = [sF[0], sF[1], sF[2]];
+                    isSnapped = true;
+                  } else {
+                    floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
+                    floorPreviewCollectible.size = 0.25;
+                  }
                 } else {
                   floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
                   floorPreviewCollectible.size = 0.25;
                 }
-              } else {
-                floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
-                floorPreviewCollectible.size = 0.25;
               }
             }
           } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item") {
@@ -1793,6 +1824,7 @@ function buildCollectibles(count, seed) {
                         let floatOffset = 0;
                         if (typeToPlace === "robot_cockpit") floatOffset = 0.14;
                         else if (typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") floatOffset = 0.14;
+                        else if (typeToPlace === "robot_stand") floatOffset = 0.0;
                         else if (typeToPlace.startsWith("robot_")) floatOffset = 0.35;
                         targetPos = [
                             sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (floorHH / 2 + floatOffset),
@@ -2126,6 +2158,10 @@ function buildCollectibles(count, seed) {
           }
 
           if (c.type === "arrow") {
+             if (c.isStuck) {
+                 continue;
+             }
+
              if (c.attachedToNPC) {
                  if (!c.attachedToNPC.active) {
                      c.active = false;
@@ -2258,10 +2294,12 @@ function buildCollectibles(count, seed) {
                  p[1] = ny * (coreRadius + 0.001);
                  p[2] = nz * (coreRadius + 0.001);
                  c.vel = [0, 0, 0];
+                 c.isStuck = true;
                  
                  if (typeof playPlaceSound === "function") {
                      playPlaceSound();
                  }
+                 window.pendingDynamicCollectibleRefresh = true;
                  continue;
              }
              
@@ -2272,10 +2310,13 @@ function buildCollectibles(count, seed) {
                  p[2] = nz * (terrainRad + 0.001);
                  
                  c.vel = [0, 0, 0];
+                 c.isStuck = true;
                  
                  if (typeof playPlaceSound === "function") {
                      playPlaceSound();
                  }
+                 window.pendingDynamicCollectibleRefresh = true;
+                 continue;
              }
              
              if (c.isDynamic !== false) {
@@ -2477,7 +2518,8 @@ function buildCollectibles(count, seed) {
               const rFwdOff  = typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
               const rUpOff   = typeof window.wheelRearUpOffset   === "number" ? window.wheelRearUpOffset   : -0.03;
 
-              const wheelRadius = 0.16;
+              const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+              const wheelRadius = 0.16 * wheelScale;
 
               const nx = c.position[0] / (r || 1);
               const ny = c.position[1] / (r || 1);
@@ -2586,7 +2628,8 @@ function buildCollectibles(count, seed) {
 
                 // 4. Update wheel spin visually
                 let moveDir = vehSpeed >= 0 ? 1 : -1;
-                const wheelRadius = 0.16;
+                const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+                const wheelRadius = 0.16 * wheelScale;
                 const distTraveled = vehSpeed * dt;
                 c.spinAngle = (c.spinAngle || 0) + (distTraveled / wheelRadius);
 
