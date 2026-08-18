@@ -1,6 +1,6 @@
 {
   "name": "seedplanet เวอร์ 2.0.0.0",
-  "description": "A planet-seeding simulation game.",
+  "description": "A planet-seeding simulation game with procedural terrain, adaptive environments, dynamic atmosphere, clouds, ecosystems, and randomized planetary scales.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
