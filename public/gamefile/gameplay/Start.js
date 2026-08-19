@@ -39,6 +39,22 @@ function startGameWithSlot(loadedData, devMode = false) {
   if (gameStarted) return;
   gameStarted = true;
   isDevMode = devMode;
+
+  const toggleBtn = document.getElementById("toggleControlsBtn");
+  const mainCtrls = document.getElementById("mainControls");
+  const fullBtn = document.getElementById("fullscreenBtn");
+  const devLink = document.getElementById("devByNskLink");
+  if (!isDevMode) {
+    if (toggleBtn) toggleBtn.style.setProperty("display", "none", "important");
+    if (mainCtrls) mainCtrls.style.setProperty("display", "none", "important");
+    if (fullBtn) fullBtn.style.setProperty("display", "none", "important");
+    if (devLink) devLink.style.setProperty("display", "none", "important");
+  } else {
+    if (toggleBtn) toggleBtn.style.setProperty("display", "block", "important");
+    if (mainCtrls) mainCtrls.style.setProperty("display", "flex", "important");
+    if (fullBtn) fullBtn.style.setProperty("display", "inline-block", "important");
+    if (devLink) devLink.style.setProperty("display", "inline", "important");
+  }
   
   if (isDevMode || loadedData) {
     if (typeof window.isVirtualCursorManualHidden !== "undefined") {
@@ -220,15 +236,15 @@ function startGameWithSlot(loadedData, devMode = false) {
           const fullBtn = document.getElementById("fullscreenBtn");
           const devLink = document.getElementById("devByNskLink");
           if (!isDevMode) {
-            if (toggleBtn) toggleBtn.style.display = "none";
-            if (mainCtrls) mainCtrls.style.display = "none";
-            if (fullBtn) fullBtn.style.display = "none";
-            if (devLink) devLink.style.display = "none";
+            if (toggleBtn) toggleBtn.style.setProperty("display", "none", "important");
+            if (mainCtrls) mainCtrls.style.setProperty("display", "none", "important");
+            if (fullBtn) fullBtn.style.setProperty("display", "none", "important");
+            if (devLink) devLink.style.setProperty("display", "none", "important");
           } else {
-            if (toggleBtn) toggleBtn.style.display = "block";
-            if (mainCtrls) mainCtrls.style.display = "flex";
-            if (fullBtn) fullBtn.style.display = "inline-block";
-            if (devLink) devLink.style.display = "inline";
+            if (toggleBtn) toggleBtn.style.setProperty("display", "block");
+            if (mainCtrls) mainCtrls.style.setProperty("display", "flex");
+            if (fullBtn) fullBtn.style.setProperty("display", "inline-block");
+            if (devLink) devLink.style.setProperty("display", "inline");
           }
         }, 800);
       }, 500);

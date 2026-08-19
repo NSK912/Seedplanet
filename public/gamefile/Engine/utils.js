@@ -636,6 +636,34 @@ window.addEventListener("pointermove", handleVirtualMouseMove, { capture: true, 
 
 let lastVirtualMouseUpTime = 0;
 
+// Setup click listener for toggleControlsBtn if present
+function setupToggleControlsBtnListener() {
+  const toggleBtn = document.getElementById("toggleControlsBtn");
+  if (toggleBtn && !toggleBtn.dataset.hasToggleListener) {
+    toggleBtn.dataset.hasToggleListener = "true";
+    toggleBtn.style.zIndex = "20";
+    toggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const mainControls = document.getElementById("mainControls");
+      if (!mainControls) return;
+      const isHidden = mainControls.style.display === "none" || (window.getComputedStyle && window.getComputedStyle(mainControls).display === "none");
+      if (isHidden) {
+        mainControls.style.display = "flex";
+        toggleBtn.textContent = "⚙️ ซ่อนเมนู";
+      } else {
+        mainControls.style.display = "none";
+        toggleBtn.textContent = "⚙️ แสดงเมนู";
+      }
+    });
+  }
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupToggleControlsBtnListener);
+} else {
+  setupToggleControlsBtnListener();
+}
+
 // Redirect mouse clicks/events to virtual cursor target when UI is open or locked
 function redirectMouseEventToVirtualCursor(e) {
   if (isSyntheticEvent) return;
@@ -643,6 +671,9 @@ function redirectMouseEventToVirtualCursor(e) {
   const isTouch = window.devInputMode === "touch" || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || 
                   (window.devInputMode === "auto" && typeof isAndroidProfile !== "undefined" && isAndroidProfile);
   if (isTouch) return;
+
+  // Ensure toggleControlsBtn listener is active
+  setupToggleControlsBtnListener();
 
   // Keep window focused for keyboard events
   if (window.focus) {
@@ -690,6 +721,13 @@ function redirectMouseEventToVirtualCursor(e) {
     e.stopPropagation();
     if (typeof e.stopImmediatePropagation === "function") {
       e.stopImmediatePropagation();
+    }
+
+    if (didVirtualDrag && (e.type === "click" || e.type === "mouseup")) {
+      isVirtualMouseDown = false;
+      activeVirtualDragTarget = null;
+      didVirtualDrag = false;
+      return;
     }
 
     isSyntheticEvent = true;
@@ -753,21 +791,14 @@ function redirectMouseEventToVirtualCursor(e) {
 
         isVirtualMouseDown = false;
         activeVirtualDragTarget = null;
-
-        if (!didVirtualDrag && clickable && typeof clickable.click === "function") {
-          clickable.click();
-          if (clickable.tagName !== "INPUT" && clickable.tagName !== "TEXTAREA") {
-            try { clickable.blur(); } catch(err){}
-          }
-        }
         didVirtualDrag = false;
       }
 
       if (e.type === "click") {
-        if (!didVirtualDrag && clickable && typeof clickable.click === "function") {
-          // Handled on mouseup or direct click
-        }
         didVirtualDrag = false;
+        if (targetEl.tagName !== "INPUT" && targetEl.tagName !== "TEXTAREA") {
+          try { targetEl.blur(); } catch(err){}
+        }
       }
     } catch (err) {
       console.warn("Error dispatching virtual mouse event:", err);
@@ -1236,7 +1267,7 @@ function convertAllSelectsToCustomDropdowns() {
     list.style.overflowY = "auto";
     list.style.background = "#1a1a1a";
     list.style.border = "1px solid #dfb76c";
-    list.style.zIndex = "2147483647";
+    list.style.zIndex = "10050";
     list.style.display = "none";
     list.style.boxSizing = "border-box";
     list.style.boxShadow = "0 4px 12px rgba(0,0,0,0.8)";

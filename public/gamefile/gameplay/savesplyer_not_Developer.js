@@ -1131,7 +1131,7 @@
                                 ${
                                   !isEmpty
                                     ? `
-                                <button onclick="event.stopPropagation(); deleteSaveSlot('${slot.id}', this)" 
+                                <button onclick="event.preventDefault(); event.stopPropagation(); deleteSaveSlot('${slot.id}', this, event)" 
                                          
                                         onmouseover="this.style.background='rgba(239, 68, 68, 0.35)'; this.style.borderColor='#fca5a5';" 
                                         onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'; this.style.borderColor='rgba(239, 68, 68, 0.4)';" class="game-ui" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 2px 6px; font-size: 10px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s;">
@@ -1152,7 +1152,13 @@
         listContainer.innerHTML = html;
       }
 
-      function deleteSaveSlot(slotId, buttonElement) {
+      function deleteSaveSlot(slotId, buttonElement, e) {
+        if (e) {
+          if (typeof e.preventDefault === "function") e.preventDefault();
+          if (typeof e.stopPropagation === "function") e.stopPropagation();
+          if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+        }
+        window.lastDeleteSaveSlotTime = Date.now();
         if (!buttonElement) return;
         if (buttonElement.dataset.confirm === "true") {
           localStorage.removeItem(slotId);
@@ -1178,6 +1184,9 @@
       deleteSaveSlot = deleteSaveSlot;
 
       function selectSaveSlotAndStart(slotId) {
+        if (window.lastDeleteSaveSlotTime && Date.now() - window.lastDeleteSaveSlotTime < 500) {
+          return;
+        }
         if (Date.now() - lastSaveSelectorOpenedTime < 350) {
           return;
         }
