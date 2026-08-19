@@ -56,11 +56,9 @@ function startGameWithSlot(loadedData, devMode = false) {
     if (devLink) devLink.style.setProperty("display", "inline", "important");
   }
   
-  if (isDevMode || loadedData) {
-    if (typeof window.isVirtualCursorManualHidden !== "undefined") {
-      window.isVirtualCursorManualHidden = true;
-      if (typeof window.updateVirtualCursorVisibility === "function") window.updateVirtualCursorVisibility();
-    }
+  if (typeof window.isVirtualCursorManualHidden !== "undefined") {
+    window.isVirtualCursorManualHidden = true;
+    if (typeof window.updateVirtualCursorVisibility === "function") window.updateVirtualCursorVisibility();
   }
 
   // Apply fullscreen gesture fallback on startup click
@@ -245,6 +243,14 @@ function startGameWithSlot(loadedData, devMode = false) {
             if (mainCtrls) mainCtrls.style.setProperty("display", "flex");
             if (fullBtn) fullBtn.style.setProperty("display", "inline-block");
             if (devLink) devLink.style.setProperty("display", "inline");
+          }
+
+          if (typeof window.isVirtualCursorManualHidden !== "undefined") {
+            window.isVirtualCursorManualHidden = true;
+            if (typeof window.updateVirtualCursorVisibility === "function") window.updateVirtualCursorVisibility();
+          }
+          if (typeof requestPointerLockSafe === "function") {
+            requestPointerLockSafe();
           }
         }, 800);
       }, 500);
