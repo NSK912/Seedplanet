@@ -6,16 +6,20 @@
     'gamefile/ui-layout.js',
     'gamefile/gameplay/settings.js',
 
+    // --- Audio System ---
+    'gamefile/audio/audio.js',
+    'gamefile/audio/wooden_wheels_sound.js',
+
     // --- Core Engine & Utilities ---
     'gamefile/Engine/utils.js',
     'gamefile/Engine/SpacesMap.js',
-    'gamefile/Engine/audio.js',
     'gamefile/Engine/terrain.js',
     'gamefile/Engine/debugLog.js',
     'gamefile/Engine/collision.js',
     'gamefile/Engine/physics.js',
     'gamefile/Engine/camera.js',
     'gamefile/Engine/frustumCulling.js',
+    'gamefile/Engine/world_3d_ui.js',
 
     // --- Environment ---
     'gamefile/Environment/surface.js',

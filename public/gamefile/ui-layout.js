@@ -30,7 +30,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <div class="planet-decor"></div>
       <div class="planet-decor-2"></div>
       <div class="logo-container">
-        <h1 class="logo-title">seedplanet</h1>
+        <img src="assets/20260820_000234.png" alt="SeedPlanet Logo" class="main-screen-logo" />
         <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0px;">
           <!-- YouTube Icon Link -->
           <a
@@ -81,7 +81,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- Version Info -->
           <div style="color: #64748b; font-size: 12px; font-weight: 500; font-family: monospace; margin-left: 8px;">
             <span style="font-weight: 700; margin-right: 4px;">NSK App</span>
-            ver 2.0.0.1
+            ver 2.0.0.2
           </div>
         </div>
       </div>

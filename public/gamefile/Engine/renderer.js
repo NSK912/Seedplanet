@@ -5083,6 +5083,8 @@ window.cloud3DProgram = cloud3DProgram;
             let tRadius = caveDataBoat.ground;
             
             // If water is disabled or terrain is higher than water, float on terrain instead of water
+            let isBoatInWater = waterEnabled && (tRadius < wRadius) && ((wRadius - tRadius) > 0.3 * charScale);
+            activeRidingBoat.isInWater = isBoatInWater;
             let baseRadius = (waterEnabled && tRadius < wRadius) ? wRadius : tRadius;
             if (waterEnabled && tRadius < wRadius) {
                 const wave = getWaterWave(nx * wRadius, ny * wRadius, nz * wRadius, waterAnimTime, waveStrength);
@@ -5333,6 +5335,12 @@ window.cloud3DProgram = cloud3DProgram;
             walkPhase,
             lastIsCameraUnderwater,
           );
+        }
+
+        // Update wheeled boat rolling sound (only on land, not on water)
+        if (typeof updateWheeledBoatSound === "function") {
+          let isBoatOnWater = activeRidingBoat ? (activeRidingBoat.isInWater !== undefined ? activeRidingBoat.isInWater : (waterEnabled && (waterRadius - terrainRadius) > 0.35 * charScale)) : false;
+          updateWheeledBoatSound(activeRidingBoat, timeScale, isBoatOnWater);
         }
 
         // Update footstep / splash sound
@@ -5649,6 +5657,7 @@ window.cloud3DProgram = cloud3DProgram;
                   boatToDismount.isDynamic = true;
                   boatToDismount.vel = [0, 0, 0];
                   activeRidingBoat = null;
+                  if (typeof stopWheeledBoatSound === "function") stopWheeledBoatSound();
             }
           } else {
                 chestHoldTimer = 0.0;
@@ -8884,6 +8893,10 @@ window.cloud3DProgram = cloud3DProgram;
 
         if (typeof updateFloatingNpcHpBars === "function") {
           updateFloatingNpcHpBars(viewMatrix, projMatrix, eyePos);
+        }
+
+        if (typeof World3DUI !== "undefined" && typeof World3DUI.render === "function") {
+          World3DUI.render(viewMatrix, projMatrix, eyePos, canvas.clientWidth, canvas.clientHeight);
         }
 
         if (typeof updateCompassHUD === "function") {

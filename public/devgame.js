@@ -623,6 +623,196 @@ if (toggleControlsBtn && mainControls) {
   bindSlider("devWheelRearUpOffsetSlider", "devWheelRearUpOffsetLabel", () => window.wheelRearUpOffset, v => window.wheelRearUpOffset = v, true);
 })();
 
+// --- ระบบปรับแต่งช่วงเสียงล้อไม้ (Wooden Wheel Sound Trim & Loop Controller) ---
+(function initDevWheelSoundControl() {
+  if (typeof window.woodenWheelSoundLoopStart === "undefined") window.woodenWheelSoundLoopStart = 0.88;
+  if (typeof window.woodenWheelSoundLoopEnd === "undefined") window.woodenWheelSoundLoopEnd = 1.12;
+
+  function mountGroup() {
+    const mainControls = document.getElementById("mainControls");
+    if (!mainControls) return false;
+    if (document.getElementById("devWheelSoundControlGroup")) return true;
+
+    const group = document.createElement("div");
+    group.className = "control-group";
+    group.id = "devWheelSoundControlGroup";
+    group.style.border = "1.5px solid #ffca28";
+    group.style.borderRadius = "8px";
+    group.style.background = "rgba(22, 20, 15, 0.95)";
+    group.style.boxShadow = "0 4px 12px rgba(0,0,0,0.5)";
+    group.style.padding = "10px";
+
+    group.innerHTML = `
+      <div style="font-weight: bold; color: #ffca28; font-size: 13px; margin-bottom: 6px;">
+        🔊 ปรับช่วงเสียงล้อไม้ (Wheel Sound Loop)
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #dfb76c; margin-bottom: 8px; background: rgba(0,0,0,0.4); padding: 5px 8px; border-radius: 4px; border: 1px solid rgba(223, 183, 108, 0.2);">
+        <span>ความยาวไฟล์เสียงทั้งหมด:</span>
+        <span id="devWheelSoundTotalDurationLabel" style="font-weight: bold; color: #ffffff;">-- s</span>
+      </div>
+
+      <!-- สไลเดอร์ช่วงเริ่มเสียง (หน้า) -->
+      <div style="margin-top: 4px;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #eee;">
+          <span>▶ ช่วงเริ่มเสียง (Start Time / Loop Start):</span>
+          <span style="font-weight: bold; color: #81c784;"><span id="devWheelSoundStartLabel">0.88</span>s</span>
+        </div>
+        <input type="range" id="devWheelSoundStartSlider" min="0" max="861" value="88" style="width: 100%; margin-top: 3px; cursor: pointer;" />
+      </div>
+
+      <!-- สไลเดอร์ช่วงท้ายเสียง (หลัง) -->
+      <div style="margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #eee;">
+          <span>⏹ ช่วงท้ายเสียง (End Time / Loop End):</span>
+          <span style="font-weight: bold; color: #ffb74d;"><span id="devWheelSoundEndLabel">1.12</span>s</span>
+        </div>
+        <input type="range" id="devWheelSoundEndSlider" min="0" max="861" value="112" style="width: 100%; margin-top: 3px; cursor: pointer;" />
+      </div>
+
+      <!-- แถบแสดงช่วงการเล่นวนลูป (Visual Range Bar) -->
+      <div style="margin-top: 10px; background: rgba(0,0,0,0.6); border-radius: 4px; height: 12px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15);">
+        <div id="devWheelSoundVisualBar" style="position: absolute; top: 0; left: 0%; width: 100%; height: 100%; background: linear-gradient(90deg, #43a047, #fbc02d); opacity: 0.85; border-radius: 3px; transition: left 0.05s, width 0.05s;"></div>
+      </div>
+
+      <!-- ปุ่มทดสอบและปุ่มรีเซ็ต -->
+      <div style="display: flex; gap: 6px; margin-top: 12px; align-items: stretch;">
+        <button id="devWheelSoundTestBtn" class="btn-random" style="flex: 1; margin: 0; padding: 7px 6px; font-size: 11px; font-weight: bold; color: #fff; background-image: linear-gradient(135deg, #2e7d32, #4caf50); border-radius: 5px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; line-height: 1.3; text-align: center;">
+          ▶ ทดลองฟังเสียงล้อ (Preview)
+        </button>
+        <button id="devWheelSoundResetBtn" class="btn-random" style="flex: 0 0 65px; margin: 0; padding: 7px 4px; font-size: 11px; color: #fff; background-image: linear-gradient(135deg, #424242, #616161); border-radius: 5px; cursor: pointer; line-height: 1.3; text-align: center;">
+          🔄 รีเซ็ต
+        </button>
+      </div>
+    `;
+
+    mainControls.appendChild(group);
+
+    const startSlider = group.querySelector("#devWheelSoundStartSlider");
+    const startLabel = group.querySelector("#devWheelSoundStartLabel");
+    const endSlider = group.querySelector("#devWheelSoundEndSlider");
+    const endLabel = group.querySelector("#devWheelSoundEndLabel");
+    const durLabel = group.querySelector("#devWheelSoundTotalDurationLabel");
+    const visualBar = group.querySelector("#devWheelSoundVisualBar");
+    const testBtn = group.querySelector("#devWheelSoundTestBtn");
+    const resetBtn = group.querySelector("#devWheelSoundResetBtn");
+
+    const updateVisualBar = (start, end, dur) => {
+      if (!visualBar || !dur || dur <= 0) return;
+      const leftPercent = Math.max(0, Math.min(100, (start / dur) * 100));
+      const widthPercent = Math.max(0, Math.min(100 - leftPercent, ((end - start) / dur) * 100));
+      visualBar.style.left = leftPercent.toFixed(1) + "%";
+      visualBar.style.width = widthPercent.toFixed(1) + "%";
+    };
+
+    const syncBufferDuration = (dur) => {
+      if (!dur || isNaN(dur) || dur <= 0) return;
+      window.woodenWheelSoundBufferDuration = dur;
+      if (durLabel) durLabel.textContent = dur.toFixed(2) + " s";
+      
+      const maxVal = Math.ceil(dur * 100);
+      if (startSlider) {
+        startSlider.max = maxVal;
+        const curStart = (typeof window.woodenWheelSoundLoopStart === "number") ? window.woodenWheelSoundLoopStart : 0.88;
+        startSlider.value = Math.round(curStart * 100);
+      }
+      if (endSlider) {
+        endSlider.max = maxVal;
+        const curEnd = (typeof window.woodenWheelSoundLoopEnd === "number") ? window.woodenWheelSoundLoopEnd : Math.min(1.12, dur);
+        endSlider.value = Math.round(curEnd * 100);
+      }
+      const actualStart = (typeof window.woodenWheelSoundLoopStart === "number") ? window.woodenWheelSoundLoopStart : 0.88;
+      const actualEnd = (typeof window.woodenWheelSoundLoopEnd === "number") ? window.woodenWheelSoundLoopEnd : Math.min(1.12, dur);
+      if (startLabel) startLabel.textContent = actualStart.toFixed(2);
+      if (endLabel) endLabel.textContent = actualEnd.toFixed(2);
+      updateVisualBar(actualStart, actualEnd, dur);
+    };
+
+    const tryLoadAudioInfo = async () => {
+      try {
+        if (typeof window.getWoodenWheelsAudioBuffer === "function") {
+          const ctx = (typeof audioCtx !== "undefined" && audioCtx) || (typeof window !== "undefined" && (window.audioCtx || window.audioContext)) || new (window.AudioContext || window.webkitAudioContext)();
+          const buf = await window.getWoodenWheelsAudioBuffer(ctx);
+          if (buf) syncBufferDuration(buf.duration);
+        }
+      } catch(e) {}
+    };
+    tryLoadAudioInfo();
+
+    if (startSlider) {
+      startSlider.addEventListener("input", (e) => {
+        let val = parseInt(e.target.value, 10) / 100;
+        const dur = window.woodenWheelSoundBufferDuration || 8.61;
+        const endVal = endSlider ? (parseInt(endSlider.value, 10) / 100) : dur;
+        if (val >= endVal) {
+          val = Math.max(0, endVal - 0.05);
+          startSlider.value = Math.round(val * 100);
+        }
+        window.woodenWheelSoundLoopStart = val;
+        if (startLabel) startLabel.textContent = val.toFixed(2);
+        updateVisualBar(val, endVal, dur);
+      });
+    }
+
+    if (endSlider) {
+      endSlider.addEventListener("input", (e) => {
+        let val = parseInt(e.target.value, 10) / 100;
+        const dur = window.woodenWheelSoundBufferDuration || 8.61;
+        const startVal = startSlider ? (parseInt(startSlider.value, 10) / 100) : 0;
+        if (val <= startVal) {
+          val = startVal + 0.05;
+          endSlider.value = Math.round(val * 100);
+        }
+        window.woodenWheelSoundLoopEnd = val;
+        if (endLabel) endLabel.textContent = val.toFixed(2);
+        updateVisualBar(startVal, val, dur);
+      });
+    }
+
+    if (testBtn) {
+      testBtn.addEventListener("click", async () => {
+        await tryLoadAudioInfo();
+        if (typeof window.previewWoodenWheelSound === "function") {
+          if (window.isPreviewWoodenWheelSoundActive && window.isPreviewWoodenWheelSoundActive()) {
+            window.stopPreviewWoodenWheelSound();
+            testBtn.innerHTML = "▶ ทดลองฟังเสียงล้อ (Preview)";
+            testBtn.style.backgroundImage = "linear-gradient(135deg, #2e7d32, #4caf50)";
+          } else {
+            const started = await window.previewWoodenWheelSound(true);
+            if (started) {
+              testBtn.innerHTML = "⏹ หยุดเสียงทดลอง (Stop)";
+              testBtn.style.backgroundImage = "linear-gradient(135deg, #c62828, #e53935)";
+            }
+          }
+        }
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        const dur = window.woodenWheelSoundBufferDuration || 8.61;
+        window.woodenWheelSoundLoopStart = 0.88;
+        window.woodenWheelSoundLoopEnd = Math.min(1.12, dur);
+        if (startSlider) startSlider.value = 88;
+        if (endSlider) endSlider.value = Math.round(Math.min(1.12, dur) * 100);
+        if (startLabel) startLabel.textContent = "0.88";
+        if (endLabel) endLabel.textContent = Math.min(1.12, dur).toFixed(2);
+        updateVisualBar(0.88, Math.min(1.12, dur), dur);
+        if (typeof showNotice === "function") showNotice("รีเซ็ตช่วงเสียงล้อไม้เป็น 0.88s - 1.12s แล้ว");
+      });
+    }
+
+    return true;
+  }
+
+  // Try immediate mount or listen for DOM load
+  if (!mountGroup()) {
+    window.addEventListener("DOMContentLoaded", mountGroup);
+    setTimeout(mountGroup, 500);
+    setTimeout(mountGroup, 1500);
+  }
+})();
+
 // --- ระบบปิด/เปิดการสร้าง NPCs และ Environment (Generation Toggles) ---
 (function initDevGenerationToggles() {
   const npcBtn = document.getElementById("devToggleNpcBtn");
@@ -1097,3 +1287,47 @@ if (toggleControlsBtn && mainControls) {
     });
   }
 })();
+
+// Helper function to test spawning in-world 3D signs (non-screen-aligned)
+if (typeof window !== "undefined") {
+  window.testSpawn3DSign = function(text = "🚩 จุดปักป้าย 3D (In-World Sign)", offsetForward = 0.5) {
+    if (!window.World3DUI) return null;
+    const sinT = Math.sin(charTheta), cosT = Math.cos(charTheta);
+    const sinP = Math.sin(charPhi), cosP = Math.cos(charPhi);
+    const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+
+    // Up and forward vectors
+    const fwd = [
+      -Math.cos(charTheta) * Math.cos(charPhi),
+      Math.sin(charTheta),
+      -Math.cos(charTheta) * Math.sin(charPhi)
+    ];
+
+    const r_ground = (typeof RADIUS !== "undefined" ? RADIUS : 1.0) + (typeof charScale !== "undefined" ? charScale * 0.1 : 0.05);
+    const spawnPos = [
+      nx * r_ground + fwd[0] * offsetForward,
+      ny * r_ground + fwd[1] * offsetForward,
+      nz * r_ground + fwd[2] * offsetForward
+    ];
+
+    const signId = window.World3DUI.createSign({
+      position: spawnPos,
+      normal: fwd, // Faces towards player
+      up: [nx, ny, nz], // Ground up vector
+      size: [0.35, 0.18],
+      isScreenAligned: false, // DOES NOT rotate with screen
+      backfaceCulling: true,
+      content: `
+        <div style="padding: 6px 12px; background: rgba(18, 20, 26, 0.9); border: 1.5px solid #dfb76c; border-radius: 8px; color: #dfb76c; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.6); white-space: nowrap;">
+          ${text}
+        </div>
+      `
+    });
+
+    if (typeof showNotice === "function") {
+      showNotice("สร้างป้าย 3D แบบยึดติดพื้นโลกเรียบร้อย!");
+    }
+    return signId;
+  };
+}
+
