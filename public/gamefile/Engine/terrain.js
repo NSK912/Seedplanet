@@ -585,8 +585,13 @@
               const isSegmentEntrance = (r_p2 >= maxTerrainRadius - t.r * 1.25);
 
               // Determine if player/character is physically inside the 3D sphere of the cave tunnel
-              const isInsideSegment = (dist3D < t.r * 1.15) && (feetRadius < maxTerrainRadius); // Match visual hole radius and clip at surface
-              if (isInsideSegment) {                anyInside = true;                bestFloor = Math.min(bestFloor, r_p1);                bestCeiling = Math.max(bestCeiling, r_p2);                if (isSegmentEntrance) isEntrance = true;              }
+              const isInsideSegment = (dist3D < t.r * 1.15) && (feetRadius < maxTerrainRadius || isSegmentEntrance); // Match visual hole radius and allow entrance from surface
+              if (isInsideSegment) {
+                anyInside = true;
+                bestFloor = Math.min(bestFloor, r_p1);
+                bestCeiling = Math.max(bestCeiling, r_p2);
+                if (isSegmentEntrance) isEntrance = true;
+              }
             }
           }
 

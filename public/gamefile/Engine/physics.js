@@ -102,8 +102,13 @@ const Physics = {
         
         let centerTerrainRad = baseRadius;
         if (centerTerrainRad === null) {
-            const centerTerrainH = getH ? getH(theta, phi, seed) : 0;
-            centerTerrainRad = rad + centerTerrainH * hScale;
+            if (typeof getTerrainSurfaceAndCeiling === "function") {
+                const cData = getTerrainSurfaceAndCeiling(nx, ny, nz, pR);
+                centerTerrainRad = cData.ground;
+            } else {
+                const centerTerrainH = getH ? getH(theta, phi, seed) : 0;
+                centerTerrainRad = rad + centerTerrainH * hScale;
+            }
         }
         
         const waterRadius = rad + waterLevel * 0.15;
@@ -172,8 +177,14 @@ const Physics = {
             let wTheta = Math.acos(Math.max(-1.0, Math.min(1.0, wWorldY / wR)));
             let wPhi = Math.atan2(wWorldZ, wWorldX);
 
-            let wTerrainH = getH ? getH(wTheta, wPhi, seed) : 0;
-            let wTerrainRad = rad + wTerrainH * hScale;
+            let wTerrainRad;
+            if (typeof getTerrainSurfaceAndCeiling === "function") {
+                const wCData = getTerrainSurfaceAndCeiling(wWorldX / wR, wWorldY / wR, wWorldZ / wR, wR);
+                wTerrainRad = wCData.ground;
+            } else {
+                let wTerrainH = getH ? getH(wTheta, wPhi, seed) : 0;
+                wTerrainRad = rad + wTerrainH * hScale;
+            }
 
             let wSurfaceRad = wTerrainRad;
             if (waterEnabled && wTerrainRad < waterRadius) {

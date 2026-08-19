@@ -1911,14 +1911,15 @@ Graphics.init(canvas, glCanvas).then(() => {
 });
 
 // Initialize WebGL synchronously (Legacy requirement)
+const initialAntialias = (typeof antialiasEnabled !== "undefined" && antialiasEnabled) || (typeof taauEnabled !== "undefined" && taauEnabled);
 gl =
-  glCanvas.getContext("webgl2", { antialias: false, stencil: true, alpha: true, premultipliedAlpha: false }) ||
-  glCanvas.getContext("webgl", { antialias: false, stencil: true, alpha: true, premultipliedAlpha: false });
+  glCanvas.getContext("webgl2", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false }) ||
+  glCanvas.getContext("webgl", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false });
 
 if (!gl) {
   // If overlay fails, try the primary canvas (legacy fallback path)
-  gl = canvas.getContext("webgl2", { antialias: false, stencil: true }) ||
-       canvas.getContext("webgl", { antialias: false, stencil: true });
+  gl = canvas.getContext("webgl2", { antialias: initialAntialias, stencil: true }) ||
+       canvas.getContext("webgl", { antialias: initialAntialias, stencil: true });
 }
 
 if (!gl) {
@@ -2602,6 +2603,113 @@ window.cloud3DProgram = cloud3DProgram;
         }
       };
 
+
+      // ============================================
+      // Post-Processing Anti-Aliasing (FXAA / TAAU Edge Smoothing)
+      // ============================================
+      let fxaaProgram = null;
+      let fxaaQuadBuffer = null;
+      let fxaaPosLoc = -1;
+      let fxaaTexLoc = null;
+      let fxaaResolutionLoc = null;
+      let fxaaCopyTex = null;
+      let fxaaCopyWidth = 0;
+      let fxaaCopyHeight = 0;
+
+      const fxaaVS = `
+        attribute vec2 aPosition;
+        varying vec2 vUv;
+        void main() {
+          vUv = aPosition * 0.5 + 0.5;
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `;
+
+      const fxaaFS = `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D uTexture;
+        uniform vec2 uResolution;
+
+        #define FXAA_REDUCE_MIN   (1.0 / 128.0)
+        #define FXAA_REDUCE_MUL   (1.0 / 8.0)
+        #define FXAA_SPAN_MAX     8.0
+
+        void main() {
+          vec2 inverseVP = 1.0 / uResolution;
+          vec3 rgbNW = texture2D(uTexture, vUv + vec2(-1.0, -1.0) * inverseVP).rgb;
+          vec3 rgbNE = texture2D(uTexture, vUv + vec2( 1.0, -1.0) * inverseVP).rgb;
+          vec3 rgbSW = texture2D(uTexture, vUv + vec2(-1.0,  1.0) * inverseVP).rgb;
+          vec3 rgbSE = texture2D(uTexture, vUv + vec2( 1.0,  1.0) * inverseVP).rgb;
+          vec3 rgbM  = texture2D(uTexture, vUv).rgb;
+
+          vec3 luma = vec3(0.299, 0.587, 0.114);
+          float lumaNW = dot(rgbNW, luma);
+          float lumaNE = dot(rgbNE, luma);
+          float lumaSW = dot(rgbSW, luma);
+          float lumaSE = dot(rgbSE, luma);
+          float lumaM  = dot(rgbM,  luma);
+
+          float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+          float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+
+          vec2 dir;
+          dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+          dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+          float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 * FXAA_REDUCE_MUL), FXAA_REDUCE_MIN);
+          float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+          dir = min(vec2(FXAA_SPAN_MAX, FXAA_SPAN_MAX), max(vec2(-FXAA_SPAN_MAX, -FXAA_SPAN_MAX), dir * rcpDirMin)) * inverseVP;
+
+          vec3 rgbA = 0.5 * (
+            texture2D(uTexture, vUv + dir * (1.0 / 3.0 - 0.5)).rgb +
+            texture2D(uTexture, vUv + dir * (2.0 / 3.0 - 0.5)).rgb
+          );
+          vec3 rgbB = rgbA * 0.5 + 0.25 * (
+            texture2D(uTexture, vUv + dir * -0.5).rgb +
+            texture2D(uTexture, vUv + dir *  0.5).rgb
+          );
+
+          float lumaB = dot(rgbB, luma);
+          if ((lumaB < lumaMin) || (lumaB > lumaMax)) {
+            gl_FragColor = vec4(rgbA, 1.0);
+          } else {
+            gl_FragColor = vec4(rgbB, 1.0);
+          }
+        }
+      `;
+
+      function initFXAASystem() {
+        if (fxaaProgram) return;
+        const vs = createShader(fxaaVS, gl.VERTEX_SHADER);
+        const fs = createShader(fxaaFS, gl.FRAGMENT_SHADER);
+        if (!vs || !fs) return;
+        fxaaProgram = gl.createProgram();
+        gl.attachShader(fxaaProgram, vs);
+        gl.attachShader(fxaaProgram, fs);
+        gl.linkProgram(fxaaProgram);
+
+        fxaaPosLoc = gl.getAttribLocation(fxaaProgram, "aPosition");
+        fxaaTexLoc = gl.getUniformLocation(fxaaProgram, "uTexture");
+        fxaaResolutionLoc = gl.getUniformLocation(fxaaProgram, "uResolution");
+
+        fxaaQuadBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, fxaaQuadBuffer);
+        gl.bufferData(
+          gl.ARRAY_BUFFER,
+          new Float32Array([
+            -1.0, -1.0,
+             1.0, -1.0,
+            -1.0,  1.0,
+            -1.0,  1.0,
+             1.0, -1.0,
+             1.0,  1.0
+          ]),
+          gl.STATIC_DRAW
+        );
+
+        fxaaCopyTex = gl.createTexture();
+      }
 
       // ============================================
       // Wireframe
@@ -3427,7 +3535,8 @@ window.cloud3DProgram = cloud3DProgram;
         let charHeight = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
         const charScale = playerScale;
 
-        let feetRadiusBefore = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + charHeight * HEIGHT_SCALE);
+        const mechOffset = typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71;
+        let feetRadiusBefore = (playerCenterRadius !== null) ? (playerCenterRadius - (activeRidingMech ? mechOffset : 0.46 * charScale)) : (RADIUS + charHeight * HEIGHT_SCALE);
         const caveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore) : { ground: RADIUS + charHeight * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
         let terrainRadius = caveData.ground;
         const waterRadius = RADIUS + waterLevel * 0.15;
@@ -3438,7 +3547,7 @@ window.cloud3DProgram = cloud3DProgram;
         
         // if (caveData.insideTunnel) { wRadiusLocal = 0; } // Disabled: allow water in caves
         
-        let currentFeetRadius = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * charScale) : terrainRadius;
+        let currentFeetRadius = (playerCenterRadius !== null) ? (playerCenterRadius - (activeRidingMech ? mechOffset : 0.46 * charScale)) : terrainRadius;
 
         // เรียกใช้ฟังก์ชันควบคุมการว่ายน้ำและดำน้ำจาก ui.js เพื่อลดความซ้ำซ้อนของโค้ด
         updatePlayerSwimmingAndDiving(
@@ -3453,19 +3562,18 @@ window.cloud3DProgram = cloud3DProgram;
 
         // Initialize playerCenterRadius if null
         if (playerCenterRadius === null) {
-          playerCenterRadius = terrainRadius + 0.46 * charScale;
+          playerCenterRadius = terrainRadius + (activeRidingMech ? mechOffset : 0.46 * charScale);
           playerVerticalVel = 0.0;
         }
 
-        let standGroundRadius = terrainRadius + 0.46 * charScale;
+        let standGroundRadius = terrainRadius + (activeRidingMech ? mechOffset : 0.46 * charScale);
         if (activeRidingBoat) {
-          const tRadius = RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
+          const tRadius = terrainRadius;
           const baseRadius = (waterEnabled && tRadius < waterRadius) ? waterRadius : tRadius;
           let bR = activeRidingBoat.currentRadius !== undefined ? activeRidingBoat.currentRadius : (baseRadius - 0.04);
           standGroundRadius = bR + 0.46 * charScale;
         } else if (activeRidingMech) {
-          const tRadius = RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
-          standGroundRadius = tRadius + (typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71);
+          standGroundRadius = terrainRadius + mechOffset;
         } else if (currentSwimFactor > 0.0) {
           const targetSwimRadius =
             waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
@@ -4750,7 +4858,8 @@ window.cloud3DProgram = cloud3DProgram;
 
             charHeight = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
 
-            let feetRadiusBeforeForSwim = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + charHeight * HEIGHT_SCALE);
+            const mechOffsetMoving = typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71;
+            let feetRadiusBeforeForSwim = (playerCenterRadius !== null) ? (playerCenterRadius - (activeRidingMech ? mechOffsetMoving : 0.46 * charScale)) : (RADIUS + charHeight * HEIGHT_SCALE);
             const caveDataForSwim = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBeforeForSwim) : { ground: RADIUS + charHeight * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
             let tRadius = caveDataForSwim.ground;
             let wRadius = getWaterRadiusAt(nx * feetRadiusBeforeForSwim, ny * feetRadiusBeforeForSwim, nz * feetRadiusBeforeForSwim);
@@ -4838,7 +4947,10 @@ window.cloud3DProgram = cloud3DProgram;
           }
 
           if (activeRidingBoat || activeRidingMech) {
-            const tRadius = RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
+            const rawH = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+            const feetRadiusBefore = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + rawH * HEIGHT_SCALE);
+            const caveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore) : { ground: RADIUS + rawH * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
+            const tRadius = caveData.ground;
             if (activeRidingMech) {
               playerCenterRadius = tRadius + (typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71);
             } else if (activeRidingBoat) {
@@ -4966,7 +5078,9 @@ window.cloud3DProgram = cloud3DProgram;
         if (activeRidingBoat) {
             const wRadius = RADIUS + waterLevel * 0.15;
             let height = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-            let tRadius = RADIUS + height * HEIGHT_SCALE;
+            let feetBeforeBoat = activeRidingBoat.currentRadius || (playerCenterRadius ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + height * HEIGHT_SCALE));
+            const caveDataBoat = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetBeforeBoat) : { ground: RADIUS + height * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
+            let tRadius = caveDataBoat.ground;
             
             // If water is disabled or terrain is higher than water, float on terrain instead of water
             let baseRadius = (waterEnabled && tRadius < wRadius) ? wRadius : tRadius;
@@ -5050,7 +5164,10 @@ window.cloud3DProgram = cloud3DProgram;
             activeRidingBoat.R = bR_vec;
         } else if (activeRidingMech) {
             let height = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-            let tRadius = RADIUS + height * HEIGHT_SCALE;
+            const mechOffsetRendering = typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71;
+            let feetBeforeMech = (playerCenterRadius !== null) ? (playerCenterRadius - mechOffsetRendering) : (RADIUS + height * HEIGHT_SCALE);
+            const caveDataMech = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetBeforeMech) : { ground: RADIUS + height * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
+            let tRadius = caveDataMech.ground;
             const isMechWalking = typeof isWalking !== "undefined" && isWalking;
             const wPhase = typeof walkPhase !== "undefined" ? walkPhase : 0.0;
             const stepBob = 0.0; // Steady mech height to keep camera smooth
@@ -5520,6 +5637,14 @@ window.cloud3DProgram = cloud3DProgram;
                      charTheta = Math.acos(Math.max(-1.0, Math.min(1.0, p3d[1] / pLen)));
                      charPhi = Math.atan2(p3d[2], p3d[0]);
                      if (charPhi < 0) charPhi += Math.PI * 2;
+
+                     const pnx = p3d[0] / pLen, pny = p3d[1] / pLen, pnz = p3d[2] / pLen;
+                     const pFeetRad = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * playerScale) : (pLen - 0.46 * playerScale);
+                     const pCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(pnx, pny, pnz, pFeetRad) : null;
+                     const pGroundRad = pCaveData ? pCaveData.ground : (RADIUS + bHeight * HEIGHT_SCALE);
+                     playerCenterRadius = pGroundRad + 0.46 * playerScale;
+                     isPlayerGrounded = true;
+                     playerVerticalVel = 0.0;
                   }
                   boatToDismount.isDynamic = true;
                   boatToDismount.vel = [0, 0, 0];
@@ -5622,6 +5747,14 @@ window.cloud3DProgram = cloud3DProgram;
                        charTheta = Math.acos(Math.max(-1.0, Math.min(1.0, p3d[1] / pLen)));
                        charPhi = Math.atan2(p3d[2], p3d[0]);
                        if (charPhi < 0) charPhi += Math.PI * 2;
+
+                       const pnx = p3d[0] / pLen, pny = p3d[1] / pLen, pnz = p3d[2] / pLen;
+                       const pFeetRad = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * playerScale) : (pLen - 0.46 * playerScale);
+                       const pCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(pnx, pny, pnz, pFeetRad) : null;
+                       const pGroundRad = pCaveData ? pCaveData.ground : (RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE);
+                       playerCenterRadius = pGroundRad + 0.46 * playerScale;
+                       isPlayerGrounded = true;
+                       playerVerticalVel = 0.0;
                     }
                     mechToDismount.isDynamic = false;
                     mechToDismount.vel = [0, 0, 0];
@@ -5632,9 +5765,11 @@ window.cloud3DProgram = cloud3DProgram;
                       const mnx = mPos[0] / mLen, mny = mPos[1] / mLen, mnz = mPos[2] / mLen;
                       let mTheta = Math.acos(Math.max(-1.0, Math.min(1.0, mny)));
                       let mPhi = Math.atan2(mnz, mnx);
-                      let mGroundRad = RADIUS + getHeightOnSphere(mTheta, mPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
+                      let mFeetRad = mLen - 0.66;
+                      const mCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(mnx, mny, mnz, mFeetRad) : null;
+                      let mGroundRad = mCaveData ? mCaveData.ground : (RADIUS + getHeightOnSphere(mTheta, mPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE);
                       const wRad = RADIUS + waterLevel * 0.15;
-                      if (waterEnabled && mGroundRad < wRad) mGroundRad = wRad;
+                      if (waterEnabled && mGroundRad < wRad && (!mCaveData || !mCaveData.insideTunnel)) mGroundRad = wRad;
 
                       // Check if mech has legs or stand attached
                       const hasLegsOrStand = mechToDismount.attachedParts && mechToDismount.attachedParts.some(entry =>
@@ -5665,6 +5800,7 @@ window.cloud3DProgram = cloud3DProgram;
                       }
                     }
                     activeRidingMech = null;
+                    window.activeRidingMech = null;
                     pendingCollectibleRefresh = true;
                   }
                 } else {
@@ -6040,6 +6176,7 @@ window.cloud3DProgram = cloud3DProgram;
                     if (chestHoldTimer >= 0.8) {
                       chestHoldTimer = 0.0;
                       activeRidingMech = closestMech;
+                      window.activeRidingMech = activeRidingMech;
                       activeRidingMech.isDynamic = true;
 
                       let mStand = null;
@@ -8711,6 +8848,39 @@ window.cloud3DProgram = cloud3DProgram;
         waterTime += dt;
         cloudTime += dt * cloudsSpeed;
         cloudShapeTime += 0.06 * dt;
+
+        // Anti-Aliasing / TAAU Post-Processing Pass
+        const isAAPostProcess = !!((typeof taauEnabled !== "undefined" && taauEnabled) || (typeof window.taauEnabled !== "undefined" && window.taauEnabled) || (typeof antialiasEnabled !== "undefined" && antialiasEnabled));
+        if (isAAPostProcess && gl) {
+          initFXAASystem();
+          if (fxaaProgram && fxaaCopyTex) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, fxaaCopyTex);
+            gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, canvas.width, canvas.height, 0);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            gl.disable(gl.DEPTH_TEST);
+            gl.disable(gl.BLEND);
+
+            gl.useProgram(fxaaProgram);
+            gl.uniform1i(fxaaTexLoc, 0);
+            gl.uniform2f(fxaaResolutionLoc, canvas.width, canvas.height);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, fxaaQuadBuffer);
+            gl.enableVertexAttribArray(fxaaPosLoc);
+            gl.vertexAttribPointer(fxaaPosLoc, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            gl.disableVertexAttribArray(fxaaPosLoc);
+
+            gl.enable(gl.DEPTH_TEST);
+          }
+        }
 
         if (typeof updateFloatingNpcHpBars === "function") {
           updateFloatingNpcHpBars(viewMatrix, projMatrix, eyePos);

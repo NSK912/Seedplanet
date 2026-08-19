@@ -741,8 +741,11 @@ const CollisionCore = {
     
     const maxStepUp = Math.max(0.35, 3.5 * charScale);
     
+    const isMech = (typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech);
+    const playerFootOffset = isMech ? ((typeof window !== "undefined" && typeof window.mechSeatOffset !== "undefined") ? window.mechSeatOffset : 0.71) : 0.46 * charScale;
+
     // Check standard terrain surface and cave system mathematically
-    const feetRadiusBefore = (centerRadius !== null) ? (centerRadius - 0.46 * charScale) : (r_planet + charHeight * h_scale);
+    const feetRadiusBefore = (centerRadius !== null) ? (centerRadius - playerFootOffset) : (r_planet + charHeight * h_scale);
     const caveData = typeof getTerrainSurfaceAndCeiling === "function"
       ? getTerrainSurfaceAndCeiling(P_new[0], P_new[1], P_new[2], feetRadiusBefore)
       : { ground: r_planet + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1, Math.min(1, P_new[1]))), Math.atan2(P_new[2], P_new[0]), typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0) * h_scale, ceiling: Infinity, insideTunnel: false };
@@ -846,9 +849,13 @@ const CollisionCore = {
     const phiFinal = Math.atan2(pushP[2], pushP[0]);
     const heightFinal = typeof getHeightOnSphere === "function" ? getHeightOnSphere(thetaFinal, phiFinal, typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0;
     const finalTerrainRadius = r_planet + heightFinal * h_scale;
-    if (pushR < finalTerrainRadius - 0.5 * charScale && !updatedCaveData.insideTunnel) {
-        // We know they are underground and were constrained, so force it
-        updatedCaveData.insideTunnel = true;
+    if (pushR < finalTerrainRadius - 0.2 * charScale && (!updatedCaveData || !updatedCaveData.insideTunnel)) {
+        // We know they are underground, ensure they stay in cave space
+        if (!updatedCaveData) {
+            updatedCaveData = { ground: pushR - playerFootOffset, ceiling: Infinity, insideTunnel: true };
+        } else {
+            updatedCaveData.insideTunnel = true;
+        }
     }
 
     if (updatedCaveData.insideTunnel) {
@@ -878,7 +885,7 @@ const CollisionCore = {
     }
 
     // 3. Standard Surface Collision (When outside of cave tunnels)
-    const currFeetRadius = (centerRadius !== null) ? (centerRadius - 0.46 * charScale) : (r_planet + charHeight * h_scale);
+    const currFeetRadius = (centerRadius !== null) ? (centerRadius - playerFootOffset) : (r_planet + charHeight * h_scale);
     const thetaCurr = Math.acos(Math.max(-1, Math.min(1, P_curr[1])));
     const phiCurr = Math.atan2(P_curr[2], P_curr[0]);
     const heightCurr = typeof getHeightOnSphere === "function" ? getHeightOnSphere(thetaCurr, phiCurr, typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0;
@@ -889,9 +896,16 @@ const CollisionCore = {
       const thetaP = Math.acos(Math.max(-1, Math.min(1, P[1])));
       const phiP = Math.atan2(P[2], P[0]);
       const heightP = typeof getHeightOnSphere === "function" ? getHeightOnSphere(thetaP, phiP, typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0;
-      const pFeetRadius = currentR - 0.46 * charScale;
+      const pFeetRadius = currentR - playerFootOffset;
       const caveDataP = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P[0], P[1], P[2], pFeetRadius) : null;
-      let terrainRadius = caveDataP ? caveDataP.ground : (r_planet + heightP * h_scale);
+      let terrainRadius = (caveDataP && (caveDataP.insideTunnel || caveDataP.ground < r_planet + heightP * h_scale - 0.1)) ? caveDataP.ground : (r_planet + heightP * h_scale);
+      if (currentR < r_planet + heightP * h_scale - 0.2 * charScale && terrainRadius > currentR) {
+        if (caveDataP && caveDataP.ground < r_planet + heightP * h_scale) {
+          terrainRadius = caveDataP.ground;
+        } else {
+          terrainRadius = currentR - playerFootOffset;
+        }
+      }
 
       let testCenterRadius = currentR;
       let testDiveDepth = diveDepth;
@@ -901,7 +915,7 @@ const CollisionCore = {
         const targetSwimRadius = wRadius + (-0.22 + swimMoveFactor * 0.27) * charScale;
         testCenterRadius = targetSwimRadius - testDiveDepth;
 
-        const testFeetRadius = testCenterRadius - 0.46 * charScale;
+        const testFeetRadius = testCenterRadius - playerFootOffset;
 
         // Terrain Wall Block (Horizontal collision on surface)
         if (terrainRadius > currTerrainRadius + maxStepUp) {
@@ -913,7 +927,7 @@ const CollisionCore = {
         // Terrain Floor Adjustment (Shallow water step up)
         if (testFeetRadius < terrainRadius) {
           if (terrainRadius <= currTerrainRadius + maxStepUp) {
-            testCenterRadius = terrainRadius + 0.46 * charScale;
+            testCenterRadius = terrainRadius + playerFootOffset;
             testDiveDepth = Math.max(0.0, targetSwimRadius - testCenterRadius);
             testIsDiving = testDiveDepth > 0.015 * charScale;
           } else {
@@ -922,7 +936,7 @@ const CollisionCore = {
         }
       } else {
         // Walking logic on surface
-        let testFeetRadius = testCenterRadius - 0.46 * charScale;
+        let testFeetRadius = testCenterRadius - playerFootOffset;
         
         // Wall collision
         if (terrainRadius > currTerrainRadius + maxStepUp) {
@@ -933,8 +947,8 @@ const CollisionCore = {
         
         // Step up
         if (testFeetRadius < terrainRadius && terrainRadius <= currTerrainRadius + maxStepUp) {
-          testCenterRadius = terrainRadius + 0.46 * charScale;
-          testFeetRadius = testCenterRadius - 0.46 * charScale;
+          testCenterRadius = terrainRadius + playerFootOffset;
+          testFeetRadius = testCenterRadius - playerFootOffset;
         }
 
         // Check solid stone floor legs/foundation collision from the side at ground level
