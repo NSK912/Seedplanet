@@ -913,6 +913,9 @@
       // สร้างดาว
       // ============================================
       async function buildPlanet(gridSize, seed) {
+        if (typeof window !== 'undefined' && typeof window.clearCache === 'function') {
+          window.clearCache();
+        }
         currentCampfires = (typeof collectibles !== 'undefined' ? collectibles : []).filter(c => c.active && c.type === "campfire" && !c.isPreview);
         
         const rPlanet = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
@@ -931,7 +934,12 @@
         const calculatedGrid = gridSize || (typeof currentGridSize !== 'undefined' ? currentGridSize : Math.max(100, Math.min(1600, Math.round(rPlanet * 12.5))));
         const effGridSize = Math.max(50, Math.min(calculatedGrid, 1600));
         currentGridSize = effGridSize;
-        if (typeof window !== 'undefined') window.currentGridSize = effGridSize;
+        if (typeof window !== 'undefined') {
+          window.currentGridSize = effGridSize;
+          window.RADIUS = rPlanet;
+          window.HEIGHT_SCALE = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6;
+          window.globalSeed = seed;
+        }
         const latSeg = effGridSize;
         const longSeg = effGridSize;
 
@@ -1188,239 +1196,18 @@
       window.buildSun = buildSun;
 
       // ============================================
-      // ============================================
-      // สร้างโมเดลดวงอาทิตย์ (Satellite Sun) ขนาดใหญ่ สว่างไสว โชติช่วงดั่งดวงอาทิตย์จริง
+      // สร้างโมเดลดวงอาทิตย์ (Satellite Sun) & ดาวเคราะห์บริวาร (SpacesMap System)
       // ============================================
       function buildSatellitePlanet(seed = 12345) {
-        const latSeg = 48;
-        const longSeg = 48;
-
-        const vertices = [];
-        const colors = [];
-        const indices = [];
-
-        const sunRadius = 1.0; // Unit sphere ( scaled dynamically on Sky Dome )
-
-        for (let lat = 0; lat <= latSeg; lat++) {
-          const theta = (lat / latSeg) * Math.PI;
-          const sinTheta = Math.sin(theta);
-          const cosTheta = Math.cos(theta);
-
-          for (let long = 0; long <= longSeg; long++) {
-            const phi = (long / longSeg) * Math.PI * 2;
-            const sinPhi = Math.sin(phi);
-            const cosPhi = Math.cos(phi);
-
-            // ทรงกลมเนียนเรียบสมบูรณ์แบบของดวงอาทิตย์
-            const nx = sinTheta * cosPhi;
-            const ny = cosTheta;
-            const nz = sinTheta * sinPhi;
-
-            const vx = nx * sunRadius;
-            const vy = ny * sunRadius;
-            const vz = nz * sunRadius;
-
-            vertices.push(vx, vy, vz);
-
-            // โทนสีพื้นฐานพลาสม่าสุริยะ: ส้มทองสว่างไสว เปล่งประกาย (Warm Golden-Orange Sun)
-            const solarNoise = Math.sin(phi * 4 + lat * 0.25) * Math.cos(theta * 4) * 0.08;
-            const factor = 0.8 + solarNoise;
-            
-            const r = 1.0;
-            const g = Math.min(0.9, Math.max(0.48, 0.72 * factor));
-            const b = Math.min(0.4, Math.max(0.04, 0.14 * factor));
-
-            colors.push(r, g, b);
-          }
-        }
-
-        for (let lat = 0; lat < latSeg; lat++) {
-          for (let long = 0; long < longSeg; long++) {
-            const a = lat * (longSeg + 1) + long;
-            const b = a + longSeg + 1;
-            const c = a + 1;
-            const d = b + 1;
-            indices.push(a, b, c);
-            indices.push(c, b, d);
-          }
-        }
-
-        window.satelliteIndicesLength = indices.length;
-
-        if (window.satelliteVertexBuffer) gl.deleteBuffer(window.satelliteVertexBuffer);
-        if (window.satelliteColorBuffer) gl.deleteBuffer(window.satelliteColorBuffer);
-        if (window.satelliteIndexBuffer) gl.deleteBuffer(window.satelliteIndexBuffer);
-
-        window.satelliteVertexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, window.satelliteVertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-
-        window.satelliteColorBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, window.satelliteColorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-        window.satelliteIndexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, window.satelliteIndexBuffer);
-        if (supportUint32 && indices.length > 65535) {
-          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
-        } else {
-          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-        }
-
-        if (typeof window.getSunWorldPosition === "function") {
-          window.SATELLITE_PLANET_POS = window.getSunWorldPosition();
-        } else {
-          window.SATELLITE_PLANET_POS = [-2000.0, 0.0, 0.0];
+        if (window.SpacesMap && typeof window.SpacesMap.buildSatelliteSun === "function") {
+          window.SpacesMap.buildSatelliteSun(seed);
         }
       }
       window.buildSatellitePlanet = buildSatellitePlanet;
 
-      // ============================================
-      // สร้าง 5 ดาวเปล่าแบบสุ่ม (5 Procedural Empty Planets)
-      // ============================================
       function buildExtraPlanets(seed = 12345) {
-        const mainRad = typeof RADIUS !== "undefined" ? RADIUS : 8.0;
-
-        if (window.SpacesMap && typeof window.SpacesMap.randomizeOrbits === "function") {
-          window.SpacesMap.randomizeOrbits(seed);
-        }
-
-        if (window.EXTRA_PLANETS && Array.isArray(window.EXTRA_PLANETS)) {
-          window.EXTRA_PLANETS.forEach(p => {
-            if (p.vbo) gl.deleteBuffer(p.vbo);
-            if (p.cbo) gl.deleteBuffer(p.cbo);
-            if (p.ibo) gl.deleteBuffer(p.ibo);
-          });
-        }
-        window.EXTRA_PLANETS = [];
-
-        const biomes = [
-          { name: "🧊 ดาวน้ำแข็ง (Ice World)", baseColor: [0.75, 0.88, 1.0], noiseCol: [0.4, 0.65, 0.95] },
-          { name: "🌋 ดาวลาวา (Volcanic Planet)", baseColor: [0.85, 0.28, 0.12], noiseCol: [0.35, 0.12, 0.05] },
-          { name: "🏜️ ดาวทะเลทราย (Desert World)", baseColor: [0.88, 0.68, 0.38], noiseCol: [0.58, 0.40, 0.22] },
-          { name: "🟣 ดาวพลาสม่า (Alien Plasma)", baseColor: [0.55, 0.22, 0.85], noiseCol: [0.82, 0.42, 0.92] },
-          { name: "🌔 ดาวหินอุกกาบาต (Meteorite Moon)", baseColor: [0.62, 0.64, 0.68], noiseCol: [0.38, 0.39, 0.42] },
-          { name: "🟢 ดาวมรกต (Emerald World)", baseColor: [0.22, 0.72, 0.42], noiseCol: [0.12, 0.42, 0.22] },
-          { name: "🪐 ดาวแร่แดง (Rust Planet)", baseColor: [0.78, 0.42, 0.22], noiseCol: [0.48, 0.22, 0.12] }
-        ];
-
-        const latSeg = 20;
-        const longSeg = 20;
-        const numPlanets = 5;
-
-        const getNoise = (typeof fbmNoise === "function")
-          ? fbmNoise
-          : (x, y, z, s, oct) => (Math.sin(x*2) * Math.cos(y*2) + 1.0) * 0.5;
-
-        for (let pIdx = 0; pIdx < numPlanets; pIdx++) {
-          const pSeed = seed + (pIdx + 1) * 8888;
-          const pseudoRand = (offset) => {
-            let x = Math.sin(pSeed + offset * 12.345) * 43758.5453;
-            return x - Math.floor(x);
-          };
-
-          const radScale = 0.35 + pseudoRand(1) * 0.45;
-          const pRadius = mainRad * radScale;
-          const noiseScale = pRadius * (0.15 + pseudoRand(2) * 0.18);
-
-          // Spread out empty planets in 3D orbit around the Sun (ดวงอาทิตย์)
-          const angle = (pIdx / numPlanets) * Math.PI * 2 + pseudoRand(3) * 0.8;
-          const distance = mainRad * (1.8 + pIdx * 0.85 + pseudoRand(4) * 0.6);
-          const heightOffset = (pseudoRand(5) - 0.5) * mainRad * 1.4;
-
-          const relX = Math.cos(angle) * distance;
-          const relY = heightOffset;
-          const relZ = Math.sin(angle) * distance;
-
-          const biomeIdx = Math.floor(pseudoRand(6) * biomes.length);
-          const biome = biomes[biomeIdx];
-
-          const vertices = [];
-          const colors = [];
-          const indices = [];
-
-          for (let lat = 0; lat <= latSeg; lat++) {
-            const theta = (lat / latSeg) * Math.PI;
-            const sinTheta = Math.sin(theta);
-            const cosTheta = Math.cos(theta);
-
-            for (let long = 0; long <= longSeg; long++) {
-              const phi = (long / longSeg) * Math.PI * 2;
-              const sinPhi = Math.sin(phi);
-              const cosPhi = Math.cos(phi);
-
-              const nx = sinTheta * cosPhi;
-              const ny = cosTheta;
-              const nz = sinTheta * sinPhi;
-
-              const n1 = getNoise(nx * 3.2, ny * 3.2, nz * 3.2, pSeed + 111, 4);
-              const n2 = getNoise(nx * 8.5, ny * 8.5, nz * 8.5, pSeed + 333, 3);
-              const crater = getNoise(nx * 14.0, ny * 14.0, nz * 14.0, pSeed + 777, 2);
-
-              const hVal = (n1 * 0.65 + n2 * 0.35) - 0.48;
-              const curRad = 1.0 + hVal * 0.12; // Base unit sphere 1.0 with procedural height variation
-
-              vertices.push(nx * curRad, ny * curRad, nz * curRad);
-
-              const colMix = n1 * 0.75 + crater * 0.25;
-              const r = biome.baseColor[0] * (0.6 + colMix * 0.5) + biome.noiseCol[0] * (0.4 - colMix * 0.3);
-              const g = biome.baseColor[1] * (0.6 + colMix * 0.5) + biome.noiseCol[1] * (0.4 - colMix * 0.3);
-              const b = biome.baseColor[2] * (0.6 + colMix * 0.5) + biome.noiseCol[2] * (0.4 - colMix * 0.3);
-
-              colors.push(Math.min(1.0, Math.max(0.0, r)), Math.min(1.0, Math.max(0.0, g)), Math.min(1.0, Math.max(0.0, b)));
-            }
-          }
-
-          for (let lat = 0; lat < latSeg; lat++) {
-            for (let long = 0; long < longSeg; long++) {
-              const a = lat * (longSeg + 1) + long;
-              const b = a + longSeg + 1;
-              const c = a + 1;
-              const d = b + 1;
-              indices.push(a, b, c);
-              indices.push(c, b, d);
-            }
-          }
-
-          const vbo = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-
-          const cbo = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-          const ibo = gl.createBuffer();
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-          if (supportUint32 && indices.length > 65535) {
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
-          } else {
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-          }
-
-          window.EXTRA_PLANETS.push({
-            id: pIdx + 1,
-            name: `ดาวที่ ${pIdx + 1} (${biome.name})`,
-            biomeName: biome.name,
-            radius: pRadius,
-            relPos: [relX, relY, relZ],
-            get pos() {
-              if (window.SpacesMap) {
-                const pId = `planet_${pIdx + 6}`;
-                const rel = window.SpacesMap.getRelativeRenderPosition(pId);
-                return [rel[0], rel[1], rel[2]];
-              }
-              const defaultSun = [-2000.0, 0.0, 0.0];
-              const sc = (typeof window.getSunWorldPosition === "function") 
-                ? window.getSunWorldPosition() 
-                : (window.SATELLITE_PLANET_POS || defaultSun);
-              return [sc[0] + this.relPos[0], sc[1] + this.relPos[1], sc[2] + this.relPos[2]];
-            },
-            vbo: vbo,
-            cbo: cbo,
-            ibo: ibo,
-            indicesLength: indices.length
-          });
+        if (window.SpacesMap && typeof window.SpacesMap.buildExtraPlanets === "function") {
+          window.SpacesMap.buildExtraPlanets(seed);
         }
       }
       window.buildExtraPlanets = buildExtraPlanets;
@@ -2640,7 +2427,7 @@
           const theta = Math.acos(2 * u - 1);
           const phi = 2 * Math.PI * v;
 
-          const height = getHeightOnSphere(theta, phi, seed);
+          const height = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
           const minLandHeight = waterLevel * 0.15 + 0.02;
           const r = RADIUS + height * HEIGHT_SCALE;
 
@@ -2726,7 +2513,7 @@
 
               const pTheta = Math.acos(Math.max(-1, Math.min(1, pNy)));
               const pPhi = Math.atan2(pNz, pNx);
-              const pHeight = getHeightOnSphere(pTheta, pPhi, seed);
+              const pHeight = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(pTheta, pPhi, seed) : getHeightOnSphere(pTheta, pPhi, seed);
 
               // ถ้าโผล่ขึ้นเหนือน้ำ ไม่สร้าง
               if (pHeight >= minLandHeight) continue;
@@ -2982,7 +2769,7 @@
 
                 const theta_pt = Math.acos(Math.max(-1.0, Math.min(1.0, uy)));
                 const phi_pt = Math.atan2(uz, ux);
-                const h_pt = getHeightOnSphere(theta_pt, phi_pt, seed);
+                const h_pt = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta_pt, phi_pt, seed) : getHeightOnSphere(theta_pt, phi_pt, seed);
                 const r_surf = RADIUS + h_pt * HEIGHT_SCALE;
 
                 // สุ่มความเรียวของราก (ไม่ให้ติด 0)
@@ -3637,7 +3424,7 @@
                     const surfData = typeof getTerrainHeightAndColor === "function" 
                         ? getTerrainHeightAndColor(gTheta, gPhi, seed) 
                         : { height: getHeightOnSphere(gTheta, gPhi, seed), color: [0.3, 0.6, 0.2] };
-                    const h_pt = surfData.height;
+                    const h_pt = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(gTheta, gPhi, seed) : surfData.height;
                     const gColor = surfData.color;
                     
                     if (h_pt <= waterH + 0.02) continue;
@@ -3653,7 +3440,7 @@
 
                 const chunkEnd = indices.length;
                 if (chunkEnd > chunkStart) {
-                    const treeH = typeof getHeightOnSphere === "function" ? getHeightOnSphere(tp.theta, tp.phi, seed) : 0;
+                    const treeH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(tp.theta, tp.phi, seed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(tp.theta, tp.phi, seed) : 0);
                     const r_treeSurf = RADIUS + treeH * HEIGHT_SCALE;
                     const gX = Math.sin(tp.theta) * Math.cos(tp.phi) * r_treeSurf;
                     const gY = Math.cos(tp.theta) * r_treeSurf;
@@ -3699,7 +3486,7 @@
                             ? getTerrainHeightAndColor(gTheta, gPhi, seed) 
                             : { height: getHeightOnSphere(gTheta, gPhi, seed), color: [0.3, 0.6, 0.2] };
                         
-                        const h_pt = surfData.height;
+                        const h_pt = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(gTheta, gPhi, seed) : surfData.height;
                         const gColor = surfData.color;
                         
                         // ประเมินโปรไฟล์การเกิดของหญ้าตามสีและความสูง
@@ -3730,16 +3517,17 @@
                                     ? getTerrainHeightAndColor(cTheta, cPhi, seed)
                                     : surfData;
                                 
-                                const cProfile = getGrassSpawnProfile(cSurf.color, cSurf.height);
+                                const cH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(cTheta, cPhi, seed) : cSurf.height;
+                                const cProfile = getGrassSpawnProfile(cSurf.color, cH);
                                 if (cProfile.count <= 0) continue;
                                 
-                                const cR = RADIUS + cSurf.height * HEIGHT_SCALE;
+                                const cR = RADIUS + cH * HEIGHT_SCALE;
                                 const cgx = cX * cR;
                                 const cgy = cY * cR;
                                 const cgz = cZ * cR;
                                 if (isPositionInsideCave(cgx, cgy, cgz, 0.15)) continue;
                                 
-                                addGrassTuft(cX, cY, cZ, cSurf.height, cR, cSurf.color, profile.scale);
+                                addGrassTuft(cX, cY, cZ, cH, cR, cSurf.color, profile.scale);
                                 cxAcc += cgx; cyAcc += cgy; czAcc += cgz; validTufts++;
                             }
                         } else {

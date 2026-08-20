@@ -17,7 +17,7 @@ function buildCollectibles(count, seed) {
           const v = Math.random();
           const theta = Math.acos(2 * u - 1);
           const phi = 2 * Math.PI * v;
-          const height = getHeightOnSphere(theta, phi, seed);
+          const height = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
           
           if (height >= minLandHeight) {
             const forestDensity = fbmNoise(
@@ -87,7 +87,7 @@ function buildCollectibles(count, seed) {
 
             theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny)));
             phi = Math.atan2(nz, nx);
-            height = getHeightOnSphere(theta, phi, seed);
+            height = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
             r = RADIUS + height * HEIGHT_SCALE;
 
             x = r * nx; y = r * ny; z = r * nz;
@@ -123,7 +123,7 @@ function buildCollectibles(count, seed) {
 
             theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny)));
             phi = Math.atan2(nz, nx);
-            height = getHeightOnSphere(theta, phi, seed);
+            height = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
             r = RADIUS + height * HEIGHT_SCALE;
 
             x = r * nx; y = r * ny; z = r * nz;
@@ -131,7 +131,7 @@ function buildCollectibles(count, seed) {
             // Standard random spawn for rocks (or branches if no trees)
             theta = Math.random() * Math.PI;
             phi = Math.random() * Math.PI * 2;
-            height = getHeightOnSphere(theta, phi, seed);
+            height = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
             
             if (type === "branch") {
               const minLandHeight = waterLevel * 0.15 + 0.05;

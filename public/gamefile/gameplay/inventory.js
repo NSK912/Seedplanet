@@ -666,7 +666,7 @@
           const mainLayout = document.getElementById("inventoryMainLayout");
           if (mainLayout) {
             mainLayout.style.display = "flex";
-            mainLayout.style.maxWidth = "520px";
+            mainLayout.style.maxWidth = "none";
           }
           const divider = document.getElementById("inventoryVerticalDivider");
           if (divider) divider.style.display = "block";
@@ -759,136 +759,185 @@
       }
 
       
+      function getSlotItem(source, index) {
+        if (source === "inventory" || source === "chestPlayerInventory") {
+          return inventory[index];
+        } else if (source === "action") {
+          return actionSlotsItems[index];
+        } else if (source === "chest") {
+          return (currentOpenChest && currentOpenChest.storage) ? currentOpenChest.storage[index] : null;
+        }
+        return null;
+      }
+
+      function setSlotItem(source, index, item) {
+        if (source === "inventory" || source === "chestPlayerInventory") {
+          inventory[index] = item;
+        } else if (source === "action") {
+          actionSlotsItems[index] = item;
+        } else if (source === "chest") {
+          if (currentOpenChest && currentOpenChest.storage) {
+            currentOpenChest.storage[index] = item;
+          }
+        }
+      }
+
+      function populateSlotElement(slotEl, {
+        source,
+        index,
+        item = null,
+        isLocked = false,
+        isDraggable = true,
+        isDropTarget = true,
+        keyLabel = null,
+        cursor = null,
+        onClick = null,
+        onRightClick = null,
+        labelStyle = null,
+        labelColor = null
+      }) {
+        slotEl.innerHTML = "";
+        slotEl.dataset.source = source;
+        slotEl.dataset.index = index;
+
+        if (isLocked) {
+          slotEl.classList.add("locked");
+          slotEl.draggable = false;
+          slotEl.onclick = null;
+          slotEl.ondragstart = null;
+          slotEl.ondragend = null;
+          slotEl.ondragover = null;
+          slotEl.ondragleave = null;
+          slotEl.ondrop = null;
+          return slotEl;
+        } else {
+          slotEl.classList.remove("locked");
+        }
+
+        // Setup Drag & Drop
+        if (isDropTarget) {
+          slotEl.ondragover = handleDragOver;
+          slotEl.ondragleave = handleDragLeave;
+          slotEl.ondrop = (e) => handleDrop(e, source, index);
+        } else {
+          slotEl.ondragover = null;
+          slotEl.ondragleave = null;
+          slotEl.ondrop = null;
+        }
+
+        // Key label for Action Slots (1, 2, 3, 4)
+        if (keyLabel) {
+          const keyBadge = document.createElement("span");
+          keyBadge.style.position = "absolute";
+          keyBadge.style.top = "2px";
+          keyBadge.style.right = "4px";
+          keyBadge.style.fontSize = "10px";
+          keyBadge.style.color = "rgba(255,255,255,0.5)";
+          keyBadge.style.fontFamily = "monospace";
+          keyBadge.textContent = keyLabel;
+          slotEl.appendChild(keyBadge);
+        }
+
+        if (item) {
+          slotEl.classList.remove("empty");
+          slotEl.style.position = "relative";
+          slotEl.style.cursor = cursor || "pointer";
+
+          if (isDraggable) {
+            slotEl.draggable = true;
+            slotEl.ondragstart = (e) => handleDragStart(e, source, index);
+            slotEl.ondragend = handleDragEnd;
+          } else {
+            slotEl.draggable = false;
+            slotEl.ondragstart = null;
+            slotEl.ondragend = null;
+          }
+
+          const content = document.createElement("span");
+          content.className = "slot-content";
+          const canvas3D = create3DIconCanvas(item, 48, 48);
+          if (canvas3D) {
+            content.appendChild(canvas3D);
+          } else {
+            content.textContent = item.icon || "📦";
+          }
+          slotEl.appendChild(content);
+
+          const label = document.createElement("span");
+          label.className = "slot-label";
+          if (labelStyle) {
+            Object.assign(label.style, labelStyle);
+          } else if (labelColor) {
+            label.style.color = labelColor;
+          }
+          label.textContent = item.name || item.label || "ITEM";
+          slotEl.appendChild(label);
+
+          if (item.count > 1) {
+            const countBadge = document.createElement("span");
+            countBadge.style.position = "absolute";
+            countBadge.style.top = "2px";
+            countBadge.style.left = "4px";
+            countBadge.style.fontSize = "11px";
+            countBadge.style.fontWeight = "bold";
+            countBadge.style.color = "#fff";
+            countBadge.style.textShadow = "1px 1px 2px #000";
+            countBadge.textContent = "x" + item.count;
+            slotEl.appendChild(countBadge);
+          }
+
+          slotEl.oncontextmenu = (e) => { e.preventDefault(); };
+          slotEl.onmousedown = (e) => {
+            if (e.button === 2) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (typeof onRightClick === "function") {
+                onRightClick(e);
+              } else {
+                handleSplitItem(source, index);
+              }
+            }
+          };
+
+          slotEl.onclick = onClick || null;
+        } else {
+          slotEl.classList.add("empty");
+          slotEl.draggable = false;
+          slotEl.ondragstart = null;
+          slotEl.ondragend = null;
+          if (cursor) slotEl.style.cursor = cursor;
+          slotEl.onclick = onClick || null;
+
+          const emptyText = document.createElement("span");
+          emptyText.style.fontSize = "10px";
+          emptyText.style.color = "rgba(255,255,255,0.05)";
+          emptyText.textContent = "□";
+          slotEl.appendChild(emptyText);
+        }
+
+        return slotEl;
+      }
+
+      function createSlotElement(options) {
+        const slot = document.createElement("div");
+        slot.className = options.className || "inventory-slot";
+        return populateSlotElement(slot, options);
+      }
+
       function renderChest() {
         if (!currentOpenChest) return;
         const chestGrid = document.getElementById("chestGrid");
         if (!chestGrid) return;
         chestGrid.innerHTML = "";
 
-        const handleChestDrop = (e, targetType, targetIndex) => {
-          e.preventDefault();
-          e.currentTarget.classList.remove("dragover");
-          try {
-            const source = e.dataTransfer.getData("source");
-            const sourceIndex = parseInt(e.dataTransfer.getData("index"), 10);
-            
-            if (isNaN(sourceIndex)) return;
-
-            
-            if (source === "chest" && targetType === "chestPlayerInventory") {
-              const fromItem = currentOpenChest.storage[sourceIndex];
-              const toItem = inventory[targetIndex];
-              if (fromItem && toItem && (fromItem.name === toItem.name || fromItem.label === toItem.label)) {
-                toItem.count += fromItem.count;
-                currentOpenChest.storage[sourceIndex] = null;
-              } else {
-                currentOpenChest.storage[sourceIndex] = toItem;
-                inventory[targetIndex] = fromItem;
-              }
-              renderChest();
-              renderInventory();
-              renderActionSlots();
-              updateBadge();
-              saveSettingsToLocalStorage();
-            } else if (source === "inventory" && targetType === "chest") {
-              const fromItem = inventory[sourceIndex];
-              const toItem = currentOpenChest.storage[targetIndex];
-              if (fromItem && toItem && (fromItem.name === toItem.name || fromItem.label === toItem.label)) {
-                toItem.count += fromItem.count;
-                inventory[sourceIndex] = null;
-              } else {
-                inventory[sourceIndex] = toItem;
-                currentOpenChest.storage[targetIndex] = fromItem;
-              }
-              renderChest();
-              renderInventory();
-              renderActionSlots();
-              updateBadge();
-              saveSettingsToLocalStorage();
-            } else if (source === "chest" && targetType === "chest") {
-              // Swap within chest
-              if (sourceIndex === targetIndex) return;
-              const fromItem = currentOpenChest.storage[sourceIndex];
-              const toItem = currentOpenChest.storage[targetIndex];
-              currentOpenChest.storage[sourceIndex] = toItem;
-              currentOpenChest.storage[targetIndex] = fromItem;
-              renderChest();
-              saveSettingsToLocalStorage();
-            } else if (source === "inventory" && targetType === "chestPlayerInventory") {
-              // Swap within player inventory
-              if (sourceIndex === targetIndex) return;
-              const fromItem = inventory[sourceIndex];
-              const toItem = inventory[targetIndex];
-              inventory[sourceIndex] = toItem;
-              inventory[targetIndex] = fromItem;
-              renderChest();
-              renderInventory();
-              saveSettingsToLocalStorage();
-            }
-          } catch (err) {
-            console.error("Chest drop error", err);
-          }
-        };
-
-        const handleChestDragOver = (e) => {
-          e.preventDefault();
-          e.currentTarget.classList.add("dragover");
-          e.dataTransfer.dropEffect = "move";
-        };
-        const handleChestDragLeave = (e) => {
-          e.currentTarget.classList.remove("dragover");
-        };
-
-        // Render Chest Storage slots (20 slots)
+        // 1. Render Chest Storage slots (20 slots)
         for (let i = 0; i < 20; i++) {
-          const slot = document.createElement("div");
-          slot.className = "inventory-slot";
           const item = currentOpenChest.storage[i];
-
-          // Make chest slots a drop target
-          slot.ondragover = handleChestDragOver;
-          slot.ondragleave = handleChestDragLeave;
-          slot.ondrop = (e) => handleChestDrop(e, "chest", i);
-
-          if (item) {
-            slot.style.position = "relative";
-            slot.style.cursor = "pointer";
-
-            // Make slot draggable
-            slot.draggable = true;
-            slot.ondragstart = (e) => handleDragStart(e, "chest", i);
-            slot.ondragend = handleDragEnd;
-
-            const content = document.createElement("span");
-            content.className = "slot-content";
-            const canvas3D = create3DIconCanvas(item, 48, 48);
-            if (canvas3D) {
-              content.appendChild(canvas3D);
-            } else {
-              content.textContent = item.icon || "📦";
-            }
-            slot.appendChild(content);
-
-            const label = document.createElement("span");
-            label.className = "slot-label";
-            label.textContent = item.name || item.label || "ITEM";
-            slot.appendChild(label);
-
-            if (item.count > 1) {
-              const countBadge = document.createElement("span");
-              countBadge.style.position = "absolute";
-              countBadge.style.top = "2px";
-              countBadge.style.left = "4px";
-              countBadge.style.fontSize = "11px";
-              countBadge.style.fontWeight = "bold";
-              countBadge.style.color = "#fff";
-              countBadge.style.textShadow = "1px 1px 2px #000";
-              countBadge.textContent = "x" + item.count;
-              slot.appendChild(countBadge);
-            }
-
-            slot.oncontextmenu = (e) => { e.preventDefault(); }; slot.onmousedown = (e) => { if (e.button === 2) { e.preventDefault(); e.stopPropagation(); handleSplitItem("chest", i); } };
-            slot.onclick = () => {
+          const slot = createSlotElement({
+            source: "chest",
+            index: i,
+            item: item,
+            onClick: item ? () => {
               // Click to take item to player inventory
               if (addItemToInventory(item, true)) {
                 if (item.count > 1) {
@@ -900,103 +949,46 @@
                 renderInventory();
                 renderActionSlots();
                 updateBadge();
+                saveSettingsToLocalStorage();
               } else {
                 showNotice("กระเป๋าเต็มแล้ว! (Inventory Full)");
               }
-            };
-          } else {
-            slot.classList.add("empty");
-            const emptyText = document.createElement("span");
-            emptyText.style.fontSize = "10px";
-            emptyText.style.color = "rgba(255,255,255,0.05)";
-            emptyText.textContent = "□";
-            slot.appendChild(emptyText);
-          }
+            } : null
+          });
           chestGrid.appendChild(slot);
         }
 
-        // Render Player Inventory slots inside Chest UI (20 slots)
+        // 2. Render Player Inventory slots inside Chest UI (20 slots)
         const playerGrid = document.getElementById("chestPlayerInventoryGrid");
         if (!playerGrid) return;
         playerGrid.innerHTML = "";
 
         for (let i = 0; i < TOTAL_SLOTS; i++) {
-          const slot = document.createElement("div");
-          slot.className = "inventory-slot";
-
-          if (i >= UNLOCKED_SLOTS) {
-            slot.classList.add("locked");
-          } else {
-            // Make player inventory slots a drop target
-            slot.ondragover = handleChestDragOver;
-            slot.ondragleave = handleChestDragLeave;
-            slot.ondrop = (e) => handleChestDrop(e, "chestPlayerInventory", i);
-
-            const item = inventory[i];
-
-            if (item) {
-              slot.style.position = "relative";
-              slot.style.cursor = "pointer";
-
-              // Make slot draggable
-              slot.draggable = true;
-              slot.ondragstart = (e) => handleDragStart(e, "inventory", i);
-              slot.ondragend = handleDragEnd;
-
-              const content = document.createElement("span");
-              content.className = "slot-content";
-              const canvas3D = create3DIconCanvas(item, 48, 48);
-              if (canvas3D) {
-                content.appendChild(canvas3D);
-              } else {
-                content.textContent = item.icon || "📦";
-              }
-              slot.appendChild(content);
-
-              const label = document.createElement("span");
-              label.className = "slot-label";
-              label.textContent = item.name || item.label || "ITEM";
-              slot.appendChild(label);
-
-              if (item.count > 1) {
-                const countBadge = document.createElement("span");
-                countBadge.style.position = "absolute";
-                countBadge.style.top = "2px";
-                countBadge.style.left = "4px";
-                countBadge.style.fontSize = "11px";
-                countBadge.style.fontWeight = "bold";
-                countBadge.style.color = "#fff";
-                countBadge.style.textShadow = "1px 1px 2px #000";
-                countBadge.textContent = "x" + item.count;
-                slot.appendChild(countBadge);
-              }
-
-              slot.oncontextmenu = (e) => { e.preventDefault(); }; slot.onmousedown = (e) => { if (e.button === 2) { e.preventDefault(); e.stopPropagation(); handleSplitItem("chestPlayerInventory", i); } };
-              slot.onclick = () => {
-                // Click to put item into chest storage
-                if (addItemToChest(item)) {
-                  if (item.count > 1) {
-                    item.count -= 1;
-                  } else {
-                    inventory[i] = null;
-                  }
-                  renderChest();
-                  renderInventory();
-                  renderActionSlots();
-                  updateBadge();
+          const item = inventory[i];
+          const isLocked = i >= UNLOCKED_SLOTS;
+          const slot = createSlotElement({
+            source: "chestPlayerInventory",
+            index: i,
+            item: item,
+            isLocked: isLocked,
+            onClick: (item && !isLocked) ? () => {
+              // Click to put item into chest storage
+              if (addItemToChest(item)) {
+                if (item.count > 1) {
+                  item.count -= 1;
                 } else {
-                  showNotice("กล่องเต็มแล้ว! (Chest Full)");
+                  inventory[i] = null;
                 }
-              };
-            } else {
-              slot.classList.add("empty");
-              const emptyText = document.createElement("span");
-              emptyText.style.fontSize = "10px";
-              emptyText.style.color = "rgba(255,255,255,0.05)";
-              emptyText.textContent = "□";
-              slot.appendChild(emptyText);
-            }
-          }
+                renderChest();
+                renderInventory();
+                renderActionSlots();
+                updateBadge();
+                saveSettingsToLocalStorage();
+              } else {
+                showNotice("กล่องเต็มแล้ว! (Chest Full)");
+              }
+            } : null
+          });
           playerGrid.appendChild(slot);
         }
       }
@@ -1124,7 +1116,7 @@
           const mainLayout = document.getElementById("inventoryMainLayout");
           if (mainLayout) {
             mainLayout.style.display = "flex";
-            mainLayout.style.maxWidth = "520px";
+            mainLayout.style.maxWidth = "none";
           }
           const divider = document.getElementById("inventoryVerticalDivider");
           if (divider) divider.style.display = "block";
@@ -2093,14 +2085,7 @@ function cancelFloorPlacement() {
       let originalItem = null;
 
       function handleDragStart(e, source, index) {
-        let item = null;
-        if (source === "inventory") {
-          item = inventory[index];
-        } else if (source === "action") {
-          item = actionSlotsItems[index];
-        } else if (source === "chest") {
-          item = (currentOpenChest && currentOpenChest.storage) ? currentOpenChest.storage[index] : null;
-        }
+        let item = getSlotItem(source, index);
 
         if (!item) {
           e.preventDefault();
@@ -2152,38 +2137,42 @@ function cancelFloorPlacement() {
         e.currentTarget.classList.remove("dragover");
 
         try {
-          const data = JSON.parse(e.dataTransfer.getData("text/plain"));
-          const source = data.source;
-          const sourceIndex = data.index;
+          let source = e.dataTransfer.getData("source");
+          let sourceIndex = parseInt(e.dataTransfer.getData("index"), 10);
+          if (!source) {
+            const dataStr = e.dataTransfer.getData("text/plain");
+            if (dataStr) {
+              const data = JSON.parse(dataStr);
+              source = data.source;
+              sourceIndex = data.index;
+            }
+          }
 
+          if (!source || isNaN(sourceIndex)) return;
           if (source === targetSource && sourceIndex === targetIndex) return;
 
-          let fromItem =
-            source === "inventory"
-              ? inventory[sourceIndex]
-              : actionSlotsItems[sourceIndex];
-          let toItem =
-            targetSource === "inventory"
-              ? inventory[targetIndex]
-              : actionSlotsItems[targetIndex];
+          let fromItem = getSlotItem(source, sourceIndex);
+          let toItem = getSlotItem(targetSource, targetIndex);
 
           if (!fromItem) return;
 
-          // Swap/Move items
-          if (source === "inventory") {
-            inventory[sourceIndex] = toItem;
+          const fromName = fromItem.name || fromItem.label;
+          const toName = toItem ? (toItem.name || toItem.label) : null;
+
+          // Stacking if dropping onto same item type
+          if (toItem && fromName === toName) {
+            toItem.count = (toItem.count || 1) + (fromItem.count || 1);
+            setSlotItem(source, sourceIndex, null);
           } else {
-            actionSlotsItems[sourceIndex] = toItem;
+            // Swap/Move items
+            setSlotItem(source, sourceIndex, toItem);
+            setSlotItem(targetSource, targetIndex, fromItem);
           }
 
-          if (targetSource === "inventory") {
-            inventory[targetIndex] = fromItem;
-          } else {
-            actionSlotsItems[targetIndex] = fromItem;
-          }
-
+          if (currentOpenChest) renderChest();
           renderInventory();
           renderActionSlots();
+          updateBadge();
           saveSettingsToLocalStorage();
         } catch (err) {
           console.error("Drop error", err);
@@ -3242,104 +3231,33 @@ function cancelFloorPlacement() {
 
       function renderInventory() {
         const grid = document.getElementById("inventoryGrid");
+        if (!grid) return;
         grid.innerHTML = "";
 
         if (activeTab === "inventory") {
           for (let i = 0; i < TOTAL_SLOTS; i++) {
-            const slot = document.createElement("div");
-            slot.className = "inventory-slot";
-
-            if (i >= UNLOCKED_SLOTS) {
-              slot.classList.add("locked");
-            } else {
-              const item = inventory[i];
-
-              slot.draggable = !!item;
-              slot.dataset.index = i;
-
-              slot.ondragstart = (e) => handleDragStart(e, "inventory", i);
-              slot.ondragend = handleDragEnd;
-              slot.ondragover = handleDragOver;
-              slot.ondragleave = handleDragLeave;
-              slot.ondrop = (e) => handleDrop(e, "inventory", i);
-
-              if (item) {
-                slot.style.position = "relative"; // Ensure slot is relative for absolute badge
-                const content = document.createElement("span");
-                content.className = "slot-content";
-                const canvas3D = create3DIconCanvas(item, 48, 48);
-                if (canvas3D) {
-                  content.appendChild(canvas3D);
-                } else {
-                  content.textContent = item.icon || "📦";
-                }
-                slot.appendChild(content);
-
-                const label = document.createElement("span");
-                label.className = "slot-label";
-                label.textContent = item.name || item.label || "ITEM";
-                slot.appendChild(label);
-
-                if (item.count > 1) {
-                  const countBadge = document.createElement("span");
-                  countBadge.style.position = "absolute";
-                  countBadge.style.top = "2px";
-                  countBadge.style.left = "4px";
-                  countBadge.style.fontSize = "11px";
-                  countBadge.style.fontWeight = "bold";
-                  countBadge.style.color = "#fff";
-                  countBadge.style.textShadow = "1px 1px 2px #000";
-                  countBadge.textContent = "x" + item.count;
-                  slot.appendChild(countBadge);
-                }
-
-                slot.oncontextmenu = (e) => { e.preventDefault(); }; 
-                slot.onmousedown = (e) => { if (e.button === 2) { e.preventDefault(); e.stopPropagation(); handleSplitItem("inventory", i); } };
-                
-                if (isMoveModeEnabled) {
-                  slot.style.cursor = "grab";
-                  slot.onclick = null;
-                } else {
-                  slot.style.cursor = "pointer";
-                  slot.onclick = () => useItem(item, i, "inventory");
-            }
-          } else {
-                slot.classList.add("empty");
-                const emptyText = document.createElement("span");
-                emptyText.style.fontSize = "10px";
-                emptyText.style.color = "rgba(255,255,255,0.05)";
-                emptyText.textContent = "□";
-                slot.appendChild(emptyText);
-              }
-            }
+            const item = inventory[i];
+            const isLocked = i >= UNLOCKED_SLOTS;
+            const slot = createSlotElement({
+              source: "inventory",
+              index: i,
+              item: item,
+              isLocked: isLocked,
+              cursor: isMoveModeEnabled ? "grab" : "pointer",
+              onClick: (item && !isLocked) ? (isMoveModeEnabled ? null : () => useItem(item, i, "inventory")) : null
+            });
             grid.appendChild(slot);
           }
         } else if (activeTab === "itemsList") {
           for (let i = 0; i < Math.max(TOTAL_SLOTS, ALL_ITEMS.length); i++) {
-            const slot = document.createElement("div");
-            slot.className = "inventory-slot";
-
             const item = ALL_ITEMS[i];
-            if (item) {
-              slot.style.position = "relative";
-              slot.style.cursor = "pointer";
-              const content = document.createElement("span");
-              content.className = "slot-content";
-              const canvas3D = create3DIconCanvas(item, 48, 48);
-              if (canvas3D) {
-                content.appendChild(canvas3D);
-              } else {
-                content.textContent = item.icon || "📦";
-              }
-              slot.appendChild(content);
-
-              const label = document.createElement("span");
-              label.className = "slot-label";
-              label.textContent = item.name || "ITEM";
-              slot.appendChild(label);
-
-              // Click to instantly spawn 50 items into player's inventory
-              slot.onclick = () => {
+            const slot = createSlotElement({
+              source: "itemsList",
+              index: i,
+              item: item,
+              isDraggable: false,
+              isDropTarget: false,
+              onClick: item ? () => {
                 if (!isDevMode) return; // ปิดระบบเสกของในโหมดเซฟ
                 let successCount = 0;
                 for (let j = 0; j < 50; j++) {
@@ -3359,16 +3277,8 @@ function cancelFloorPlacement() {
                 } else {
                   showNotice("❌ กระเป๋าเต็มแล้ว! (Inventory is full)");
                 }
-              };
-            } else {
-              slot.classList.add("empty");
-              const emptyText = document.createElement("span");
-              emptyText.style.fontSize = "10px";
-              emptyText.style.color = "rgba(255,255,255,0.05)";
-              emptyText.textContent = "□";
-              slot.appendChild(emptyText);
-            }
-
+              } : null
+            });
             grid.appendChild(slot);
           }
         }
@@ -3387,7 +3297,6 @@ function cancelFloorPlacement() {
           for (let i = 0; i < slots.length; i++) {
             const slotEl = slots[i];
             if (!slotEl) continue;
-            slotEl.innerHTML = "";
 
             if (i === selectedActionSlotIndex) {
               slotEl.classList.add("selected");
@@ -3395,96 +3304,44 @@ function cancelFloorPlacement() {
               slotEl.classList.remove("selected");
             }
 
-            slotEl.draggable = !!actionSlotsItems[i];
-            slotEl.dataset.index = i;
-
-            slotEl.ondragstart = (e) => handleDragStart(e, "action", i);
-            slotEl.ondragend = handleDragEnd;
-            slotEl.ondragover = handleDragOver;
-            slotEl.ondragleave = handleDragLeave;
-            slotEl.ondrop = (e) => handleDrop(e, "action", i);
-
+            let keyLabel = null;
             if (i < 4) {
-              const keyLabel = document.createElement("span");
-              keyLabel.style.position = "absolute";
-              keyLabel.style.top = "2px";
-              keyLabel.style.right = "4px";
-              keyLabel.style.fontSize = "10px";
-              keyLabel.style.color = "rgba(255,255,255,0.5)";
-              keyLabel.style.fontFamily = "monospace";
               const keyMap = { 0: "action1", 1: "action2", 2: "action3", 3: "action4" };
               const rawKey = currentKeyBindings[keyMap[i]] || "";
-              keyLabel.textContent = rawKey.replace("Key", "").replace("Digit", "");
-              slotEl.appendChild(keyLabel);
+              keyLabel = rawKey.replace("Key", "").replace("Digit", "");
             }
 
             const item = actionSlotsItems[i];
-            if (item) {
-              slotEl.style.position = "relative"; // Ensure slot is relative for absolute badge
-              const content = document.createElement("span");
-              content.className = "slot-content";
-              const canvas3D = create3DIconCanvas(item, 48, 48);
-              if (canvas3D) {
-                content.appendChild(canvas3D);
-              } else {
-                content.textContent = item.icon || "📦";
-              }
-              slotEl.appendChild(content);
 
-              const label = document.createElement("span");
-              label.className = "slot-label";
-              label.style.fontSize = "8px";
-              label.style.position = "absolute";
-              label.style.bottom = "2px";
-              label.style.color = "rgba(223, 183, 108, 0.7)";
-              label.style.fontFamily = "'Courier New', monospace";
-              label.textContent = item.name || item.label || "ITEM";
-              slotEl.appendChild(label);
-
-              if (item.count > 1) {
-                const countBadge = document.createElement("span");
-                countBadge.style.position = "absolute";
-                countBadge.style.top = "2px";
-                countBadge.style.left = "4px";
-                countBadge.style.fontSize = "10px";
-                countBadge.style.fontWeight = "bold";
-                countBadge.style.color = "#fff";
-                countBadge.style.textShadow = "1px 1px 2px #000";
-                countBadge.textContent = "x" + item.count;
-                slotEl.appendChild(countBadge);
-              }
-
-              slotEl.oncontextmenu = (e) => { e.preventDefault(); }; 
-              slotEl.onmousedown = (e) => { if (e.button === 2) { e.preventDefault(); e.stopPropagation(); handleSplitItem("action", i); } };
-
-              if (isMoveModeEnabled) {
-                slotEl.style.cursor = "grab";
-                slotEl.onclick = null;
-              } else {
-                slotEl.style.cursor = "pointer";
-                slotEl.onclick = () => {
-                  if (selectedActionSlotIndex === i) {
-                    selectedActionSlotIndex = -1;
-                    renderActionSlots();
-                    if (activeItem && activeItem.name === "BOW") {
-                      useAnimTimer = 0;
-                      isUsingItem = false;
-                      activeItem = null;
-                    }
-                    wasUsingBowBeforeSwimming = false;
-                  } else {
-                    selectedActionSlotIndex = i;
-                    renderActionSlots();
+            populateSlotElement(slotEl, {
+              source: "action",
+              index: i,
+              item: item,
+              keyLabel: keyLabel,
+              cursor: isMoveModeEnabled ? "grab" : "pointer",
+              labelStyle: {
+                fontSize: "8px",
+                position: "absolute",
+                bottom: "2px",
+                color: "rgba(223, 183, 108, 0.7)",
+                fontFamily: "'Courier New', monospace"
+              },
+              onClick: isMoveModeEnabled ? null : () => {
+                if (selectedActionSlotIndex === i) {
+                  selectedActionSlotIndex = -1;
+                  renderActionSlots();
+                  if (activeItem && activeItem.name === "BOW") {
+                    useAnimTimer = 0;
+                    isUsingItem = false;
+                    activeItem = null;
                   }
-                };
+                  wasUsingBowBeforeSwimming = false;
+                } else {
+                  selectedActionSlotIndex = i;
+                  renderActionSlots();
+                }
               }
-            } else {
-              slotEl.style.cursor = isMoveModeEnabled ? "grab" : "pointer";
-              slotEl.onclick = isMoveModeEnabled ? null : () => {
-                selectedActionSlotIndex = selectedActionSlotIndex === i ? -1 : i;
-                renderActionSlots();
-              };
-            }
+            });
           }
         });
       }

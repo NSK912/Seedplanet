@@ -639,7 +639,7 @@ window.addEventListener("keyup", (e) => {
         const mainLayout = document.getElementById("inventoryMainLayout");
         if (mainLayout) {
           mainLayout.style.display = "flex";
-          mainLayout.style.maxWidth = "520px";
+          mainLayout.style.maxWidth = "none";
         }
         const divider = document.getElementById("inventoryVerticalDivider");
         if (divider) divider.style.display = "block";
@@ -692,7 +692,7 @@ window.addEventListener("keyup", (e) => {
         const mainLayout = document.getElementById("inventoryMainLayout");
         if (mainLayout) {
           mainLayout.style.display = "flex";
-          mainLayout.style.maxWidth = "450px"; // Perfectly proportional to the 5-column item grid when no actions are shown
+          mainLayout.style.maxWidth = "none";
         }
         const divider = document.getElementById("inventoryVerticalDivider");
         if (divider) divider.style.display = "none";
@@ -2010,6 +2010,8 @@ window.addEventListener("keyup", (e) => {
             biomeName = "🌍 ดาวโลกอุดมสมบูรณ์ (Earth-like World)";
           }
         }
+        window.waterLevel = waterLevel;
+        if (typeof window.clearCache === "function") window.clearCache();
 
         const warningEl = document.querySelector(".warning");
         if (warningEl) {
@@ -2704,11 +2706,36 @@ window.addEventListener("keyup", (e) => {
       // Sync Helpers for Game and Inventory Settings
       // ============================================
 
+      let fallRagdollTimeout = null;
+
+      function triggerFallRagdoll(duration = 1500) {
+        if (typeof playerHP !== "undefined" && playerHP <= 0) return;
+        if (typeof playerControlsLocked !== "undefined" && playerControlsLocked) return;
+
+        if (fallRagdollTimeout) {
+          clearTimeout(fallRagdollTimeout);
+          fallRagdollTimeout = null;
+        }
+
+        setRagdoll(true);
+
+        fallRagdollTimeout = setTimeout(() => {
+          if ((typeof playerHP === "undefined" || playerHP > 0) && (typeof playerControlsLocked === "undefined" || !playerControlsLocked)) {
+            setRagdoll(false);
+          }
+          fallRagdollTimeout = null;
+        }, duration);
+      }
+      window.triggerFallRagdoll = triggerFallRagdoll;
+
       function setRagdoll(enabled) {
         ragdollEnabled = enabled;
         if (ragdollEnabled) {
           activeRidingBoat = null;
           activeRidingMech = null;
+        } else if (fallRagdollTimeout) {
+          clearTimeout(fallRagdollTimeout);
+          fallRagdollTimeout = null;
         }
         const toggle = document.getElementById("ragdollToggle");
         if (toggle) {

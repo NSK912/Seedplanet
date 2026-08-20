@@ -3648,7 +3648,11 @@ window.cloud3DProgram = cloud3DProgram;
                 isPlayerGrounded = true;
 
                 if (impactVelocity > 0.025) {
-                  setRagdoll(true);
+                  if (typeof triggerFallRagdoll === "function") {
+                    triggerFallRagdoll(1500);
+                  } else {
+                    setRagdoll(true);
+                  }
                   if (typeof playSplashSound === "function") {
                     playSplashSound(0.5);
                   }
@@ -8582,100 +8586,157 @@ window.cloud3DProgram = cloud3DProgram;
         }
         
         // ============================================
-        // วาดวงโคจรรอบดวงอาทิตย์ (Orbit Rings) เฉพาะตอนเปิดโหมดกล้องพระอาทิตย์
+        // วาดวงโคจรรอบดวงอาทิตย์ (Orbit Rings) - แสดงผลเฉพาะเมื่ออยู่ในโหมดกล้องอวกาศ/พระอาทิตย์/Freecam ไม่แสดงในกล้องตัวละคร
         // ============================================
-        if (cameraMode === "sun") {
+        const isCharCam = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps");
+        if (program && !isCharCam) {
           gl.useProgram(program);
           if (useLightingLoc) gl.uniform1f(useLightingLoc, 0.0);
+          if (terrainRenderDistEnabledLoc) gl.uniform1f(terrainRenderDistEnabledLoc, 0.0);
+          if (terrainWaterRadiusLoc) gl.uniform1f(terrainWaterRadiusLoc, 0.0);
+          if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 0.0);
+          if (tunnelCountLoc) gl.uniform1i(tunnelCountLoc, 0);
+
+          if (terrainRadiusAttrLoc !== -1) gl.disableVertexAttribArray(terrainRadiusAttrLoc);
+          if (tunnelCenterAttrLoc !== -1) gl.disableVertexAttribArray(tunnelCenterAttrLoc);
           
           let sunPos = [-800.0, 0.0, 0.0];
           if (window.SpacesMap && typeof window.SpacesMap.getCelestialTransform === "function") {
             const cel = window.SpacesMap.getCelestialTransform("sun");
-            if (cel) sunPos = cel.pos;
+            if (cel && cel.pos) sunPos = cel.pos;
           } else if (typeof window.getSunWorldPosition === "function") {
             sunPos = window.getSunWorldPosition();
           }
 
-          const nonActivePlanetIds = (window.SpacesMap && window.SpacesMap.allPlanets)
-              ? Object.keys(window.SpacesMap.allPlanets).filter(id => id !== window.SpacesMap.activePlanetId)
-              : [6, 7, 8, 9, 10].map(n => `planet_${n}`);
-
           const orbitVerts = [];
           const orbitCols = [];
-          const numSegments = 64;
+          const numSegments = 128;
+          const activePlanetId = (window.SpacesMap && window.SpacesMap.activePlanetId) ? window.SpacesMap.activePlanetId : "planet_1";
 
-          // วาดวงโคจรดาวเพื่อนบ้าน
-          for (let i = 0; i < nonActivePlanetIds.length; i++) {
-            const targetPlanetId = nonActivePlanetIds[i];
-            const epMesh = window.EXTRA_PLANETS && window.EXTRA_PLANETS[i % window.EXTRA_PLANETS.length];
-            if (epMesh) {
-                let epPos = [800.0, 0.0, 0.0];
-                if (window.SpacesMap && typeof window.SpacesMap.getCelestialTransform === "function") {
-                  const cel = window.SpacesMap.getCelestialTransform(targetPlanetId);
-                  if (cel) epPos = cel.pos;
-                } else if (epMesh.pos) {
-                  epPos = epMesh.pos;
+          // รวบรวมข้อมูลวงโคจรของดาวเคราะห์ในระบบสุริยะ SpacesMap (5 วงโคจรหลัก)
+          const orbitsToDraw = [];
+
+          if (window.SpacesMap && window.SpacesMap.allPlanets) {
+            Object.keys(window.SpacesMap.allPlanets).forEach(pId => {
+              const p = window.SpacesMap.allPlanets[pId];
+              const isActive = (pId === activePlanetId);
+              let rad = p.orbitRadius || 800.0;
+              let tilt = isActive ? 0.0 : ((typeof p.orbitTilt === "number") ? p.orbitTilt : 0.0);
+
+              if (typeof window.SpacesMap.getCelestialTransform === "function") {
+                const cel = window.SpacesMap.getCelestialTransform(pId);
+                if (cel) {
+                  rad = cel.orbitRadius || rad;
+                  tilt = (typeof cel.orbitTilt === "number") ? cel.orbitTilt : tilt;
+                }
+              }
+
+              // วงโคจรของดาวแม่ (Genesis/Active Planet) รัศมี 800 หน่วยบนระนาบ 0 เพื่อให้ผ่านศูนย์กลาง [0, 0, 0] พอดี
+              if (isActive) {
+                const dx = 0.0 - sunPos[0];
+                const dy = 0.0 - sunPos[1];
+                const dz = 0.0 - sunPos[2];
+                rad = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                tilt = 0.0;
+              }
+
+              orbitsToDraw.push({
+                id: pId,
+                radius: rad,
+                tilt: tilt,
+                isActive: isActive
+              });
+            });
+          }
+
+          // สร้างเส้นเวกเตอร์สำหรับ Orbit Rings
+          for (let i = 0; i < orbitsToDraw.length; i++) {
+            const orbit = orbitsToDraw[i];
+            const radius = orbit.radius;
+            const tilt = orbit.tilt;
+
+            if (radius > 10.0) {
+              const col = orbit.isActive
+                ? [1.0, 1.0, 1.0]          // เส้นสีขาวสว่างชัดเจนสำหรับดาวหลักที่ผู้เล่นอยู่
+                : [0.75, 0.85, 1.0];        // เส้นสีขาวนวลประกายเงิน/ฟ้าสำหรับดาวบริวารดวงอื่น
+
+              if (orbit.isActive) {
+                // คำนวณระนาบวงโคจรของดาวหลัก (Active Planet) ให้ผ่านจุดศูนย์กลาง [0, 0, 0] ของดาวแม่ 100%
+                const ux = -sunPos[0];
+                const uy = -sunPos[1];
+                const uz = -sunPos[2];
+                const uLen = Math.sqrt(ux * ux + uy * uy + uz * uz);
+                let vx = -uz;
+                let vy = 0.0;
+                let vz = ux;
+                const vLen = Math.sqrt(vx * vx + vz * vz);
+                if (vLen > 0.0001) {
+                  vx = (vx / vLen) * uLen;
+                  vz = (vz / vLen) * uLen;
+                } else {
+                  vx = 0.0;
+                  vy = 0.0;
+                  vz = uLen;
                 }
 
-                const dx = epPos[0] - sunPos[0];
-                const dy = epPos[1] - sunPos[1];
-                const dz = epPos[2] - sunPos[2];
-                const radius = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                
-                if (radius > 10.0) {
-                    for (let s = 0; s < numSegments; s++) {
-                        const a1 = (s / numSegments) * Math.PI * 2;
-                        const a2 = ((s + 1) / numSegments) * Math.PI * 2;
-                        orbitVerts.push(
-                            sunPos[0] + Math.cos(a1) * radius, sunPos[1], sunPos[2] + Math.sin(a1) * radius,
-                            sunPos[0] + Math.cos(a2) * radius, sunPos[1], sunPos[2] + Math.sin(a2) * radius
-                        );
-                        orbitCols.push(0.4, 0.4, 0.4, 0.4, 0.4, 0.4); // สีเทาสำหรับดาวดวงอื่น
-                    }
+                for (let s = 0; s < numSegments; s++) {
+                  const a1 = (s / numSegments) * Math.PI * 2;
+                  const a2 = ((s + 1) / numSegments) * Math.PI * 2;
+
+                  const p1x = sunPos[0] + ux * Math.cos(a1) + vx * Math.sin(a1);
+                  const p1y = sunPos[1] + uy * Math.cos(a1) + vy * Math.sin(a1);
+                  const p1z = sunPos[2] + uz * Math.cos(a1) + vz * Math.sin(a1);
+
+                  const p2x = sunPos[0] + ux * Math.cos(a2) + vx * Math.sin(a2);
+                  const p2y = sunPos[1] + uy * Math.cos(a2) + vy * Math.sin(a2);
+                  const p2z = sunPos[2] + uz * Math.cos(a2) + vz * Math.sin(a2);
+
+                  orbitVerts.push(p1x, p1y, p1z, p2x, p2y, p2z);
+                  orbitCols.push(col[0], col[1], col[2], col[0], col[1], col[2]);
                 }
+              } else {
+                for (let s = 0; s < numSegments; s++) {
+                  const a1 = (s / numSegments) * Math.PI * 2;
+                  const a2 = ((s + 1) / numSegments) * Math.PI * 2;
+
+                  orbitVerts.push(
+                    sunPos[0] + Math.cos(a1) * radius,
+                    sunPos[1] + Math.sin(a1) * (radius * tilt),
+                    sunPos[2] + Math.sin(a1) * radius,
+
+                    sunPos[0] + Math.cos(a2) * radius,
+                    sunPos[1] + Math.sin(a2) * (radius * tilt),
+                    sunPos[2] + Math.sin(a2) * radius
+                  );
+
+                  orbitCols.push(col[0], col[1], col[2], col[0], col[1], col[2]);
+                }
+              }
             }
           }
 
-          // วาดวงโคจรของดาวที่เรากำลังยืนอยู่ (Active Planet)
-          if (window.SpacesMap && window.SpacesMap.activePlanetId) {
-             const activePos = [0, 0, 0]; // จุดศูนย์กลางเสมอ
-             const dx = activePos[0] - sunPos[0];
-             const dy = activePos[1] - sunPos[1];
-             const dz = activePos[2] - sunPos[2];
-             const radius = Math.sqrt(dx*dx + dy*dy + dz*dz);
-             if (radius > 10.0) {
-                 for (let s = 0; s < numSegments; s++) {
-                     const a1 = (s / numSegments) * Math.PI * 2;
-                     const a2 = ((s + 1) / numSegments) * Math.PI * 2;
-                     orbitVerts.push(
-                        sunPos[0] + Math.cos(a1) * radius, sunPos[1], sunPos[2] + Math.sin(a1) * radius,
-                        sunPos[0] + Math.cos(a2) * radius, sunPos[1], sunPos[2] + Math.sin(a2) * radius
-                     );
-                     orbitCols.push(0.9, 0.9, 0.9, 0.9, 0.9, 0.9); // สีขาวสว่างสำหรับวงโคจรดาวปัจจุบัน
-                 }
-             }
-          }
-
           if (orbitVerts.length > 0) {
-              if (!window.orbitLineBuffer) window.orbitLineBuffer = gl.createBuffer();
-              if (!window.orbitColorBuffer) window.orbitColorBuffer = gl.createBuffer();
-              
-              setF32(f32_modelViewMatrix, viewMatrix);
-              gl.uniformMatrix4fv(modelViewLoc, false, f32_modelViewMatrix);
-              setF32(f32_projMatrix, projMatrix);
-              gl.uniformMatrix4fv(projectionLoc, false, f32_projMatrix);
-              
-              gl.bindBuffer(gl.ARRAY_BUFFER, window.orbitLineBuffer);
-              gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(orbitVerts), gl.DYNAMIC_DRAW);
-              gl.enableVertexAttribArray(positionLoc);
-              gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
-              
-              gl.bindBuffer(gl.ARRAY_BUFFER, window.orbitColorBuffer);
-              gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(orbitCols), gl.DYNAMIC_DRAW);
-              gl.enableVertexAttribArray(colorLoc);
-              gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
-              
-              gl.drawArrays(gl.LINES, 0, orbitVerts.length / 3);
+            if (!window.orbitLineBuffer) window.orbitLineBuffer = gl.createBuffer();
+            if (!window.orbitColorBuffer) window.orbitColorBuffer = gl.createBuffer();
+
+            gl.disable(gl.CULL_FACE);
+            
+            setF32(f32_modelViewMatrix, viewMatrix);
+            gl.uniformMatrix4fv(modelViewLoc, false, f32_modelViewMatrix);
+            setF32(f32_projMatrix, projMatrix);
+            gl.uniformMatrix4fv(projectionLoc, false, f32_projMatrix);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.orbitLineBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(orbitVerts), gl.DYNAMIC_DRAW);
+            gl.enableVertexAttribArray(positionLoc);
+            gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.orbitColorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(orbitCols), gl.DYNAMIC_DRAW);
+            gl.enableVertexAttribArray(colorLoc);
+            gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+            
+            gl.drawArrays(gl.LINES, 0, orbitVerts.length / 3);
           }
         }
         

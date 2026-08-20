@@ -163,64 +163,61 @@
       }
 
       function triggerUnconscious() {
-        const overlay = document.getElementById("unconsciousOverlay");
-        if (!overlay) return;
-        
         playerControlsLocked = true;
         setRagdoll(true);
         
-        // Wait 3 seconds in ragdoll mode before respawning
+        // ปล่อย Meganeura ทุกตัวที่เกาะตัวละครอยู่ทันทีเมื่อหมดสติ
+        if (typeof amphibians !== "undefined" && Array.isArray(amphibians)) {
+          for (let i = 0; i < amphibians.length; i++) {
+            if (amphibians[i] && amphibians[i].type === "meganeura") {
+              amphibians[i].attachedToPlayer = false;
+            }
+          }
+        }
+
+        // Wait 3 seconds in ragdoll mode before respawning (No black screen fade)
         setTimeout(() => {
-          overlay.classList.add("active");
+          let foundSpot = false;
+          let newTheta = charTheta;
+          let newPhi = charPhi;
+          for (let attempts = 0; attempts < 30; attempts++) {
+            const distOffset = 0.15 + Math.random() * 0.20;
+            const angleDir = Math.random() * Math.PI * 2;
+            
+            const testTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
+            let testPhi = charPhi + Math.sin(angleDir) * distOffset;
+            if (testPhi < 0) testPhi += Math.PI * 2;
+            if (testPhi > Math.PI * 2) testPhi -= Math.PI * 2;
+            
+            const height = getVisualHeightOnSphere(testTheta, testPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+            const terrainRad = RADIUS + height * HEIGHT_SCALE;
+            const waterRadius = RADIUS + waterLevel * 0.15;
+            if (!waterEnabled || terrainRad > waterRadius) {
+              newTheta = testTheta;
+              newPhi = testPhi;
+              foundSpot = true;
+              break;
+            }
+          }
+          if (!foundSpot) {
+            const distOffset = 0.15 + Math.random() * 0.20;
+            const angleDir = Math.random() * Math.PI * 2;
+            newTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
+            newPhi = charPhi + Math.sin(angleDir) * distOffset;
+            if (newPhi < 0) newPhi += Math.PI * 2;
+            if (newPhi > Math.PI * 2) newPhi -= Math.PI * 2;
+          }
           
-          setTimeout(() => {
-                let foundSpot = false;
-                let newTheta = charTheta;
-                let newPhi = charPhi;
-                for (let attempts = 0; attempts < 30; attempts++) {
-                  const distOffset = 0.15 + Math.random() * 0.20;
-                  const angleDir = Math.random() * Math.PI * 2;
-                  
-                  const testTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
-                  let testPhi = charPhi + Math.sin(angleDir) * distOffset;
-                  if (testPhi < 0) testPhi += Math.PI * 2;
-                  if (testPhi > Math.PI * 2) testPhi -= Math.PI * 2;
-                  
-                  const height = getVisualHeightOnSphere(testTheta, testPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-                  const terrainRad = RADIUS + height * HEIGHT_SCALE;
-                  const waterRadius = RADIUS + waterLevel * 0.15;
-                  if (!waterEnabled || terrainRad > waterRadius) {
-                    newTheta = testTheta;
-                    newPhi = testPhi;
-                    foundSpot = true;
-                    break;
-                  }
-                }
-                if (!foundSpot) {
-                  const distOffset = 0.15 + Math.random() * 0.20;
-                  const angleDir = Math.random() * Math.PI * 2;
-                  newTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
-                  newPhi = charPhi + Math.sin(angleDir) * distOffset;
-                  if (newPhi < 0) newPhi += Math.PI * 2;
-                  if (newPhi > Math.PI * 2) newPhi -= Math.PI * 2;
-                }
-                
-                charTheta = newTheta;
-                charPhi = newPhi;
-                
-                playerHP = playerMaxHP;
-                updatePlayerHPUI();
-                playerDamageCooldown = 2.0;
-                playerControlsLocked = false;
-                setRagdoll(false);
-                
-                saveSettingsToLocalStorage();
-                
-                setTimeout(() => {
-                  overlay.classList.remove("active");
-                }, 500);
-                
-              }, 2500); // 2.5 seconds fade in time
+          charTheta = newTheta;
+          charPhi = newPhi;
+          
+          playerHP = playerMaxHP;
+          updatePlayerHPUI();
+          playerDamageCooldown = 2.0;
+          playerControlsLocked = false;
+          setRagdoll(false);
+          
+          saveSettingsToLocalStorage();
         }, 3000); // 3 seconds ragdoll
       }
       let playerScale = 0.1;
@@ -1881,6 +1878,8 @@
              }
         }
 
+        let R_rot = null, N_rot = null, F_rot = null;
+
         if (ragdollEnabled && ragdollInitialized) {
           const rx = ragdollAxis[0],
             ry = ragdollAxis[1],
@@ -1903,17 +1902,17 @@
           const m22 = t * rz * rz + c;
 
           const b = ragdollBaseMatrix;
-          const R_rot = [
+          R_rot = [
             m00 * b[0] + m01 * b[1] + m02 * b[2],
             m10 * b[0] + m11 * b[1] + m12 * b[2],
             m20 * b[0] + m21 * b[1] + m22 * b[2],
           ];
-          const N_rot = [
+          N_rot = [
             m00 * b[4] + m01 * b[5] + m02 * b[6],
             m10 * b[4] + m11 * b[5] + m12 * b[6],
             m20 * b[4] + m21 * b[5] + m22 * b[6],
           ];
-          const F_rot = [
+          F_rot = [
             m00 * b[8] + m01 * b[9] + m02 * b[10],
             m10 * b[8] + m11 * b[9] + m12 * b[10],
             m20 * b[8] + m21 * b[9] + m22 * b[10],
@@ -2075,42 +2074,42 @@
         );
 
         // Generate unpitched, un-yawed counterparts for local coordinate face mapping
-        const localChest = (ragdollEnabled && ragdollInitialized) ? chest : generateCapsule(
+        const localChest = generateCapsule(
           localChestP1,
           localChestP2,
           (0.09 + bRadius) * scaleFactor,
           8,
           8,
         );
-        const localPelvis = (ragdollEnabled && ragdollInitialized) ? pelvis : generateCapsule(
+        const localPelvis = generateCapsule(
           localPelvisP1,
           localPelvisP2,
           0.085 * scaleFactor,
           8,
           8,
         );
-        const localNeck = (ragdollEnabled && ragdollInitialized) ? neck : generateCapsule(
+        const localNeck = generateCapsule(
           localNeckP1,
           localNeckP2,
           0.045 * scaleFactor,
           6,
           6,
         );
-        const localHead = (ragdollEnabled && ragdollInitialized) ? head : generateCapsule(
+        const localHead = generateCapsule(
           localHeadP1,
           localHeadP2,
           0.24 * scaleFactor,
           8,
           8,
         );
-        const localLeftEar = (ragdollEnabled && ragdollInitialized) ? leftEar : generateCapsule(
+        const localLeftEar = generateCapsule(
           localLeftEarP1,
           localLeftEarP2,
           0.035 * scaleFactor,
           6,
           6,
         );
-        const localRightEar = (ragdollEnabled && ragdollInitialized) ? rightEar : generateCapsule(
+        const localRightEar = generateCapsule(
           localRightEarP1,
           localRightEarP2,
           0.035 * scaleFactor,
@@ -2294,9 +2293,11 @@
             };
           }
 
+          const isRag = !!(ragdollEnabled && ragdollInitialized && R_rot && N_rot && F_rot);
           const targetHeadP = headP1;
           const numCoords = bm.localV.length;
           const worldV = new Array(numCoords);
+          const worldNormals = isRag ? new Array(numCoords) : bm.normals;
           const hx = targetHeadP[0];
           const hy = targetHeadP[1];
           const hz = targetHeadP[2];
@@ -2372,19 +2373,36 @@
             const breezeZ = Math.cos(timeSec * 2.1 + ly * 10.0 + lz * 5.0) * 0.006 * flexSq;
 
             // Combine all physical forces
-            const totalDx = breezeX + walkX * flexSq + dirX * airFlare * flexSq;
-            const totalDy = (walkY + actionY + airY + bounceY) * flexSq - Math.abs(totalDx) * 0.12;
-            const totalDz = breezeZ + walkZ * flexSq + actionZ * flexSq + dirZ * airFlare * flexSq;
+            const totalDx = breezeX + (isRag ? 0.0 : (walkX * flexSq + dirX * airFlare * flexSq));
+            const totalDy = (isRag ? 0.0 : ((walkY + actionY + airY + bounceY) * flexSq - Math.abs(totalDx) * 0.12));
+            const totalDz = breezeZ + (isRag ? 0.0 : (walkZ * flexSq + actionZ * flexSq + dirZ * airFlare * flexSq));
 
-            worldV[k]   = hx + (lx + totalDx) * scale;
-            worldV[k+1] = hy + (ly + totalDy) * scale;
-            worldV[k+2] = hz + (lz + totalDz) * scale;
+            const offX = (lx + totalDx) * scale;
+            const offY = (ly + totalDy) * scale;
+            const offZ = (lz + totalDz) * scale;
+
+            if (isRag) {
+              worldV[k]   = hx + (offX * R_rot[0] + offY * N_rot[0] + offZ * F_rot[0]);
+              worldV[k+1] = hy + (offX * R_rot[1] + offY * N_rot[1] + offZ * F_rot[1]);
+              worldV[k+2] = hz + (offX * R_rot[2] + offY * N_rot[2] + offZ * F_rot[2]);
+
+              const nx = bm.normals[k];
+              const ny = bm.normals[k+1];
+              const nz = bm.normals[k+2];
+              worldNormals[k]   = nx * R_rot[0] + ny * N_rot[0] + nz * F_rot[0];
+              worldNormals[k+1] = nx * R_rot[1] + ny * N_rot[1] + nz * F_rot[1];
+              worldNormals[k+2] = nx * R_rot[2] + ny * N_rot[2] + nz * F_rot[2];
+            } else {
+              worldV[k]   = hx + offX;
+              worldV[k+1] = hy + offY;
+              worldV[k+2] = hz + offZ;
+            }
           }
 
           return {
             vertices: worldV,
             colors: bm.colors,
-            normals: bm.normals,
+            normals: worldNormals,
             indices: bm.indices
           };
         }

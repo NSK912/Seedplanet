@@ -610,7 +610,14 @@ function updateAmphibians(deltaTime, seed) {
       const dy = player_pos[1] - npc_pos[1];
       const dz = player_pos[2] - npc_pos[2];
       const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      if (c.type === 'meganeura' && dist < 0.45 && playerHP > 0 && playerDamageCooldown <= 0 && !playerControlsLocked) {
+      let pBoat = null;
+      let pMech = null;
+      try { pBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat); } catch(e) {}
+      try { pMech = (typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech); } catch(e) {}
+      const isDriving = !!(pBoat || pMech);
+      const isPlayerDown = playerHP <= 0 || playerControlsLocked || (typeof ragdollEnabled !== "undefined" && ragdollEnabled);
+
+      if (c.type === 'meganeura' && dist < 0.45 && !isPlayerDown && !isDriving && playerDamageCooldown <= 0) {
         damagePlayer(1);
       }
 

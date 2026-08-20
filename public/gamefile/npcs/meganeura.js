@@ -228,14 +228,23 @@ window.NpcRegistry["meganeura"] = {
     let pTheta, pPhi, pBoat, pMech;
     try { pTheta = charTheta; } catch(e) {}
     try { pPhi = charPhi; } catch(e) {}
-    try { pBoat = activeRidingBoat; } catch(e) {}
-    try { pMech = activeRidingMech; } catch(e) {}
+    try { pBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat); } catch(e) {}
+    try { pMech = (typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech); } catch(e) {}
     
-    const isDriving = pBoat || pMech;
+    const isDriving = !!(pBoat || pMech);
 
+    let isUnconscious = false;
+    try {
+      if (typeof playerHP !== "undefined" && playerHP <= 0) isUnconscious = true;
+      if (typeof ragdollEnabled !== "undefined" && ragdollEnabled) isUnconscious = true;
+      if (typeof playerControlsLocked !== "undefined" && playerControlsLocked) isUnconscious = true;
+      if (typeof window !== "undefined" && (window.isPlayerUnconscious || (window.playerHP !== undefined && window.playerHP <= 0))) isUnconscious = true;
+    } catch(e) {}
+
+    // ถ้าตัวละครหมดสติ หรือกำลังขับเรือ/ขับหุ่นยนต์ จะไม่สามารถเกาะตัวละครได้ และหากเกาะอยู่ให้ปล่อยทันที
     if (c.attachedToPlayer) {
-      if (isDriving) {
-        c.attachedToPlayer = false; // Shake off when driving boat or mech
+      if (isDriving || isUnconscious) {
+        c.attachedToPlayer = false; // ปล่อยจากการเกาะทันที
       } else if (pTheta !== undefined && pPhi !== undefined) {
         // Attach to player and attack
         c.theta = pTheta;
@@ -250,7 +259,9 @@ window.NpcRegistry["meganeura"] = {
         
         // Attack logic
         try {
-            if (typeof damagePlayer === 'function') damagePlayer(1);
+            if (!isUnconscious && !isDriving && typeof damagePlayer === 'function') {
+              damagePlayer(1);
+            }
         } catch(e) {}
         
         return; // Skip normal wandering behavior
@@ -258,8 +269,8 @@ window.NpcRegistry["meganeura"] = {
         c.attachedToPlayer = false;
       }
     } else {
-      // Attempt to attach if close and not driving
-      if (pTheta !== undefined && pPhi !== undefined && !isDriving) {
+      // Attempt to attach only if close AND not driving AND not unconscious
+      if (pTheta !== undefined && pPhi !== undefined && !isDriving && !isUnconscious) {
         let pr = gRadius;
         try { 
             pr = (typeof RADIUS !== "undefined" ? RADIUS : 200) + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(pTheta, pPhi, seed) * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 10) : 0);

@@ -626,6 +626,12 @@
       .inventory-overlay.open .inventory-action-slots {
         display: flex;
       }
+      .inventory-action-slots .action-slot {
+        width: 72px !important;
+        height: 72px !important;
+        min-height: 72px !important;
+        box-sizing: border-box !important;
+      }
       .inventory-action-slots .action-slot:nth-child(n+5) {
         display: none !important;
       }
@@ -772,11 +778,14 @@
       }
       .inventory-grid {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(5, 72px);
         gap: 8px;
         margin: 4px 0 0 0;
+        justify-content: center;
       }
       .inventory-slot {
+        width: 72px;
+        height: 72px;
         aspect-ratio: 1;
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.06);
@@ -788,7 +797,8 @@
         font-size: 10px;
         transition: all 0.25s ease;
         position: relative;
-        min-height: 64px;
+        min-height: 72px;
+        box-sizing: border-box;
         font-family: 'JetBrains Mono', monospace;
         --slot-cut: 6px;
         clip-path: polygon(0 0, calc(100% - var(--slot-cut)) 0, 100% var(--slot-cut), 100% 100%, var(--slot-cut) 100%, 0 calc(100% - var(--slot-cut)));
@@ -1030,36 +1040,6 @@
         pointer-events: none;
       }
 
-      .starfield {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image:
-          radial-gradient(1px 1px at 20px 30px, #dfb76c, rgba(0, 0, 0, 0)),
-          radial-gradient(2px 2px at 40px 70px, #fff, rgba(0, 0, 0, 0)),
-          radial-gradient(1px 1px at 50px 160px, #dfb76c, rgba(0, 0, 0, 0)),
-          radial-gradient(2px 2px at 90px 40px, #e2e8f0, rgba(0, 0, 0, 0)),
-          radial-gradient(1.5px 1.5px at 130px 80px, #fff, rgba(0, 0, 0, 0)),
-          radial-gradient(1px 1px at 160px 120px, #dfb76c, rgba(0, 0, 0, 0));
-        background-repeat: repeat;
-        background-size: 200px 200px;
-        opacity: 0.2;
-        animation: starShift 100s linear infinite;
-        pointer-events: none;
-        z-index: 1;
-      }
-
-      @keyframes starShift {
-        from {
-          background-position: 0 0;
-        }
-        to {
-          background-position: 1000px 500px;
-        }
-      }
-
       .logo-container {
         text-align: center;
         margin-bottom: 22px;
@@ -1077,27 +1057,8 @@
         height: auto;
         margin: 0 auto 16px auto;
         display: block;
-        filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.45)) drop-shadow(0 0 45px rgba(56, 189, 248, 0.25));
-        animation: logoFloat 4s ease-in-out infinite alternate;
-        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;
         user-select: none;
         pointer-events: auto;
-      }
-
-      .main-screen-logo:hover {
-        transform: scale(1.05) translateY(-3px);
-        filter: drop-shadow(0 0 32px rgba(255, 255, 255, 0.75)) drop-shadow(0 0 60px rgba(56, 189, 248, 0.45));
-      }
-
-      @keyframes logoFloat {
-        0% {
-          transform: translateY(0px);
-          filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.35)) drop-shadow(0 0 35px rgba(56, 189, 248, 0.2));
-        }
-        100% {
-          transform: translateY(-6px);
-          filter: drop-shadow(0 0 28px rgba(255, 255, 255, 0.65)) drop-shadow(0 0 55px rgba(56, 189, 248, 0.35));
-        }
       }
 
       .logo-title {
@@ -1164,38 +1125,6 @@
       .start-btn:active {
         transform: translateY(-1px) scale(0.98);
         box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
-      }
-
-      .planet-decor {
-        position: absolute;
-        width: 450px;
-        height: 450px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #b38b43 0%, #030712 70%);
-        box-shadow:
-          -30px -30px 80px rgba(179, 139, 67, 0.3) inset,
-          0 0 60px rgba(223, 183, 108, 0.15);
-        opacity: 0.15;
-        bottom: -150px;
-        right: -150px;
-        pointer-events: none;
-        z-index: 1;
-      }
-
-      .planet-decor-2 {
-        position: absolute;
-        width: 250px;
-        height: 250px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #dfb76c 0%, #030712 80%);
-        box-shadow:
-          -20px -20px 50px rgba(223, 183, 108, 0.3) inset,
-          0 0 40px rgba(223, 183, 108, 0.1);
-        opacity: 0.12;
-        top: -50px;
-        left: -50px;
-        pointer-events: none;
-        z-index: 1;
       }
 
       .game-ui {

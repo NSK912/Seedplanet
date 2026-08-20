@@ -26,9 +26,6 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
     <!-- หน้าเข้าเกม (Title Screen) -->
     <div class="game-start-overlay" id="gameStartOverlay">
-      <div class="starfield"></div>
-      <div class="planet-decor"></div>
-      <div class="planet-decor-2"></div>
       <div class="logo-container">
         <img src="assets/20260820_000234.png" alt="SeedPlanet Logo" class="main-screen-logo" />
         <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0px;">
@@ -563,16 +560,16 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
 
 
-        <div id="inventoryMainLayout" style="display: flex; gap: 24px; align-items: stretch; justify-content: center; width: 100%; max-width: 520px; margin: 16px auto; box-sizing: border-box;">
-          <div class="inventory-grid" id="inventoryGrid" style="flex: 1; margin: 0; min-width: 0;">
+        <div id="inventoryMainLayout" style="display: flex; gap: 20px; align-items: flex-start; justify-content: center; width: auto; margin: 16px auto; box-sizing: border-box;">
+          <div class="inventory-grid" id="inventoryGrid" style="margin: 0;">
             <!-- สร้างช่องกระเป๋าผ่าน JavaScript -->
           </div>
 
           <!-- Vertical Divider line for Inventory Tab -->
-          <div id="inventoryVerticalDivider" style="width: 1px; background: rgba(255, 255, 255, 0.1); margin: 0 4px; display: block;"></div>
+          <div id="inventoryVerticalDivider" style="width: 1px; background: rgba(255, 255, 255, 0.1); margin: 0 4px; height: 312px; display: block;"></div>
 
           <!-- ช่องแอคชั่นข้างหน้าต่างกระเป๋า (Inventory Action Slots) -->
-          <div id="inventoryActionSlotsWrapper" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 64px; flex-shrink: 0; margin-top: 4px; border: none; padding: 0;">
+          <div id="inventoryActionSlotsWrapper" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 72px; flex-shrink: 0; margin-top: 0; border: none; padding: 0;">
             <div style="color: #dfb76c; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; writing-mode: vertical-rl; text-orientation: mixed; margin-bottom: 8px; opacity: 0.7; display: flex; align-items: center; gap: 4px;">
               ⚡ ACTIONS
             </div>
@@ -1087,11 +1084,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
     <!-- หน้าต่างกล่องไม้ (Wooden Chest Overlay) -->
     <div class="inventory-overlay" id="chestOverlay">
-      <div class="inventory-panel game-ui" style="width: 95%; max-width: 1232px; max-height: 90vh; display: flex; flex-direction: row; gap: 24px; padding: 24px;">
+      <div class="inventory-panel game-ui" style="width: auto; max-width: 960px; max-height: 90vh; display: flex; flex-direction: row; gap: 32px; padding: 28px; margin: auto; justify-content: center;">
         <!-- Left Column: Chest Storage -->
-        <div style="flex: 1; display: flex; flex-direction: column;">
+        <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0;">
           <!-- Chest Header -->
-          <div class="inventory-header" style="margin-bottom: 12px;">
+          <div class="inventory-header" style="margin-bottom: 12px; margin-left: 0; margin-right: 0; margin-top: 0;">
             <div class="inventory-tabs">
               <h2 class="active" style="font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
@@ -1117,9 +1114,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
 
         <!-- Right Column: Player Inventory -->
-        <div style="flex: 1; display: flex; flex-direction: column; border-left: 1px solid rgba(255, 255, 255, 0.06); padding-left: 24px; position: relative;">
+        <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0; border-left: 1px solid rgba(255, 255, 255, 0.06); padding-left: 32px; position: relative;">
           <!-- Player Inventory Header in Chest UI -->
-          <div class="inventory-header" style="margin-bottom: 12px;">
+          <div class="inventory-header" style="margin-bottom: 12px; margin-left: 0; margin-right: 0; margin-top: 0;">
             <div class="inventory-tabs">
               <h2 class="active" style="font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">

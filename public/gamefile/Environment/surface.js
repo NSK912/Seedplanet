@@ -463,20 +463,27 @@
   function getVisualHeightOnSphere(theta, phi, seed) {
     const grid = typeof window !== 'undefined' && window.currentGridSize ? window.currentGridSize : (typeof currentGridSize !== 'undefined' ? currentGridSize : 0);
     if (!grid) {
-        return getHeightOnSphere(theta, phi, seed);
+        return (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, seed) : 0);
     }
+
+    const currentR = (typeof window !== 'undefined' && typeof window.RADIUS === 'number') ? window.RADIUS : (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
+    const currentHScale = (typeof window !== 'undefined' && typeof window.HEIGHT_SCALE === 'number') ? window.HEIGHT_SCALE : (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6);
+
+    const safeTheta = Math.max(0.00001, Math.min(Math.PI - 0.00001, theta));
+    let normPhi = phi % (2 * Math.PI);
+    if (normPhi < 0) normPhi += 2 * Math.PI;
     
     const latSeg = grid;
     const longSeg = grid;
     
-    const lat = (theta / Math.PI) * latSeg;
-    let long = (phi / (2 * Math.PI)) * longSeg;
+    const lat = (safeTheta / Math.PI) * latSeg;
+    let long = (normPhi / (2 * Math.PI)) * longSeg;
     if (long < 0) long += longSeg;
     long = long % longSeg;
     
     const lat0 = Math.max(0, Math.min(latSeg - 1, Math.floor(lat)));
     const long0 = Math.floor(long);
-    const lat1 = lat0 + 1;
+    const lat1 = Math.min(latSeg, lat0 + 1);
     const long1 = (long0 + 1) % longSeg;
     
     const u = lat - lat0;
@@ -486,11 +493,12 @@
         const t = (l_idx / latSeg) * Math.PI;
         const p = (lg_idx / longSeg) * 2 * Math.PI;
         const h = getHeightOnSphere(t, p, seed);
-        const r = (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) + h * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6);
+        const r = currentR + h * currentHScale;
+        const sinT = Math.sin(t);
         return [
-            r * Math.sin(t) * Math.cos(p),
+            r * sinT * Math.cos(p),
             r * Math.cos(t),
-            r * Math.sin(t) * Math.sin(p)
+            r * sinT * Math.sin(p)
         ];
     };
     
@@ -506,9 +514,9 @@
         pC = getPos(lat1, long0);
     }
     
-    const Dx = Math.sin(theta) * Math.cos(phi);
-    const Dy = Math.cos(theta);
-    const Dz = Math.sin(theta) * Math.sin(phi);
+    const Dx = Math.sin(safeTheta) * Math.cos(normPhi);
+    const Dy = Math.cos(safeTheta);
+    const Dz = Math.sin(safeTheta) * Math.sin(normPhi);
     
     const ABx = pB[0] - pA[0], ABy = pB[1] - pA[1], ABz = pB[2] - pA[2];
     const ACx = pC[0] - pA[0], ACy = pC[1] - pA[1], ACz = pC[2] - pA[2];
@@ -521,13 +529,34 @@
     const dotND = Nx * Dx + Ny * Dy + Nz * Dz;
     
     if (Math.abs(dotND) < 1e-6) {
-        return getHeightOnSphere(theta, phi, seed);
+        return getHeightOnSphere(safeTheta, normPhi, seed);
     }
     
     const rIntersect = dotNA / dotND;
-    const hIntersect = (rIntersect - (typeof RADIUS !== 'undefined' ? RADIUS : 8.0)) / (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6);
+    if (!isFinite(rIntersect) || rIntersect <= 0) {
+        return getHeightOnSphere(safeTheta, normPhi, seed);
+    }
     
-    return hIntersect;
+    const hIntersect = (rIntersect - currentR) / (currentHScale || 0.6);
+    return isFinite(hIntersect) ? hIntersect : getHeightOnSphere(safeTheta, normPhi, seed);
   }
   window.getVisualHeightOnSphere = getVisualHeightOnSphere;
+
+  function getVisualPositionOnSphere(theta, phi, seed) {
+    const currentR = (typeof window !== 'undefined' && typeof window.RADIUS === 'number') ? window.RADIUS : (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
+    const currentHScale = (typeof window !== 'undefined' && typeof window.HEIGHT_SCALE === 'number') ? window.HEIGHT_SCALE : (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6);
+    const h = getVisualHeightOnSphere(theta, phi, seed);
+    const r = currentR + h * currentHScale;
+    const safeTheta = Math.max(0.00001, Math.min(Math.PI - 0.00001, theta));
+    const sinT = Math.sin(safeTheta);
+    return [
+        r * sinT * Math.cos(phi),
+        r * Math.cos(safeTheta),
+        r * sinT * Math.sin(phi),
+        h,
+        r
+    ];
+  }
+  window.getVisualPositionOnSphere = getVisualPositionOnSphere;
+
   
