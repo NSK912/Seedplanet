@@ -68,6 +68,7 @@
     'gamefile/npcs/registry.js',
     'gamefile/npcs/meganeura.js',
     'gamefile/npcs/georgiacetus.js',
+    'gamefile/npcs/placoderm.js',
     'gamefile/npcs/isopod.js',
     'gamefile/npcs/human.js',
     'gamefile/npcs/npc.js',

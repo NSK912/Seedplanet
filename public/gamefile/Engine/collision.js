@@ -382,6 +382,37 @@ const CollisionCore = {
           if (Math.abs(dx) < cushionR && Math.abs(dz) < cushionR && dy >= -h/2 - cushionUp && dy <= h/2 + cushionUp) {
             return true;
           }
+        } else if (other.type === "wood_roof") {
+          const angle = other.angle || 0.0;
+          const cosA = Math.cos(angle);
+          const sinA = Math.sin(angle);
+          const roofR = [
+            other.R[0] * cosA + other.F[0] * sinA,
+            other.R[1] * cosA + other.F[1] * sinA,
+            other.R[2] * cosA + other.F[2] * sinA
+          ];
+          const roofF = [
+            other.F[0] * cosA - other.R[0] * sinA,
+            other.F[1] * cosA - other.R[1] * sinA,
+            other.F[2] * cosA - other.R[2] * sinA
+          ];
+          const roofN = other.normal || [0, 1, 0];
+          const dx_vec = [
+            p[0] - other.position[0],
+            p[1] - other.position[1],
+            p[2] - other.position[2]
+          ];
+          const lx = dx_vec[0] * roofR[0] + dx_vec[1] * roofR[1] + dx_vec[2] * roofR[2];
+          const lz = dx_vec[0] * roofF[0] + dx_vec[1] * roofF[1] + dx_vec[2] * roofF[2];
+          const ly = dx_vec[0] * roofN[0] + dx_vec[1] * roofN[1] + dx_vec[2] * roofN[2];
+          const cushion = 0.08;
+          if (Math.abs(lx) < 0.15 + cushion && lz > -0.15 - cushion && lz < 0.15 + cushion) {
+            const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
+            const surfH = 0.125 + (clampedZ / 0.30) * 0.25;
+            if (ly >= -cushion && ly <= surfH + 0.04 + cushion) {
+              return true;
+            }
+          }
         }
       }
     }
@@ -721,6 +752,41 @@ const CollisionCore = {
               currentP[1] += other.normal[1] * pushDir * (penetration + 0.015);
               currentP[2] += other.normal[2] * pushDir * (penetration + 0.015);
               structureMoved = true;
+            }
+          } else if (other.type === "wood_roof") {
+            const angle = other.angle || 0.0;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const roofR = [
+              other.R[0] * cosA + other.F[0] * sinA,
+              other.R[1] * cosA + other.F[1] * sinA,
+              other.R[2] * cosA + other.F[2] * sinA
+            ];
+            const roofF = [
+              other.F[0] * cosA - other.R[0] * sinA,
+              other.F[1] * cosA - other.R[1] * sinA,
+              other.F[2] * cosA - other.R[2] * sinA
+            ];
+            const roofN = other.normal || [0, 1, 0];
+            const dx_vec = [
+              currentP[0] - other.position[0],
+              currentP[1] - other.position[1],
+              currentP[2] - other.position[2]
+            ];
+            const lx = dx_vec[0] * roofR[0] + dx_vec[1] * roofR[1] + dx_vec[2] * roofR[2];
+            const lz = dx_vec[0] * roofF[0] + dx_vec[1] * roofF[1] + dx_vec[2] * roofF[2];
+            const ly = dx_vec[0] * roofN[0] + dx_vec[1] * roofN[1] + dx_vec[2] * roofN[2];
+            const cushion = 0.08;
+            if (Math.abs(lx) < 0.15 + cushion && lz > -0.15 - cushion && lz < 0.15 + cushion) {
+              const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
+              const surfH = 0.125 + (clampedZ / 0.30) * 0.25;
+              if (ly >= -cushion && ly <= surfH + 0.04 + cushion) {
+                const pen = (surfH + 0.04 + cushion) - ly;
+                currentP[0] += roofN[0] * (pen + 0.02);
+                currentP[1] += roofN[1] * (pen + 0.02);
+                currentP[2] += roofN[2] * (pen + 0.02);
+                structureMoved = true;
+              }
             }
           }
         }
@@ -1109,6 +1175,699 @@ const CollisionCore = {
       isDivingMode: diveDepth > 0.015 * charScale,
       shouldBlock: true
     };
+  },
+
+  // Layer: Structures (Wood Walls, Wood Roofs, Wood Windows, Wood Doors) for both Player and Wheeled Boat
+  resolveStructureCollisions: function(params) {
+    const P_new = params.P_new;
+    const P_curr = params.P_curr;
+    const groundRadius = params.groundRadius;
+    const playerScale = params.playerScale;
+    const activeRidingBoat = params.activeRidingBoat;
+    const collectibles = params.collectibles;
+    const F_3d = params.F_3d;
+    const East = params.East;
+    const North = params.North;
+    const charTheta = params.charTheta;
+    const charPhi = params.charPhi;
+    const charHeading = params.charHeading;
+
+    if (!collectibles || !collectibles.length) return false;
+
+    const currentPlayPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
+    const nearbyCollectibles = [];
+    const collFilterDistSq = 4.0 * 4.0;
+    for (let i = 0; i < collectibles.length; i++) {
+      const item = collectibles[i];
+      if (item.active && !item.isPreview && (item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_roof")) {
+        const dx = currentPlayPos3D[0] - item.position[0];
+        const dy = currentPlayPos3D[1] - item.position[1];
+        const dz = currentPlayPos3D[2] - item.position[2];
+        if (dx*dx + dy*dy + dz*dz < collFilterDistSq) {
+          nearbyCollectibles.push(item);
+        }
+      }
+    }
+
+    if (!nearbyCollectibles.length) return false;
+
+    const isRidingBoat = !!activeRidingBoat;
+    let vehicleCollidedWithStructure = false;
+
+    let boatF = null;
+    let boatR = null;
+    if (isRidingBoat) {
+      boatF = (typeof F_3d !== "undefined" && F_3d) ? [F_3d[0], F_3d[1], F_3d[2]] : (activeRidingBoat.F || [0, 0, 1]);
+      const eastVec = (typeof East !== "undefined" && East) ? East : [-Math.sin(charPhi), 0, Math.cos(charPhi)];
+      const northVec = (typeof North !== "undefined" && North) ? North : [-Math.cos(charTheta) * Math.cos(charPhi), Math.sin(charTheta), -Math.cos(charTheta) * Math.sin(charPhi)];
+      boatR = [
+        eastVec[0] * Math.cos(charHeading) - northVec[0] * Math.sin(charHeading),
+        eastVec[1] * Math.cos(charHeading) - northVec[1] * Math.sin(charHeading),
+        eastVec[2] * Math.cos(charHeading) - northVec[2] * Math.sin(charHeading)
+      ];
+      const rLen = Math.sqrt(boatR[0]*boatR[0] + boatR[1]*boatR[1] + boatR[2]*boatR[2]) || 1;
+      boatR = [boatR[0] / rLen, boatR[1] / rLen, boatR[2] / rLen];
+    }
+
+    const structTestPoints = isRidingBoat ? [
+      { fwd: 0.22, side: 0.0, rad: 0.10 },    // Bow
+      { fwd: -0.20, side: 0.0, rad: 0.10 },   // Stern
+      { fwd: 0.0, side: 0.17, rad: 0.09 },    // Right hull
+      { fwd: 0.0, side: -0.17, rad: 0.09 },   // Left hull
+      { fwd: 0.18, side: 0.15, rad: 0.08 },   // Front-Right wheel
+      { fwd: 0.18, side: -0.15, rad: 0.08 },  // Front-Left wheel
+      { fwd: -0.16, side: 0.15, rad: 0.08 },  // Rear-Right wheel
+      { fwd: -0.16, side: -0.15, rad: 0.08 }, // Rear-Left wheel
+      { fwd: 0.0, side: 0.0, rad: 0.12 }      // Boat center
+    ] : [
+      { fwd: 0.0, side: 0.0, rad: playerScale * 0.38 }
+    ];
+
+    const numStructPasses = isRidingBoat ? 3 : 2;
+
+    for (let pass = 0; pass < numStructPasses; pass++) {
+      // 1. COLLISION WITH WOOD WALLS
+      for (let other of nearbyCollectibles) {
+        if (other.active && other.type === "wood_wall" && !other.isPreview) {
+          const wallCenterRadius = Math.sqrt(
+            other.position[0] * other.position[0] +
+            other.position[1] * other.position[1] +
+            other.position[2] * other.position[2]
+          );
+          
+          const wallHeight = 0.25;
+          const feetRadius = isRidingBoat ? (groundRadius - 0.22) : (groundRadius - 0.46 * playerScale);
+          const headRadius = isRidingBoat ? (groundRadius + 0.42) : (groundRadius + 0.46 * playerScale);
+          
+          if (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight) {
+            const angle = other.angle || 0.0;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            
+            const wallR = [
+              other.R[0] * cosA + other.F[0] * sinA,
+              other.R[1] * cosA + other.F[1] * sinA,
+              other.R[2] * cosA + other.F[2] * sinA
+            ];
+            const wallF = [
+              other.F[0] * cosA - other.R[0] * sinA,
+              other.F[1] * cosA - other.R[1] * sinA,
+              other.F[2] * cosA - other.R[2] * sinA
+            ];
+            
+            let segments = [];
+            if (isRidingBoat) {
+              segments.push({ cx: 0.0, hw: 0.15 });
+            } else {
+              let hasCoLocatedDoor = false;
+              let hasCoLocatedWindow = false;
+              for (let d of nearbyCollectibles) {
+                if (d.active && !d.isPreview) {
+                  const ox = d.position[0] - other.position[0];
+                  const oy = d.position[1] - other.position[1];
+                  const oz = d.position[2] - other.position[2];
+                  if (ox*ox + oy*oy + oz*oz < 0.005) {
+                    if (d.type === "wood_door") hasCoLocatedDoor = true;
+                    else if (d.type === "wood_window") hasCoLocatedWindow = true;
+                  }
+                }
+              }
+              if (hasCoLocatedDoor) {
+                segments.push({ cx: -0.1095, hw: 0.0405 });
+                segments.push({ cx: 0.1095, hw: 0.0405 });
+              } else if (hasCoLocatedWindow) {
+                const feetHeight = feetRadius - wallCenterRadius;
+                if (feetHeight >= 0.075 && feetHeight < 0.185) {
+                  segments.push({ cx: -0.1175, hw: 0.0325 });
+                  segments.push({ cx: 0.1175, hw: 0.0325 });
+                } else {
+                  segments.push({ cx: 0.0, hw: 0.15 });
+                }
+              } else {
+                segments.push({ cx: 0.0, hw: 0.15 });
+              }
+            }
+
+            const hd = 0.02;
+
+            for (let tp of structTestPoints) {
+              const tpOff = isRidingBoat ? [
+                boatF[0] * tp.fwd + boatR[0] * tp.side,
+                boatF[1] * tp.fwd + boatR[1] * tp.side,
+                boatF[2] * tp.fwd + boatR[2] * tp.side
+              ] : [0, 0, 0];
+
+              const curPt = [
+                P_new[0] * groundRadius + tpOff[0],
+                P_new[1] * groundRadius + tpOff[1],
+                P_new[2] * groundRadius + tpOff[2]
+              ];
+              const prevPt = [
+                P_curr[0] * groundRadius + tpOff[0],
+                P_curr[1] * groundRadius + tpOff[1],
+                P_curr[2] * groundRadius + tpOff[2]
+              ];
+
+              const cur_dx = (curPt[0] - other.position[0]) * wallR[0] + (curPt[1] - other.position[1]) * wallR[1] + (curPt[2] - other.position[2]) * wallR[2];
+              const cur_dz = (curPt[0] - other.position[0]) * wallF[0] + (curPt[1] - other.position[1]) * wallF[1] + (curPt[2] - other.position[2]) * wallF[2];
+
+              const prev_dz = (prevPt[0] - other.position[0]) * wallF[0] + (prevPt[1] - other.position[1]) * wallF[1] + (prevPt[2] - other.position[2]) * wallF[2];
+              const prev_dx = (prevPt[0] - other.position[0]) * wallR[0] + (prevPt[1] - other.position[1]) * wallR[1] + (prevPt[2] - other.position[2]) * wallR[2];
+
+              for (let seg of segments) {
+                const ldx = cur_dx - seg.cx;
+                const prev_ldx = prev_dx - seg.cx;
+                const limitX = seg.hw + tp.rad;
+                const limitZ = hd + tp.rad;
+
+                if (Math.abs(ldx) < limitX && Math.abs(cur_dz) < limitZ) {
+                  const penX = limitX - Math.abs(ldx);
+                  const penZ = limitZ - Math.abs(cur_dz);
+
+                  const signZ = (Math.abs(prev_dz) > 0.002 ? Math.sign(prev_dz) : Math.sign(cur_dz)) || 1;
+                  const signX = (Math.abs(prev_ldx) > 0.002 ? Math.sign(prev_ldx) : Math.sign(ldx)) || 1;
+
+                  let pushVec;
+                  if (penX < penZ && Math.abs(ldx) > seg.hw * 0.75) {
+                    const pushAmt = penX * signX;
+                    pushVec = [wallR[0] * pushAmt, wallR[1] * pushAmt, wallR[2] * pushAmt];
+                  } else {
+                    const pushAmt = penZ * signZ;
+                    pushVec = [wallF[0] * pushAmt, wallF[1] * pushAmt, wallF[2] * pushAmt];
+                  }
+
+                  P_new[0] += pushVec[0] / groundRadius;
+                  P_new[1] += pushVec[1] / groundRadius;
+                  P_new[2] += pushVec[2] / groundRadius;
+
+                  const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                  P_new[0] /= pLenTemp;
+                  P_new[1] /= pLenTemp;
+                  P_new[2] /= pLenTemp;
+
+                  if (isRidingBoat) vehicleCollidedWithStructure = true;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 2. COLLISION WITH WOOD ROOFS
+      for (let other of nearbyCollectibles) {
+        if (other.active && other.type === "wood_roof" && !other.isPreview) {
+          const roofCenterRadius = Math.sqrt(
+            other.position[0] * other.position[0] +
+            other.position[1] * other.position[1] +
+            other.position[2] * other.position[2]
+          );
+          const roofHeight = 0.30;
+          const feetRadius = isRidingBoat ? (groundRadius - 0.22) : (groundRadius - 0.46 * playerScale);
+          const headRadius = isRidingBoat ? (groundRadius + 0.42) : (groundRadius + 0.46 * playerScale);
+
+          if (headRadius > roofCenterRadius - 0.08 && feetRadius < roofCenterRadius + roofHeight + 0.08) {
+            const angle = other.angle || 0.0;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const roofR = [
+              other.R[0] * cosA + other.F[0] * sinA,
+              other.R[1] * cosA + other.F[1] * sinA,
+              other.R[2] * cosA + other.F[2] * sinA
+            ];
+            const roofF = [
+              other.F[0] * cosA - other.R[0] * sinA,
+              other.F[1] * cosA - other.R[1] * sinA,
+              other.F[2] * cosA - other.R[2] * sinA
+            ];
+            const roofN = other.normal || [0, 1, 0];
+
+            const d = 0.30;
+            const rise = 0.25;
+            const slopeLen = Math.sqrt(d * d + rise * rise);
+            const normSlope = [
+              (roofN[0] * d - roofF[0] * rise) / slopeLen,
+              (roofN[1] * d - roofF[1] * rise) / slopeLen,
+              (roofN[2] * d - roofF[2] * rise) / slopeLen
+            ];
+            const slopeOffset = (rise / 2) * (d / slopeLen);
+
+            for (let tp of structTestPoints) {
+              const tpOff = isRidingBoat ? [
+                boatF[0] * tp.fwd + boatR[0] * tp.side,
+                boatF[1] * tp.fwd + boatR[1] * tp.side,
+                boatF[2] * tp.fwd + boatR[2] * tp.side
+              ] : [0, 0, 0];
+
+              const curPt = [
+                P_new[0] * groundRadius + tpOff[0],
+                P_new[1] * groundRadius + tpOff[1],
+                P_new[2] * groundRadius + tpOff[2]
+              ];
+              const prevPt = [
+                P_curr[0] * groundRadius + tpOff[0],
+                P_curr[1] * groundRadius + tpOff[1],
+                P_curr[2] * groundRadius + tpOff[2]
+              ];
+
+              const lx = (curPt[0] - other.position[0]) * roofR[0] + (curPt[1] - other.position[1]) * roofR[1] + (curPt[2] - other.position[2]) * roofR[2];
+              const lz = (curPt[0] - other.position[0]) * roofF[0] + (curPt[1] - other.position[1]) * roofF[1] + (curPt[2] - other.position[2]) * roofF[2];
+              const ly = (curPt[0] - other.position[0]) * roofN[0] + (curPt[1] - other.position[1]) * roofN[1] + (curPt[2] - other.position[2]) * roofN[2];
+
+              const prev_lx = (prevPt[0] - other.position[0]) * roofR[0] + (prevPt[1] - other.position[1]) * roofR[1] + (prevPt[2] - other.position[2]) * roofR[2];
+              const prev_lz = (prevPt[0] - other.position[0]) * roofF[0] + (prevPt[1] - other.position[1]) * roofF[1] + (prevPt[2] - other.position[2]) * roofF[2];
+              const prev_ly = (prevPt[0] - other.position[0]) * roofN[0] + (prevPt[1] - other.position[1]) * roofN[1] + (prevPt[2] - other.position[2]) * roofN[2];
+
+              const limitX = 0.15 + tp.rad;
+              const limitZ = 0.15 + tp.rad;
+
+              if (Math.abs(lx) < limitX && Math.abs(lz) < limitZ) {
+                const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
+                const surfH = 0.125 + (clampedZ / 0.30) * 0.25;
+
+                if (ly >= -tp.rad - 0.05 && ly <= surfH + tp.rad + 0.06) {
+                  const distSlope = (ly * d - lz * rise) / slopeLen - slopeOffset;
+                  const prev_distSlope = (prev_ly * d - prev_lz * rise) / slopeLen - slopeOffset;
+
+                  let pushVec = null;
+                  if (prev_distSlope >= -0.02 || distSlope >= -0.04) {
+                    const penSlope = (0.04 + tp.rad) - distSlope;
+                    if (penSlope > 0) {
+                      pushVec = [normSlope[0] * penSlope, normSlope[1] * penSlope, normSlope[2] * penSlope];
+                    }
+                  } else {
+                    const penX = limitX - Math.abs(lx);
+                    const penEave = lz - (-limitZ);
+                    const penRidge = limitZ - lz;
+
+                    if (prev_lz <= -0.12 || (penEave < penX && lz < 0)) {
+                      const pushAmt = penEave;
+                      pushVec = [-roofF[0] * pushAmt, -roofF[1] * pushAmt, -roofF[2] * pushAmt];
+                    } else if (prev_lz >= 0.12 || (penRidge < penX && lz > 0)) {
+                      const pushAmt = penRidge;
+                      pushVec = [roofF[0] * pushAmt, roofF[1] * pushAmt, roofF[2] * pushAmt];
+                    } else {
+                      const signX = (Math.abs(prev_lx) > 0.01 ? Math.sign(prev_lx) : Math.sign(lx)) || 1;
+                      const pushAmt = penX * signX;
+                      pushVec = [roofR[0] * pushAmt, roofR[1] * pushAmt, roofR[2] * pushAmt];
+                    }
+                  }
+
+                  if (pushVec) {
+                    P_new[0] += pushVec[0] / groundRadius;
+                    P_new[1] += pushVec[1] / groundRadius;
+                    P_new[2] += pushVec[2] / groundRadius;
+
+                    const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                    P_new[0] /= pLenTemp;
+                    P_new[1] /= pLenTemp;
+                    P_new[2] /= pLenTemp;
+
+                    if (isRidingBoat) vehicleCollidedWithStructure = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 3. COLLISION WITH WOOD WINDOWS
+      for (let other of nearbyCollectibles) {
+        if (other.active && other.type === "wood_window" && !other.isPreview) {
+          const wallCenterRadius = Math.sqrt(
+            other.position[0] * other.position[0] +
+            other.position[1] * other.position[1] +
+            other.position[2] * other.position[2]
+          );
+          const wallHeight = 0.25;
+          const feetRadius = isRidingBoat ? (groundRadius - 0.22) : (groundRadius - 0.46 * playerScale);
+          const headRadius = isRidingBoat ? (groundRadius + 0.42) : (groundRadius + 0.46 * playerScale);
+
+          if (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight) {
+            const angle = other.angle || 0.0;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const wallR = [
+              other.R[0] * cosA + other.F[0] * sinA,
+              other.R[1] * cosA + other.F[1] * sinA,
+              other.R[2] * cosA + other.F[2] * sinA
+            ];
+            const wallF = [
+              other.F[0] * cosA - other.R[0] * sinA,
+              other.F[1] * cosA - other.R[1] * sinA,
+              other.F[2] * cosA - other.R[2] * sinA
+            ];
+
+            if (isRidingBoat) {
+              for (let tp of structTestPoints) {
+                const tpOff = [
+                  boatF[0] * tp.fwd + boatR[0] * tp.side,
+                  boatF[1] * tp.fwd + boatR[1] * tp.side,
+                  boatF[2] * tp.fwd + boatR[2] * tp.side
+                ];
+                const curPt = [P_new[0] * groundRadius + tpOff[0], P_new[1] * groundRadius + tpOff[1], P_new[2] * groundRadius + tpOff[2]];
+                const prevPt = [P_curr[0] * groundRadius + tpOff[0], P_curr[1] * groundRadius + tpOff[1], P_curr[2] * groundRadius + tpOff[2]];
+
+                const cur_dx = (curPt[0]-other.position[0])*wallR[0] + (curPt[1]-other.position[1])*wallR[1] + (curPt[2]-other.position[2])*wallR[2];
+                const cur_dz = (curPt[0]-other.position[0])*wallF[0] + (curPt[1]-other.position[1])*wallF[1] + (curPt[2]-other.position[2])*wallF[2];
+                const prev_dz = (prevPt[0]-other.position[0])*wallF[0] + (prevPt[1]-other.position[1])*wallF[1] + (prevPt[2]-other.position[2])*wallF[2];
+                const limitX = 0.15 + tp.rad;
+                const limitZ = 0.02 + tp.rad;
+
+                if (Math.abs(cur_dx) < limitX && Math.abs(cur_dz) < limitZ) {
+                  const penX = limitX - Math.abs(cur_dx);
+                  const penZ = limitZ - Math.abs(cur_dz);
+                  const signZ = (Math.abs(prev_dz) > 0.002 ? Math.sign(prev_dz) : Math.sign(cur_dz)) || 1;
+                  const signX = Math.sign(cur_dx) || 1;
+
+                  let pushVec;
+                  if (penX < penZ && Math.abs(cur_dx) > 0.12) {
+                    pushVec = [wallR[0] * penX * signX, wallR[1] * penX * signX, wallR[2] * penX * signX];
+                  } else {
+                    pushVec = [wallF[0] * penZ * signZ, wallF[1] * penZ * signZ, wallF[2] * penZ * signZ];
+                  }
+
+                  P_new[0] += pushVec[0] / groundRadius;
+                  P_new[1] += pushVec[1] / groundRadius;
+                  P_new[2] += pushVec[2] / groundRadius;
+
+                  const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                  P_new[0] /= pLenTemp; P_new[1] /= pLenTemp; P_new[2] /= pLenTemp;
+                  vehicleCollidedWithStructure = true;
+                }
+              }
+            } else {
+              const cur_dx_vec = [
+                P_new[0] * groundRadius - other.position[0],
+                P_new[1] * groundRadius - other.position[1],
+                P_new[2] * groundRadius - other.position[2]
+              ];
+              const dx = cur_dx_vec[0] * wallR[0] + cur_dx_vec[1] * wallR[1] + cur_dx_vec[2] * wallR[2];
+              const dz = cur_dx_vec[0] * wallF[0] + cur_dx_vec[1] * wallF[1] + cur_dx_vec[2] * wallF[2];
+
+              const segments = [
+                { cx: -0.1175, hw: 0.0325 },
+                { cx: 0.1175, hw: 0.0325 }
+              ];
+              const feetHeight = feetRadius - wallCenterRadius;
+              const headHeight = headRadius - wallCenterRadius;
+              if (!(feetHeight >= 0.075 && feetHeight < 0.185)) {
+                segments.push({ cx: 0.0, hw: 0.085 });
+              }
+              const hd = 0.02;
+              for (let seg of segments) {
+                const cur_dx = (P_new[0]*groundRadius-other.position[0])*wallR[0] + (P_new[1]*groundRadius-other.position[1])*wallR[1] + (P_new[2]*groundRadius-other.position[2])*wallR[2];
+                const cur_dz = (P_new[0]*groundRadius-other.position[0])*wallF[0] + (P_new[1]*groundRadius-other.position[1])*wallF[1] + (P_new[2]*groundRadius-other.position[2])*wallF[2];
+                const ldx = cur_dx - seg.cx;
+                const limitX = seg.hw + playerScale * 0.38;
+                const limitZ = hd + playerScale * 0.38;
+                if (Math.abs(ldx) < limitX && Math.abs(cur_dz) < limitZ) {
+                  const penX = limitX - Math.abs(ldx);
+                  const penZ = limitZ - Math.abs(cur_dz);
+                  let pushVec;
+                  if (penX < penZ) {
+                    const pushAmt = penX * Math.sign(ldx);
+                    pushVec = [wallR[0] * pushAmt, wallR[1] * pushAmt, wallR[2] * pushAmt];
+                  } else {
+                    const pushAmt = penZ * Math.sign(cur_dz);
+                    pushVec = [wallF[0] * pushAmt, wallF[1] * pushAmt, wallF[2] * pushAmt];
+                  }
+                  P_new[0] += pushVec[0] / groundRadius;
+                  P_new[1] += pushVec[1] / groundRadius;
+                  P_new[2] += pushVec[2] / groundRadius;
+                  const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                  P_new[0] /= pLenTemp; P_new[1] /= pLenTemp; P_new[2] /= pLenTemp;
+                }
+              }
+
+              const A = other.windowAngle || 0.0;
+              if (feetHeight < 0.17 && headHeight > 0.08) {
+                const shutterLen = 0.085;
+                const shutterThickness = 0.012;
+                const colZ = shutterThickness / 2 + playerScale * 0.38;
+                const hingeLeft = [other.position[0] - wallR[0] * 0.085, other.position[1] - wallR[1] * 0.085, other.position[2] - wallR[2] * 0.085];
+                const p_rel_left = [P_new[0] * groundRadius - hingeLeft[0], P_new[1] * groundRadius - hingeLeft[1], P_new[2] * groundRadius - hingeLeft[2]];
+                const R_left = [wallR[0] * Math.cos(A) + wallF[0] * Math.sin(A), wallR[1] * Math.cos(A) + wallF[1] * Math.sin(A), wallR[2] * Math.cos(A) + wallF[2] * Math.sin(A)];
+                const F_left = [wallF[0] * Math.cos(A) - wallR[0] * Math.sin(A), wallF[1] * Math.cos(A) - wallR[1] * Math.sin(A), wallF[2] * Math.cos(A) - wallR[2] * Math.sin(A)];
+                const leftX = p_rel_left[0] * R_left[0] + p_rel_left[1] * R_left[1] + p_rel_left[2] * R_left[2];
+                const leftZ = p_rel_left[0] * F_left[0] + p_rel_left[1] * F_left[1] + p_rel_left[2] * F_left[2];
+                if (leftX >= 0 && leftX <= shutterLen && Math.abs(leftZ) < colZ) {
+                  const penZ = colZ - Math.abs(leftZ);
+                  const pushAmt = penZ * (Math.sign(leftZ) || 1);
+                  P_new[0] += (F_left[0] * pushAmt) / groundRadius;
+                  P_new[1] += (F_left[1] * pushAmt) / groundRadius;
+                  P_new[2] += (F_left[2] * pushAmt) / groundRadius;
+                  const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                  P_new[0] /= pLenTemp; P_new[1] /= pLenTemp; P_new[2] /= pLenTemp;
+                }
+                const hingeRight = [other.position[0] + wallR[0] * 0.085, other.position[1] + wallR[1] * 0.085, other.position[2] + wallR[2] * 0.085];
+                const p_rel_right = [P_new[0] * groundRadius - hingeRight[0], P_new[1] * groundRadius - hingeRight[1], P_new[2] * groundRadius - hingeRight[2]];
+                const leafR_right = [-wallR[0] * Math.cos(A) + wallF[0] * Math.sin(A), -wallR[1] * Math.cos(A) + wallF[1] * Math.sin(A), -wallR[2] * Math.cos(A) + wallF[2] * Math.sin(A)];
+                const leafF_right = [wallF[0] * Math.cos(A) + wallR[0] * Math.sin(A), wallF[1] * Math.cos(A) + wallR[0] * Math.sin(A), wallF[2] * Math.cos(A) + wallR[2] * Math.sin(A)];
+                const rightX = p_rel_right[0] * leafR_right[0] + p_rel_right[1] * leafR_right[1] + p_rel_right[2] * leafR_right[2];
+                const rightZ = p_rel_right[0] * leafF_right[0] + p_rel_right[1] * leafF_right[1] + p_rel_right[2] * leafF_right[2];
+                if (rightX >= 0 && rightX <= shutterLen && Math.abs(rightZ) < colZ) {
+                  const penZ = colZ - Math.abs(rightZ);
+                  const pushAmt = penZ * (Math.sign(rightZ) || 1);
+                  P_new[0] += (leafF_right[0] * pushAmt) / groundRadius;
+                  P_new[1] += (leafF_right[1] * pushAmt) / groundRadius;
+                  P_new[2] += (leafF_right[2] * pushAmt) / groundRadius;
+                  const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                  P_new[0] /= pLenTemp; P_new[1] /= pLenTemp; P_new[2] /= pLenTemp;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 4. COLLISION WITH WOOD DOORS
+      for (let other of nearbyCollectibles) {
+        if (other.active && other.type === "wood_door" && !other.isPreview) {
+          const p3x = P_new[0] * groundRadius;
+          const p3y = P_new[1] * groundRadius;
+          const p3z = P_new[2] * groundRadius;
+          
+          const dx_vec_x = p3x - other.position[0];
+          const dx_vec_y = p3y - other.position[1];
+          const dx_vec_z = p3z - other.position[2];
+          const distSq = dx_vec_x * dx_vec_x + dx_vec_y * dx_vec_y + dx_vec_z * dx_vec_z;
+          if (distSq > 0.40) continue;
+
+          if (other._wallR === undefined) {
+            const angle = other.angle || 0.0;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            other._wallR = [
+              other.R[0] * cosA + other.F[0] * sinA,
+              other.R[1] * cosA + other.F[1] * sinA,
+              other.R[2] * cosA + other.F[2] * sinA
+            ];
+            other._wallF = [
+              other.F[0] * cosA - other.R[0] * sinA,
+              other.F[1] * cosA - other.R[1] * sinA,
+              other.F[2] * cosA - other.R[2] * sinA
+            ];
+            other._centerRadius = Math.sqrt(
+              other.position[0] * other.position[0] +
+              other.position[1] * other.position[1] +
+              other.position[2] * other.position[2]
+            );
+          }
+          const wallCenterRadius = other._centerRadius;
+          const wallR = other._wallR;
+          const wallF = other._wallF;
+          
+          const wallHeight = 0.25;
+          const feetRadius = isRidingBoat ? (groundRadius - 0.22) : (groundRadius - 0.46 * playerScale);
+          const headRadius = isRidingBoat ? (groundRadius + 0.42) : (groundRadius + 0.46 * playerScale);
+          
+          if (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight) {
+            if (isRidingBoat) {
+              for (let tp of structTestPoints) {
+                const tpOff = [
+                  boatF[0] * tp.fwd + boatR[0] * tp.side,
+                  boatF[1] * tp.fwd + boatR[1] * tp.side,
+                  boatF[2] * tp.fwd + boatR[2] * tp.side
+                ];
+                const curPt = [P_new[0] * groundRadius + tpOff[0], P_new[1] * groundRadius + tpOff[1], P_new[2] * groundRadius + tpOff[2]];
+                const prevPt = [P_curr[0] * groundRadius + tpOff[0], P_curr[1] * groundRadius + tpOff[1], P_curr[2] * groundRadius + tpOff[2]];
+
+                const cur_dx = (curPt[0]-other.position[0])*wallR[0] + (curPt[1]-other.position[1])*wallR[1] + (curPt[2]-other.position[2])*wallR[2];
+                const cur_dz = (curPt[0]-other.position[0])*wallF[0] + (curPt[1]-other.position[1])*wallF[1] + (curPt[2]-other.position[2])*wallF[2];
+                const prev_dz = (prevPt[0]-other.position[0])*wallF[0] + (prevPt[1]-other.position[1])*wallF[1] + (prevPt[2]-other.position[2])*wallF[2];
+                const limitX = 0.15 + tp.rad;
+                const limitZ = 0.025 + tp.rad;
+
+                if (Math.abs(cur_dx) < limitX && Math.abs(cur_dz) < limitZ) {
+                  const penX = limitX - Math.abs(cur_dx);
+                  const penZ = limitZ - Math.abs(cur_dz);
+                  const signZ = (Math.abs(prev_dz) > 0.002 ? Math.sign(prev_dz) : Math.sign(cur_dz)) || 1;
+                  const signX = Math.sign(cur_dx) || 1;
+
+                  let pushVec;
+                  if (penX < penZ && Math.abs(cur_dx) > 0.12) {
+                    pushVec = [wallR[0] * penX * signX, wallR[1] * penX * signX, wallR[2] * penX * signX];
+                  } else {
+                    pushVec = [wallF[0] * penZ * signZ, wallF[1] * penZ * signZ, wallF[2] * penZ * signZ];
+                  }
+
+                  P_new[0] += pushVec[0] / groundRadius;
+                  P_new[1] += pushVec[1] / groundRadius;
+                  P_new[2] += pushVec[2] / groundRadius;
+
+                  const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                  P_new[0] /= pLenTemp; P_new[1] /= pLenTemp; P_new[2] /= pLenTemp;
+                  vehicleCollidedWithStructure = true;
+                }
+              }
+            } else {
+              const dx = dx_vec_x * wallR[0] + dx_vec_y * wallR[1] + dx_vec_z * wallR[2];
+              const dz = dx_vec_x * wallF[0] + dx_vec_y * wallF[1] + dx_vec_z * wallF[2];
+
+              let blockedByPost = false;
+              let postSide = '';
+              let pushed = false;
+              let appliedTorque = 0.0;
+
+              const postRadius = 0.012;
+              const leftPostDx = dx - (-0.069);
+              const rightPostDx = dx - 0.069;
+              const collRad = postRadius + playerScale * 0.38;
+              
+              const leftDistSq = leftPostDx * leftPostDx + dz * dz;
+              if (leftDistSq < collRad * collRad) {
+                blockedByPost = true;
+                postSide = 'left';
+                const dist = Math.sqrt(leftDistSq) || 1.0;
+                const pen = collRad - dist;
+                const pushX = (leftPostDx / dist) * pen;
+                const pushZ = (dz / dist) * pen;
+                const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
+                P_new[0] += pushVec[0] / groundRadius;
+                P_new[1] += pushVec[1] / groundRadius;
+                P_new[2] += pushVec[2] / groundRadius;
+              }
+
+              const rightDistSq = rightPostDx * rightPostDx + dz * dz;
+              if (rightDistSq < collRad * collRad) {
+                blockedByPost = true;
+                postSide = 'right';
+                const dist = Math.sqrt(rightDistSq) || 1.0;
+                const pen = collRad - dist;
+                const pushX = (rightPostDx / dist) * pen;
+                const pushZ = (dz / dist) * pen;
+                const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
+                P_new[0] += pushVec[0] / groundRadius;
+                P_new[1] += pushVec[1] / groundRadius;
+                P_new[2] += pushVec[2] / groundRadius;
+              }
+
+              const doorAngle = other.doorAngle || 0.0;
+              const leafLen = 0.126;
+              const leafThickness = 0.012;
+              const hingeOffset = -0.063;
+              
+              const hingeX = other.position[0] + wallR[0] * hingeOffset;
+              const hingeY = other.position[1] + wallR[1] * hingeOffset;
+              const hingeZ = other.position[2] + wallR[2] * hingeOffset;
+              
+              const p_rel_x = P_new[0] * groundRadius - hingeX;
+              const p_rel_y = P_new[1] * groundRadius - hingeY;
+              const p_rel_z = P_new[2] * groundRadius - hingeZ;
+              
+              const leafR = [
+                wallR[0] * Math.cos(doorAngle) + wallF[0] * Math.sin(doorAngle),
+                wallR[1] * Math.cos(doorAngle) + wallF[1] * Math.sin(doorAngle),
+                wallR[2] * Math.cos(doorAngle) + wallF[2] * Math.sin(doorAngle)
+              ];
+              const leafF = [
+                wallF[0] * Math.cos(doorAngle) - wallR[0] * Math.sin(doorAngle),
+                wallF[1] * Math.cos(doorAngle) - wallR[0] * Math.sin(doorAngle),
+                wallF[2] * Math.cos(doorAngle) - wallR[2] * Math.sin(doorAngle)
+              ];
+              
+              const leafX = p_rel_x * leafR[0] + p_rel_y * leafR[1] + p_rel_z * leafR[2];
+              const leafZ = p_rel_x * leafF[0] + p_rel_y * leafF[1] + p_rel_z * leafF[2];
+              
+              const colZ = leafThickness / 2 + playerScale * 0.38;
+              
+              if (leafX >= 0 && leafX <= leafLen) {
+                if (Math.abs(leafZ) < colZ) {
+                  const penZ = colZ - Math.abs(leafZ);
+                  const pushAmt = penZ * (Math.sign(leafZ) || 1);
+                  const pushVec = [leafF[0] * pushAmt, leafF[1] * pushAmt, leafF[2] * pushAmt];
+                  P_new[0] += pushVec[0] / groundRadius;
+                  P_new[1] += pushVec[1] / groundRadius;
+                  P_new[2] += pushVec[2] / groundRadius;
+                  
+                  const signPush = Math.sign(leafZ) || 1;
+                  appliedTorque = -signPush * (penZ * 8.0) * Math.max(0.1, leafX / leafLen);
+                  other.doorVel = (other.doorVel || 0.0) + appliedTorque;
+                  pushed = true;
+                }
+              } else if (leafX > leafLen && leafX <= leafLen + playerScale * 0.38) {
+                const dxTip = leafX - leafLen;
+                const distSq = dxTip * dxTip + leafZ * leafZ;
+                const limit = playerScale * 0.38;
+                if (distSq < limit * limit) {
+                  const dist = Math.sqrt(distSq) || 1e-5;
+                  const pen = limit - dist;
+                  const pushX = (dxTip / dist) * pen;
+                  const pushZ = (leafZ / dist) * pen;
+                  const pushVec = [
+                    leafR[0] * pushX + leafF[0] * pushZ,
+                    leafR[1] * pushX + leafF[1] * pushZ,
+                    leafR[2] * pushX + leafF[2] * pushZ
+                  ];
+                  P_new[0] += pushVec[0] / groundRadius;
+                  P_new[1] += pushVec[1] / groundRadius;
+                  P_new[2] += pushVec[2] / groundRadius;
+                  
+                  const signPush = Math.sign(leafZ) || 1;
+                  appliedTorque = -signPush * (pen * 8.0);
+                  other.doorVel = (other.doorVel || 0.0) + appliedTorque;
+                  pushed = true;
+                }
+              }
+              
+              const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+              P_new[0] /= pLenTemp;
+              P_new[1] /= pLenTemp;
+              P_new[2] /= pLenTemp;
+
+              if (typeof window.logDoorCollision === "function") {
+                const doorId = other.id || `x${other.position[0].toFixed(1)}y${other.position[1].toFixed(1)}z${other.position[2].toFixed(1)}`;
+                const playerPos = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
+                window.logDoorCollision(
+                  doorId,
+                  playerPos,
+                  other.position,
+                  dx,
+                  dz,
+                  leafX,
+                  leafZ,
+                  appliedTorque,
+                  doorAngle,
+                  other.doorVel || 0.0,
+                  pushed,
+                  blockedByPost,
+                  postSide
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (vehicleCollidedWithStructure && isRidingBoat && activeRidingBoat) {
+      if (activeRidingBoat.vehicleSpeed !== undefined) {
+        activeRidingBoat.vehicleSpeed = 0;
+      }
+    }
+
+    return vehicleCollidedWithStructure;
   }
 };
 
@@ -1118,3 +1877,4 @@ checkCameraCollision = CollisionCore.checkCameraCollision;
 resolveCameraCollision = CollisionCore.resolveCameraCollision;
 checkCaveAndTerrainCollision = CollisionCore.checkCaveAndTerrainCollision;
 closestPointOnTriangle = CollisionCore.closestPointOnTriangle;
+resolveStructureCollisions = CollisionCore.resolveStructureCollisions;

@@ -202,6 +202,9 @@ function buildCollectibles(count, seed) {
         });
         const rBase = (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
         const numStoneFloors = Math.min(18, Math.max(4, Math.round(3 + Math.sqrt(rBase))));
+        const placedHouses = [];
+        const natureObsList = (typeof natureObstacles !== "undefined" && natureObstacles) ? natureObstacles : (typeof window !== "undefined" && window.natureObstacles ? window.natureObstacles : []);
+
         for (let i = 0; i < numStoneFloors; i++) {
           let foundFlatSpot = false;
           let wx = 0, wy = 0, wz = 0;
@@ -213,15 +216,18 @@ function buildCollectibles(count, seed) {
           const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
           const totalW = gridX * wfW;
           const totalD = gridY * wfW;
+          const halfW = totalW / 2;
+          const halfD = totalD / 2;
+          const houseRadius = Math.sqrt(halfW * halfW + halfD * halfD);
 
-          // Attempt up to 15 times to find a flat, non-underwater, non-cliff location for the entire house footprint
-          for (let attempt = 0; attempt < 15; attempt++) {
+          // Attempt up to 80 times to find a clear, flat location avoiding trees, rocks, holes/caves, and cliffs
+          for (let attempt = 0; attempt < 80; attempt++) {
             const u = Math.random();
             const v = Math.random();
             const theta = Math.acos(2 * u - 1);
             const phi = 2 * Math.PI * v;
             const h = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
-            const minLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.04;
+            const minLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.05;
             
             if (h < minLandHeight) continue;
 
@@ -232,8 +238,6 @@ function buildCollectibles(count, seed) {
             const candWx = r * candNx;
             const candWy = r * candNy;
             const candWz = r * candNz;
-
-            if (isPositionInsideCave(candWx, candWy, candWz, 0.6)) continue;
 
             // Frame basis
             let txR, txY, txZ;
@@ -252,47 +256,241 @@ function buildCollectibles(count, seed) {
             const lenF = Math.sqrt(candF[0]*candF[0] + candF[1]*candF[1] + candF[2]*candF[2]) || 1;
             candF[0] /= lenF; candF[1] /= lenF; candF[2] /= lenF;
 
-            // Test all 4 corners of the house footprint on the spherical terrain to prevent cliff overhang
-            const halfW = totalW / 2;
-            const halfD = totalD / 2;
-            const corners = [
+            // ============================================
+            // 1. Check distance to already placed houses
+            // ============================================
+            let overlapsHouse = false;
+            for (let ph = 0; ph < placedHouses.length; ph++) {
+              const prevH = placedHouses[ph];
+              const pdx = candWx - prevH.x;
+              const pdy = candWy - prevH.y;
+              const pdz = candWz - prevH.z;
+              const minAllowedDist = houseRadius + prevH.radius + 1.2;
+              if (pdx*pdx + pdy*pdy + pdz*pdz < minAllowedDist * minAllowedDist) {
+                overlapsHouse = true;
+                break;
+              }
+            }
+            if (overlapsHouse) continue;
+
+            // ============================================
+            // 2. Check HOLES: Cave tunnels, openings, pits ("หลุม" / "หลุ่ม")
+            // ============================================
+            let overlapsHole = false;
+
+            // A) Direct check against all 3D cave tunnel spheres
+            const tunnels = (typeof window !== "undefined" && window.tunnels3D) ? window.tunnels3D : (typeof tunnels3D !== "undefined" ? tunnels3D : []);
+            if (tunnels && tunnels.length > 0) {
+              const maxCaveClearance = houseRadius + 0.65;
+              for (let tIdx = 0; tIdx < tunnels.length; tIdx++) {
+                const tun = tunnels[tIdx];
+                const tdx = candWx - tun.x;
+                const tdy = candWy - tun.y;
+                const tdz = candWz - tun.z;
+                const safeDist = tun.r + maxCaveClearance;
+                if (tdx*tdx + tdy*tdy + tdz*tdz < safeDist * safeDist) {
+                  overlapsHole = true;
+                  break;
+                }
+              }
+            }
+            if (overlapsHole) continue;
+
+            // B) Sample points across the house footprint checking isPositionInsideCave
+            // Test 9 sample points: center, 4 corners, 4 edge midpoints
+            const sampleOffsets = [
+              [0, 0],
               [-halfW, -halfD],
               [halfW, -halfD],
               [-halfW, halfD],
-              [halfW, halfD]
+              [halfW, halfD],
+              [0, -halfD],
+              [0, halfD],
+              [-halfW, 0],
+              [halfW, 0]
             ];
 
-            let slopeOk = true;
-            for (let cIdx = 0; cIdx < 4; cIdx++) {
-              const [cx, cy] = corners[cIdx];
-              const cpX = candWx + candR[0]*cx + candF[0]*cy;
-              const cpY = candWy + candR[1]*cx + candF[1]*cy;
-              const cpZ = candWz + candR[2]*cx + candF[2]*cy;
-              const cDist = Math.sqrt(cpX*cpX + cpY*cpY + cpZ*cpZ) || 1;
-              const cny = cpY / cDist;
-              const cnx = cpX / cDist;
-              const cnz = cpZ / cDist;
+            if (typeof isPositionInsideCave === "function") {
+              for (let sIdx = 0; sIdx < sampleOffsets.length; sIdx++) {
+                const [sx, sy] = sampleOffsets[sIdx];
+                const spX = candWx + candR[0]*sx + candF[0]*sy;
+                const spY = candWy + candR[1]*sx + candF[1]*sy;
+                const spZ = candWz + candR[2]*sx + candF[2]*sy;
+                if (isPositionInsideCave(spX, spY, spZ, 0.45)) {
+                  overlapsHole = true;
+                  break;
+                }
+              }
+            }
+            if (overlapsHole) continue;
+
+            // C) Check terrain surface for depressions, craters, dips, or steep slopes ("หลุมภูมิประเทศ")
+            let terrainOk = true;
+            let minH = h;
+            let maxH = h;
+            for (let sIdx = 0; sIdx < sampleOffsets.length; sIdx++) {
+              const [sx, sy] = sampleOffsets[sIdx];
+              const spX = candWx + candR[0]*(sx * 1.1) + candF[0]*(sy * 1.1);
+              const spY = candWy + candR[1]*(sx * 1.1) + candF[1]*(sy * 1.1);
+              const spZ = candWz + candR[2]*(sx * 1.1) + candF[2]*(sy * 1.1);
+              const cDist = Math.sqrt(spX*spX + spY*spY + spZ*spZ) || 1;
+              const cny = spY / cDist;
+              const cnx = spX / cDist;
+              const cnz = spZ / cDist;
               const cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, cny)));
               const cPhi = Math.atan2(cnz, cnx);
               const cH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(cTheta, cPhi, seed) : getHeightOnSphere(cTheta, cPhi, seed);
-              
-              // Each corner must be solidly above water and not a steep cliff overhang
-              if (cH < minLandHeight || Math.abs(cH - h) > 0.06) {
-                slopeOk = false;
+
+              if (cH < minLandHeight) {
+                terrainOk = false;
+                break;
+              }
+              if (cH < minH) minH = cH;
+              if (cH > maxH) maxH = cH;
+
+              if (Math.abs(cH - h) > 0.038) {
+                terrainOk = false;
                 break;
               }
             }
 
-            if (slopeOk) {
-              wx = candWx; wy = candWy; wz = candWz;
-              nx = candNx; ny = candNy; nz = candNz;
-              R = candR; F = candF;
-              foundFlatSpot = true;
-              break;
+            if (!terrainOk || (maxH - minH) > 0.045) continue;
+
+            // ============================================
+            // 3. Check TREES ("ต้นไม้") & ROCKS ("หิน") in natureObstacles
+            // ============================================
+            let overlapsNature = false;
+            const treeClearance = 0.55;
+            const rockClearance = 0.45;
+
+            for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
+              const obs = natureObsList[oIdx];
+              if (!obs || !obs.position) continue;
+              const ox = obs.position[0];
+              const oy = obs.position[1];
+              const oz = obs.position[2];
+              
+              const odx = ox - candWx;
+              const ody = oy - candWy;
+              const odz = oz - candWz;
+              const distSq = odx*odx + ody*ody + odz*odz;
+
+              if (distSq > (houseRadius + 3.0) * (houseRadius + 3.0)) continue;
+
+              const localR = odx * candR[0] + ody * candR[1] + odz * candR[2];
+              const localF = odx * candF[0] + ody * candF[1] + odz * candF[2];
+              const localN = odx * candNx + ody * candNy + odz * candNz;
+
+              if (Math.abs(localN) > 2.5) continue;
+
+              const isTree = (obs.type === "tree" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.TREE));
+              const isRock = (obs.type === "rock" || obs.type === "big_rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "copper_ore" || obs.type === "coal_ore" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.ROCK));
+
+              if (isTree) {
+                const rad = obs.trunkBaseRadius ? Math.max(0.2, obs.trunkBaseRadius) : 0.25;
+                const allowedW = halfW + treeClearance + rad;
+                const allowedD = halfD + treeClearance + rad;
+                if (Math.abs(localR) < allowedW && Math.abs(localF) < allowedD) {
+                  overlapsNature = true;
+                  break;
+                }
+              } else if (isRock) {
+                const rad = obs.radius ? Math.min(0.5, obs.radius * 0.5) : 0.25;
+                const allowedW = halfW + rockClearance + rad;
+                const allowedD = halfD + rockClearance + rad;
+                if (Math.abs(localR) < allowedW && Math.abs(localF) < allowedD) {
+                  overlapsNature = true;
+                  break;
+                }
+              }
             }
+
+            if (overlapsNature) continue;
+
+            // ============================================
+            // 4. Check items already in collectibles (branches, rock items)
+            // ============================================
+            let overlapsCollectible = false;
+            for (let cIdx = 0; cIdx < collectibles.length; cIdx++) {
+              const c = collectibles[cIdx];
+              if (!c.active || !c.position) continue;
+              if (c.type === "rock" || c.type === "big_rock" || c.type === "branch" || c.type === "stone_floor") {
+                const cdx = c.position[0] - candWx;
+                const cdy = c.position[1] - candWy;
+                const cdz = c.position[2] - candWz;
+                if (cdx*cdx + cdy*cdy + cdz*cdz < (houseRadius + 0.45) * (houseRadius + 0.45)) {
+                  overlapsCollectible = true;
+                  break;
+                }
+              }
+            }
+            if (overlapsCollectible) continue;
+
+            // All checks passed! Valid spot found.
+            wx = candWx; wy = candWy; wz = candWz;
+            nx = candNx; ny = candNy; nz = candNz;
+            R = candR; F = candF;
+            foundFlatSpot = true;
+            placedHouses.push({
+              x: wx,
+              y: wy,
+              z: wz,
+              nx: nx,
+              ny: ny,
+              nz: nz,
+              R: R,
+              F: F,
+              radius: houseRadius,
+              totalW: totalW,
+              totalD: totalD
+            });
+            break;
           }
 
           if (!foundFlatSpot) continue;
+
+          // Extra safety clearance for surrounding border
+          const houseClearRadSq = (Math.max(totalW, totalD) * 0.65) * (Math.max(totalW, totalD) * 0.65);
+          for (let cIdx = 0; cIdx < collectibles.length; cIdx++) {
+            const c = collectibles[cIdx];
+            if (!c || !c.active || c.isHouse || c.isProceduralHouse || !c.position) continue;
+            if (c.type === "rock" || c.type === "big_rock" || c.type === "branch") {
+              const cdx = c.position[0] - wx;
+              const cdy = c.position[1] - wy;
+              const cdz = c.position[2] - wz;
+              if (cdx*cdx + cdy*cdy + cdz*cdz <= houseClearRadSq) {
+                c.active = false;
+              }
+            }
+          }
+
+          for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
+            const obs = natureObsList[oIdx];
+            if (!obs || !obs.position) continue;
+            const odx = obs.position[0] - wx;
+            const ody = obs.position[1] - wy;
+            const odz = obs.position[2] - wz;
+            if (odx*odx + ody*ody + odz*odz <= houseClearRadSq) {
+              if (obs.type === "tree") {
+                if (typeof choppedTrees !== "undefined" && !choppedTrees.includes(obs.id)) choppedTrees.push(obs.id);
+                else if (window.choppedTrees && !window.choppedTrees.includes(obs.id)) window.choppedTrees.push(obs.id);
+              } else {
+                if (typeof destroyedRocks !== "undefined" && !destroyedRocks.includes(obs.id)) destroyedRocks.push(obs.id);
+                else if (window.destroyedRocks && !window.destroyedRocks.includes(obs.id)) window.destroyedRocks.push(obs.id);
+              }
+              const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : window.natureRawVertices;
+              const vBuffer = (typeof natureVertexBuffer !== "undefined") ? natureVertexBuffer : window.natureVertexBuffer;
+              if (obs.meshStart !== undefined && obs.meshEnd !== undefined && rawVerts) {
+                const startF = obs.meshStart * 3;
+                const endF = obs.meshEnd * 3;
+                for (let j = startF; j < endF; j++) rawVerts[j] = 0;
+                if (typeof gl !== "undefined" && gl && vBuffer) {
+                  gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+                  gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, new Float32Array(rawVerts.slice(startF, endF)));
+                }
+              }
+            }
+          }
 
           collectibles.push({
             type: "stone_floor",
@@ -305,7 +503,10 @@ function buildCollectibles(count, seed) {
             width: totalW,
             depth: totalD,
             angle: 0.0,
-            seed: seed + i * 5000
+            seed: seed + i * 5000,
+            isHouse: true,
+            isProceduralHouse: true,
+            hideFromCompass: true
           });
 
           const stoneH = wfSize * 0.15;
@@ -398,7 +599,11 @@ function buildCollectibles(count, seed) {
                    F: F,
                    active: true,
                    size: wfSize,
-                   seed: seed + i*1000 + gx*10 + gy
+                   seed: seed + i*1000 + gx*10 + gy,
+                   isHouse: true,
+                   isProceduralHouse: true,
+                   hideFromCompass: true,
+                   isWorldGenerated: true
                  });
                }
                
@@ -418,7 +623,11 @@ function buildCollectibles(count, seed) {
                      F: F,
                      active: true,
                      size: wfSize,
-                     seed: seed + i*2000 + gx*10 + gy
+                     seed: seed + i*2000 + gx*10 + gy,
+                     isHouse: true,
+                     isProceduralHouse: true,
+                     hideFromCompass: true,
+                     isWorldGenerated: true
                    });
                  } else {
                    // Gable roof logic
@@ -470,7 +679,11 @@ function buildCollectibles(count, seed) {
                        F: F,
                        active: true,
                        size: wfSize,
-                       seed: seed + i*2000 + gx*10 + gy
+                       seed: seed + i*2000 + gx*10 + gy,
+                       isHouse: true,
+                       isProceduralHouse: true,
+                       hideFromCompass: true,
+                       isWorldGenerated: true
                      });
                    } else if (isSlope) {
                      const roofHeight = wallBaseHeight + 0.25;
@@ -488,7 +701,11 @@ function buildCollectibles(count, seed) {
                        active: true,
                        size: wfSize,
                        angle: 0,
-                       seed: seed + i*2000 + gx*10 + gy
+                       seed: seed + i*2000 + gx*10 + gy,
+                       isHouse: true,
+                       isProceduralHouse: true,
+                       hideFromCompass: true,
+                       isWorldGenerated: true
                      });
                    }
                  }
@@ -521,7 +738,11 @@ function buildCollectibles(count, seed) {
                      F: wF,
                      active: true,
                      size: wfSize,
-                     seed: seed + i*3000 + seedOffset
+                     seed: seed + i*3000 + seedOffset,
+                     isHouse: true,
+                     isProceduralHouse: true,
+                     hideFromCompass: true,
+                     isWorldGenerated: true
                    });
 
                    // If this wall has a door or window fixture, co-locate it with the wall
@@ -535,7 +756,11 @@ function buildCollectibles(count, seed) {
                        active: true,
                        size: wfSize,
                        angle: 0.0,
-                       seed: seed + i*3000 + seedOffset + 500
+                       seed: seed + i*3000 + seedOffset + 500,
+                       isHouse: true,
+                       isProceduralHouse: true,
+                       hideFromCompass: true,
+                       isWorldGenerated: true
                      });
                    }
                  };
@@ -570,6 +795,216 @@ function buildCollectibles(count, seed) {
                }
             }
           }
+        }
+
+        // =========================================================
+        // PROCEDURAL BOATS (WOOD_BOAT ONLY - สุ่มวางตามบ้านสุ่ม และชายหาด)
+        // Rule: Pure boats only (no wheels/engines).
+        // House count: strictly less than half of the procedural houses count.
+        // =========================================================
+        const numPlacedHouses = placedHouses.length;
+        // Strictly less than half of total placed houses
+        const maxHouseBoats = Math.max(0, Math.floor((numPlacedHouses - 1) / 2));
+        const houseBoatCount = Math.min(maxHouseBoats, Math.max(0, Math.floor(numPlacedHouses * 0.35)));
+        
+        const placedBoatPositions = [];
+
+        if (houseBoatCount > 0 && numPlacedHouses > 0) {
+          // Shuffle house indices deterministically
+          const houseIndices = [];
+          for (let h = 0; h < numPlacedHouses; h++) houseIndices.push(h);
+          Math.random = mulberry32(seed + 94321);
+          for (let h = houseIndices.length - 1; h > 0; h--) {
+            const j = Math.floor(Math.random() * (h + 1));
+            const tmp = houseIndices[h];
+            houseIndices[h] = houseIndices[j];
+            houseIndices[j] = tmp;
+          }
+
+          for (let b = 0; b < houseBoatCount; b++) {
+            const house = placedHouses[houseIndices[b]];
+            if (!house) continue;
+
+            const hx = house.x, hy = house.y, hz = house.z;
+            const hR = house.R || [1, 0, 0], hF = house.F || [0, 0, 1];
+            const hRad = house.radius || 0.6;
+
+            // Try placing outside the house (e.g. near entrance or side yard)
+            const angleOffsets = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2, Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4];
+            for (let aIdx = 0; aIdx < angleOffsets.length; aIdx++) {
+              const ang = angleOffsets[aIdx];
+              const dist = hRad + 0.38 + Math.random() * 0.15;
+              const offX = (Math.cos(ang) * hR[0] + Math.sin(ang) * hF[0]) * dist;
+              const offY = (Math.cos(ang) * hR[1] + Math.sin(ang) * hF[1]) * dist;
+              const offZ = (Math.cos(ang) * hR[2] + Math.sin(ang) * hF[2]) * dist;
+
+              const candX = hx + offX;
+              const candY = hy + offY;
+              const candZ = hz + offZ;
+              const cDist = Math.sqrt(candX*candX + candY*candY + candZ*candZ) || 1;
+              const bnx = candX / cDist;
+              const bny = candY / cDist;
+              const bnz = candZ / cDist;
+
+              const bTheta = Math.acos(Math.max(-1.0, Math.min(1.0, bny)));
+              const bPhi = Math.atan2(bnz, bnx);
+              const bH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(bTheta, bPhi, seed) : getHeightOnSphere(bTheta, bPhi, seed);
+              const bRad = RADIUS + bH * HEIGHT_SCALE;
+              const bPos = [bnx * (bRad + 0.002), bny * (bRad + 0.002), bnz * (bRad + 0.002)];
+
+              if (typeof isPositionInsideCave === "function" && isPositionInsideCave(bPos[0], bPos[1], bPos[2], 0.35)) {
+                continue;
+              }
+
+              // Compute orthogonal tangent vectors
+              let txR, txY, txZ;
+              if (Math.abs(bny) < 0.9) {
+                txR = -bnz; txY = 0; txZ = bnx;
+              } else {
+                txR = 1; txY = 0; txZ = 0;
+              }
+              const lenR = Math.sqrt(txR*txR + txY*txY + txZ*txZ) || 1;
+              const bR_vec = [txR / lenR, txY / lenR, txZ / lenR];
+              const bF_vec = [
+                bny * bR_vec[2] - bnz * bR_vec[1],
+                bnz * bR_vec[0] - bnx * bR_vec[2],
+                bnx * bR_vec[1] - bny * bR_vec[0]
+              ];
+              const lenF = Math.sqrt(bF_vec[0]*bF_vec[0] + bF_vec[1]*bF_vec[1] + bF_vec[2]*bF_vec[2]) || 1;
+              bF_vec[0] /= lenF; bF_vec[1] /= lenF; bF_vec[2] /= lenF;
+
+              collectibles.push({
+                type: "wood_boat",
+                position: bPos,
+                normal: [bnx, bny, bnz],
+                R: bR_vec,
+                F: bF_vec,
+                active: true,
+                isDynamic: true,
+                size: 0.25,
+                isPreview: false,
+                hasWheel: false,
+                hasWheels: false,
+                wheelCount: 0,
+                hasEngine: false,
+                angle: Math.random() * Math.PI * 2,
+                seed: seed + 50000 + b * 777,
+                isWorldGenerated: true,
+                isRandomBoat: true,
+                isPlayerPlaced: false,
+                hideFromCompass: true
+              });
+
+              placedBoatPositions.push(bPos);
+              break;
+            }
+          }
+        }
+
+        // =========================================================
+        // 2. BEACH BOATS (เรือสุ่มตามชายหาด)
+        // =========================================================
+        const waterRad = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * 0.15;
+        const targetBeachBoats = Math.min(6, Math.max(3, Math.round(2 + Math.sqrt(rBase))));
+        let beachBoatsSpawned = 0;
+
+        for (let attempt = 0; attempt < 160 && beachBoatsSpawned < targetBeachBoats; attempt++) {
+          Math.random = mulberry32(seed + 65432 + attempt * 997);
+          const u = Math.random();
+          const v = Math.random();
+          const theta = Math.acos(2 * u - 1);
+          const phi = 2 * Math.PI * v;
+          const h = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
+          const terrainRad = RADIUS + h * HEIGHT_SCALE;
+          const hDiff = terrainRad - waterRad;
+
+          // Beach shoreline zone: from shallow shoreline (-0.035) up to dry beach sand (+0.075)
+          if (hDiff < -0.035 || hDiff > 0.075) continue;
+
+          const candNx = Math.sin(theta) * Math.cos(phi);
+          const candNy = Math.cos(theta);
+          const candNz = Math.sin(theta) * Math.sin(phi);
+
+          // Check for steep terrain / cliffs dropping into water (ensure gentle beach slope)
+          const testOffset = 0.03;
+          const tH1 = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta + testOffset, phi, seed) : getHeightOnSphere(theta + testOffset, phi, seed);
+          const tH2 = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi + testOffset, seed) : getHeightOnSphere(theta, phi + testOffset, seed);
+          if (Math.abs(tH1 - h) > 0.045 || Math.abs(tH2 - h) > 0.045) continue;
+
+          const spawnRad = terrainRad < waterRad ? (waterRad - 0.02) : (terrainRad + 0.002);
+          const candWx = spawnRad * candNx;
+          const candWy = spawnRad * candNy;
+          const candWz = spawnRad * candNz;
+
+          if (typeof isPositionInsideCave === "function" && isPositionInsideCave(candWx, candWy, candWz, 0.35)) {
+            continue;
+          }
+
+          // Check distance from existing placed houses
+          let tooCloseHouse = false;
+          for (let ph = 0; ph < placedHouses.length; ph++) {
+            const hItem = placedHouses[ph];
+            const dx = candWx - hItem.x, dy = candWy - hItem.y, dz = candWz - hItem.z;
+            if (dx*dx + dy*dy + dz*dz < (hItem.radius + 1.0) * (hItem.radius + 1.0)) {
+              tooCloseHouse = true;
+              break;
+            }
+          }
+          if (tooCloseHouse) continue;
+
+          // Check distance from already spawned boats
+          let tooCloseBoat = false;
+          for (let pb = 0; pb < placedBoatPositions.length; pb++) {
+            const bP = placedBoatPositions[pb];
+            const dx = candWx - bP[0], dy = candWy - bP[1], dz = candWz - bP[2];
+            if (dx*dx + dy*dy + dz*dz < 1.44) { // at least 1.2m apart
+              tooCloseBoat = true;
+              break;
+            }
+          }
+          if (tooCloseBoat) continue;
+
+          // Tangent coordinate system
+          let txR, txY, txZ;
+          if (Math.abs(candNy) < 0.9) {
+            txR = -candNz; txY = 0; txZ = candNx;
+          } else {
+            txR = 1; txY = 0; txZ = 0;
+          }
+          const lenR = Math.sqrt(txR * txR + txY * txY + txZ * txZ) || 1;
+          const bR = [txR / lenR, txY / lenR, txZ / lenR];
+          const bF = [
+            candNy * bR[2] - candNz * bR[1],
+            candNz * bR[0] - candNx * bR[2],
+            candNx * bR[1] - candNy * bR[0]
+          ];
+          const lenF = Math.sqrt(bF[0]*bF[0] + bF[1]*bF[1] + bF[2]*bF[2]) || 1;
+          bF[0] /= lenF; bF[1] /= lenF; bF[2] /= lenF;
+
+          collectibles.push({
+            type: "wood_boat",
+            position: [candWx, candWy, candWz],
+            normal: [candNx, candNy, candNz],
+            R: bR,
+            F: bF,
+            active: true,
+            isDynamic: true,
+            size: 0.25,
+            isPreview: false,
+            hasWheel: false,
+            hasWheels: false,
+            wheelCount: 0,
+            hasEngine: false,
+            angle: Math.random() * Math.PI * 2,
+            seed: seed + 80000 + beachBoatsSpawned * 331,
+            isWorldGenerated: true,
+            isRandomBoat: true,
+            isPlayerPlaced: false,
+            hideFromCompass: true
+          });
+
+          placedBoatPositions.push([candWx, candWy, candWz]);
+          beachBoatsSpawned++;
         }
 
         Math.random = _origRandom;
@@ -1774,16 +2209,55 @@ function buildCollectibles(count, seed) {
               }
             }
           } else if (typeToPlace === "wood_boat") {
-             floorPreviewCollectible.isValidPlacement = isUnderWater && !isDivingMode;
              floorPreviewCollectible.size = 0.25;
-             targetPos = [
-                 pnx * (waterRadius - 0.02),
-                 pny * (waterRadius - 0.02),
-                 pnz * (waterRadius - 0.02)
-             ];
              pN = [pnx, pny, pnz];
              pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
              pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
+
+             if (isUnderWater) {
+               floorPreviewCollectible.isValidPlacement = !isDivingMode;
+               targetPos = [
+                   pnx * (waterRadius - 0.04),
+                   pny * (waterRadius - 0.04),
+                   pnz * (waterRadius - 0.04)
+               ];
+             } else {
+               // Land / Ground placement allowed!
+               let boatRad = previewGroundRadius + 0.002;
+
+               // Check if sitting on a constructed floor (stone_floor, wood_floor, thin_wood_floor)
+               let nearestFloor = null;
+               let nearestDist = Infinity;
+               for (let other of collectibles) {
+                 if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
+                   const dx = other.position[0] - (pnx * previewGroundRadius);
+                   const dy = other.position[1] - (pny * previewGroundRadius);
+                   const dz = other.position[2] - (pnz * previewGroundRadius);
+                   const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                   if (dist < nearestDist) {
+                     nearestDist = dist;
+                     nearestFloor = other;
+                   }
+                 }
+               }
+               if (nearestFloor && nearestDist < 0.6) {
+                 let floorHH = 0;
+                 if (nearestFloor.type === "stone_floor") floorHH = nearestFloor.size * 0.15;
+                 else if (nearestFloor.type === "wood_floor") floorHH = woodFloorHeight + nearestFloor.size * 0.12;
+                 else if (nearestFloor.type === "thin_wood_floor") floorHH = nearestFloor.size * 0.04;
+                 const fLen = Math.sqrt(nearestFloor.position[0]**2 + nearestFloor.position[1]**2 + nearestFloor.position[2]**2);
+                 if (fLen > 0) {
+                   boatRad = Math.max(boatRad, fLen + floorHH / 2 + 0.002);
+                 }
+               }
+
+               floorPreviewCollectible.isValidPlacement = !isDivingMode && (slopeVal < 1.5);
+               targetPos = [
+                   pnx * boatRad,
+                   pny * boatRad,
+                   pnz * boatRad
+               ];
+             }
           } else if (typeToPlace === "wood_wheel" || typeToPlace === "electric_engine") {
              let nearestBoat = null;
              let bestDist = Infinity;
@@ -3157,7 +3631,7 @@ function buildCollectibles(count, seed) {
                      const dy = p[1] - nPos[1];
                      const dz = p[2] - nPos[2];
                      const distSq = dx*dx + dy*dy + dz*dz;
-                     const hitRadius = npc.type === "meganeura" ? 0.25 : (npc.type === "isopod" ? 0.35 : 0.45);
+                     const hitRadius = npc.type === "meganeura" ? 0.25 : (npc.type === "isopod" ? 0.35 : (npc.type === "placoderm" ? 0.95 : 0.45));
                       if (distSq < hitRadius * hitRadius) {
                           // Hit!
                           if (npc.hp === undefined) {
@@ -3462,13 +3936,20 @@ function buildCollectibles(count, seed) {
               }
           }
           
-          let collisionRadius = groundRadius + (c.type === "wood_boat" ? -0.04 : (c.size ? c.size : 0));
+          let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (c.size ? c.size : 0));
+          if (c.type === "wood_boat" && !isInWater) {
+             const cPos = c.position;
+             if (typeof Physics !== "undefined" && typeof Physics.getFloorSurfaceRadiusAt === "function") {
+               collisionRadius = Physics.getFloorSurfaceRadiusAt(cPos[0], cPos[1], cPos[2], collisionRadius);
+             }
+          }
           let pitchGrade = 0;
           let rollGrade = 0;
           
-          let isWheeledBoat = c.type === "wood_boat" && (c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
+          let isWoodBoat = c.type === "wood_boat";
+          let isWheeledBoat = isWoodBoat && (c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
 
-          if (isWheeledBoat) {
+          if (isWheeledBoat && !isInWater) {
               const nx = c.position[0] / (r || 1);
               const ny = c.position[1] / (r || 1);
               const nz = c.position[2] / (r || 1);
@@ -3482,7 +3963,9 @@ function buildCollectibles(count, seed) {
                   waterEnabled,
                   waterLevel,
                   waterAnimTime,
-                  waveStrength
+                  waveStrength,
+                  hasWheels: true,
+                  isInWater: false
               });
 
               collisionRadius = vehicleTransform.targetGroundRadius;
@@ -3492,9 +3975,8 @@ function buildCollectibles(count, seed) {
               c.F = vehicleTransform.F;
               c.R = vehicleTransform.R;
           } else if (isInWater) {
-              // Logs and boats float, so they shouldn't hit the water surface as hard ground.
-              // Ores sink, so their collision target should be the terrain below the water.
-              collisionRadius = terrainRadius + (c.type === "wood_boat" ? -0.04 : (c.size ? c.size : 0));
+              // Wood boat keeps exact original water depth (-0.04)
+              collisionRadius = (c.type === "wood_boat") ? (waterRadius - 0.04) : (terrainRadius + (c.size ? c.size : 0));
           }
           
           if (r < collisionRadius) {
@@ -3516,7 +3998,7 @@ function buildCollectibles(count, seed) {
                 c.vel[2] -= dot * nz * restitution;
             }
             let friction = 0.6;
-            if (isWheeledBoat) {
+            if (isWheeledBoat && !isInWater) {
                 friction = 1.0; // Speed is handled by vehSpeed instead of c.vel friction
                 c.spinSpeed = 0; // Wheeled boats align to terrain instead of spinning
 
@@ -3582,7 +4064,13 @@ function buildCollectibles(count, seed) {
 
             // Stop moving if very slow
             const speedSq = c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2;
-            if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
+            if (c.type === "wood_boat" && !isInWater && !isWheeledBoat) {
+                // Non-wheeled boat on land cannot move (completely static and stable)
+                c.vel[0] = 0;
+                c.vel[1] = 0;
+                c.vel[2] = 0;
+                c.spinSpeed = 0;
+            } else if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
                 
                 
                 

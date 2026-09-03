@@ -178,7 +178,10 @@
             mockItem.size = 0.75;
           } else if (name === "STONE_FLOOR") {
             scaleFactor = 1.1;
-            mockItem.size = 0.25; // Use 0.25 (real game size) to match real proportions!
+            mockItem.size = 0.08;
+            mockItem.width = 0.75;
+            mockItem.depth = 0.75;
+            mockItem.isIconPreview = true;
           } else if (name === "WOOD_STAIRS") {
             scaleFactor = 1.05;
             mockItem.stairTop = [-0.175, 0.175, -0.175];
@@ -1534,10 +1537,19 @@ function cancelFloorPlacement() {
             floorPreviewCollectible.vel = [0, 0, 0];
             floorPreviewCollectible.spinAxis = [0, 1, 0];
             floorPreviewCollectible.spinSpeed = 0;
-            // Place it slightly above the ground so it can fall and trigger collision cleanly
-            floorPreviewCollectible.position[0] += floorPreviewCollectible.normal[0] * 0.1;
-            floorPreviewCollectible.position[1] += floorPreviewCollectible.normal[1] * 0.1;
-            floorPreviewCollectible.position[2] += floorPreviewCollectible.normal[2] * 0.1;
+            // If placed in water, slightly above water so it can drop and float into buoyancy
+            let isWaterPlacement = (typeof waterEnabled !== "undefined" && waterEnabled);
+            let pR_len = Math.sqrt(floorPreviewCollectible.position[0]**2 + floorPreviewCollectible.position[1]**2 + floorPreviewCollectible.position[2]**2) || 1;
+            let pTheta = Math.acos(Math.max(-1.0, Math.min(1.0, floorPreviewCollectible.position[1] / pR_len)));
+            let pPhi = Math.atan2(floorPreviewCollectible.position[2], floorPreviewCollectible.position[0]);
+            let pHeight = getHeightOnSphere(pTheta, pPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+            let pTerrainR = RADIUS + pHeight * HEIGHT_SCALE;
+            let pWaterR = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * 0.15;
+            if (isWaterPlacement && pTerrainR < pWaterR) {
+                floorPreviewCollectible.position[0] += floorPreviewCollectible.normal[0] * 0.05;
+                floorPreviewCollectible.position[1] += floorPreviewCollectible.normal[1] * 0.05;
+                floorPreviewCollectible.position[2] += floorPreviewCollectible.normal[2] * 0.05;
+            }
         }
         
         if (placingItemName === "WOOD_STAIRS") {
@@ -1642,6 +1654,14 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.type = placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor");
           floorPreviewCollectible.layer = placingItemName === "STONE_FLOOR" ? COLLISION_LAYERS.STONE_FLOOR : COLLISION_LAYERS.WOOD_FLOOR;
         }
+
+        floorPreviewCollectible.isPreview = false;
+        floorPreviewCollectible.isPlayerPlaced = true;
+        floorPreviewCollectible.isWorldGenerated = false;
+        floorPreviewCollectible.hideFromCompass = false;
+        floorPreviewCollectible.isHouse = false;
+        floorPreviewCollectible.isProceduralHouse = false;
+        floorPreviewCollectible.isRuin = false;
 
         collectibles.push(floorPreviewCollectible);
         
@@ -3488,7 +3508,7 @@ function cancelFloorPlacement() {
         } else if (closestDemolishItem.type === "wood_floor") {
           itemData = { name: "WOOD_FLOOR", icon: "ðŸªµ", label: "WOOD_FLOOR" };
         } else if (closestDemolishItem.type === "thin_wood_floor") {
-          itemData = { name: "THIN_WOOD_FLOOR", icon: "ðŸªµ", label: "THIN_WOOD_FLOOR" };
+          itemData = { name: "THIN_WOOD_FLOOR", icon: "í ¾íºµ", label: "THIN_WOOD_FLOOR" };
         } else if (closestDemolishItem.type === "wood_stairs") {
           itemData = { name: "WOOD_STAIRS", icon: "ðŸªœ", label: "WOOD_STAIRS" };
         } else if (closestDemolishItem.type === "campfire") {

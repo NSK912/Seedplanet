@@ -72,9 +72,13 @@
       let tunnelRawVertices = [];
       let tunnelRawIndices = [];
       let natureObstacles = [];
+      window.natureObstacles = natureObstacles;
       let cubeObstacles = [];
+      window.cubeObstacles = cubeObstacles;
       let choppedTrees = [];
+      window.choppedTrees = choppedTrees;
       let destroyedRocks = [];
+      window.destroyedRocks = destroyedRocks;
 
       let charVertexBuffer,
         charNormalBuffer,
@@ -866,7 +870,7 @@
             if (onProgress) onProgress(85, "Spawning natural forests and vegetation...", "[BIO] Simulating biosphere ecosystems...");
             
             const planetRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
-            const sampleRatio = Math.max(1.0, Math.pow(planetRadius / 8.0, 1.2));
+            const sampleRatio = Math.max(0.35, Math.pow(planetRadius / 8.0, 1.25));
 
             if (systems.includes("nature")) {
               const treeCount = window.globalTreeCountOverride !== undefined ? window.globalTreeCountOverride : Math.min(1000, Math.floor(sampleRatio * (130 + Math.floor(Math.random() * 41))));
@@ -875,6 +879,7 @@
               if (typeof natureIndicesLength !== "undefined") natureIndicesLength = 0;
               natureRawVertices = [];
               natureObstacles = [];
+              window.natureObstacles = natureObstacles;
             }
 
             if (onProgress) onProgress(92, "Assembling ancient ruins and collectibles...", "[OBJ] Generating procedural structures & VBOs...");
@@ -898,7 +903,10 @@
             }
 
             if (systems.includes("npcs")) {
-              initAmphibians(15, seed);
+              const npcCount = (typeof window.calculatePlanetNpcCount === "function")
+                ? window.calculatePlanetNpcCount(planetRadius)
+                : Math.min(72, Math.max(8, Math.round(16 * Math.pow(planetRadius / 8.0, 1.35))));
+              initAmphibians(npcCount, seed);
             } else {
               amphibians = [];
             }
@@ -1096,11 +1104,14 @@
         cubeObstacles = [];
         // buildCubes(50, seed); // ปิดสุ่มวัตถุ 50 ชิ้นเป็นค่าเริ่มต้นตามความต้องการของผู้ใช้
         const planetRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
-        const sampleRatio = Math.max(1.0, Math.pow(planetRadius / 8.0, 1.2));
+        const sampleRatio = Math.max(0.35, Math.pow(planetRadius / 8.0, 1.25));
         const treeCount = window.globalTreeCountOverride !== undefined ? window.globalTreeCountOverride : Math.min(1000, Math.floor(sampleRatio * (130 + Math.floor(Math.random() * 41))));
         await buildNature(treeCount, seed);
         buildCollectibles(Math.min(160, Math.floor(30 * sampleRatio)), seed);
-        initAmphibians(Math.min(60, Math.floor(15 * sampleRatio)), seed);
+        const npcCount = (typeof window.calculatePlanetNpcCount === "function")
+          ? window.calculatePlanetNpcCount(planetRadius)
+          : Math.min(72, Math.max(8, Math.round(16 * Math.pow(planetRadius / 8.0, 1.35))));
+        initAmphibians(npcCount, seed);
         buildSun();
         if (typeof initBackgroundPlanets === "function") initBackgroundPlanets();
         updateCharacterMesh(0.0);
@@ -2430,6 +2441,7 @@
         const colors = new FastFloat32Array(100000);
         const indices = new FastUint32Array(100000);
         natureObstacles = [];
+        window.natureObstacles = natureObstacles;
         const treePositions = [];
 
         let lastYieldTime = performance.now();

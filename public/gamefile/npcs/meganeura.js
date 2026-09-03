@@ -232,6 +232,7 @@ window.NpcRegistry["meganeura"] = {
     try { pMech = (typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech); } catch(e) {}
     
     const isDriving = !!(pBoat || pMech);
+    const ignorePlayer = (typeof window !== "undefined" && window.npcIgnorePlayer);
 
     let isUnconscious = false;
     try {
@@ -241,9 +242,9 @@ window.NpcRegistry["meganeura"] = {
       if (typeof window !== "undefined" && (window.isPlayerUnconscious || (window.playerHP !== undefined && window.playerHP <= 0))) isUnconscious = true;
     } catch(e) {}
 
-    // ถ้าตัวละครหมดสติ หรือกำลังขับเรือ/ขับหุ่นยนต์ จะไม่สามารถเกาะตัวละครได้ และหากเกาะอยู่ให้ปล่อยทันที
+    // ถ้าตัวละครหมดสติ กำลังขับเรือ/ขับหุ่นยนต์ หรือเปิดโหมด NPC ไม่สนใจตัวละคร จะไม่สามารถเกาะตัวละครได้ และหากเกาะอยู่ให้ปล่อยทันที
     if (c.attachedToPlayer) {
-      if (isDriving || isUnconscious) {
+      if (isDriving || isUnconscious || ignorePlayer) {
         c.attachedToPlayer = false; // ปล่อยจากการเกาะทันที
       } else if (pTheta !== undefined && pPhi !== undefined) {
         // Attach to player and attack
@@ -259,7 +260,7 @@ window.NpcRegistry["meganeura"] = {
         
         // Attack logic
         try {
-            if (!isUnconscious && !isDriving && typeof damagePlayer === 'function') {
+            if (!isUnconscious && !isDriving && !ignorePlayer && typeof damagePlayer === 'function') {
               damagePlayer(1);
             }
         } catch(e) {}
@@ -269,8 +270,8 @@ window.NpcRegistry["meganeura"] = {
         c.attachedToPlayer = false;
       }
     } else {
-      // Attempt to attach only if close AND not driving AND not unconscious
-      if (pTheta !== undefined && pPhi !== undefined && !isDriving && !isUnconscious) {
+      // Attempt to attach only if close AND not driving AND not unconscious AND not ignorePlayer
+      if (pTheta !== undefined && pPhi !== undefined && !isDriving && !isUnconscious && !ignorePlayer) {
         let pr = gRadius;
         try { 
             pr = (typeof RADIUS !== "undefined" ? RADIUS : 200) + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(pTheta, pPhi, seed) * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 10) : 0);

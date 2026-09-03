@@ -1288,6 +1288,84 @@ if (toggleControlsBtn && mainControls) {
   }
 })();
 
+// --- ระบบโหมด NPC ไม่สนใจตัวละคร (NPC Ignore Player Mode Controller) ---
+(function initDevNpcIgnorePlayerControl() {
+  if (typeof window.npcIgnorePlayer === "undefined") {
+    window.npcIgnorePlayer = false;
+  }
+
+  function mountGroup() {
+    const mainControls = document.getElementById("mainControls");
+    if (!mainControls) return false;
+    if (document.getElementById("devNpcIgnoreControlGroup")) return true;
+
+    const group = document.createElement("div");
+    group.className = "control-group";
+    group.id = "devNpcIgnoreControlGroup";
+    group.style.border = "1.5px solid #00bcd4";
+    group.style.borderRadius = "8px";
+    group.style.background = "rgba(10, 24, 30, 0.95)";
+    group.style.boxShadow = "0 4px 12px rgba(0,0,0,0.5)";
+    group.style.padding = "10px";
+
+    group.innerHTML = `
+      <div style="font-weight: bold; color: #00e5ff; font-size: 13px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <span>🦎 โหมด NPC (NPC Behavior Control)</span>
+        <span id="devNpcIgnoreStatusBadge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: #888; font-weight: normal;">ปกติ (Normal)</span>
+      </div>
+      
+      <div style="font-size: 11px; color: #b2ebf2; margin-bottom: 8px; line-height: 1.4;">
+        เมื่อเปิดโหมดนี้ NPC ทุกชนิด (เช่น ปลาดึกดำบรรพ์ Placoderm, วาฬ Georgiacetus, แมลง Meganeura) จะไม่ไล่ตาม ไม่โจมตี และไม่เกาะตัวละคร
+      </div>
+
+      <button id="devToggleNpcIgnoreBtn" class="btn-random" style="width: 100%; margin: 0; padding: 9px 8px; font-size: 12px; font-weight: bold; color: #fff; background-image: linear-gradient(135deg, #00838f, #00acc1); border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s ease;">
+        🛡️ เปิดโหมด: NPC ไม่สนใจตัวละคร
+      </button>
+    `;
+
+    mainControls.appendChild(group);
+
+    const toggleBtn = document.getElementById("devToggleNpcIgnoreBtn");
+    const statusBadge = document.getElementById("devNpcIgnoreStatusBadge");
+
+    function updateUI() {
+      if (!toggleBtn || !statusBadge) return;
+      if (window.npcIgnorePlayer) {
+        toggleBtn.style.backgroundImage = "linear-gradient(135deg, #2e7d32, #43a047)";
+        toggleBtn.innerHTML = "✅ NPC ไม่สนใจตัวละคร (กำลังเปิดใช้งาน)";
+        statusBadge.textContent = "ไม่สนใจตัวละคร (Ignored)";
+        statusBadge.style.background = "rgba(76, 175, 80, 0.25)";
+        statusBadge.style.color = "#81c784";
+      } else {
+        toggleBtn.style.backgroundImage = "linear-gradient(135deg, #00838f, #00acc1)";
+        toggleBtn.innerHTML = "🛡️ เปิดโหมด: NPC ไม่สนใจตัวละคร";
+        statusBadge.textContent = "ปกติ (Normal)";
+        statusBadge.style.background = "rgba(255,255,255,0.1)";
+        statusBadge.style.color = "#888";
+      }
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        window.npcIgnorePlayer = !window.npcIgnorePlayer;
+        updateUI();
+        if (typeof showNotice === "function") {
+          showNotice(window.npcIgnorePlayer ? "เปิดโหมด NPC ไม่สนใจตัวละครแล้ว" : "ปิดโหมด NPC ไม่สนใจตัวละคร (NPC กลับมามีพฤติกรรมปกติ)");
+        }
+      });
+    }
+
+    updateUI();
+    return true;
+  }
+
+  if (!mountGroup()) {
+    const timer = setInterval(() => {
+      if (mountGroup()) clearInterval(timer);
+    }, 500);
+  }
+})();
+
 // Helper function to test spawning in-world 3D signs (non-screen-aligned)
 if (typeof window !== "undefined") {
   window.testSpawn3DSign = function(text = "🚩 จุดปักป้าย 3D (In-World Sign)", offsetForward = 0.5) {

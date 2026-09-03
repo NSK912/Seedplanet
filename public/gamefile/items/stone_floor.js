@@ -30,42 +30,46 @@ window.ItemRegistry["stone_floor"] = {
 
     let maxBaseLen = 0.05;
 
-    for (let offset of sampleOffsets) {
-      const sampleP = [
-        pBottom[0] + r[0] * offset[0] + f[0] * offset[1],
-        pBottom[1] + r[1] * offset[0] + f[1] * offset[1],
-        pBottom[2] + r[2] * offset[0] + f[2] * offset[1]
-      ];
-      const sampleDist = Math.sqrt(sampleP[0] * sampleP[0] + sampleP[1] * sampleP[1] + sampleP[2] * sampleP[2]) || 1;
-      const nx_s = sampleP[0] / sampleDist;
-      const ny_s = sampleP[1] / sampleDist;
-      const nz_s = sampleP[2] / sampleDist;
-      
-      let groundRad_s = RADIUS;
-      if (typeof getTerrainSurfaceAndCeiling === "function") {
-        const caveData = getTerrainSurfaceAndCeiling(nx_s, ny_s, nz_s, sampleDist);
-        if (caveData && caveData.ground !== undefined && caveData.insideTunnel) {
-          groundRad_s = caveData.ground;
+    if (targetBuffer === 'preview' || item.isIconPreview) {
+      maxBaseLen = 0.03;
+    } else {
+      for (let offset of sampleOffsets) {
+        const sampleP = [
+          pBottom[0] + r[0] * offset[0] + f[0] * offset[1],
+          pBottom[1] + r[1] * offset[0] + f[1] * offset[1],
+          pBottom[2] + r[2] * offset[0] + f[2] * offset[1]
+        ];
+        const sampleDist = Math.sqrt(sampleP[0] * sampleP[0] + sampleP[1] * sampleP[1] + sampleP[2] * sampleP[2]) || 1;
+        const nx_s = sampleP[0] / sampleDist;
+        const ny_s = sampleP[1] / sampleDist;
+        const nz_s = sampleP[2] / sampleDist;
+        
+        let groundRad_s = RADIUS;
+        if (typeof getTerrainSurfaceAndCeiling === "function") {
+          const caveData = getTerrainSurfaceAndCeiling(nx_s, ny_s, nz_s, sampleDist);
+          if (caveData && caveData.ground !== undefined && caveData.insideTunnel) {
+            groundRad_s = caveData.ground;
+          } else {
+            const theta_s = Math.acos(Math.max(-1.0, Math.min(1.0, ny_s)));
+            const phi_s = Math.atan2(nz_s, nx_s);
+            groundRad_s = RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_s, phi_s, typeof globalSeed !== "undefined" ? globalSeed : 0) : 0) * HEIGHT_SCALE;
+          }
         } else {
           const theta_s = Math.acos(Math.max(-1.0, Math.min(1.0, ny_s)));
           const phi_s = Math.atan2(nz_s, nx_s);
           groundRad_s = RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_s, phi_s, typeof globalSeed !== "undefined" ? globalSeed : 0) : 0) * HEIGHT_SCALE;
         }
-      } else {
-        const theta_s = Math.acos(Math.max(-1.0, Math.min(1.0, ny_s)));
-        const phi_s = Math.atan2(nz_s, nx_s);
-        groundRad_s = RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_s, phi_s, typeof globalSeed !== "undefined" ? globalSeed : 0) : 0) * HEIGHT_SCALE;
-      }
-      
-      const waterRadius = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * 0.15;
-      if (typeof waterEnabled !== "undefined" && waterEnabled && groundRad_s < waterRadius) {
-        groundRad_s = waterRadius;
-      }
-      
-      const extraDepth = 0.10; // penetrate slightly into terrain for seamless fit
-      const reqLen = sampleDist - groundRad_s + extraDepth;
-      if (reqLen > maxBaseLen) {
-        maxBaseLen = reqLen;
+        
+        const waterRadius = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * 0.15;
+        if (typeof waterEnabled !== "undefined" && waterEnabled && groundRad_s < waterRadius) {
+          groundRad_s = waterRadius;
+        }
+        
+        const extraDepth = 0.10; // penetrate slightly into terrain for seamless fit
+        const reqLen = sampleDist - groundRad_s + extraDepth;
+        if (reqLen > maxBaseLen) {
+          maxBaseLen = reqLen;
+        }
       }
     }
 

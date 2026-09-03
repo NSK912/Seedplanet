@@ -1,51 +1,89 @@
 // === SEEDPLANET MODULE: JS/NPC.JS ===
 
-function initAmphibians(count, seed) { amphibians = []; if (window.DISABLE_NPCS) return;
+function calculatePlanetNpcCount(radius) {
+  const r = typeof radius === 'number' ? radius : (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
+  // Scales smoothly with sphere surface area:
+  // r = 4  => 8 NPCs (minimum to ensure full species diversity + human group)
+  // r = 6  => 11 NPCs
+  // r = 8  => 16 NPCs (standard planet baseline)
+  // r = 12 => 28 NPCs
+  // r = 16 => 40 NPCs
+  // r = 24 => 68 NPCs
+  // r = 32 => max 72 NPCs (performance safe-guard)
+  const ratio = Math.pow(r / 8.0, 1.35);
+  return Math.min(72, Math.max(8, Math.round(16 * ratio)));
+}
+window.calculatePlanetNpcCount = calculatePlanetNpcCount;
+
+function initAmphibians(count, seed) { 
+  amphibians = []; 
+  if (window.DISABLE_NPCS) return;
+
+  const planetRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+  if (!count || count <= 0) {
+    count = calculatePlanetNpcCount(planetRadius);
+  }
+
   const _origRandom = Math.random;
   Math.random = mulberry32(seed);
 
   amphibians = [];
-  let i = 0;
   const effectiveWaterH = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
-  const rRatio = Math.max(1.0, (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) / 8.0);
-  while (i < count) {
-    const theta = Math.random() * Math.PI;
-    const phi = Math.random() * Math.PI * 2;
-    const height = getHeightOnSphere(theta, phi, seed);
-    const isLand = (height * HEIGHT_SCALE > effectiveWaterH);
+  const rRatio = Math.max(0.5, planetRadius / 8.0);
 
-    const r =
-      RADIUS +
-      Math.max(height * HEIGHT_SCALE, effectiveWaterH - 0.05) +
-      0.05 +
-      Math.random() * 0.05;
+  // Helper to find a suitable coordinate on the planet sphere
+  function findSpawnCoordinate(preferType) {
+    // preferType: 'water', 'land', or 'any'
+    let bestTheta = Math.random() * Math.PI;
+    let bestPhi = Math.random() * Math.PI * 2;
+    let bestH = getHeightOnSphere(bestTheta, bestPhi, seed);
+    let bestIsLand = (bestH * HEIGHT_SCALE > effectiveWaterH);
 
-    const rand = Math.random();
-    let type = 'georgiacetus';
-    if (isLand) {
-      if (rand < 0.35) type = 'human';
-      else if (rand < 0.70) type = 'meganeura';
-      else type = 'isopod';
-    } else {
-      if (rand < 0.25) type = 'meganeura';
-      else if (rand < 0.60) type = 'georgiacetus';
-      else type = 'isopod';
+    if (preferType === 'any') {
+      return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
     }
 
+    const wantLand = (preferType === 'land');
+    if (bestIsLand === wantLand) {
+      return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
+    }
+
+    // Try up to 40 attempts to find desired terrain type
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const t = Math.random() * Math.PI;
+      const p = Math.random() * Math.PI * 2;
+      const h = getHeightOnSphere(t, p, seed);
+      const isL = (h * HEIGHT_SCALE > effectiveWaterH);
+      if (isL === wantLand) {
+        return { theta: t, phi: p, height: h, isLand: isL };
+      }
+    }
+
+    // If planet is 100% water or 100% land, fallback to best available
+    return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
+  }
+
+  function spawnNpcOfType(type) {
+    if (amphibians.length >= count) return 0;
+
     if (type === 'human') {
-      const groupSize = 2 + Math.floor(Math.random() * 2); // 2 or 3
-      for (let j = 0; j < groupSize && i < count; j++) {
-        let offsetTheta = theta;
-        let offsetPhi = phi;
+      // Humans prefer land and spawn in cohesive groups (2, or 3 if slots permit)
+      const coord = findSpawnCoordinate('land');
+      const maxHp = (window.NpcRegistry && window.NpcRegistry['human']) ? window.NpcRegistry['human'].maxHp : 1;
+      const remainingSlots = count - amphibians.length;
+      if (remainingSlots <= 0) return 0;
+      
+      const groupSize = (remainingSlots >= 3 && Math.random() < 0.35) ? 3 : (remainingSlots >= 2 ? 2 : 1);
+      
+      for (let j = 0; j < groupSize; j++) {
+        let offsetTheta = coord.theta;
+        let offsetPhi = coord.phi;
         if (j > 0) {
-           offsetTheta += (Math.random() - 0.5) * (0.04 / rRatio);
-           offsetPhi += (Math.random() - 0.5) * (0.04 / rRatio);
+          offsetTheta += (Math.random() - 0.5) * (0.04 / rRatio);
+          offsetPhi += (Math.random() - 0.5) * (0.04 / rRatio);
         }
         const oHeight = getHeightOnSphere(offsetTheta, offsetPhi, seed);
-        if (oHeight * HEIGHT_SCALE <= effectiveWaterH && j > 0) continue; // Must be on land
-        
-        const oR = RADIUS + oHeight * HEIGHT_SCALE + 0.05 + Math.random() * 0.05;
-        const maxHp = window.NpcRegistry['human'] ? window.NpcRegistry['human'].maxHp : 1;
+        const oR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH) + 0.05 + Math.random() * 0.04;
         
         amphibians.push({
           type: 'human',
@@ -64,17 +102,49 @@ function initAmphibians(count, seed) { amphibians = []; if (window.DISABLE_NPCS)
           hp: maxHp,
           maxHp: maxHp,
         });
-        i++;
       }
+      return groupSize;
     } else {
-      const isMeganeura = type === 'meganeura';
-      const isIsopod = type === 'isopod';
-      const maxHp = window.NpcRegistry[type] ? window.NpcRegistry[type].maxHp : 1;
-      const spawnR = isMeganeura ? RADIUS + height * HEIGHT_SCALE + 0.3 : (isIsopod ? RADIUS + height * HEIGHT_SCALE + 0.02 : r);
+      const isGeorgiacetus = (type === 'georgiacetus');
+      const isPlacoderm = (type === 'placoderm');
+      const isMeganeura = (type === 'meganeura');
+      const isIsopod = (type === 'isopod');
+
+      // Georgiacetus and Placoderm strictly prefer ocean water; Isopod/Meganeura can be anywhere
+      const pref = (isGeorgiacetus || isPlacoderm) ? 'water' : 'any';
+      const coord = findSpawnCoordinate(pref);
+
+      const maxHp = (window.NpcRegistry && window.NpcRegistry[type]) ? window.NpcRegistry[type].maxHp : 1;
+      let spawnR;
+      let swimming = false;
+
+      if (isMeganeura) {
+        // Flying dragonfly hovering gracefully over land and water
+        const surfaceR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH);
+        spawnR = surfaceR + 0.35 + Math.random() * 0.15;
+        swimming = false;
+      } else if (isIsopod) {
+        // Giant isopod crawling on ground or seabed
+        spawnR = RADIUS + coord.height * HEIGHT_SCALE + 0.02;
+        swimming = !coord.isLand;
+      } else if (isGeorgiacetus || isPlacoderm) {
+        // Prehistoric marine animals swimming in ocean, or crawling along shore if planet is dry
+        if (!coord.isLand) {
+          spawnR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH - 0.04) + 0.04;
+          swimming = true;
+        } else {
+          spawnR = RADIUS + coord.height * HEIGHT_SCALE + 0.05;
+          swimming = false;
+        }
+      } else {
+        spawnR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH) + 0.05;
+        swimming = !coord.isLand;
+      }
+
       amphibians.push({
         type: type,
-        theta: theta,
-        phi: phi,
+        theta: coord.theta,
+        phi: coord.phi,
         r: spawnR,
         heading: Math.random() * Math.PI * 2,
         animPhase: Math.random() * Math.PI * 2,
@@ -83,13 +153,37 @@ function initAmphibians(count, seed) { amphibians = []; if (window.DISABLE_NPCS)
         ragdollAxis: [0, 1, 0],
         ragdollAngle: 0,
         ragdollAngularSpeed: 0,
-        isSwimming: (type === 'georgiacetus' || (type === 'isopod' && !isLand)),
+        isSwimming: swimming,
         seed: Math.random(),
         hp: maxHp,
         maxHp: maxHp,
       });
-      i++;
+      return 1;
     }
+  }
+
+  // 1. GUARANTEED PHASE: Ensure every single known NPC type is guaranteed to spawn!
+  const knownTypes = ['human', 'georgiacetus', 'placoderm', 'meganeura', 'isopod'];
+  if (window.NpcRegistry) {
+    for (const k in window.NpcRegistry) {
+      if (!knownTypes.includes(k)) knownTypes.push(k);
+    }
+  }
+
+  // Spawn each registered species at least once (humans spawn as a pair)
+  for (const t of knownTypes) {
+    if (amphibians.length < count) {
+      spawnNpcOfType(t);
+    }
+  }
+
+  // 2. PROPORTIONAL FILL PHASE:
+  // Distribute remaining slots smoothly across all types in a balanced rotation
+  let typeIdx = 0;
+  while (amphibians.length < count) {
+    const t = knownTypes[typeIdx % knownTypes.length];
+    spawnNpcOfType(t);
+    typeIdx++;
   }
 
   Math.random = _origRandom;
@@ -211,7 +305,7 @@ function updateAmphibians(deltaTime, seed) {
             // Find an existing human to group with, or pick a random land spot
             let foundLeader = false;
             const effWaterH = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
-            const rRatio = Math.max(1.0, (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) / 8.0);
+            const rRatio = Math.max(0.5, (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) / 8.0);
             for (let other of amphibians) {
                if (other.type === 'human' && other !== c && !other.ragdollEnabled) {
                    if (Math.random() < 0.5) {
@@ -227,22 +321,45 @@ function updateAmphibians(deltaTime, seed) {
             }
             
             if (!foundLeader) {
-                for(let tries=0; tries<10; tries++) {
+                for(let tries=0; tries<25; tries++) {
                    if (newHeight * HEIGHT_SCALE > effWaterH) break;
                    newTheta = Math.random() * Math.PI;
                    newPhi = Math.random() * Math.PI * 2;
                    newHeight = getHeightOnSphere(newTheta, newPhi, seed);
                 }
             }
+          } else if (c.type === 'georgiacetus' || c.type === 'placoderm') {
+            // Prehistoric aquatic animals: try to find an ocean/water spot for respawn
+            const effWaterH = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
+            for (let tries = 0; tries < 30; tries++) {
+              if (newHeight * HEIGHT_SCALE <= effWaterH) break;
+              newTheta = Math.random() * Math.PI;
+              newPhi = Math.random() * Math.PI * 2;
+              newHeight = getHeightOnSphere(newTheta, newPhi, seed);
+            }
           }
 
           const isMeganeura = c.type === 'meganeura';
           const isIsopod = c.type === 'isopod';
+          const isGeorgiacetus = c.type === 'georgiacetus';
+          const isPlacoderm = c.type === 'placoderm';
           const effWaterH = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
           const gRadius = RADIUS + newHeight * HEIGHT_SCALE;
           const wRadius = RADIUS + effWaterH;
-          const newR = isMeganeura ? gRadius + 0.3 : (isIsopod ? gRadius + 0.02 : Math.max(gRadius, wRadius - 0.02) + 0.05);
-          const maxHp = window.NpcRegistry[c.type] ? window.NpcRegistry[c.type].maxHp : 1;
+          const isWater = (newHeight * HEIGHT_SCALE <= effWaterH);
+
+          let newR = gRadius + 0.05;
+          if (isMeganeura) {
+            newR = Math.max(gRadius, wRadius) + 0.35 + Math.random() * 0.1;
+          } else if (isIsopod) {
+            newR = gRadius + 0.02;
+          } else if (isGeorgiacetus || isPlacoderm) {
+            newR = isWater ? Math.max(gRadius, wRadius - 0.04) + 0.04 : gRadius + 0.05;
+          } else if (c.type === 'human') {
+            newR = Math.max(gRadius, wRadius) + 0.05;
+          }
+
+          const maxHp = (window.NpcRegistry && window.NpcRegistry[c.type]) ? window.NpcRegistry[c.type].maxHp : 1;
           
           c.theta = newTheta;
           c.phi = newPhi;
@@ -255,6 +372,7 @@ function updateAmphibians(deltaTime, seed) {
           c.ragdollVel = null;
           c.hp = maxHp;
           c.maxHp = maxHp;
+          c.isSwimming = ((isGeorgiacetus || isPlacoderm) ? isWater : (isIsopod && isWater));
           
           // Remove arrows attached to this NPC
           for (let coll of collectibles) {
@@ -1000,5 +1118,5 @@ function clearActiveNPCs() {
 window.clearActiveNPCs = clearActiveNPCs;
 window.initAmphibians = initAmphibians;
 window.rebuildNPCs = function(count, seed) {
-  initAmphibians(count || 12, seed || (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 12345));
+  initAmphibians(count, seed || (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 12345));
 };

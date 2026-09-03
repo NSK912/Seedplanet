@@ -74,7 +74,77 @@ const Physics = {
         }
     },
 
-    // Unified Land Boat (Wheeled Vehicle) terrain contact and transform calculation
+    // Precise Bounded Query for constructed floors & roofs at a specific 3D point
+    getFloorSurfaceRadiusAt: function(px, py, pz, fallbackTerrainRad) {
+        if (typeof collectibles === "undefined" || !Array.isArray(collectibles)) {
+            return fallbackTerrainRad;
+        }
+        let surfaceRad = fallbackTerrainRad;
+        for (let o of collectibles) {
+            if (!o.active || o.isPreview) continue;
+            if (o.type !== "wood_floor" && o.type !== "thin_wood_floor" && o.type !== "stone_floor" && o.type !== "wood_roof") continue;
+            
+            const dx = o.position[0] - px, dy = o.position[1] - py, dz = o.position[2] - pz;
+            const distSq = dx*dx + dy*dy + dz*dz;
+            if (distSq > 0.36) continue; // Skip if clearly outside 0.6m bounding distance
+
+            const oR = o.R || [1, 0, 0];
+            const oF = o.F || [0, 0, 1];
+            const oN = o.normal || [0, 1, 0];
+
+            if (o.type === "wood_floor" || o.type === "thin_wood_floor" || o.type === "stone_floor") {
+                const halfW = (o.width !== undefined ? o.width : (o.size || 0.25) * 1.2) / 2 + 0.03;
+                const halfD = (o.depth !== undefined ? o.depth : (o.size || 0.25) * 1.2) / 2 + 0.03;
+                
+                const lx = (px - o.position[0]) * oR[0] + (py - o.position[1]) * oR[1] + (pz - o.position[2]) * oR[2];
+                const lz = (px - o.position[0]) * oF[0] + (py - o.position[1]) * oF[1] + (pz - o.position[2]) * oF[2];
+                const ly = (px - o.position[0]) * oN[0] + (py - o.position[1]) * oN[1] + (pz - o.position[2]) * oN[2];
+
+                // Point MUST strictly lie within the rectangular footprint and close to the floor's top surface
+                if (Math.abs(lx) <= halfW && Math.abs(lz) <= halfD && ly >= -0.15 && ly <= 0.35) {
+                    let fHH = 0;
+                    if (o.type === "stone_floor") fHH = (o.size || 0.25) * 0.15;
+                    else if (o.type === "wood_floor") fHH = (typeof woodFloorHeight !== "undefined" ? woodFloorHeight : 0.06) + (o.size || 0.25) * 0.12;
+                    else if (o.type === "thin_wood_floor") fHH = (o.size || 0.25) * 0.04;
+                    const fR = Math.sqrt(o.position[0]**2 + o.position[1]**2 + o.position[2]**2);
+                    if (fR > 0) {
+                        surfaceRad = Math.max(surfaceRad, fR + fHH / 2);
+                    }
+                }
+            } else if (o.type === "wood_roof") {
+                const angle = o.angle || 0;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const roofR = [
+                    oR[0] * cosA + oF[0] * sinA,
+                    oR[1] * cosA + oF[1] * sinA,
+                    oR[2] * cosA + oF[2] * sinA
+                ];
+                const roofF = [
+                    oF[0] * cosA - oR[0] * sinA,
+                    oF[1] * cosA - oR[0] * sinA,
+                    oF[2] * cosA - oR[0] * sinA
+                ];
+                const halfW = 0.18;
+                const halfD = 0.18;
+                const lx = (px - o.position[0]) * roofR[0] + (py - o.position[1]) * roofR[1] + (pz - o.position[2]) * roofR[2];
+                const lz = (px - o.position[0]) * roofF[0] + (py - o.position[1]) * roofF[1] + (pz - o.position[2]) * roofF[2];
+                const ly = (px - o.position[0]) * oN[0] + (py - o.position[1]) * oN[1] + (pz - o.position[2]) * oN[2];
+
+                if (Math.abs(lx) <= halfW && Math.abs(lz) <= halfD && ly >= -0.05 && ly <= 0.40) {
+                    const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
+                    const surfH = (0.125 + (clampedZ / 0.30) * 0.25 + 0.04);
+                    const fR = Math.sqrt(o.position[0]**2 + o.position[1]**2 + o.position[2]**2);
+                    if (fR > 0) {
+                        surfaceRad = Math.max(surfaceRad, fR + surfH);
+                    }
+                }
+            }
+        }
+        return surfaceRad;
+    },
+
+    // Unified Land Boat (Wheeled Vehicle & Sled Hull) terrain contact and transform calculation
     calculateLandBoatTransform: function({
         position,
         nx, ny, nz,
@@ -83,7 +153,9 @@ const Physics = {
         waterEnabled = false,
         waterLevel = 0,
         waterAnimTime = 0,
-        waveStrength = 0
+        waveStrength = 0,
+        hasWheels = true,
+        isInWater: isInWaterArg = undefined
     }) {
         const rad = typeof RADIUS !== "undefined" ? RADIUS : 100;
         const hScale = typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1;
@@ -110,48 +182,72 @@ const Physics = {
                 centerTerrainRad = rad + centerTerrainH * hScale;
             }
         }
+
+        // Check if sitting on constructed floors with precise bounding check
+        centerTerrainRad = this.getFloorSurfaceRadiusAt(nx * centerTerrainRad, ny * centerTerrainRad, nz * centerTerrainRad, centerTerrainRad);
         
         const waterRadius = rad + waterLevel * 0.15;
 
         let isInWater = false;
-        if (baseRadius === null) {
-            baseRadius = centerTerrainRad;
-            if (waterEnabled && centerTerrainRad < waterRadius) {
-                baseRadius = waterRadius;
-                isInWater = true;
-                if (typeof getWaterWave === "function") {
-                    const wave = getWaterWave(nx * waterRadius, ny * waterRadius, nz * waterRadius, waterAnimTime, waveStrength);
-                    let depth = waterRadius - centerTerrainRad;
-                    let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
-                    baseRadius += wave * fade;
-                }
-            }
-        } else {
-            // baseRadius is already provided, just add waves if it's matching water radius
-            if (waterEnabled && Math.abs(baseRadius - waterRadius) < 0.01) {
-                isInWater = true;
-                if (typeof getWaterWave === "function") {
-                    const wave = getWaterWave(nx * waterRadius, ny * waterRadius, nz * waterRadius, waterAnimTime, waveStrength);
-                    let depth = waterRadius - centerTerrainRad;
-                    let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
-                    baseRadius += wave * fade;
-                }
-            }
+        if (typeof isInWaterArg === "boolean") {
+            isInWater = isInWaterArg;
+        } else if (waterEnabled && centerTerrainRad < waterRadius && (waterRadius - centerTerrainRad > 0.05)) {
+            isInWater = true;
         }
-
-        const fSideOff = typeof window !== "undefined" && typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;
-        const fFwdOff  = typeof window !== "undefined" && typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18;
-        const fUpOff   = typeof window !== "undefined" && typeof window.wheelFrontUpOffset   === "number" ? window.wheelFrontUpOffset   : -0.03;
-
-        const rSideOff = typeof window !== "undefined" && typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18;
-        const rFwdOff  = typeof window !== "undefined" && typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
-        const rUpOff   = typeof window !== "undefined" && typeof window.wheelRearUpOffset   === "number" ? window.wheelRearUpOffset   : -0.03;
-
-        const wheelScale = typeof window !== "undefined" && typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
-        const wheelRadius = 0.16 * wheelScale;
 
         let bF = F ? [F[0], F[1], F[2]] : [0, 0, 1];
         let bR_vec = R ? [R[0], R[1], R[2]] : [1, 0, 0];
+
+        // 1. BOAT IN WATER: Keep exact original sinking depth of 0.04
+        if (isInWater) {
+            let waterBaseR = (baseRadius !== null && baseRadius >= waterRadius - 0.1) ? baseRadius : waterRadius;
+            if (typeof getWaterWave === "function") {
+                const wave = getWaterWave(nx * waterRadius, ny * waterRadius, nz * waterRadius, waterAnimTime, waveStrength);
+                let depth = waterRadius - centerTerrainRad;
+                let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
+                waterBaseR += wave * fade;
+            }
+            return {
+                targetGroundRadius: waterBaseR - 0.04,
+                baseRadius: waterBaseR,
+                centerTerrainRad,
+                isInWater: true,
+                pitchGrade: 0,
+                rollGrade: 0,
+                normal: [nx, ny, nz],
+                F: bF,
+                R: bR_vec,
+                wheelHeights: []
+            };
+        }
+
+        // 2. NON-WHEELED BOAT ON LAND: Sits flush touching the ground
+        if (!hasWheels) {
+            return {
+                targetGroundRadius: centerTerrainRad + 0.002,
+                baseRadius: centerTerrainRad,
+                centerTerrainRad,
+                isInWater: false,
+                pitchGrade: 0,
+                rollGrade: 0,
+                normal: [nx, ny, nz],
+                F: bF,
+                R: bR_vec,
+                wheelHeights: []
+            };
+        }
+
+        // 3. WHEELED BOAT ON LAND: Calculate wheel contact and terrain adaptation
+        const fSideOff = typeof window !== "undefined" && typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;
+        const fFwdOff  = typeof window !== "undefined" && typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18;
+        const fUpOff   = typeof window !== "undefined" && typeof window.wheelFrontUpOffset === "number" ? window.wheelFrontUpOffset : -0.03;
+
+        const rSideOff = typeof window !== "undefined" && typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18;
+        const rFwdOff  = typeof window !== "undefined" && typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
+        const rUpOff   = typeof window !== "undefined" && typeof window.wheelRearUpOffset === "number" ? window.wheelRearUpOffset : -0.03;
+
+        const wheelScale = typeof window !== "undefined" && typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+        const wheelRadius = 0.16 * wheelScale;
 
         const wheelOffsets = [
             { id: "FL", side: -1, fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
@@ -186,8 +282,11 @@ const Physics = {
                 wTerrainRad = rad + wTerrainH * hScale;
             }
 
+            // Floor check for this sample point with precise bounding
+            wTerrainRad = this.getFloorSurfaceRadiusAt(wWorldX, wWorldY, wWorldZ, wTerrainRad);
+
             let wSurfaceRad = wTerrainRad;
-            if (waterEnabled && wTerrainRad < waterRadius) {
+            if (waterEnabled && wTerrainRad < waterRadius && (waterRadius - wTerrainRad > 0.3 * (typeof playerScale !== "undefined" ? playerScale : 1.0))) {
                 let waveVal = (typeof getWaterWave === "function") ? getWaterWave(wWorldX, wWorldY, wWorldZ, waterAnimTime, waveStrength) : 0;
                 let depth = waterRadius - wTerrainRad;
                 let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
@@ -207,7 +306,7 @@ const Physics = {
             reqRadii.push(requiredBoatRad);
         }
 
-        let bR_baseline = baseRadius - 0.04;
+        let bR_baseline = centerTerrainRad + 0.04;
         let targetGroundRadius = bR_baseline;
         if (reqRadii.length === 4) {
             let avgWheelReq = (reqRadii[0] + reqRadii[1] + reqRadii[2] + reqRadii[3]) / 4;
@@ -222,7 +321,7 @@ const Physics = {
         let newF = [bF[0], bF[1], bF[2]];
         let newR = [bR_vec[0], bR_vec[1], bR_vec[2]];
 
-        if (wHeights.length === 4) {
+        if (wHeights.length === 4 && !isInWater) {
             let fl = wHeights[0], fr = wHeights[1], rl = wHeights[2], rr = wHeights[3];
             let fAvg = (fl + fr) * 0.5;
             let rAvg = (rl + rr) * 0.5;

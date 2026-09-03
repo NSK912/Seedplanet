@@ -3937,11 +3937,18 @@ window.cloud3DProgram = cloud3DProgram;
             let _isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
             if (_isLandBoat) {
               currentSpeedVal = Math.abs(activeRidingBoat.vehicleSpeed || 0);
-            } else {
+            } else if (_isInWater) {
               if (activeRidingBoat.hasEngine) {
                  currentSpeedVal = pSpeed * 5.0;
               } else {
                  currentSpeedVal = pSpeed * 1.5;
+              }
+            } else {
+              // Non-wheeled boat on land: dragged with friction
+              if (activeRidingBoat.hasEngine) {
+                 currentSpeedVal = pSpeed * 1.8;
+              } else {
+                 currentSpeedVal = pSpeed * 0.6;
               }
             }
           }
@@ -4172,612 +4179,23 @@ window.cloud3DProgram = cloud3DProgram;
             // Wood floors and stone floors are flat surfaces and should not block the player horizontally.
             // This prevents the player from floating unusually high due to conflicting/overlapping horizontal wall and floor collisions.
 
-            const currentPlayPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
-            const nearbyCollectibles = [];
-            const collFilterDistSq = 3.0 * 3.0; // 3.0 units is plenty since wood_walls are only ~0.3 units in size
-            for (let i = 0; i < collectibles.length; i++) {
-              const item = collectibles[i];
-              if (item.active && !item.isPreview && (item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door")) {
-                const dx = currentPlayPos3D[0] - item.position[0];
-                const dy = currentPlayPos3D[1] - item.position[1];
-                const dz = currentPlayPos3D[2] - item.position[2];
-                if (dx*dx + dy*dy + dz*dz < collFilterDistSq) {
-                  nearbyCollectibles.push(item);
-                }
-              }
-            }
-
-            // --- COLLISION WITH WOOD WALLS ---
-            for (let other of nearbyCollectibles) {
-              if (other.active && other.type === "wood_wall" && !other.isPreview) {
-                const wallCenterRadius = Math.sqrt(
-                  other.position[0] * other.position[0] +
-                  other.position[1] * other.position[1] +
-                  other.position[2] * other.position[2]
-                );
-                
-                const wallHeight = 0.25;
-                const charRadius = playerScale * 0.38;
-                
-                const feetRadius = groundRadius - 0.46 * playerScale;
-                const headRadius = groundRadius + 0.46 * playerScale;
-                
-                if (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight) {
-                  // Compute rotated local coordinate system of the wall
-                  const angle = other.angle || 0.0;
-                  const cosA = Math.cos(angle);
-                  const sinA = Math.sin(angle);
-                  
-                  const wallR = [
-                    other.R[0] * cosA + other.F[0] * sinA,
-                    other.R[1] * cosA + other.F[1] * sinA,
-                    other.R[2] * cosA + other.F[2] * sinA
-                  ];
-                  const wallF = [
-                    other.F[0] * cosA - other.R[0] * sinA,
-                    other.F[1] * cosA - other.R[1] * sinA,
-                    other.F[2] * cosA - other.R[2] * sinA
-                  ];
-                  
-                  // Vector from wall center to player
-                  const dx_vec = [
-                    P_new[0] * groundRadius - other.position[0],
-                    P_new[1] * groundRadius - other.position[1],
-                    P_new[2] * groundRadius - other.position[2]
-                  ];
-                  
-                  // Project onto local axes of the wall
-                  const dx = dx_vec[0] * wallR[0] + dx_vec[1] * wallR[1] + dx_vec[2] * wallR[2];
-                  const dz = dx_vec[0] * wallF[0] + dx_vec[1] * wallF[1] + dx_vec[2] * wallF[2];
-                  
-                  // Check if there is an active wood_door or wood_window sharing the same snapped position (or very close)
-                  let hasCoLocatedDoor = false;
-                  let hasCoLocatedWindow = false;
-                  if (other.type === "wood_wall") {
-                    for (let d of nearbyCollectibles) {
-                      if (d.active && !d.isPreview) {
-                        const ox = d.position[0] - other.position[0];
-                        const oy = d.position[1] - other.position[1];
-                        const oz = d.position[2] - other.position[2];
-                        const distSq = ox*ox + oy*oy + oz*oz;
-                        if (distSq < 0.005) {
-                          if (d.type === "wood_door") {
-                            hasCoLocatedDoor = true;
-                          } else if (d.type === "wood_window") {
-                            hasCoLocatedWindow = true;
-                          }
-                        }
-                      }
-                    }
-                  }
-
-                  let segments = [];
-                  if (hasCoLocatedDoor) {
-                    segments.push({ cx: -0.1095, hw: 0.0405 });
-                    segments.push({ cx: 0.1095, hw: 0.0405 });
-                  } else if (hasCoLocatedWindow) {
-                    const feetHeight = feetRadius - wallCenterRadius;
-                    // Player is passing through the window if their feet are at or above the sill (0.08), 
-                    // and not too high (feet are below 0.18, which is the top frame)
-                    if (feetHeight >= 0.075 && feetHeight < 0.185) {
-                      // Player is vertically inside the window opening, only block by left/right window frames
-                      segments.push({ cx: -0.1175, hw: 0.0325 });
-                      segments.push({ cx: 0.1175, hw: 0.0325 });
-                    } else {
-                      // Otherwise, player height overlaps with solid parts of the wall, so block completely
-                      segments.push({ cx: 0.0, hw: 0.15 });
-                    }
-                  } else {
-                    segments.push({ cx: 0.0, hw: 0.15 });
-                  }
-
-                  const hd = 0.02; // half thickness
-
-                  for (let seg of segments) {
-                    // Project onto local axes of the wall (might have been pushed in previous iteration)
-                    const cur_dx_vec = [
-                      P_new[0] * groundRadius - other.position[0],
-                      P_new[1] * groundRadius - other.position[1],
-                      P_new[2] * groundRadius - other.position[2]
-                    ];
-                    const cur_dx = cur_dx_vec[0] * wallR[0] + cur_dx_vec[1] * wallR[1] + cur_dx_vec[2] * wallR[2];
-                    const cur_dz = cur_dx_vec[0] * wallF[0] + cur_dx_vec[1] * wallF[1] + cur_dx_vec[2] * wallF[2];
-
-                    const ldx = cur_dx - seg.cx;
-                    const limitX = seg.hw + charRadius;
-                    const limitZ = hd + charRadius;
-
-                    if (Math.abs(ldx) < limitX && Math.abs(cur_dz) < limitZ) {
-                      const penX = limitX - Math.abs(ldx);
-                      const penZ = limitZ - Math.abs(cur_dz);
-
-                      if (penX < penZ) {
-                        const pushAmt = penX * Math.sign(ldx);
-                        const pushVec = [wallR[0] * pushAmt, wallR[1] * pushAmt, wallR[2] * pushAmt];
-                        P_new[0] += pushVec[0] / groundRadius;
-                        P_new[1] += pushVec[1] / groundRadius;
-                        P_new[2] += pushVec[2] / groundRadius;
-                      } else {
-                        const pushAmt = penZ * Math.sign(cur_dz);
-                        const pushVec = [wallF[0] * pushAmt, wallF[1] * pushAmt, wallF[2] * pushAmt];
-                        P_new[0] += pushVec[0] / groundRadius;
-                        P_new[1] += pushVec[1] / groundRadius;
-                        P_new[2] += pushVec[2] / groundRadius;
-                      }
-
-                      // Renormalize P_new after each push
-                      const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
-                      P_new[0] /= pLenTemp;
-                      P_new[1] /= pLenTemp;
-                      P_new[2] /= pLenTemp;
-                    }
-                  }
-                }
-              }
-            }
-
-            // --- COLLISION WITH WOOD WINDOWS ---
-            for (let other of nearbyCollectibles) {
-              if (other.active && other.type === "wood_window" && !other.isPreview) {
-                const wallCenterRadius = Math.sqrt(
-                  other.position[0] * other.position[0] +
-                  other.position[1] * other.position[1] +
-                  other.position[2] * other.position[2]
-                );
-                
-                const wallHeight = 0.25;
-                const charRadius = playerScale * 0.38;
-                
-                const feetRadius = groundRadius - 0.46 * playerScale;
-                const headRadius = groundRadius + 0.46 * playerScale;
-                
-                if (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight) {
-                  // Compute rotated local coordinate system of the window frame
-                  const angle = other.angle || 0.0;
-                  const cosA = Math.cos(angle);
-                  const sinA = Math.sin(angle);
-                  
-                  const wallR = [
-                    other.R[0] * cosA + other.F[0] * sinA,
-                    other.R[1] * cosA + other.F[1] * sinA,
-                    other.R[2] * cosA + other.F[2] * sinA
-                  ];
-                  const wallF = [
-                    other.F[0] * cosA - other.R[0] * sinA,
-                    other.F[1] * cosA - other.R[1] * sinA,
-                    other.F[2] * cosA - other.R[2] * sinA
-                  ];
-                  
-                  // Vector from window center to player
-                  const dx_vec = [
-                    P_new[0] * groundRadius - other.position[0],
-                    P_new[1] * groundRadius - other.position[1],
-                    P_new[2] * groundRadius - other.position[2]
-                  ];
-                  
-                  // Project onto local axes of the window
-                  const dx = dx_vec[0] * wallR[0] + dx_vec[1] * wallR[1] + dx_vec[2] * wallR[2];
-                  const dz = dx_vec[0] * wallF[0] + dx_vec[1] * wallF[1] + dx_vec[2] * wallF[2];
-
-                  // 1. Static Frame collision:
-                  // The solid left and right frames of the window
-                  const segments = [
-                    { cx: -0.1175, hw: 0.0325 },
-                    { cx: 0.1175, hw: 0.0325 }
-                  ];
-
-                  const feetHeight = feetRadius - wallCenterRadius;
-                  const headHeight = headRadius - wallCenterRadius;
-                  // Player is passing through the window if their feet are at or above the sill (0.08), 
-                  // and not too high (feet are below 0.18, which is the top frame)
-                  if (feetHeight >= 0.075 && feetHeight < 0.185) {
-                    // Player is vertically inside the window opening, only block by left/right frames
-                  } else {
-                    // Player is outside the vertical window opening, so block the entire width
-                    segments.push({ cx: 0.0, hw: 0.085 });
-                  }
-
-                  const hd = 0.02; // frame thickness half-thickness
-
-                  for (let seg of segments) {
-                    const cur_dx_vec = [
-                      P_new[0] * groundRadius - other.position[0],
-                      P_new[1] * groundRadius - other.position[1],
-                      P_new[2] * groundRadius - other.position[2]
-                    ];
-                    const cur_dx = cur_dx_vec[0] * wallR[0] + cur_dx_vec[1] * wallR[1] + cur_dx_vec[2] * wallR[2];
-                    const cur_dz = cur_dx_vec[0] * wallF[0] + cur_dx_vec[1] * wallF[1] + cur_dx_vec[2] * wallF[2];
-
-                    const ldx = cur_dx - seg.cx;
-                    const limitX = seg.hw + charRadius;
-                    const limitZ = hd + charRadius;
-
-                    if (Math.abs(ldx) < limitX && Math.abs(cur_dz) < limitZ) {
-                      const penX = limitX - Math.abs(ldx);
-                      const penZ = limitZ - Math.abs(cur_dz);
-
-                      if (penX < penZ) {
-                        const pushAmt = penX * Math.sign(ldx);
-                        const pushVec = [wallR[0] * pushAmt, wallR[1] * pushAmt, wallR[2] * pushAmt];
-                        P_new[0] += pushVec[0] / groundRadius;
-                        P_new[1] += pushVec[1] / groundRadius;
-                        P_new[2] += pushVec[2] / groundRadius;
-                      } else {
-                        const pushAmt = penZ * Math.sign(cur_dz);
-                        const pushVec = [wallF[0] * pushAmt, wallF[1] * pushAmt, wallF[2] * pushAmt];
-                        P_new[0] += pushVec[0] / groundRadius;
-                        P_new[1] += pushVec[1] / groundRadius;
-                        P_new[2] += pushVec[2] / groundRadius;
-                      }
-
-                      // Renormalize P_new after each push
-                      const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
-                      P_new[0] /= pLenTemp;
-                      P_new[1] /= pLenTemp;
-                      P_new[2] /= pLenTemp;
-                    }
-                  }
-
-                  // 2. Window Shutters (Left & Right) collision:
-                  const A = other.windowAngle || 0.0;
-
-                  // Only collide with shutters if the player's vertical range overlaps with the window opening [0.08, 0.17]
-                  if (feetHeight < 0.17 && headHeight > 0.08) {
-                    const shutterLen = 0.085;
-                    const shutterThickness = 0.012;
-                    const colX = charRadius;
-                    const colZ = shutterThickness / 2 + charRadius;
-
-                    // --- LEFT SHUTTER CAPSULE COLLISION ---
-                    const hingeLeft = [
-                      other.position[0] - wallR[0] * 0.085,
-                      other.position[1] - wallR[1] * 0.085,
-                      other.position[2] - wallR[2] * 0.085
-                    ];
-                    const p_rel_left = [
-                      P_new[0] * groundRadius - hingeLeft[0],
-                      P_new[1] * groundRadius - hingeLeft[1],
-                      P_new[2] * groundRadius - hingeLeft[2]
-                    ];
-
-                    const R_left = [
-                      wallR[0] * Math.cos(A) + wallF[0] * Math.sin(A),
-                      wallR[1] * Math.cos(A) + wallF[1] * Math.sin(A),
-                      wallR[2] * Math.cos(A) + wallF[2] * Math.sin(A)
-                    ];
-                    const F_left = [
-                      wallF[0] * Math.cos(A) - wallR[0] * Math.sin(A),
-                      wallF[1] * Math.cos(A) - wallR[1] * Math.sin(A),
-                      wallF[2] * Math.cos(A) - wallR[2] * Math.sin(A)
-                    ];
-
-                    const leftX = p_rel_left[0] * R_left[0] + p_rel_left[1] * R_left[1] + p_rel_left[2] * R_left[2];
-                    const leftZ = p_rel_left[0] * F_left[0] + p_rel_left[1] * F_left[1] + p_rel_left[2] * F_left[2];
-
-                    let isCollidingLeft = false;
-                    let pushVecLeft = [0, 0, 0];
-
-                    if (leftX >= 0 && leftX <= shutterLen) {
-                      // Over the face of the shutter
-                      if (Math.abs(leftZ) < colZ) {
-                        isCollidingLeft = true;
-                        const penZ = colZ - Math.abs(leftZ);
-                        const pushAmt = penZ * (Math.sign(leftZ) || 1);
-                        pushVecLeft = [F_left[0] * pushAmt, F_left[1] * pushAmt, F_left[2] * pushAmt];
-                      }
-                    } else if (leftX < 0 && leftX >= -charRadius) {
-                      // Near the hinge - check circle collision with hinge
-                      const distSq = leftX * leftX + leftZ * leftZ;
-                      const limit = charRadius;
-                      if (distSq < limit * limit) {
-                        isCollidingLeft = true;
-                        const dist = Math.sqrt(distSq) || 1e-5;
-                        const pen = limit - dist;
-                        const pushX = (leftX / dist) * pen;
-                        const pushZ = (leftZ / dist) * pen;
-                        pushVecLeft = [
-                          R_left[0] * pushX + F_left[0] * pushZ,
-                          R_left[1] * pushX + F_left[1] * pushZ,
-                          R_left[2] * pushX + F_left[2] * pushZ
-                        ];
-                      }
-                    } else if (leftX > shutterLen && leftX <= shutterLen + charRadius) {
-                      // Near the tip - check circle collision with tip
-                      const dxTip = leftX - shutterLen;
-                      const distSq = dxTip * dxTip + leftZ * leftZ;
-                      const limit = charRadius;
-                      if (distSq < limit * limit) {
-                        isCollidingLeft = true;
-                        const dist = Math.sqrt(distSq) || 1e-5;
-                        const pen = limit - dist;
-                        const pushX = (dxTip / dist) * pen;
-                        const pushZ = (leftZ / dist) * pen;
-                        pushVecLeft = [
-                          R_left[0] * pushX + F_left[0] * pushZ,
-                          R_left[1] * pushX + F_left[1] * pushZ,
-                          R_left[2] * pushX + F_left[2] * pushZ
-                        ];
-                      }
-                    }
-
-                    if (isCollidingLeft) {
-                      P_new[0] += pushVecLeft[0] / groundRadius;
-                      P_new[1] += pushVecLeft[1] / groundRadius;
-                      P_new[2] += pushVecLeft[2] / groundRadius;
-
-                      const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
-                      P_new[0] /= pLenTemp;
-                      P_new[1] /= pLenTemp;
-                      P_new[2] /= pLenTemp;
-                    }
-
-                    // --- RIGHT SHUTTER CAPSULE COLLISION ---
-                    const hingeRight = [
-                      other.position[0] + wallR[0] * 0.085,
-                      other.position[1] + wallR[1] * 0.085,
-                      other.position[2] + wallR[2] * 0.085
-                    ];
-                    const p_rel_right = [
-                      P_new[0] * groundRadius - hingeRight[0],
-                      P_new[1] * groundRadius - hingeRight[1],
-                      P_new[2] * groundRadius - hingeRight[2]
-                    ];
-
-                    const leafR_right = [
-                      -wallR[0] * Math.cos(A) + wallF[0] * Math.sin(A),
-                      -wallR[1] * Math.cos(A) + wallF[1] * Math.sin(A),
-                      -wallR[2] * Math.cos(A) + wallF[2] * Math.sin(A)
-                    ];
-                    const leafF_right = [
-                      wallF[0] * Math.cos(A) + wallR[0] * Math.sin(A),
-                      wallF[1] * Math.cos(A) + wallR[1] * Math.sin(A),
-                      wallF[2] * Math.cos(A) + wallR[2] * Math.sin(A)
-                    ];
-
-                    const rightX = p_rel_right[0] * leafR_right[0] + p_rel_right[1] * leafR_right[1] + p_rel_right[2] * leafR_right[2];
-                    const rightZ = p_rel_right[0] * leafF_right[0] + p_rel_right[1] * leafF_right[1] + p_rel_right[2] * leafF_right[2];
-
-                    let isCollidingRight = false;
-                    let pushVecRight = [0, 0, 0];
-
-                    if (rightX >= 0 && rightX <= shutterLen) {
-                      // Over the face of the shutter
-                      if (Math.abs(rightZ) < colZ) {
-                        isCollidingRight = true;
-                        const penZ = colZ - Math.abs(rightZ);
-                        const pushAmt = penZ * (Math.sign(rightZ) || 1);
-                        pushVecRight = [leafF_right[0] * pushAmt, leafF_right[1] * pushAmt, leafF_right[2] * pushAmt];
-                      }
-                    } else if (rightX < 0 && rightX >= -charRadius) {
-                      // Near the hinge - check circle collision with hinge
-                      const distSq = rightX * rightX + rightZ * rightZ;
-                      const limit = charRadius;
-                      if (distSq < limit * limit) {
-                        isCollidingRight = true;
-                        const dist = Math.sqrt(distSq) || 1e-5;
-                        const pen = limit - dist;
-                        const pushX = (rightX / dist) * pen;
-                        const pushZ = (rightZ / dist) * pen;
-                        pushVecRight = [
-                          leafR_right[0] * pushX + leafF_right[0] * pushZ,
-                          leafR_right[1] * pushX + leafF_right[1] * pushZ,
-                          leafR_right[2] * pushX + leafF_right[2] * pushZ
-                        ];
-                      }
-                    } else if (rightX > shutterLen && rightX <= shutterLen + charRadius) {
-                      // Near the tip - check circle collision with tip
-                      const dxTip = rightX - shutterLen;
-                      const distSq = dxTip * dxTip + rightZ * rightZ;
-                      const limit = charRadius;
-                      if (distSq < limit * limit) {
-                        isCollidingRight = true;
-                        const dist = Math.sqrt(distSq) || 1e-5;
-                        const pen = limit - dist;
-                        const pushX = (dxTip / dist) * pen;
-                        const pushZ = (rightZ / dist) * pen;
-                        pushVecRight = [
-                          leafR_right[0] * pushX + leafF_right[0] * pushZ,
-                          leafR_right[1] * pushX + leafF_right[1] * pushZ,
-                          leafR_right[2] * pushX + leafF_right[2] * pushZ
-                        ];
-                      }
-                    }
-
-                    if (isCollidingRight) {
-                      P_new[0] += pushVecRight[0] / groundRadius;
-                      P_new[1] += pushVecRight[1] / groundRadius;
-                      P_new[2] += pushVecRight[2] / groundRadius;
-
-                      const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
-                      P_new[0] /= pLenTemp;
-                      P_new[1] /= pLenTemp;
-                      P_new[2] /= pLenTemp;
-                    }
-                  }
-                }
-              }
-            }
-
-            // --- COLLISION WITH WOOD DOORS ---
-            for (let other of nearbyCollectibles) {
-              if (other.active && other.type === "wood_door" && !other.isPreview) {
-                const p3x = P_new[0] * groundRadius;
-                const p3y = P_new[1] * groundRadius;
-                const p3z = P_new[2] * groundRadius;
-                
-                const dx_vec_x = p3x - other.position[0];
-                const dx_vec_y = p3y - other.position[1];
-                const dx_vec_z = p3z - other.position[2];
-                const distSq = dx_vec_x * dx_vec_x + dx_vec_y * dx_vec_y + dx_vec_z * dx_vec_z;
-                if (distSq > 0.16) { // 0.4 * 0.4 = 0.16
-                  continue;
-                }
-
-                if (other._wallR === undefined) {
-                  const angle = other.angle || 0.0;
-                  const cosA = Math.cos(angle);
-                  const sinA = Math.sin(angle);
-                  other._wallR = [
-                    other.R[0] * cosA + other.F[0] * sinA,
-                    other.R[1] * cosA + other.F[1] * sinA,
-                    other.R[2] * cosA + other.F[2] * sinA
-                  ];
-                  other._wallF = [
-                    other.F[0] * cosA - other.R[0] * sinA,
-                    other.F[1] * cosA - other.R[1] * sinA,
-                    other.F[2] * cosA - other.R[2] * sinA
-                  ];
-                  other._centerRadius = Math.sqrt(
-                    other.position[0] * other.position[0] +
-                    other.position[1] * other.position[1] +
-                    other.position[2] * other.position[2]
-                  );
-                }
-                const wallCenterRadius = other._centerRadius;
-                const wallR = other._wallR;
-                const wallF = other._wallF;
-                
-                const wallHeight = 0.25;
-                const charRadius = playerScale * 0.38;
-                
-                const feetRadius = groundRadius - 0.46 * playerScale;
-                const headRadius = groundRadius + 0.46 * playerScale;
-                
-                if (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight) {
-                  // Project onto local axes of the door frame
-                  const dx = dx_vec_x * wallR[0] + dx_vec_y * wallR[1] + dx_vec_z * wallR[2];
-                  const dz = dx_vec_x * wallF[0] + dx_vec_y * wallF[1] + dx_vec_z * wallF[2];
-
-                  let blockedByPost = false;
-                  let postSide = '';
-                  let pushed = false;
-                  let appliedTorque = 0.0;
-
-                  // 1. Static Frame/Posts collision:
-                  // The posts are at the sides of the door (from 0.063 to 0.075, and from -0.063 to -0.075).
-                  // If the player tries to walk through the side posts, they should be blocked.
-                  const postRadius = 0.012;
-                  const leftPostDx = dx - (-0.069);
-                  const rightPostDx = dx - 0.069;
-                  const collRad = postRadius + charRadius;
-                  
-                  // Simple circle collision check for left post:
-                  const leftDistSq = leftPostDx * leftPostDx + dz * dz;
-                  if (leftDistSq < collRad * collRad) {
-                    blockedByPost = true;
-                    postSide = 'left';
-                    const dist = Math.sqrt(leftDistSq) || 1.0;
-                    const pen = collRad - dist;
-                    const pushX = (leftPostDx / dist) * pen;
-                    const pushZ = (dz / dist) * pen;
-                    const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
-                    P_new[0] += pushVec[0] / groundRadius;
-                    P_new[1] += pushVec[1] / groundRadius;
-                    P_new[2] += pushVec[2] / groundRadius;
-                  }
-
-                  // Simple circle collision check for right post:
-                  const rightDistSq = rightPostDx * rightPostDx + dz * dz;
-                  if (rightDistSq < collRad * collRad) {
-                    blockedByPost = true;
-                    postSide = 'right';
-                    const dist = Math.sqrt(rightDistSq) || 1.0;
-                    const pen = collRad - dist;
-                    const pushX = (rightPostDx / dist) * pen;
-                    const pushZ = (dz / dist) * pen;
-                    const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
-                    P_new[0] += pushVec[0] / groundRadius;
-                    P_new[1] += pushVec[1] / groundRadius;
-                    P_new[2] += pushVec[2] / groundRadius;
-                  }
-
-                  // 2. Door leaf (swingable) collision and push:
-                  // Hinge is at wallR * -0.063.
-                  // The door leaf rotated coordinates relative to the hinge:
-                  const hinge = [
-                    other.position[0] - wallR[0] * 0.063,
-                    other.position[1] - wallR[1] * 0.063,
-                    other.position[2] - wallR[2] * 0.063
-                  ];
-                  const p_rel = [
-                    P_new[0] * groundRadius - hinge[0],
-                    P_new[1] * groundRadius - hinge[1],
-                    P_new[2] * groundRadius - hinge[2]
-                  ];
-
-                  const doorAngle = other.doorAngle || 0.0;
-                  const cosD = Math.cos(doorAngle);
-                  const sinD = Math.sin(doorAngle);
-
-                  // Local right axis of leaf:
-                  const leafR = [
-                    wallR[0] * cosD + wallF[0] * sinD,
-                    wallR[1] * cosD + wallF[1] * sinD,
-                    wallR[2] * cosD + wallF[2] * sinD
-                  ];
-                  // Local forward axis of leaf (thickness normal):
-                  const leafF = [
-                    wallF[0] * cosD - wallR[0] * sinD,
-                    wallF[1] * cosD - wallR[1] * sinD,
-                    wallF[2] * cosD - wallR[2] * sinD
-                  ];
-
-                  const leafX = p_rel[0] * leafR[0] + p_rel[1] * leafR[1] + p_rel[2] * leafR[2];
-                  const leafZ = p_rel[0] * leafF[0] + p_rel[1] * leafF[1] + p_rel[2] * leafF[2];
-
-                  // Check if player's cylinder overlaps the door leaf
-                  const leafLength = 0.125; // leaf width from hinge (half-width)
-                  const leafThickness = 0.015;
-                  const colX = charRadius;
-                  const colZ = leafThickness / 2 + charRadius;
-
-                  // Player overlaps the door leaf range
-                  if (leafX >= -colX && leafX <= leafLength + colX && Math.abs(leafZ) < colZ) {
-                    // Push the door!
-                    // Torque is applied in the direction of the push
-                    if (other.doorVel === undefined) other.doorVel = 0.0;
-                    
-                    const leverArm = Math.max(0.05, Math.min(leafLength, leafX));
-                    const forceFactor = 22.0; // Dynamic push strength
-                    const forceSign = -Math.sign(leafZ);
-                    const pushTorque = forceSign * forceFactor * (leverArm / leafLength);
-                    
-                    pushed = true;
-                    appliedTorque = pushTorque;
-                    other.doorVel += pushTorque * dt;
-                    // No need to set pendingCollectibleRefresh = true; as doorActiveSwinging will be true and refresh the dynamic buffer instead of the entire static world.
-
-                    // Always block the player physically so they cannot clip or slide through the solid wood door leaf panel
-                    const penZ = colZ - Math.abs(leafZ);
-                    const pushAmt = penZ * Math.sign(leafZ);
-                    const pushVec = [leafF[0] * pushAmt, leafF[1] * pushAmt, leafF[2] * pushAmt];
-                    P_new[0] += pushVec[0] / groundRadius;
-                    P_new[1] += pushVec[1] / groundRadius;
-                    P_new[2] += pushVec[2] / groundRadius;
-                  }
-
-                  if (typeof window.logDoorCollision === "function") {
-                    const doorId = other.id || `x${other.position[0].toFixed(1)}y${other.position[1].toFixed(1)}z${other.position[2].toFixed(1)}`;
-                    const playerPos = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
-                    window.logDoorCollision(
-                      doorId,
-                      playerPos,
-                      other.position,
-                      dx,
-                      dz,
-                      leafX,
-                      leafZ,
-                      appliedTorque,
-                      doorAngle,
-                      other.doorVel || 0.0,
-                      pushed,
-                      blockedByPost,
-                      postSide
-                    );
-                  }
-
-                }
-              }
+            // Structure Collision (wood_wall, wood_roof, wood_window, wood_door)
+            // Prevents both on-foot player and wheeled land boat from passing through walls and roofs
+            if (typeof resolveStructureCollisions === "function") {
+              resolveStructureCollisions({
+                P_new,
+                P_curr,
+                groundRadius,
+                playerScale,
+                activeRidingBoat,
+                collectibles,
+                F_3d,
+                East,
+                North,
+                charTheta,
+                charPhi,
+                charHeading
+              });
             }
 
             // Renormalize P_new after physics
@@ -5102,10 +4520,8 @@ window.cloud3DProgram = cloud3DProgram;
                 let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
                 baseRadius += wave * fade;
             }
-            // Gravity system for wheeled boat
+            
             let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
-            let bR = baseRadius - 0.04;
-            let targetGroundRadius = bR;
 
             // Recalculate F_3d and R for the boat based on the updated charHeading and nx,ny,nz
             let cNorth = [-Math.cos(charTheta) * Math.cos(charPhi), Math.sin(charTheta), -Math.cos(charTheta) * Math.sin(charPhi)];
@@ -5121,27 +4537,36 @@ window.cloud3DProgram = cloud3DProgram;
                 cEast[2] * Math.cos(charHeading) - cNorth[2] * Math.sin(charHeading)
             ];
 
-            if (activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0)) {
+            let bR;
+            if (isBoatInWater) {
+                // BOAT IN WATER: Keep exact original water submersion depth (-0.04)
+                bR = baseRadius - 0.04;
+                activeRidingBoat.currentRadius = bR;
+                activeRidingBoat.verticalVel = 0;
+                activeRidingBoat.pitchGrade = 0;
+                activeRidingBoat.normal = [nx, ny, nz];
+            } else if (isLandVehicle) {
+                // WHEELED VEHICLE ON LAND: calculate wheeled vehicle physics
                 const vehicleTransform = Physics.calculateLandBoatTransform({
                     position: [tRadius * nx, tRadius * ny, tRadius * nz],
                     nx, ny, nz,
                     F: bF,
                     R: bR_vec,
-                    baseRadius: baseRadius,
+                    baseRadius: tRadius,
                     waterEnabled,
                     waterLevel,
                     waterAnimTime,
-                    waveStrength
+                    waveStrength,
+                    hasWheels: true,
+                    isInWater: false
                 });
 
-                targetGroundRadius = vehicleTransform.targetGroundRadius;
+                let targetGroundRadius = vehicleTransform.targetGroundRadius;
                 activeRidingBoat.pitchGrade = vehicleTransform.pitchGrade;
                 activeRidingBoat.normal = vehicleTransform.normal;
                 bF = vehicleTransform.F;
                 bR_vec = vehicleTransform.R;
-            }
 
-            if (isLandVehicle) {
                 if (activeRidingBoat.currentRadius === undefined) {
                     activeRidingBoat.currentRadius = targetGroundRadius;
                     activeRidingBoat.verticalVel = 0;
@@ -5153,12 +4578,22 @@ window.cloud3DProgram = cloud3DProgram;
                 
                 // Ground collision
                 if (activeRidingBoat.currentRadius <= targetGroundRadius) {
-                    // Slight bounce or just stop
                     activeRidingBoat.currentRadius = targetGroundRadius;
                     activeRidingBoat.verticalVel = 0;
                 }
                 
                 bR = activeRidingBoat.currentRadius;
+            } else {
+                // NON-WHEELED BOAT ON LAND: sits flush touching the ground / floor
+                let landGroundRad = tRadius;
+                if (typeof Physics !== "undefined" && typeof Physics.getFloorSurfaceRadiusAt === "function") {
+                    landGroundRad = Physics.getFloorSurfaceRadiusAt(nx * tRadius, ny * tRadius, nz * tRadius, tRadius);
+                }
+                bR = landGroundRad + 0.002;
+                activeRidingBoat.currentRadius = bR;
+                activeRidingBoat.verticalVel = 0;
+                activeRidingBoat.pitchGrade = 0;
+                activeRidingBoat.normal = [nx, ny, nz];
             }
 
             activeRidingBoat.position = [bR * nx, bR * ny, bR * nz];
@@ -5167,10 +4602,6 @@ window.cloud3DProgram = cloud3DProgram;
             py = playerCenterRadius * ny;
             pz = playerCenterRadius * nz;
 
-            // let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
-            if (!isLandVehicle || !activeRidingBoat.normal) {
-                activeRidingBoat.normal = [nx, ny, nz];
-            }
             activeRidingBoat.angle = undefined; // clear fixed placement angle
             activeRidingBoat.F = bF;
             activeRidingBoat.R = bR_vec;
@@ -5445,7 +4876,7 @@ window.cloud3DProgram = cloud3DProgram;
         lastIsCameraUnderwater = isCameraUnderwater;
 
         // คำนวณทิศทางแสงวงโคจรของดวงอาทิตย์ (หมุนตามวงโคจร)
-        const orbitSpeed = 0.08; // ความเร็วของดวงอาทิตย์ที่งดงาม หมุนเปลี่ยนกลางวันกลางคืนได้อย่างลงตัว
+        const orbitSpeed = (typeof window !== "undefined" && typeof window.dayNightOrbitSpeed === "number") ? window.dayNightOrbitSpeed : 0.01; // ความเร็วของดวงอาทิตย์ (0.01 ให้เวลา 1 วันประมาณ 10 นาทีครึ่ง)
         const orbitAngle = waterTime * orbitSpeed;
         const baseLightDir = [0.8, 0.45, 0.4];
         const baseLen = Math.sqrt(
@@ -5673,8 +5104,16 @@ window.cloud3DProgram = cloud3DProgram;
                 chestHoldTimer = 0.0;
               }
               const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-              let actionText = "กด [E] ค้าง เพื่อ ลงจากเรือ<br>Hold [E] to Dismount";
-              let extraStatus = (!canRideBoat) ? "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>" : "";
+              let actionText = "ลงจากเรือ<br>Dismount Boat";
+              let isBoatInWater = waterEnabled && (bTerrainRadius < bWaterRadius) && (bDepth > 0.48 * playerScale);
+              let extraStatus = "";
+              if (!isBoatInWater) {
+                if (!hasWheels) {
+                  extraStatus = "<br><span style='font-size: 9px; color: #ffaa44;'>เรืออยู่บนบก - ติดล้อไม้เพื่อขับเคลื่อนเต็มที่<br>(On land - attach Wooden Wheels to drive)</span>";
+                }
+              } else if (!canRideBoat) {
+                extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
+              }
               
               prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                 <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
@@ -6163,7 +5602,7 @@ window.cloud3DProgram = cloud3DProgram;
                     chestHoldTimer = 0.0;
                   }
                   const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-                  let actionText = (closestBoat.hasWheel || closestBoat.hasWheels) ? "ขึ้นขับเรือบก<br>Drive Land Boat" : (canRideBoat ? "ขึ้นเรือพาย<br>Ride Boat" : "ติดล้อไม้เพื่อขับเรือบนบก<br>Attach Wooden Wheel for Land");
+                  let actionText = (closestBoat.hasWheel || closestBoat.hasWheels) ? "ขึ้นขับเรือบก<br>Drive Land Boat" : (canRideBoat ? "ขึ้นเรือพาย<br>Ride Boat" : "ขึ้นนั่งเรือ (ติดล้อไม้เพื่อขับบนบก)<br>Board Boat (Attach Wheel to drive)");
                   let extraStatus = "";
 
                   prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">

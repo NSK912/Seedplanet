@@ -430,6 +430,7 @@ window.NpcRegistry["georgiacetus"] = {
     } catch(e) {}
 
     const isDriving = pBoat || pMech;
+    const ignorePlayer = (typeof window !== "undefined" && window.npcIgnorePlayer);
 
     if (gRadius > wRadius - 0.02) {
       // On land
@@ -454,7 +455,7 @@ window.NpcRegistry["georgiacetus"] = {
       // Swimming
       c.isSwimming = true;
       
-      if (distToPlayer < 15.0 && !isDriving) { // Chase player!
+      if (distToPlayer < 15.0 && !isDriving && !ignorePlayer) { // Chase player!
         const dot_E = dx * (-Math.sin(c.phi)) + dz * Math.cos(c.phi);
         const dot_N = dx * (-Math.cos(c.theta) * Math.cos(c.phi)) + dy * Math.sin(c.theta) + dz * (-Math.cos(c.theta) * Math.sin(c.phi));
         const targetHeading = Math.atan2(dot_E, dot_N);
@@ -482,6 +483,22 @@ window.NpcRegistry["georgiacetus"] = {
                 }
             } catch(e) {}
         }
+      } else {
+        // Peaceful wander / patrol swim
+        const patrolSpeed = 0.6 * deltaTime;
+        const move_theta = patrolSpeed * Math.cos(c.heading) / c.r;
+        let move_phi = 0;
+        if (Math.sin(c.theta) > 0.01) {
+          move_phi = patrolSpeed * Math.sin(c.heading) / (c.r * Math.sin(c.theta));
+        }
+        c.theta += move_theta;
+        c.phi += move_phi;
+
+        if (Math.random() < 0.02) {
+          c.heading += (Math.random() - 0.5) * 0.8;
+        }
+
+        c.animPhase += deltaTime * 5.0;
       }
 
       // Initialize diving state if not exists

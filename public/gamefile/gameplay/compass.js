@@ -259,7 +259,7 @@
 
         const markersToDraw = [];
 
-        // Exact metadata mapping for craftable placed utility objects
+        // Exact metadata mapping for craftable placed utility objects and player-placed structures
         const CRAFTED_UTILITY_MAP = {
           'campfire': { icon: '🔥', label: 'Campfire', color: '#ff9100', priority: 90, itemType: 'CAMPFIRE' },
           'wood_chest': { icon: '📦', label: 'Chest', color: '#dfb76c', priority: 80, itemType: 'WOOD_CHEST' },
@@ -268,20 +268,35 @@
           'robot_stand': { icon: '🏗️', label: 'Robot Stand', color: '#ffb74d', priority: 75, itemType: 'ROBOT_STAND' },
           'meganeura_item': { icon: '🦟', label: 'Meganeura', color: '#81c784', priority: 60, itemType: 'MEGANEURA' },
           'isopod_item': { icon: '🦐', label: 'Isopod', color: '#ba68c8', priority: 60, itemType: 'ISOPOD' },
-          'stone_floor': { icon: '🪨', label: 'Stone Floor', color: '#a0a0a0', priority: 50, itemType: 'STONE_FLOOR' }
+          'stone_floor': { icon: '🧱', label: 'Stone Floor', color: '#b0bec5', priority: 65, itemType: 'STONE_FLOOR' },
+          'wood_floor': { icon: '🪵', label: 'Wood Floor', color: '#c29d62', priority: 50, itemType: 'WOOD_FLOOR' },
+          'thin_wood_floor': { icon: '🪵', label: 'Floor', color: '#c29d62', priority: 50, itemType: 'THIN_WOOD_FLOOR' },
+          'wood_stairs': { icon: '🪜', label: 'Stairs', color: '#c29d62', priority: 50, itemType: 'WOOD_STAIRS' },
+          'wood_wall': { icon: '🪵', label: 'Wall', color: '#c29d62', priority: 50, itemType: 'WOOD_WALL' },
+          'wood_window': { icon: '🪟', label: 'Window', color: '#c29d62', priority: 50, itemType: 'WOOD_WINDOW' },
+          'wood_door': { icon: '🚪', label: 'Door', color: '#c29d62', priority: 50, itemType: 'WOOD_DOOR' },
+          'wood_roof': { icon: '🏠', label: 'Roof', color: '#c29d62', priority: 50, itemType: 'WOOD_ROOF' },
+          'wood_wheel': { icon: '⚙️', label: 'Wheel', color: '#c29d62', priority: 50, itemType: 'WOOD_WHEEL' },
+          'electric_engine': { icon: '🔋', label: 'Engine', color: '#40c4ff', priority: 60, itemType: 'ELECTRIC_ENGINE' }
         };
-
-        const BUILDING_STRUCTURE_TYPES = new Set([
-          'wood_wall', 'wood_window', 'wood_door', 'wood_floor', 'thin_wood_floor', 'stone_floor', 'wood_stairs'
-        ]);
 
         // Collect placed craftable structures in the scene
         const collectiblesList = (typeof window !== 'undefined' && window.collectibles) ? window.collectibles : ((typeof collectibles !== 'undefined') ? collectibles : []);
 
         for (let c of collectiblesList) {
           if (!c || c.active === false || c.isPreview || !c.position) continue;
+          
+          // 1. Procedural/random world-generated houses, ruins, and random boats are hidden from compass
+          if (c.hideFromCompass || c.isHouse || c.isProceduralHouse || c.isRuin || c.isWorldGenerated || c.isRandomBoat) {
+            continue;
+          }
 
-          // 1. Craftable utility items (Campfire, Chest, Boat, Core, Meganeura)
+          // 2. Random boats in world without isPlayerPlaced flag must be skipped
+          if (c.type === 'wood_boat' && !c.isPlayerPlaced) {
+            continue;
+          }
+
+          // 3. Craftable and player placed items
           const utilMeta = CRAFTED_UTILITY_MAP[c.type];
           if (utilMeta) {
             const dx = c.position[0] - px;

@@ -79,10 +79,15 @@ window.ItemRegistry["wood_wall"] = {
     const hasCoLocatedWindow = item.isPreview ? item._previewHasWindow : item._hasCoLocatedWindow;
 
     function getTrimHeight(tOffset, defaultMax) {
-      const cacheKey = tOffset < 0 ? "_trimHeightLeft" : "_trimHeightRight";
-      if (!item.isPreview && item[cacheKey] !== undefined && item._colLen === colLen) {
-        return item[cacheKey];
+      if (!item._trimCache || item._trimColLen !== colLen) {
+        item._trimCache = {};
+        item._trimColLen = colLen;
       }
+      const cacheKey = Math.round(tOffset * 1000);
+      if (!item.isPreview && item._trimCache[cacheKey] !== undefined) {
+        return item._trimCache[cacheKey];
+      }
+
       let maxH = defaultMax;
       const queryP = [
         p[0] + wallR[0] * tOffset,
@@ -117,7 +122,7 @@ window.ItemRegistry["wood_wall"] = {
           const dx = oP[0] - queryP[0];
           const dy = oP[1] - queryP[1];
           const dz = oP[2] - queryP[2];
-          if (dx*dx + dy*dy + dz*dz > 2.0) continue;
+          if (dx*dx + dy*dy + dz*dz > 3.0) continue;
 
           const oR = other.R || [1,0,0];
           const oF = other.F || [0,0,1];
@@ -179,27 +184,38 @@ window.ItemRegistry["wood_wall"] = {
               ];
               const u = diff[0] * roofR[0] + diff[1] * roofR[1] + diff[2] * roofR[2];
               const v = diff[0] * roofF[0] + diff[1] * roofF[1] + diff[2] * roofF[2];
-              if (Math.abs(u) < roofW * 0.5 + 0.02 && v > -roofD * 0.5 - 0.02 && v < roofD * 0.5 + 0.02) {
-                maxH = t_hit;
+              
+              let vLimitMax = roofD * 0.5;
+              if (other._vMaxEff !== undefined && other._vMaxEff < slopeLen * 0.5) {
+                vLimitMax = other._vMaxEff * (roofD / slopeLen);
+              }
+
+              if (Math.abs(u) <= roofW * 0.5 + 0.045 && v >= -roofD * 0.5 - 0.035 && v <= vLimitMax + 0.035) {
+                maxH = Math.max(0, t_hit);
               }
             }
           }
         }
       }
-      if (!item.isPreview) { item[cacheKey] = maxH; item._colLen = colLen; }
+      if (!item.isPreview) { item._trimCache[cacheKey] = maxH; }
       return maxH;
     }
     
 
     function addCustomBox(bottomCenter, w, d, hl, hr, color, rotR, rotU, rotF, outVertices, outColors, outIndices) {
+      if (hl <= 0.001 && hr <= 0.001) return;
       const hw = w / 2;
       const hd = d / 2;
       
       let r_ = rotR, u_ = rotU, f_ = rotF;
+      let hl_ = hl, hr_ = hr;
       if (r_ && u_ && f_) {
         const det = (r_[1]*u_[2] - r_[2]*u_[1])*f_[0] + (r_[2]*u_[0] - r_[0]*u_[2])*f_[1] + (r_[0]*u_[1] - r_[1]*u_[0])*f_[2];
         if (det < 0) {
           r_ = [-r_[0], -r_[1], -r_[2]];
+          const tmp = hl_;
+          hl_ = hr_;
+          hr_ = tmp;
         }
       }
       
@@ -208,10 +224,10 @@ window.ItemRegistry["wood_wall"] = {
         [hw, 0, -hd],
         [hw, 0, hd],
         [-hw, 0, hd],
-        [-hw, hl, -hd],
-        [hw, hr, -hd],
-        [hw, hr, hd],
-        [-hw, hl, hd],
+        [-hw, hl_, -hd],
+        [hw, hr_, -hd],
+        [hw, hr_, hd],
+        [-hw, hl_, hd],
       ];
       const baseIdx = outVertices.length / 3;
       for (let i = 0; i < 8; i++) {
@@ -261,20 +277,21 @@ window.ItemRegistry["wood_wall"] = {
       addBox(bottomBeamCenter, 0.3, 0.02, 0.025, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
     }
 
-    // 2) Top horizontal support beam
-    if (!isWindow) {
-      const hLeft = getTrimHeight(-0.15, 0.25);
-      const hRight = getTrimHeight(0.15, 0.25);
-      if (hLeft > 0.235 && hRight > 0.235) {
-        const bHL = Math.min(0.02, Math.max(0, hLeft - 0.23));
-        const bHR = Math.min(0.02, Math.max(0, hRight - 0.23));
-        const beamBottom = [
-          p[0] + n[0] * 0.23,
-          p[1] + n[1] * 0.23,
-          p[2] + n[2] * 0.23
-        ];
-        addCustomBox(beamBottom, 0.3, 0.025, bHL, bHR, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
-      }
+    // 2) Top horizontal support beam (only if wall is untrimmed at top)
+    const topTrimLeft = getTrimHeight(-0.15, 0.25);
+    const topTrimRight = getTrimHeight(0.15, 0.25);
+    const topTrimMid = getTrimHeight(0.0, 0.25);
+    const hasTopBeam = !isWindow && (topTrimLeft >= 0.245 && topTrimRight >= 0.245 && topTrimMid >= 0.245);
+
+    if (hasTopBeam) {
+      const bHL = Math.min(0.02, Math.max(0, topTrimLeft - 0.23));
+      const bHR = Math.min(0.02, Math.max(0, topTrimRight - 0.23));
+      const beamBottom = [
+        p[0] + n[0] * 0.23,
+        p[1] + n[1] * 0.23,
+        p[2] + n[2] * 0.23
+      ];
+      addCustomBox(beamBottom, 0.3, 0.025, bHL, bHR, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
     }
 
     // 3) Vertical planks (only for wood_wall, wood_window has no background planks)
@@ -285,6 +302,8 @@ window.ItemRegistry["wood_wall"] = {
         const x = Math.sin(s) * 10000;
         return x - Math.floor(x);
       }
+
+      const maxPlankH = hasTopBeam ? 0.21 : 0.23;
 
       for (let i = 0; i < numPlanks; i++) {
         if (hasCoLocatedDoor && (i === 1 || i === 2 || i === 3)) {
@@ -298,8 +317,9 @@ window.ItemRegistry["wood_wall"] = {
           bCol * (0.85 + shadeNoise * 0.3)
         ];
 
-        const hLeft = Math.max(0, getTrimHeight(t - 0.031, 0.25));
-        const hRight = Math.max(0, getTrimHeight(t + 0.031, 0.25));
+        const hLeft = Math.max(0, getTrimHeight(t - 0.03, 0.25));
+        const hMid = Math.max(0, getTrimHeight(t, 0.25));
+        const hRight = Math.max(0, getTrimHeight(t + 0.03, 0.25));
 
         if (hasCoLocatedWindow && (i === 1 || i === 2 || i === 3)) {
           // For co-located window middle planks: draw bottom and top parts, leaving a gap in the middle
@@ -310,9 +330,10 @@ window.ItemRegistry["wood_wall"] = {
           ];
           addBox(bottomPlankCenter, 0.062, 0.06, 0.015, plankColor, wallR, n, wallF, vertices, colors, indices);
 
-          if (hLeft > 0.17 || hRight > 0.17) {
-            const topHL = Math.min(0.06, Math.max(0, hLeft - 0.17));
-            const topHR = Math.min(0.06, Math.max(0, hRight - 0.17));
+          if (hLeft > 0.17 || hRight > 0.17 || hMid > 0.17) {
+            const topMaxH = hasTopBeam ? 0.06 : 0.08;
+            const topHL = Math.min(topMaxH, Math.max(0, hLeft - 0.17));
+            const topHR = Math.min(topMaxH, Math.max(0, hRight - 0.17));
             const topPlankBottom = [
               p[0] + wallR[0] * t + n[0] * 0.17,
               p[1] + wallR[1] * t + n[1] * 0.17,
@@ -321,16 +342,45 @@ window.ItemRegistry["wood_wall"] = {
             addCustomBox(topPlankBottom, 0.062, 0.015, topHL, topHR, plankColor, wallR, n, wallF, vertices, colors, indices);
           }
         } else {
-          // Standard solid full vertical plank
-          if (hLeft > 0.02 || hRight > 0.02) {
-            const pHL = Math.min(0.21, Math.max(0, hLeft - 0.02));
-            const pHR = Math.min(0.21, Math.max(0, hRight - 0.02));
-            const plankBottom = [
-              p[0] + wallR[0] * t + n[0] * 0.02,
-              p[1] + wallR[1] * t + n[1] * 0.02,
-              p[2] + wallR[2] * t + n[2] * 0.02
-            ];
-            addCustomBox(plankBottom, 0.062, 0.015, pHL, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+          // Standard solid vertical plank
+          const isPeak = (hMid > Math.max(hLeft, hRight) + 0.003);
+          const isValley = (hMid < Math.min(hLeft, hRight) - 0.003);
+
+          if (isPeak || isValley) {
+            // Draw as two half-width planks meeting at apex hMid
+            const pHL = Math.min(maxPlankH, Math.max(0, hLeft - 0.02));
+            const pHM = Math.min(maxPlankH, Math.max(0, hMid - 0.02));
+            const pHR = Math.min(maxPlankH, Math.max(0, hRight - 0.02));
+
+            if (pHL > 0.001 || pHM > 0.001) {
+              const leftCenter = [
+                p[0] + wallR[0] * (t - 0.015) + n[0] * 0.02,
+                p[1] + wallR[1] * (t - 0.015) + n[1] * 0.02,
+                p[2] + wallR[2] * (t - 0.015) + n[2] * 0.02
+              ];
+              addCustomBox(leftCenter, 0.031, 0.015, pHL, pHM, plankColor, wallR, n, wallF, vertices, colors, indices);
+            }
+
+            if (pHM > 0.001 || pHR > 0.001) {
+              const rightCenter = [
+                p[0] + wallR[0] * (t + 0.015) + n[0] * 0.02,
+                p[1] + wallR[1] * (t + 0.015) + n[1] * 0.02,
+                p[2] + wallR[2] * (t + 0.015) + n[2] * 0.02
+              ];
+              addCustomBox(rightCenter, 0.031, 0.015, pHM, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+            }
+          } else {
+            // Standard single continuous plank
+            if (hLeft > 0.02 || hRight > 0.02) {
+              const pHL = Math.min(maxPlankH, Math.max(0, hLeft - 0.02));
+              const pHR = Math.min(maxPlankH, Math.max(0, hRight - 0.02));
+              const plankBottom = [
+                p[0] + wallR[0] * t + n[0] * 0.02,
+                p[1] + wallR[1] * t + n[1] * 0.02,
+                p[2] + wallR[2] * t + n[2] * 0.02
+              ];
+              addCustomBox(plankBottom, 0.062, 0.015, pHL, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+            }
           }
 
           // Draw a diagonal brace on the wall to make it look even more beautiful and structured!
