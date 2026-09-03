@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { Settings, Home, HardDrive, Cpu, Activity, Maximize2, Minus, X } from 'lucide-react';
+import { Settings, Home, HardDrive, Cpu, Activity, Maximize2, Minus, X, Box } from 'lucide-react';
+import DevGame from './DevGame';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('devgame');
 
   return (
     <div className="flex flex-col h-screen bg-[#09090b] text-slate-200 font-sans overflow-hidden select-none">
@@ -30,7 +31,6 @@ export default function App() {
           </button>
         </div>
       </div>
-
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <div className="w-64 bg-[#0c0c0e] border-r border-white/5 flex flex-col flex-shrink-0">
@@ -42,6 +42,12 @@ export default function App() {
                 label="Dashboard" 
                 isActive={activeTab === 'dashboard'} 
                 onClick={() => setActiveTab('dashboard')} 
+              />
+              <NavItem 
+                icon={<Box size={18} />} 
+                label="DevGame (3D)" 
+                isActive={activeTab === 'devgame'} 
+                onClick={() => setActiveTab('devgame')} 
               />
               <NavItem 
                 icon={<Cpu size={18} />} 
@@ -68,9 +74,12 @@ export default function App() {
              </nav>
           </div>
         </div>
-
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-[#09090b] p-8">
+          {activeTab === 'devgame' && (
+            <DevGame />
+          )}
+
           {activeTab === 'dashboard' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h1 className="text-xl font-medium text-white mb-6">Welcome back</h1>
@@ -94,7 +103,7 @@ export default function App() {
             </div>
           )}
           
-          {activeTab !== 'dashboard' && (
+          {activeTab !== 'dashboard' && activeTab !== 'devgame' && (
              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col items-center justify-center text-slate-500">
                 <Activity size={48} className="mb-4 opacity-20 text-indigo-400" />
                 <p className="text-sm">Content for {activeTab} goes here.</p>
