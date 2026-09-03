@@ -35,7 +35,10 @@ window.ItemRegistry["wood_wall"] = {
 
     if (item._hasCoLocatedDoor === undefined || item._colLen !== colLen) {
       let hasCoLocatedDoor = false;
-      for (let other of itemsList) {
+      const key = Math.floor(p[0] / 0.5) + "_" + Math.floor(p[1] / 0.5) + "_" + Math.floor(p[2] / 0.5);
+      const candidates = window._spatialDoors ? window._spatialDoors.get(key) : null;
+      const searchList = candidates || itemsList;
+      for (let other of searchList) {
         if (other.active && other.type === "wood_door") {
           const ox = other.position[0] - p[0];
           const oy = other.position[1] - p[1];
@@ -53,7 +56,10 @@ window.ItemRegistry["wood_wall"] = {
     if (item._hasCoLocatedWindow === undefined || item._colLen !== colLen) {
       let hasCoLocatedWindow = false;
       if (item.type === "wood_wall") {
-        for (let other of itemsList) {
+        const key = Math.floor(p[0] / 0.5) + "_" + Math.floor(p[1] / 0.5) + "_" + Math.floor(p[2] / 0.5);
+        const candidates = window._spatialWindows ? window._spatialWindows.get(key) : null;
+        const searchList = candidates || itemsList;
+        for (let other of searchList) {
           if (other.active && other.type === "wood_window") {
             const ox = other.position[0] - p[0];
             const oy = other.position[1] - p[1];
@@ -83,7 +89,27 @@ window.ItemRegistry["wood_wall"] = {
         p[1] + wallR[1] * tOffset,
         p[2] + wallR[2] * tOffset
       ];
-      for (let other of itemsList) {
+      let roofsToCheck;
+      if (window._spatialRoofs) {
+        roofsToCheck = [];
+        const cx = Math.floor(queryP[0] / 2.0);
+        const cy = Math.floor(queryP[1] / 2.0);
+        const cz = Math.floor(queryP[2] / 2.0);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const k = (cx + dx) + "_" + (cy + dy) + "_" + (cz + dz);
+              const bucket = window._spatialRoofs.get(k);
+              if (bucket) {
+                for (let b = 0; b < bucket.length; b++) roofsToCheck.push(bucket[b]);
+              }
+            }
+          }
+        }
+      } else {
+        roofsToCheck = itemsList;
+      }
+      for (let other of roofsToCheck) {
         if (!other.active || other === item) continue;
         if (other.isPreview && !item.isPreview) continue;
         if (other.type === "wood_roof") {

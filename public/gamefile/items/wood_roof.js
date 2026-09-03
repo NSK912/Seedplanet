@@ -61,8 +61,27 @@ window.ItemRegistry["wood_roof"] = {
     if (item._vMaxEff !== undefined && item._colLen === colLen) {
       vMaxEff = item._vMaxEff;
     } else {
-      const allCollectibles = (typeof window !== "undefined" && window.collectibles) ? window.collectibles : [];
-      for (let other of allCollectibles) {
+      let roofsToCheck;
+      if (window._spatialRoofs) {
+        roofsToCheck = [];
+        const cx = Math.floor(p[0] / 2.0);
+        const cy = Math.floor(p[1] / 2.0);
+        const cz = Math.floor(p[2] / 2.0);
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const k = (cx + dx) + "_" + (cy + dy) + "_" + (cz + dz);
+              const bucket = window._spatialRoofs.get(k);
+              if (bucket) {
+                for (let b = 0; b < bucket.length; b++) roofsToCheck.push(bucket[b]);
+              }
+            }
+          }
+        }
+      } else {
+        roofsToCheck = allCollectibles;
+      }
+      for (let other of roofsToCheck) {
         if (!other.active || other === item) continue;
         if (other.isPreview && !item.isPreview) continue;
         const oP = other.position || [0, 0, 0];

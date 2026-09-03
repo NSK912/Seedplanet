@@ -863,7 +863,7 @@
             const activePlanet = (window.SpacesMap && typeof window.SpacesMap.getActivePlanet === "function") ? window.SpacesMap.getActivePlanet() : null;
             const systems = (activePlanet && activePlanet.systems) ? activePlanet.systems : ["terrain", "nature", "water", "caves", "clouds", "npcs", "physics", "player", "collectibles"];
 
-            if (onProgress) onProgress(90, "Spawning forests, minerals, and creatures...", "[BIO] Simulating biosphere & amphibian neural paths...");
+            if (onProgress) onProgress(85, "Spawning natural forests and vegetation...", "[BIO] Simulating biosphere ecosystems...");
             
             const planetRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
             const sampleRatio = Math.max(1.0, Math.pow(planetRadius / 8.0, 1.2));
@@ -877,6 +877,9 @@
               natureObstacles = [];
             }
 
+            if (onProgress) onProgress(92, "Assembling ancient ruins and collectibles...", "[OBJ] Generating procedural structures & VBOs...");
+            await new Promise(r => setTimeout(r, 0));
+
             if (systems.includes("collectibles")) {
               buildCollectibles(Math.min(160, Math.floor(30 * sampleRatio)), seed);
             } else {
@@ -884,6 +887,9 @@
               collectibles = [];
               window.collectibles = [];
             }
+
+            if (onProgress) onProgress(96, "Simulating planetary atmosphere and fauna...", "[ATM] Generating 3D clouds & amphibian life...");
+            await new Promise(r => setTimeout(r, 0));
 
             if (systems.includes("clouds") || systems.includes("atmosphere")) {
               if (typeof window.generateClouds3D === "function") {
@@ -1344,32 +1350,50 @@
       // ฟังก์ชันสร้าง Flat Shaded Geometry (ตำแหน่ง, สี, Normal, และ Index สำหรับ WebGL)
       // ============================================
       function makeFlatShadedGeometry(rawVertices, rawColors, rawIndices, useCache = false) {
-        const flatVertices = useCache ? REUSABLE_FLAT_VERTICES : [];
-        const flatColors = useCache ? REUSABLE_FLAT_COLORS : [];
-        const flatNormals = useCache ? REUSABLE_FLAT_NORMALS : [];
-        const flatIndices = useCache ? REUSABLE_FLAT_INDICES : [];
+        const triCount = Math.floor(rawIndices.length / 3);
+        const vertFloatCount = triCount * 9;
+        const indCount = triCount * 3;
+
+        let flatVertices, flatColors, flatNormals, flatIndices;
 
         if (useCache) {
-          flatVertices.length = 0;
-          flatColors.length = 0;
-          flatNormals.length = 0;
-          flatIndices.length = 0;
+          flatVertices = getReusableFloat32Array(1, vertFloatCount).subarray(0, vertFloatCount);
+          flatColors = getReusableFloat32Array(2, vertFloatCount).subarray(0, vertFloatCount);
+          flatNormals = getReusableFloat32Array(3, vertFloatCount).subarray(0, vertFloatCount);
+          const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && indCount > 65535;
+          flatIndices = isUint32 ? getReusableUint32Array(indCount).subarray(0, indCount) : getReusableUint16Array(indCount).subarray(0, indCount);
+        } else {
+          flatVertices = new Float32Array(vertFloatCount);
+          flatColors = new Float32Array(vertFloatCount);
+          flatNormals = new Float32Array(vertFloatCount);
+          const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && indCount > 65535;
+          flatIndices = isUint32 ? new Uint32Array(indCount) : new Uint16Array(indCount);
         }
+
+        let vPtr = 0;
+        let cPtr = 0;
+        let nPtr = 0;
+        let iPtr = 0;
+        let baseIdx = 0;
 
         for (let i = 0; i < rawIndices.length; i += 3) {
           const i0 = rawIndices[i];
           const i1 = rawIndices[i + 1];
           const i2 = rawIndices[i + 2];
 
-          const x0 = rawVertices[i0 * 3],
-            y0 = rawVertices[i0 * 3 + 1],
-            z0 = rawVertices[i0 * 3 + 2];
-          const x1 = rawVertices[i1 * 3],
-            y1 = rawVertices[i1 * 3 + 1],
-            z1 = rawVertices[i1 * 3 + 2];
-          const x2 = rawVertices[i2 * 3],
-            y2 = rawVertices[i2 * 3 + 1],
-            z2 = rawVertices[i2 * 3 + 2];
+          const i0x3 = i0 * 3;
+          const i1x3 = i1 * 3;
+          const i2x3 = i2 * 3;
+
+          const x0 = rawVertices[i0x3],
+            y0 = rawVertices[i0x3 + 1],
+            z0 = rawVertices[i0x3 + 2];
+          const x1 = rawVertices[i1x3],
+            y1 = rawVertices[i1x3 + 1],
+            z1 = rawVertices[i1x3 + 2];
+          const x2 = rawVertices[i2x3],
+            y2 = rawVertices[i2x3 + 1],
+            z2 = rawVertices[i2x3 + 2];
 
           // Face normal
           const ux = x1 - x0,
@@ -1385,34 +1409,32 @@
 
           const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
           if (len > 0.0001) {
-            nx /= len;
-            ny /= len;
-            nz /= len;
+            const invLen = 1.0 / len;
+            nx *= invLen;
+            ny *= invLen;
+            nz *= invLen;
           } else {
             nx = 0;
             ny = 1;
             nz = 0;
           }
 
-          const baseIdx = flatVertices.length / 3;
+          flatVertices[vPtr++] = x0; flatVertices[vPtr++] = y0; flatVertices[vPtr++] = z0;
+          flatVertices[vPtr++] = x1; flatVertices[vPtr++] = y1; flatVertices[vPtr++] = z1;
+          flatVertices[vPtr++] = x2; flatVertices[vPtr++] = y2; flatVertices[vPtr++] = z2;
 
-          flatVertices.push(x0, y0, z0, x1, y1, z1, x2, y2, z2);
+          flatColors[cPtr++] = rawColors[i0x3]; flatColors[cPtr++] = rawColors[i0x3 + 1]; flatColors[cPtr++] = rawColors[i0x3 + 2];
+          flatColors[cPtr++] = rawColors[i1x3]; flatColors[cPtr++] = rawColors[i1x3 + 1]; flatColors[cPtr++] = rawColors[i1x3 + 2];
+          flatColors[cPtr++] = rawColors[i2x3]; flatColors[cPtr++] = rawColors[i2x3 + 1]; flatColors[cPtr++] = rawColors[i2x3 + 2];
 
-          flatColors.push(
-            rawColors[i0 * 3],
-            rawColors[i0 * 3 + 1],
-            rawColors[i0 * 3 + 2],
-            rawColors[i1 * 3],
-            rawColors[i1 * 3 + 1],
-            rawColors[i1 * 3 + 2],
-            rawColors[i2 * 3],
-            rawColors[i2 * 3 + 1],
-            rawColors[i2 * 3 + 2],
-          );
+          flatNormals[nPtr++] = nx; flatNormals[nPtr++] = ny; flatNormals[nPtr++] = nz;
+          flatNormals[nPtr++] = nx; flatNormals[nPtr++] = ny; flatNormals[nPtr++] = nz;
+          flatNormals[nPtr++] = nx; flatNormals[nPtr++] = ny; flatNormals[nPtr++] = nz;
 
-          flatNormals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
-
-          flatIndices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+          flatIndices[iPtr++] = baseIdx;
+          flatIndices[iPtr++] = baseIdx + 1;
+          flatIndices[iPtr++] = baseIdx + 2;
+          baseIdx += 3;
         }
 
         return {

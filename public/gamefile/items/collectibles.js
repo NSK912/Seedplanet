@@ -200,285 +200,375 @@ function buildCollectibles(count, seed) {
           active: true,
           isDynamic: false
         });
-        const numStoneFloors = Math.floor((typeof RADIUS !== 'undefined' ? RADIUS * RADIUS : 400) * 0.1);
+        const rBase = (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
+        const numStoneFloors = Math.min(18, Math.max(4, Math.round(3 + Math.sqrt(rBase))));
         for (let i = 0; i < numStoneFloors; i++) {
-          const u = Math.random();
-          const v = Math.random();
-          const theta = Math.acos(2 * u - 1);
-          const phi = 2 * Math.PI * v;
-          const h = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
-          const minLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.02;
+          let foundFlatSpot = false;
+          let wx = 0, wy = 0, wz = 0;
+          let nx = 0, ny = 0, nz = 0;
+          let R = [1, 0, 0], F = [0, 0, 1];
+          const wfSize = 0.25;
+          const wfW = wfSize * 1.2;
+          const gridX = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+          const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+          const totalW = gridX * wfW;
+          const totalD = gridY * wfW;
+
+          // Attempt up to 15 times to find a flat, non-underwater, non-cliff location for the entire house footprint
+          for (let attempt = 0; attempt < 15; attempt++) {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = Math.acos(2 * u - 1);
+            const phi = 2 * Math.PI * v;
+            const h = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
+            const minLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.04;
+            
+            if (h < minLandHeight) continue;
+
+            const candNx = Math.sin(theta) * Math.cos(phi);
+            const candNy = Math.cos(theta);
+            const candNz = Math.sin(theta) * Math.sin(phi);
+            const r = RADIUS + h * HEIGHT_SCALE;
+            const candWx = r * candNx;
+            const candWy = r * candNy;
+            const candWz = r * candNz;
+
+            if (isPositionInsideCave(candWx, candWy, candWz, 0.6)) continue;
+
+            // Frame basis
+            let txR, txY, txZ;
+            if (Math.abs(candNy) < 0.9) {
+              txR = -candNz; txY = 0; txZ = candNx;
+            } else {
+              txR = 1; txY = 0; txZ = 0;
+            }
+            const lenTxR = Math.sqrt(txR * txR + txY * txY + txZ * txZ) || 1;
+            const candR = [txR / lenTxR, txY / lenTxR, txZ / lenTxR];
+            const candF = [
+              candNy * candR[2] - candNz * candR[1],
+              candNz * candR[0] - candNx * candR[2],
+              candNx * candR[1] - candNy * candR[0]
+            ];
+            const lenF = Math.sqrt(candF[0]*candF[0] + candF[1]*candF[1] + candF[2]*candF[2]) || 1;
+            candF[0] /= lenF; candF[1] /= lenF; candF[2] /= lenF;
+
+            // Test all 4 corners of the house footprint on the spherical terrain to prevent cliff overhang
+            const halfW = totalW / 2;
+            const halfD = totalD / 2;
+            const corners = [
+              [-halfW, -halfD],
+              [halfW, -halfD],
+              [-halfW, halfD],
+              [halfW, halfD]
+            ];
+
+            let slopeOk = true;
+            for (let cIdx = 0; cIdx < 4; cIdx++) {
+              const [cx, cy] = corners[cIdx];
+              const cpX = candWx + candR[0]*cx + candF[0]*cy;
+              const cpY = candWy + candR[1]*cx + candF[1]*cy;
+              const cpZ = candWz + candR[2]*cx + candF[2]*cy;
+              const cDist = Math.sqrt(cpX*cpX + cpY*cpY + cpZ*cpZ) || 1;
+              const cny = cpY / cDist;
+              const cnx = cpX / cDist;
+              const cnz = cpZ / cDist;
+              const cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, cny)));
+              const cPhi = Math.atan2(cnz, cnx);
+              const cH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(cTheta, cPhi, seed) : getHeightOnSphere(cTheta, cPhi, seed);
+              
+              // Each corner must be solidly above water and not a steep cliff overhang
+              if (cH < minLandHeight || Math.abs(cH - h) > 0.06) {
+                slopeOk = false;
+                break;
+              }
+            }
+
+            if (slopeOk) {
+              wx = candWx; wy = candWy; wz = candWz;
+              nx = candNx; ny = candNy; nz = candNz;
+              R = candR; F = candF;
+              foundFlatSpot = true;
+              break;
+            }
+          }
+
+          if (!foundFlatSpot) continue;
+
+          collectibles.push({
+            type: "stone_floor",
+            position: [wx, wy, wz],
+            normal: [nx, ny, nz],
+            R: R,
+            F: F,
+            active: true,
+            size: 0.25,
+            width: totalW,
+            depth: totalD,
+            angle: 0.0,
+            seed: seed + i * 5000
+          });
+
+          const stoneH = wfSize * 0.15;
+          const baseWfH = (typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05;
+          const actualWfThickness = baseWfH + wfSize * 0.12;
           
-          if (h >= minLandHeight) {
-              const nx = Math.sin(theta) * Math.cos(phi);
-              const ny = Math.cos(theta);
-              const nz = Math.sin(theta) * Math.sin(phi);
-              const r = RADIUS + h * HEIGHT_SCALE;
-              const wx = r * nx;
-              const wy = r * ny;
-              const wz = r * nz;
-              if (isPositionInsideCave(wx, wy, wz, 0.5)) continue;
+          const floorCenterHeight = stoneH + actualWfThickness / 2;
+          const wallBaseHeight = stoneH + actualWfThickness;
+          
+          const roofStyle = Math.random() > 0.3 ? "gable" : "flat";
+          const roofAxis = Math.random() > 0.5 ? "X" : "Y";
+          
+          const isPerfect = Math.random() < 0.4;
+          const missingWallProb = isPerfect ? 0 : 0.15;
+          const missingRoofProb = isPerfect ? 0 : 0.20;
+          const missingFloorProb = isPerfect ? 0 : 0.08;
+          
+          const cells = [];
+          for (let gx = 0; gx < gridX; gx++) {
+            cells[gx] = [];
+            for (let gy = 0; gy < gridY; gy++) {
+              const hasFloor = Math.random() >= missingFloorProb;
+              cells[gx][gy] = {
+                hasFloor: hasFloor,
+                // CRITICAL: Walls and roofs can ONLY exist on a cell that has a floor! No mid-air floating structures!
+                hasRoof: hasFloor && (Math.random() >= missingRoofProb),
+                wallLeft: (hasFloor && gx === 0) ? (Math.random() >= missingWallProb) : false,
+                wallRight: (hasFloor && gx === gridX - 1) ? (Math.random() >= missingWallProb) : false,
+                wallBottom: (hasFloor && gy === 0) ? (Math.random() >= missingWallProb) : false,
+                wallTop: (hasFloor && gy === gridY - 1) ? (Math.random() >= missingWallProb) : false
+              };
+            }
+          }
 
-              let txR, txY, txZ;
-              if (Math.abs(ny) < 0.9) {
-                txR = -nz; txY = 0; txZ = nx;
-              } else {
-                txR = 1; txY = 0; txZ = 0;
+          // Enforce structural support rule: A roof must be supported by its perimeter wall
+          for (let gx = 0; gx < gridX; gx++) {
+            for (let gy = 0; gy < gridY; gy++) {
+              const c = cells[gx][gy];
+              if (c.hasRoof) {
+                if (!c.hasFloor) { c.hasRoof = false; continue; }
+                if (gx === 0 && !c.wallLeft) c.hasRoof = false;
+                if (gx === gridX - 1 && !c.wallRight) c.hasRoof = false;
+                if (gy === 0 && !c.wallBottom) c.hasRoof = false;
+                if (gy === gridY - 1 && !c.wallTop) c.hasRoof = false;
               }
-              const lenTxR = Math.sqrt(txR * txR + txY * txY + txZ * txZ) || 1;
-              const R = [txR / lenTxR, txY / lenTxR, txZ / lenTxR];
-              const F = [
-                ny * R[2] - nz * R[1],
-                nz * R[0] - nx * R[2],
-                nx * R[1] - ny * R[0]
-              ];
-              const lenF = Math.sqrt(F[0]*F[0] + F[1]*F[1] + F[2]*F[2]);
-              F[0] /= lenF; F[1] /= lenF; F[2] /= lenF;
-              
-              // Procedural House on top of the stone floor
-              const wfSize = 0.25;
-              const wfW = wfSize * 1.2;
-              
-              // Constraints to ensure good looking gable roofs
-              const gridX = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
-              const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
-              
-              const totalW = gridX * wfW;
-              const totalD = gridY * wfW;
-              
-              collectibles.push({
-                type: "stone_floor",
-                position: [wx, wy, wz],
-                normal: [nx, ny, nz],
-                R: R,
-                F: F,
-                active: true,
-                size: 0.25,
-                width: totalW,
-                depth: totalD,
-                angle: 0.0,
-                seed: seed + i * 5000
-              });
+            }
+          }
 
-              const stoneH = wfSize * 0.15;
-              const baseWfH = (typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05;
-              const actualWfThickness = baseWfH + wfSize * 0.12;
-              
-              const floorCenterHeight = stoneH + actualWfThickness / 2;
-              const wallBaseHeight = stoneH + actualWfThickness;
-              
-              const roofStyle = Math.random() > 0.3 ? "gable" : "flat";
-              const roofAxis = Math.random() > 0.5 ? "X" : "Y";
-              
-              const isPerfect = Math.random() < 0.3;
-              const missingWallProb = isPerfect ? 0 : 0.15 + Math.random() * 0.3;
-              const missingRoofProb = isPerfect ? 0 : 0.1 + Math.random() * 0.4;
-              const missingFloorProb = isPerfect ? 0 : 0.05 + Math.random() * 0.15;
-              
-              const cells = [];
-              for (let gx = 0; gx < gridX; gx++) {
-                cells[gx] = [];
-                for (let gy = 0; gy < gridY; gy++) {
-                  cells[gx][gy] = {
-                    hasFloor: Math.random() >= missingFloorProb,
-                    hasRoof: Math.random() >= missingRoofProb,
-                    wallLeft: gx === 0 ? Math.random() >= missingWallProb : false,
-                    wallRight: gx === gridX - 1 ? Math.random() >= missingWallProb : false,
-                    wallBottom: gy === 0 ? Math.random() >= missingWallProb : false,
-                    wallTop: gy === gridY - 1 ? Math.random() >= missingWallProb : false
-                  };
-                }
-              }
+          // Choose at most ONE entrance door candidate for the entire house
+          const doorCandidates = [];
+          for (let gx = 0; gx < gridX; gx++) {
+            for (let gy = 0; gy < gridY; gy++) {
+              const c = cells[gx][gy];
+              if (!c.hasFloor) continue;
+              if (c.wallBottom && gy === 0) doorCandidates.push({ gx, gy, side: "bottom" });
+              if (c.wallTop && gy === gridY - 1) doorCandidates.push({ gx, gy, side: "top" });
+              if (c.wallLeft && gx === 0) doorCandidates.push({ gx, gy, side: "left" });
+              if (c.wallRight && gx === gridX - 1) doorCandidates.push({ gx, gy, side: "right" });
+            }
+          }
 
-              // Enforce rule: A roof must be supported by its perimeter wall
-              for (let gx = 0; gx < gridX; gx++) {
-                for (let gy = 0; gy < gridY; gy++) {
-                  const c = cells[gx][gy];
-                  if (c.hasRoof) {
-                    if (gx === 0 && !c.wallLeft) c.hasRoof = false;
-                    if (gx === gridX - 1 && !c.wallRight) c.hasRoof = false;
-                    if (gy === 0 && !c.wallBottom) c.hasRoof = false;
-                    if (gy === gridY - 1 && !c.wallTop) c.hasRoof = false;
-                  }
-                }
-              }
-              
-              for (let gx = 0; gx < gridX; gx++) {
-                for (let gy = 0; gy < gridY; gy++) {
-                   const c = cells[gx][gy];
-                   const cx = -totalW/2 + wfW/2 + gx * wfW;
-                   const cy = -totalD/2 + wfW/2 + gy * wfW;
-                   
-                   const localPos = [
-                     wx + R[0]*cx + F[0]*cy,
-                     wy + R[1]*cx + F[1]*cy,
-                     wz + R[2]*cx + F[2]*cy
+          let entranceDoor = null;
+          if (doorCandidates.length > 0 && (isPerfect || Math.random() < 0.75)) {
+            entranceDoor = doorCandidates[Math.floor(Math.random() * doorCandidates.length)];
+          }
+          
+          for (let gx = 0; gx < gridX; gx++) {
+            for (let gy = 0; gy < gridY; gy++) {
+               const c = cells[gx][gy];
+               const cx = -totalW/2 + wfW/2 + gx * wfW;
+               const cy = -totalD/2 + wfW/2 + gy * wfW;
+               
+               const localPos = [
+                 wx + R[0]*cx + F[0]*cy,
+                 wy + R[1]*cx + F[1]*cy,
+                 wz + R[2]*cx + F[2]*cy
+               ];
+               
+               if (c.hasFloor) {
+                 const fPos = [
+                   localPos[0] + nx*floorCenterHeight,
+                   localPos[1] + ny*floorCenterHeight,
+                   localPos[2] + nz*floorCenterHeight
+                 ];
+                 collectibles.push({
+                   type: "wood_floor",
+                   position: fPos,
+                   normal: [nx, ny, nz],
+                   R: R,
+                   F: F,
+                   active: true,
+                   size: wfSize,
+                   seed: seed + i*1000 + gx*10 + gy
+                 });
+               }
+               
+               if (c.hasRoof && c.hasFloor) {
+                 if (roofStyle === "flat") {
+                   const roofHeight = floorCenterHeight + 0.25;
+                   const roofPos = [
+                     localPos[0] + nx*roofHeight,
+                     localPos[1] + ny*roofHeight,
+                     localPos[2] + nz*roofHeight
                    ];
+                   collectibles.push({
+                     type: "thin_wood_floor",
+                     position: roofPos,
+                     normal: [nx, ny, nz],
+                     R: R,
+                     F: F,
+                     active: true,
+                     size: wfSize,
+                     seed: seed + i*2000 + gx*10 + gy
+                   });
+                 } else {
+                   // Gable roof logic
+                   let isSlope = false;
+                   let isFlatTop = false;
+                   let roofRDir = R;
+                   let roofFDir = F;
                    
-                   if (c.hasFloor) {
-                     const fPos = [
-                       localPos[0] + nx*floorCenterHeight,
-                       localPos[1] + ny*floorCenterHeight,
-                       localPos[2] + nz*floorCenterHeight
+                   if (roofAxis === "X") {
+                     // ridge along Y-axis, slopes down along X-axis
+                     if (gx === 0) {
+                       isSlope = true;
+                       roofFDir = R; 
+                       roofRDir = [-F[0], -F[1], -F[2]];
+                     } else if (gx === gridX - 1) {
+                       isSlope = true;
+                       roofFDir = [-R[0], -R[1], -R[2]];
+                       roofRDir = F;
+                     } else {
+                       isFlatTop = true;
+                     }
+                   } else {
+                     // ridge along X-axis, slopes down along Y-axis
+                     if (gy === 0) {
+                       isSlope = true;
+                       roofFDir = F; 
+                       roofRDir = R;
+                     } else if (gy === gridY - 1) {
+                       isSlope = true;
+                       roofFDir = [-F[0], -F[1], -F[2]];
+                       roofRDir = [-R[0], -R[1], -R[2]];
+                     } else {
+                       isFlatTop = true;
+                     }
+                   }
+
+                   if (isFlatTop) {
+                     const peakHeight = wallBaseHeight + 0.50; // top of slopes
+                     const roofPos = [
+                       localPos[0] + nx*peakHeight,
+                       localPos[1] + ny*peakHeight,
+                       localPos[2] + nz*peakHeight
                      ];
                      collectibles.push({
-                       type: "wood_floor",
-                       position: fPos,
+                       type: "thin_wood_floor",
+                       position: roofPos,
                        normal: [nx, ny, nz],
                        R: R,
                        F: F,
                        active: true,
                        size: wfSize,
-                       seed: seed + i*1000 + gx*10 + gy
+                       seed: seed + i*2000 + gx*10 + gy
                      });
-                   }
-                   
-                   if (c.hasRoof) {
-                     if (roofStyle === "flat") {
-                       const roofHeight = floorCenterHeight + 0.25;
-                       const roofPos = [
-                         localPos[0] + nx*roofHeight,
-                         localPos[1] + ny*roofHeight,
-                         localPos[2] + nz*roofHeight
-                       ];
-                       collectibles.push({
-                         type: "thin_wood_floor",
-                         position: roofPos,
-                         normal: [nx, ny, nz],
-                         R: R,
-                         F: F,
-                         active: true,
-                         size: wfSize,
-                         seed: seed + i*2000 + gx*10 + gy
-                       });
-                     } else {
-                       // Gable roof logic
-                       let isSlope = false;
-                       let isFlatTop = false;
-                       let roofRDir = R;
-                       let roofFDir = F;
-                       
-                       if (roofAxis === "X") {
-                         // ridge along Y-axis, slopes down along X-axis
-                         if (gx === 0) {
-                           isSlope = true;
-                           roofFDir = R; 
-                           roofRDir = [-F[0], -F[1], -F[2]];
-                         } else if (gx === gridX - 1) {
-                           isSlope = true;
-                           roofFDir = [-R[0], -R[1], -R[2]];
-                           roofRDir = F;
-                         } else {
-                           isFlatTop = true;
-                         }
-                       } else {
-                         // ridge along X-axis, slopes down along Y-axis
-                         if (gy === 0) {
-                           isSlope = true;
-                           roofFDir = F; 
-                           roofRDir = R;
-                         } else if (gy === gridY - 1) {
-                           isSlope = true;
-                           roofFDir = [-F[0], -F[1], -F[2]];
-                           roofRDir = [-R[0], -R[1], -R[2]];
-                         } else {
-                           isFlatTop = true;
-                         }
-                       }
-    
-                       
-                       if (isFlatTop) {
-                         const peakHeight = wallBaseHeight + 0.50; // top of slopes
-                         const roofPos = [
-                           localPos[0] + nx*peakHeight,
-                           localPos[1] + ny*peakHeight,
-                           localPos[2] + nz*peakHeight
-                         ];
-                         collectibles.push({
-                           type: "thin_wood_floor",
-                           position: roofPos,
-                           normal: [nx, ny, nz],
-                           R: R,
-                           F: F,
-                           active: true,
-                           size: wfSize,
-                           seed: seed + i*2000 + gx*10 + gy
-                         });
-                       } else if (isSlope) {
-                         const roofHeight = wallBaseHeight + 0.25;
-                         const roofPos = [
-                           localPos[0] + nx*roofHeight,
-                           localPos[1] + ny*roofHeight,
-                           localPos[2] + nz*roofHeight
-                         ];
-                         collectibles.push({
-                           type: "wood_roof",
-                           position: roofPos,
-                           normal: [nx, ny, nz],
-                           R: roofRDir,
-                           F: roofFDir,
-                           active: true,
-                           size: wfSize,
-                           angle: 0,
-                           seed: seed + i*2000 + gx*10 + gy
-                         });
-                       }
-                     }
-                   }
-
-                   const wallPosBase = [
-                     localPos[0] + nx*wallBaseHeight,
-                     localPos[1] + ny*wallBaseHeight,
-                     localPos[2] + nz*wallBaseHeight
-                   ];
-
-                   const addWall = (wOffset, wR, wF, seedOffset, elevOffset = 0) => {
-                     const typeRand = Math.random();
-                     let wType = "wood_wall";
-                     if (elevOffset === 0) {
-                       if (isPerfect) {
-                          wType = typeRand > 0.5 ? "wood_wall" : "wood_window";
-                          if (typeRand < 0.1) wType = "wood_door";
-                       } else {
-                          wType = typeRand > 0.5 ? "wood_wall" : (typeRand > 0.25 ? "wood_window" : "wood_door");
-                       }
-                     }
-                     const wPos = [
-                       wallPosBase[0] + wOffset[0] + nx * elevOffset,
-                       wallPosBase[1] + wOffset[1] + ny * elevOffset,
-                       wallPosBase[2] + wOffset[2] + nz * elevOffset
+                   } else if (isSlope) {
+                     const roofHeight = wallBaseHeight + 0.25;
+                     const roofPos = [
+                       localPos[0] + nx*roofHeight,
+                       localPos[1] + ny*roofHeight,
+                       localPos[2] + nz*roofHeight
                      ];
                      collectibles.push({
-                       type: wType,
-                       position: wPos,
+                       type: "wood_roof",
+                       position: roofPos,
+                       normal: [nx, ny, nz],
+                       R: roofRDir,
+                       F: roofFDir,
+                       active: true,
+                       size: wfSize,
+                       angle: 0,
+                       seed: seed + i*2000 + gx*10 + gy
+                     });
+                   }
+                 }
+               }
+
+               // Only spawn walls if the cell has a floor beneath it!
+               if (c.hasFloor) {
+                 const wallPosBase = [
+                   localPos[0] + nx*wallBaseHeight,
+                   localPos[1] + ny*wallBaseHeight,
+                   localPos[2] + nz*wallBaseHeight
+                 ];
+
+                 // CRITICAL ENGINE RULE: wood_door and wood_window are fixtures that MUST CO-LOCATE with a wood_wall.
+                 // wood_wall renders the framing and side planks; wood_door / wood_window renders the door leaf / window frame inside.
+                 // Never spawn wood_door or wood_window alone in mid-air without wood_wall!
+                 const addWall = (wOffset, wR, wF, seedOffset, fixtureType = null, elevOffset = 0) => {
+                   const wPos = [
+                     wallPosBase[0] + wOffset[0] + nx * elevOffset,
+                     wallPosBase[1] + wOffset[1] + ny * elevOffset,
+                     wallPosBase[2] + wOffset[2] + nz * elevOffset
+                   ];
+
+                   // Always place the base structural wood_wall
+                   collectibles.push({
+                     type: "wood_wall",
+                     position: wPos,
+                     normal: [nx, ny, nz],
+                     R: wR,
+                     F: wF,
+                     active: true,
+                     size: wfSize,
+                     seed: seed + i*3000 + seedOffset
+                   });
+
+                   // If this wall has a door or window fixture, co-locate it with the wall
+                   if (elevOffset === 0 && (fixtureType === "wood_door" || fixtureType === "wood_window")) {
+                     collectibles.push({
+                       type: fixtureType,
+                       position: [wPos[0], wPos[1], wPos[2]],
                        normal: [nx, ny, nz],
                        R: wR,
                        F: wF,
                        active: true,
                        size: wfSize,
-                       seed: seed + i*3000 + seedOffset
+                       angle: 0.0,
+                       seed: seed + i*3000 + seedOffset + 500
                      });
-                   };
-
-                   if (c.wallLeft) addWall([-R[0]*(wfW/2), -R[1]*(wfW/2), -R[2]*(wfW/2)], F, [-R[0], -R[1], -R[2]], gy);
-                   if (c.wallRight) addWall([R[0]*(wfW/2), R[1]*(wfW/2), R[2]*(wfW/2)], F, R, gy + 100);
-                   if (c.wallBottom) addWall([-F[0]*(wfW/2), -F[1]*(wfW/2), -F[2]*(wfW/2)], R, [-F[0], -F[1], -F[2]], gx + 200);
-                   if (c.wallTop) addWall([F[0]*(wfW/2), F[1]*(wfW/2), F[2]*(wfW/2)], R, F, gx + 300);
-                   
-                   // Gable ends (triangular walls to fill gap)
-                   if (c.hasRoof && roofStyle === "gable") {
-                     if (roofAxis === "X") { // slopes along X, gable ends at gy=0 and gy=gridY-1
-                       if (gy === 0 && c.wallBottom) addWall([-F[0]*(wfW/2), -F[1]*(wfW/2), -F[2]*(wfW/2)], R, [-F[0], -F[1], -F[2]], gx + 1200, 0.25);
-                       if (gy === gridY - 1 && c.wallTop) addWall([F[0]*(wfW/2), F[1]*(wfW/2), F[2]*(wfW/2)], R, F, gx + 1300, 0.25);
-                     } else { // slopes along Y, gable ends at gx=0 and gx=gridX-1
-                       if (gx === 0 && c.wallLeft) addWall([-R[0]*(wfW/2), -R[1]*(wfW/2), -R[2]*(wfW/2)], F, [-R[0], -R[1], -R[2]], gy + 1000, 0.25);
-                       if (gx === gridX - 1 && c.wallRight) addWall([R[0]*(wfW/2), R[1]*(wfW/2), R[2]*(wfW/2)], F, R, gy + 1100, 0.25);
-                     }
                    }
-                }
-              }
-    
-              
+                 };
+
+                 const getFixtureType = (side) => {
+                   if (entranceDoor && entranceDoor.gx === gx && entranceDoor.gy === gy && entranceDoor.side === side) {
+                     return "wood_door";
+                   }
+                   // 25% chance of a window on perimeter walls
+                   if (Math.random() < 0.25) {
+                     return "wood_window";
+                   }
+                   return null; // solid wood_wall
+                 };
+
+                 if (c.wallLeft) addWall([-R[0]*(wfW/2), -R[1]*(wfW/2), -R[2]*(wfW/2)], F, [-R[0], -R[1], -R[2]], gy, getFixtureType("left"));
+                 if (c.wallRight) addWall([R[0]*(wfW/2), R[1]*(wfW/2), R[2]*(wfW/2)], F, R, gy + 100, getFixtureType("right"));
+                 if (c.wallBottom) addWall([-F[0]*(wfW/2), -F[1]*(wfW/2), -F[2]*(wfW/2)], R, [-F[0], -F[1], -F[2]], gx + 200, getFixtureType("bottom"));
+                 if (c.wallTop) addWall([F[0]*(wfW/2), F[1]*(wfW/2), F[2]*(wfW/2)], R, F, gx + 300, getFixtureType("top"));
+                 
+                 // Gable ends (triangular upper walls to fill peak gap)
+                 // ONLY add if roof exists, floor exists, and the lower wall below it exists!
+                 if (c.hasRoof && roofStyle === "gable") {
+                   if (roofAxis === "X") {
+                     if (gy === 0 && c.wallBottom) addWall([-F[0]*(wfW/2), -F[1]*(wfW/2), -F[2]*(wfW/2)], R, [-F[0], -F[1], -F[2]], gx + 1200, null, 0.25);
+                     if (gy === gridY - 1 && c.wallTop) addWall([F[0]*(wfW/2), F[1]*(wfW/2), F[2]*(wfW/2)], R, F, gx + 1300, null, 0.25);
+                   } else {
+                     if (gx === 0 && c.wallLeft) addWall([-R[0]*(wfW/2), -R[1]*(wfW/2), -R[2]*(wfW/2)], F, [-R[0], -R[1], -R[2]], gy + 1000, null, 0.25);
+                     if (gx === gridX - 1 && c.wallRight) addWall([R[0]*(wfW/2), R[1]*(wfW/2), R[2]*(wfW/2)], F, R, gy + 1100, null, 0.25);
+                   }
+                 }
+               }
+            }
           }
         }
 
@@ -790,6 +880,37 @@ function buildCollectibles(count, seed) {
         } else {
           itemsToProcess = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible ? [floorPreviewCollectible] : []);
         }
+
+        // Build spatial acceleration grids for doors, windows, and roofs
+        // Eliminates O(N^2) cross-item calculations in wood_wall and wood_roof!
+        const spatialDoors = new Map();
+        const spatialWindows = new Map();
+        const spatialRoofs = new Map();
+
+        for (let i = 0; i < collectibles.length; i++) {
+          const c = collectibles[i];
+          if (!c.active || !c.position) continue;
+          const px = c.position[0], py = c.position[1], pz = c.position[2];
+          if (c.type === "wood_door") {
+            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+            let arr = spatialDoors.get(key);
+            if (!arr) { arr = []; spatialDoors.set(key, arr); }
+            arr.push(c);
+          } else if (c.type === "wood_window") {
+            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+            let arr = spatialWindows.get(key);
+            if (!arr) { arr = []; spatialWindows.set(key, arr); }
+            arr.push(c);
+          } else if (c.type === "wood_roof") {
+            const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
+            let arr = spatialRoofs.get(key);
+            if (!arr) { arr = []; spatialRoofs.set(key, arr); }
+            arr.push(c);
+          }
+        }
+        window._spatialDoors = spatialDoors;
+        window._spatialWindows = spatialWindows;
+        window._spatialRoofs = spatialRoofs;
 
         const activeProcessedItems = [];
         for (let item of itemsToProcess) {
