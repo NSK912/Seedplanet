@@ -2968,7 +2968,8 @@ window.cloud3DProgram = cloud3DProgram;
         // Apply a 1.5ms tolerance to prevent minor browser rAF scheduling fluctuations from skipping frames,
         // which would drop the FPS on 120Hz or 60Hz displays.
         const tolerance = 1.5;
-        if (delta < frameTime - tolerance && !forceDraw) {
+        // Bypassing the limiter for 120+ FPS settings allows the game to utilize the monitor's max refresh rate uncapped
+        if (targetFps < 120 && delta < frameTime - tolerance && !forceDraw) {
   
         if (Graphics.mode === 'hybrid' && Graphics.webgpu.currentPassEncoder) {
             Graphics.webgpu.currentPassEncoder.end();
@@ -2999,13 +3000,18 @@ window.cloud3DProgram = cloud3DProgram;
         }
 
         if (!forceDraw) {
-          let remainder = 0;
-        if (delta >= frameTime) {
-          remainder = delta % frameTime;
-        } else if (delta >= frameTime - tolerance) {
-          remainder = delta - frameTime;
-        }
-        lastFrameTime = timestamp - remainder;
+          if (targetFps >= 120) {
+             // For uncapped / max-hz displays, we just step exactly with timestamp
+             lastFrameTime = timestamp;
+          } else {
+             let remainder = 0;
+             if (delta >= frameTime) {
+               remainder = delta % frameTime;
+             } else if (delta >= frameTime - tolerance) {
+               remainder = delta - frameTime;
+             }
+             lastFrameTime = timestamp - remainder;
+          }
         }
         // Throttled Auto-Save (Every 20 seconds, if game started)
         if (gameStarted && !forceDraw) {
@@ -3026,7 +3032,7 @@ window.cloud3DProgram = cloud3DProgram;
         // Synchronize active action slot with floor placement mode
         const selectedItem = (selectedActionSlotIndex !== -1) ? actionSlotsItems[selectedActionSlotIndex] : null;
         
-        const isPlacementItem = selectedItem && (selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "MEGANEURA" || selectedItem.name === "ISOPOD" || selectedItem.name.startsWith("ROBOT_"));
+        const isPlacementItem = selectedItem && (selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "MEGANEURA" || selectedItem.name === "ISOPOD" || selectedItem.name.startsWith("ROBOT_"));
 
         if (isPlacementItem) {
           if (!isPlacingFloor || floorPlacementInfo?.index !== selectedActionSlotIndex) {

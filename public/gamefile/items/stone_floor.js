@@ -6,9 +6,9 @@ window.ItemRegistry["stone_floor"] = {
     const r = item.R, f = item.F, n = item.normal;
     
     // "พื้นหิน" 300x300 stone floor
-    const w = item.size * 12.0; 
-    const h = item.size * 0.15; // slightly thicker than wood floor
-    const d = item.size * 12.0;
+    const w = item.width !== undefined ? item.width : item.size * 12.0;
+    const h = item.size * 0.15;
+    const d = item.depth !== undefined ? item.depth : item.size * 12.0;
     
     // Position at the bottom of the main floor slab
     const pBottom = [

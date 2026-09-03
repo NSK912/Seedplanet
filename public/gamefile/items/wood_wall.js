@@ -30,34 +30,182 @@ window.ItemRegistry["wood_wall"] = {
 
     const isWindow = item.type === "wood_window";
 
-    // Check if there is an active wood_door sharing the same snapped position (or very close)
-    let hasCoLocatedDoor = false;
     const itemsList = window.collectibles || [];
-    for (let other of itemsList) {
-      if (other.active && other.type === "wood_door") {
-        const ox = other.position[0] - p[0];
-        const oy = other.position[1] - p[1];
-        const oz = other.position[2] - p[2];
-        if (ox*ox + oy*oy + oz*oz < 0.005) {
-          hasCoLocatedDoor = true;
-          break;
-        }
-      }
-    }
+    const colLen = itemsList.length;
 
-    // Check if there is an active wood_window sharing the same snapped position (or very close)
-    let hasCoLocatedWindow = false;
-    if (item.type === "wood_wall") {
+    if (item._hasCoLocatedDoor === undefined || item._colLen !== colLen) {
+      let hasCoLocatedDoor = false;
       for (let other of itemsList) {
-        if (other.active && other.type === "wood_window") {
+        if (other.active && other.type === "wood_door") {
           const ox = other.position[0] - p[0];
           const oy = other.position[1] - p[1];
           const oz = other.position[2] - p[2];
           if (ox*ox + oy*oy + oz*oz < 0.005) {
-            hasCoLocatedWindow = true;
+            hasCoLocatedDoor = true;
             break;
           }
         }
+      }
+      if (!item.isPreview) { item._hasCoLocatedDoor = hasCoLocatedDoor; item._colLen = colLen; }
+      else item._previewHasDoor = hasCoLocatedDoor;
+    }
+
+    if (item._hasCoLocatedWindow === undefined || item._colLen !== colLen) {
+      let hasCoLocatedWindow = false;
+      if (item.type === "wood_wall") {
+        for (let other of itemsList) {
+          if (other.active && other.type === "wood_window") {
+            const ox = other.position[0] - p[0];
+            const oy = other.position[1] - p[1];
+            const oz = other.position[2] - p[2];
+            if (ox*ox + oy*oy + oz*oz < 0.005) {
+              hasCoLocatedWindow = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!item.isPreview) { item._hasCoLocatedWindow = hasCoLocatedWindow; item._colLen = colLen; }
+      else item._previewHasWindow = hasCoLocatedWindow;
+    }
+
+    const hasCoLocatedDoor = item.isPreview ? item._previewHasDoor : item._hasCoLocatedDoor;
+    const hasCoLocatedWindow = item.isPreview ? item._previewHasWindow : item._hasCoLocatedWindow;
+
+    function getTrimHeight(tOffset, defaultMax) {
+      const cacheKey = tOffset < 0 ? "_trimHeightLeft" : "_trimHeightRight";
+      if (!item.isPreview && item[cacheKey] !== undefined && item._colLen === colLen) {
+        return item[cacheKey];
+      }
+      let maxH = defaultMax;
+      const queryP = [
+        p[0] + wallR[0] * tOffset,
+        p[1] + wallR[1] * tOffset,
+        p[2] + wallR[2] * tOffset
+      ];
+      for (let other of itemsList) {
+        if (!other.active || other === item) continue;
+        if (other.isPreview && !item.isPreview) continue;
+        if (other.type === "wood_roof") {
+          const oP = other.position || [0,0,0];
+          const dx = oP[0] - queryP[0];
+          const dy = oP[1] - queryP[1];
+          const dz = oP[2] - queryP[2];
+          if (dx*dx + dy*dy + dz*dz > 2.0) continue;
+
+          const oR = other.R || [1,0,0];
+          const oF = other.F || [0,0,1];
+          const oN = other.normal || [0,1,0];
+          const oAngle = other.angle || 0.0;
+          const cosOA = Math.cos(oAngle);
+          const sinOA = Math.sin(oAngle);
+              
+          const roofF = [
+            oF[0] * cosOA - oR[0] * sinOA,
+            oF[1] * cosOA - oR[1] * sinOA,
+            oF[2] * cosOA - oR[2] * sinOA
+          ];
+          const roofR = [
+            oR[0] * cosOA + oF[0] * sinOA,
+            oR[1] * cosOA + oF[1] * sinOA,
+            oR[2] * cosOA + oF[2] * sinOA
+          ];
+              
+          const roofW = 0.30;
+          const roofD = 0.30;
+          const rise = 0.25;
+          const slopeLen = Math.sqrt(roofD * roofD + rise * rise);
+          let normSlope = [
+            (oN[0] * roofD - roofF[0] * rise) / slopeLen,
+            (oN[1] * roofD - roofF[1] * rise) / slopeLen,
+            (oN[2] * roofD - roofF[2] * rise) / slopeLen
+          ];
+          if (normSlope[0] * oN[0] + normSlope[1] * oN[1] + normSlope[2] * oN[2] < 0) {
+            normSlope = [-normSlope[0], -normSlope[1], -normSlope[2]];
+          }
+             
+          const P_roof = [
+            oP[0] + oN[0] * 0.125,
+            oP[1] + oN[1] * 0.125,
+            oP[2] + oN[2] * 0.125
+          ];
+             
+          const nDotNorm = n[0] * normSlope[0] + n[1] * normSlope[1] + n[2] * normSlope[2];
+          if (Math.abs(nDotNorm) > 0.001) {
+            const P_to_query = [
+              P_roof[0] - queryP[0],
+              P_roof[1] - queryP[1],
+              P_roof[2] - queryP[2]
+            ];
+            const dist = (P_to_query[0] * normSlope[0] + P_to_query[1] * normSlope[1] + P_to_query[2] * normSlope[2]);
+            const t_hit = dist / nDotNorm;
+               
+            if (t_hit > -0.05 && t_hit < maxH) {
+              const hitPt = [
+                queryP[0] + n[0] * t_hit,
+                queryP[1] + n[1] * t_hit,
+                queryP[2] + n[2] * t_hit
+              ];
+              const diff = [
+                hitPt[0] - oP[0],
+                hitPt[1] - oP[1],
+                hitPt[2] - oP[2]
+              ];
+              const u = diff[0] * roofR[0] + diff[1] * roofR[1] + diff[2] * roofR[2];
+              const v = diff[0] * roofF[0] + diff[1] * roofF[1] + diff[2] * roofF[2];
+              if (Math.abs(u) < roofW * 0.5 + 0.02 && v > -roofD * 0.5 - 0.02 && v < roofD * 0.5 + 0.02) {
+                maxH = t_hit;
+              }
+            }
+          }
+        }
+      }
+      if (!item.isPreview) { item[cacheKey] = maxH; item._colLen = colLen; }
+      return maxH;
+    }
+    
+
+    function addCustomBox(bottomCenter, w, d, hl, hr, color, rotR, rotU, rotF, outVertices, outColors, outIndices) {
+      const hw = w / 2;
+      const hd = d / 2;
+      
+      let r_ = rotR, u_ = rotU, f_ = rotF;
+      if (r_ && u_ && f_) {
+        const det = (r_[1]*u_[2] - r_[2]*u_[1])*f_[0] + (r_[2]*u_[0] - r_[0]*u_[2])*f_[1] + (r_[0]*u_[1] - r_[1]*u_[0])*f_[2];
+        if (det < 0) {
+          r_ = [-r_[0], -r_[1], -r_[2]];
+        }
+      }
+      
+      const cubeVerts = [
+        [-hw, 0, -hd],
+        [hw, 0, -hd],
+        [hw, 0, hd],
+        [-hw, 0, hd],
+        [-hw, hl, -hd],
+        [hw, hr, -hd],
+        [hw, hr, hd],
+        [-hw, hl, hd],
+      ];
+      const baseIdx = outVertices.length / 3;
+      for (let i = 0; i < 8; i++) {
+         const v = cubeVerts[i];
+         const rx = r_[0]*v[0] + u_[0]*v[1] + f_[0]*v[2];
+         const ry = r_[1]*v[0] + u_[1]*v[1] + f_[1]*v[2];
+         const rz = r_[2]*v[0] + u_[2]*v[1] + f_[2]*v[2];
+         outVertices.push(bottomCenter[0]+rx, bottomCenter[1]+ry, bottomCenter[2]+rz);
+         outColors.push(color[0], color[1], color[2]);
+      }
+      const cubeIndices = [
+        0, 2, 1, 0, 3, 2, // bottom (CW outward)
+        4, 5, 6, 4, 6, 7, // top (CW outward)
+        0, 1, 5, 0, 5, 4, // back (CW outward)
+        2, 3, 7, 2, 7, 6, // front (CW outward)
+        0, 7, 3, 0, 4, 7, // left (CW outward)
+        1, 2, 6, 1, 6, 5, // right (CW outward)
+      ];
+      for (let i = 0; i < cubeIndices.length; i++) {
+          outIndices.push(baseIdx + cubeIndices[i]);
       }
     }
 
@@ -89,12 +237,18 @@ window.ItemRegistry["wood_wall"] = {
 
     // 2) Top horizontal support beam
     if (!isWindow) {
-      const topBeamCenter = [
-        p[0] + n[0] * 0.24,
-        p[1] + n[1] * 0.24,
-        p[2] + n[2] * 0.24
-      ];
-      addBox(topBeamCenter, 0.3, 0.02, 0.025, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
+      const hLeft = getTrimHeight(-0.15, 0.25);
+      const hRight = getTrimHeight(0.15, 0.25);
+      if (hLeft > 0.235 && hRight > 0.235) {
+        const bHL = Math.min(0.02, Math.max(0, hLeft - 0.23));
+        const bHR = Math.min(0.02, Math.max(0, hRight - 0.23));
+        const beamBottom = [
+          p[0] + n[0] * 0.23,
+          p[1] + n[1] * 0.23,
+          p[2] + n[2] * 0.23
+        ];
+        addCustomBox(beamBottom, 0.3, 0.025, bHL, bHR, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
+      }
     }
 
     // 3) Vertical planks (only for wood_wall, wood_window has no background planks)
@@ -118,6 +272,9 @@ window.ItemRegistry["wood_wall"] = {
           bCol * (0.85 + shadeNoise * 0.3)
         ];
 
+        const hLeft = Math.max(0, getTrimHeight(t - 0.031, 0.25));
+        const hRight = Math.max(0, getTrimHeight(t + 0.031, 0.25));
+
         if (hasCoLocatedWindow && (i === 1 || i === 2 || i === 3)) {
           // For co-located window middle planks: draw bottom and top parts, leaving a gap in the middle
           const bottomPlankCenter = [
@@ -127,31 +284,43 @@ window.ItemRegistry["wood_wall"] = {
           ];
           addBox(bottomPlankCenter, 0.062, 0.06, 0.015, plankColor, wallR, n, wallF, vertices, colors, indices);
 
-          const topPlankCenter = [
-            p[0] + wallR[0] * t + n[0] * 0.20,
-            p[1] + wallR[1] * t + n[1] * 0.20,
-            p[2] + wallR[2] * t + n[2] * 0.20
-          ];
-          addBox(topPlankCenter, 0.062, 0.06, 0.015, plankColor, wallR, n, wallF, vertices, colors, indices);
+          if (hLeft > 0.17 || hRight > 0.17) {
+            const topHL = Math.min(0.06, Math.max(0, hLeft - 0.17));
+            const topHR = Math.min(0.06, Math.max(0, hRight - 0.17));
+            const topPlankBottom = [
+              p[0] + wallR[0] * t + n[0] * 0.17,
+              p[1] + wallR[1] * t + n[1] * 0.17,
+              p[2] + wallR[2] * t + n[2] * 0.17
+            ];
+            addCustomBox(topPlankBottom, 0.062, 0.015, topHL, topHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+          }
         } else {
           // Standard solid full vertical plank
-          const plankCenter = [
-            p[0] + wallR[0] * t + n[0] * 0.125,
-            p[1] + wallR[1] * t + n[1] * 0.125,
-            p[2] + wallR[2] * t + n[2] * 0.125
-          ];
-          addBox(plankCenter, 0.062, 0.21, 0.015, plankColor, wallR, n, wallF, vertices, colors, indices);
+          if (hLeft > 0.02 || hRight > 0.02) {
+            const pHL = Math.min(0.21, Math.max(0, hLeft - 0.02));
+            const pHR = Math.min(0.21, Math.max(0, hRight - 0.02));
+            const plankBottom = [
+              p[0] + wallR[0] * t + n[0] * 0.02,
+              p[1] + wallR[1] * t + n[1] * 0.02,
+              p[2] + wallR[2] * t + n[2] * 0.02
+            ];
+            addCustomBox(plankBottom, 0.062, 0.015, pHL, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+          }
 
           // Draw a diagonal brace on the wall to make it look even more beautiful and structured!
           if (i === 2 && !item.isPreview) {
             // Add a small decorative cross brace on the center plank
-            const braceColor = [rCol * 0.7, gCol * 0.7, bCol * 0.7];
-            const braceCenter = [
-              p[0] + n[0] * 0.125,
-              p[1] + n[1] * 0.125,
-              p[2] + n[2] * 0.125
-            ];
-            addBox(braceCenter, 0.22, 0.02, 0.01, braceColor, wallR, n, wallF, vertices, colors, indices);
+            const hBraceLeft = getTrimHeight(-0.11, 0.25);
+            const hBraceRight = getTrimHeight(0.11, 0.25);
+            if (hBraceLeft > 0.22 && hBraceRight > 0.22) {
+              const braceColor = [rCol * 0.7, gCol * 0.7, bCol * 0.7];
+              const braceCenter = [
+                p[0] + n[0] * 0.125,
+                p[1] + n[1] * 0.125,
+                p[2] + n[2] * 0.125
+              ];
+              addBox(braceCenter, 0.22, 0.02, 0.01, braceColor, wallR, n, wallF, vertices, colors, indices);
+            }
           }
         }
       }

@@ -36,6 +36,7 @@
         { name: "WOOD_WALL", icon: "🧱" },
         { name: "WOOD_WINDOW", icon: "🪟" },
         { name: "WOOD_DOOR", icon: "🚪" },
+        { name: "WOOD_ROOF", icon: "🛖" },
         { name: "WOOD_CHEST", icon: "📦" },
         { name: "MEGANEURA", icon: "🦟" },
         { name: "ISOPOD", icon: "🦐" },
@@ -187,6 +188,11 @@
             mockItem.type = name === "WOOD_WINDOW" ? "wood_window" : "wood_wall";
           } else if (name === "WOOD_DOOR") {
             scaleFactor = 1.05;
+          } else if (name === "WOOD_ROOF") {
+            scaleFactor = 1.05;
+            mockItem.type = "wood_roof";
+            mockItem.size = 0.25;
+            mockItem.angle = 0.0;
           } else if (name === "WOOD_CHEST") {
             scaleFactor = 1.1;
           } else if (name === "CAMPFIRE") {
@@ -322,6 +328,10 @@
             scaleFactor = 1.05;
             addBox(p, 0.5, 0.9, 0.08, [0.65, 0.45, 0.25], r, n, f, rawVertices, rawColors, rawIndices);
             addBox([0.15, 0, 0.05], 0.05, 0.05, 0.03, [0.95, 0.8, 0.2], r, n, f, rawVertices, rawColors, rawIndices);
+          } else if (name === "WOOD_ROOF") {
+            scaleFactor = 1.05;
+            addBox(p, 0.9, 0.08, 0.9, [0.65, 0.45, 0.25], r, n, f, rawVertices, rawColors, rawIndices);
+            addBox([0, 0.15, 0.2], 0.92, 0.12, 0.5, [0.55, 0.38, 0.2], r, n, f, rawVertices, rawColors, rawIndices);
           } else if (name === "WOOD_CHEST") {
             scaleFactor = 1.1;
             addBox([0, -0.08, 0], 0.8, 0.45, 0.5, [0.5, 0.3, 0.15], r, n, f, rawVertices, rawColors, rawIndices);
@@ -870,7 +880,9 @@
           } else if (labelColor) {
             label.style.color = labelColor;
           }
-          label.textContent = item.name || item.label || "ITEM";
+          const rawName = item.name || item.label || "ITEM";
+          const displayName = typeof getItemDisplayName === "function" ? getItemDisplayName(rawName) : rawName;
+          label.textContent = displayName;
           slotEl.appendChild(label);
 
           if (item.count > 1) {
@@ -1467,7 +1479,7 @@ function cancelFloorPlacement() {
         floorPreviewCollectible.color = placingItemName === "STONE_FLOOR" ? [0.6, 0.6, 0.6] : [0.65, 0.45, 0.25]; // beautiful wood color
         
         // Remove grass under placed structure & destroy overlapping trees/rocks for stone floor without drops
-        if (placingItemName === "STONE_FLOOR" || placingItemName === "WOOD_FLOOR" || placingItemName === "THIN_WOOD_FLOOR" || placingItemName === "WOOD_WALL" || placingItemName === "WOOD_WINDOW" || placingItemName === "WOOD_DOOR" || placingItemName === "CAMPFIRE") {
+        if (placingItemName === "STONE_FLOOR" || placingItemName === "WOOD_FLOOR" || placingItemName === "THIN_WOOD_FLOOR" || placingItemName === "WOOD_ROOF" || placingItemName === "WOOD_WALL" || placingItemName === "WOOD_WINDOW" || placingItemName === "WOOD_DOOR" || placingItemName === "CAMPFIRE") {
             const rad = getSuppressRadius(placingItemName, floorPreviewCollectible.size);
             suppressGrassUnder(floorPreviewCollectible.position, rad);
         }
@@ -1593,35 +1605,39 @@ function cancelFloorPlacement() {
           }
         } else if (placingItemName === "WOOD_WALL") {
           floorPreviewCollectible.type = "wood_wall";
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "WOOD_WINDOW") {
           floorPreviewCollectible.type = "wood_window";
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "WOOD_DOOR") {
           floorPreviewCollectible.type = "wood_door";
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.doorAngle = 0.0;
           floorPreviewCollectible.doorVel = 0.0;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "WOOD_CHEST") {
           floorPreviewCollectible.type = "wood_chest";
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           floorPreviewCollectible.storage = Array(20).fill(null);
         } else if (placingItemName === "MEGANEURA") {
           floorPreviewCollectible.type = "meganeura_item";
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "ISOPOD") {
           floorPreviewCollectible.type = "isopod_item";
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName.startsWith("ROBOT_")) {
           floorPreviewCollectible.type = placingItemName.toLowerCase();
-          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+        } else if (placingItemName === "WOOD_ROOF") {
+          floorPreviewCollectible.type = "wood_roof";
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
         } else {
           floorPreviewCollectible.type = placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor");
           floorPreviewCollectible.layer = placingItemName === "STONE_FLOOR" ? COLLISION_LAYERS.STONE_FLOOR : COLLISION_LAYERS.WOOD_FLOOR;
@@ -1658,7 +1674,7 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))));
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -1676,7 +1692,7 @@ function cancelFloorPlacement() {
           };
           if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
-          } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor") {
+          } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
           } else if (typeToPlace === "stone_floor") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.STONE_FLOOR;
@@ -2032,7 +2048,7 @@ function cancelFloorPlacement() {
           activeItem = item;
           isUsingItem = true;
           arrowShotInCurrentAnim = false;
-        } else if (item && (item.name === "STONE_FLOOR" || item.name === "WOOD_FLOOR" || item.name === "THIN_WOOD_FLOOR" || item.name === "WOOD_STAIRS" || item.name === "CAMPFIRE" || item.name === "WOOD_BOAT" || item.name === "WOOD_WHEEL" || item.name === "ELECTRIC_ENGINE" || item.name === "WOOD_WALL" || item.name === "WOOD_WINDOW" || item.name === "WOOD_DOOR" || item.name === "WOOD_CHEST" || item.name === "MEGANEURA" || item.name === "ISOPOD" || item.name.startsWith("ROBOT_"))) {
+        } else if (item && (item.name === "STONE_FLOOR" || item.name === "WOOD_FLOOR" || item.name === "THIN_WOOD_FLOOR" || item.name === "WOOD_ROOF" || item.name === "WOOD_STAIRS" || item.name === "CAMPFIRE" || item.name === "WOOD_BOAT" || item.name === "WOOD_WHEEL" || item.name === "ELECTRIC_ENGINE" || item.name === "WOOD_WALL" || item.name === "WOOD_WINDOW" || item.name === "WOOD_DOOR" || item.name === "WOOD_CHEST" || item.name === "MEGANEURA" || item.name === "ISOPOD" || item.name.startsWith("ROBOT_"))) {
           isPlacingFloor = true;
           placementRotationAngle = 0.0;
           floorPlacementInfo = { item, index, source };
@@ -2345,7 +2361,8 @@ function cancelFloorPlacement() {
           itemName.style.fontWeight = "bold";
           itemName.style.fontSize = "14px";
           itemName.style.color = "#df6c6c";
-          itemName.textContent = recipe.output.label;
+          const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
+          itemName.textContent = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
 
           itemInfo.appendChild(itemIcon);
           itemInfo.appendChild(itemName);
@@ -2391,7 +2408,7 @@ function cancelFloorPlacement() {
             }
             
             const ingLabelSpan = document.createElement("span");
-            ingLabelSpan.textContent = ing.label;
+            ingLabelSpan.textContent = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
             
             ingLeft.appendChild(ingIconSpan);
             ingLeft.appendChild(ingLabelSpan);
@@ -2422,12 +2439,13 @@ function cancelFloorPlacement() {
             btn.style.border = "1px solid #df6c6c";
             btn.style.color = "#df6c6c";
             btn.style.textShadow = "0 0 6px rgba(223, 108, 108, 0.4)";
+            const cookLabel = typeof t === "function" ? t("cook_btn") : "ทำอาหาร (Cook)";
             btn.innerHTML = `
               <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
                   <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
                 </svg>
-                <span>ทำอาหาร (Cook)</span>
+                <span>${cookLabel}</span>
               </div>
             `;
             
@@ -2439,7 +2457,7 @@ function cancelFloorPlacement() {
               btn.style.background = "rgba(223, 108, 108, 0.15)";
               btn.style.boxShadow = "none";
             };
-                        btn.onclick = () => {
+            btn.onclick = () => {
               recipe.ingredients.forEach(ing => {
                 consumeItem(ing.name, ing.count);
               });
@@ -2459,7 +2477,7 @@ function cancelFloorPlacement() {
             btn.style.background = "rgba(255, 255, 255, 0.05)";
             btn.style.border = "1px solid rgba(255, 255, 255, 0.1)";
             btn.style.color = "rgba(255, 255, 255, 0.3)";
-            btn.textContent = "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
+            btn.textContent = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
           }
 
           card.appendChild(btn);
@@ -2580,6 +2598,13 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "wood_roof",
+            output: { name: "WOOD_ROOF", icon: "🛖", count: 3, label: "หลังคาไม้ (WOOD ROOF) x3" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" }
+            ]
+          },
+          {
             id: "bow",
             output: { name: "BOW", icon: "🏹", count: 1, label: "ธนู (BOW) x1" },
             ingredients: [
@@ -2676,7 +2701,8 @@ function cancelFloorPlacement() {
           itemName.style.fontWeight = "bold";
           itemName.style.fontSize = "14px";
           itemName.style.color = "#dfb76c";
-          itemName.textContent = recipe.output.label;
+          const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
+          itemName.textContent = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
 
           itemInfo.appendChild(itemIcon);
           itemInfo.appendChild(itemName);
@@ -2724,7 +2750,7 @@ function cancelFloorPlacement() {
             }
             
             const ingLabelSpan = document.createElement("span");
-            ingLabelSpan.textContent = ing.label;
+            ingLabelSpan.textContent = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
             
             ingLeft.innerHTML = "";
             ingLeft.appendChild(ingIconSpan);
@@ -2759,6 +2785,7 @@ function cancelFloorPlacement() {
             btn.style.border = "1px solid #dfb76c";
             btn.style.color = "#dfb76c";
             btn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            const craftLabel = typeof t === "function" ? t("craft_btn") : "คราฟไอเทม (Craft)";
             btn.innerHTML = `
               <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
@@ -2766,7 +2793,7 @@ function cancelFloorPlacement() {
                   <path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64" />
                   <path d="m20 8-5 5" />
                 </svg>
-                <span>คราฟไอเทม (Craft)</span>
+                <span>${craftLabel}</span>
               </div>
             `;
             
@@ -2787,7 +2814,7 @@ function cancelFloorPlacement() {
             btn.style.border = "1px solid rgba(255, 255, 255, 0.15)";
             btn.style.color = "rgba(255, 255, 255, 0.3)";
             btn.style.textShadow = "none";
-            btn.textContent = "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
+            btn.textContent = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
             btn.disabled = true;
           }
 
@@ -2892,6 +2919,13 @@ function cancelFloorPlacement() {
           {
             id: "wood_door",
             output: { name: "WOOD_DOOR", icon: "🚪", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 1 }
+            ]
+          },
+          {
+            id: "wood_roof",
+            output: { name: "WOOD_ROOF", icon: "🛖", count: 3 },
             ingredients: [
               { name: "LOG", count: 1 }
             ]
@@ -3004,7 +3038,9 @@ function cancelFloorPlacement() {
         }
         
         // Notice
-        showNotice(`🔨 คราฟไอเทมสำเร็จ: ${recipe.output.icon} ${recipe.output.name} x${outputCount}`);
+        const outDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
+        const craftSuccessText = typeof t === "function" ? t("craft_success") : "คราฟไอเทมสำเร็จ";
+        showNotice(`🔨 ${craftSuccessText}: ${recipe.output.icon} ${outDispName} x${outputCount}`);
       }
 
       function toggleCrafting() {
@@ -3084,7 +3120,9 @@ function cancelFloorPlacement() {
       function openTrashConfirm(source, index, item) {
         window.isConfirmOverlayOpen = true; if (window.clearKeysPressed) window.clearKeysPressed();
         trashPendingData = { source, index, item };
-        document.getElementById("trashConfirmText").textContent = (item.name || item.label || "ITEM") + (item.count > 1 ? " x" + item.count : "");
+        const rawName = item.name || item.label || "ITEM";
+        const displayName = typeof getItemDisplayName === "function" ? getItemDisplayName(rawName) : rawName;
+        document.getElementById("trashConfirmText").textContent = displayName + (item.count > 1 ? " x" + item.count : "");
         const iconEl = document.getElementById("trashConfirmIcon");
         if (iconEl) iconEl.textContent = item.icon || "📦";
         
@@ -3271,11 +3309,14 @@ function cancelFloorPlacement() {
                 if (successCount > 0) {
                   renderInventory();
                   updateBadge();
-                  showNotice(`เสกสำเร็จ: ได้รับ ${item.icon} ${item.name} x${successCount} !`);
+                  const itemDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(item.name) : item.name;
+                  const summonText = typeof t === "function" ? t("summon_success") : "เสกสำเร็จ: ได้รับ";
+                  showNotice(`${summonText} ${item.icon} ${itemDispName} x${successCount} !`);
                   slot.style.transform = "scale(0.9)";
                   setTimeout(() => { slot.style.transform = ""; }, 100);
                 } else {
-                  showNotice("❌ กระเป๋าเต็มแล้ว! (Inventory is full)");
+                  const fullText = typeof t === "function" ? t("inventory_full") : "❌ กระเป๋าเต็มแล้ว! (Inventory is full)";
+                  showNotice(fullText);
                 }
               } : null
             });
@@ -3462,6 +3503,8 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_WINDOW", icon: "🪟", label: "WOOD_WINDOW" };
         } else if (closestDemolishItem.type === "wood_door") {
           itemData = { name: "WOOD_DOOR", icon: "🚪", label: "WOOD_DOOR" };
+        } else if (closestDemolishItem.type === "wood_roof") {
+          itemData = { name: "WOOD_ROOF", icon: "🛖", label: "WOOD_ROOF" };
         } else if (closestDemolishItem.type === "wood_chest") {
           itemData = { name: "WOOD_CHEST", icon: "📦", label: "WOOD_CHEST" };
         } else if (closestDemolishItem.type === "meganeura_item") {

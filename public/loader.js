@@ -3,6 +3,7 @@
 
   const scripts = [
     // --- UI Layout & Settings ---
+    'gamefile/i18n.js',
     'gamefile/ui-layout.js',
     'gamefile/gameplay/settings.js',
 
@@ -47,6 +48,7 @@
     'gamefile/items/wood_stairs.js',
     'gamefile/items/wood_wall.js',
     'gamefile/items/wood_door.js',
+    'gamefile/items/wood_roof.js',
     'gamefile/items/meganeura_item.js',
     'gamefile/items/isopod_item.js',
     'gamefile/items/wood_chest.js',

@@ -43,8 +43,6 @@
             shadowMapQuality,
             antialiasEnabled,
             taauEnabled,
-            grassEnabled: window.globalGrassEnabled !== false,
-            grassDensity: typeof window.globalGrassDensity === "number" ? window.globalGrassDensity : 1.0,
             cameraMode,
             cameraCollisionEnabled,
             zoomLimitEnabled,
@@ -73,8 +71,6 @@
             shadowMapQuality,
             antialiasEnabled,
             taauEnabled,
-            grassEnabled: window.globalGrassEnabled !== false,
-            grassDensity: typeof window.globalGrassDensity === "number" ? window.globalGrassDensity : 1.0,
             cameraMode,
             cameraCollisionEnabled,
             zoomLimitEnabled,
@@ -234,14 +230,6 @@
           if (typeof settings.taauEnabled === "boolean") {
             taauEnabled = settings.taauEnabled;
             if (typeof updateTaauUI === 'function') updateTaauUI();
-          }
-          if (typeof settings.grassEnabled === "boolean") {
-            window.globalGrassEnabled = settings.grassEnabled;
-            if (typeof updateGrassUIState === 'function') updateGrassUIState();
-          }
-          if (typeof settings.grassDensity === "number") {
-            window.globalGrassDensity = settings.grassDensity;
-            if (typeof updateGrassUIState === 'function') updateGrassUIState();
           }
           if (typeof settings.fullscreen === "boolean") {
             isCurrentFullscreen = settings.fullscreen;
@@ -814,8 +802,6 @@
         shadowMapQuality: /Android/i.test(navigator.userAgent) ? 1 : 2,
         antialiasEnabled: false,
         taauEnabled: false,
-        grassEnabled: true,
-        grassDensity: 1.0,
         cameraMode: "tps",
         cameraCollisionEnabled: true,
         zoomLimitEnabled: true,
@@ -1094,17 +1080,25 @@
         if (!listContainer) return;
 
         let html = "";
-        for (const slot of SAVE_SLOTS) {
+        for (let i = 0; i < SAVE_SLOTS.length; i++) {
+          const slot = SAVE_SLOTS[i];
           const data = getSlotData(slot.id);
           const isEmpty = data === null;
 
+          const slotTitle = (typeof t === "function" && t("save_slot_n")) 
+            ? t("save_slot_n").replace("{n}", i + 1)
+            : `เซฟช่องที่ ${i + 1} (Save Slot ${i + 1})`;
+
+          const emptyText = typeof t === "function" ? t("slot_empty") : "[ ว่าง / New Game ]";
+          const loadedText = typeof t === "function" ? t("slot_loaded") : "[ มีข้อมูล / Loaded ]";
+
           const statusText = isEmpty
-            ? '<span style="color: #fca5a5; font-weight: bold;">[ ว่าง / New Game ]</span>'
-            : '<span style="color: #86efac; font-weight: bold;">[ มีข้อมูล / Loaded ]</span>';
+            ? `<span style="color: #fca5a5; font-weight: bold;">${emptyText}</span>`
+            : `<span style="color: #86efac; font-weight: bold;">${loadedText}</span>`;
 
           let description = "";
           if (isEmpty) {
-            description = "สร้างดวงดาวใหม่ด้วยขนาดและข้อมูลเริ่มต้น";
+            description = typeof t === "function" ? t("slot_empty_desc") : "สร้างดวงดาวใหม่ด้วยขนาดและข้อมูลเริ่มต้น";
           } else {
             const gridSize = data.currentGridSize || 400;
             const seed = data.globalSeed || 13585;
@@ -1116,8 +1110,18 @@
               data.collectedCount && data.collectedCount.branch !== undefined
                 ? data.collectedCount.branch
                 : 0;
-            description = `ขนาด: ${gridSize} | Seed: ${seed} | หิน: ${rock}, กิ่งไม้: ${branch}`;
+            if (typeof t === "function" && t("slot_loaded_desc")) {
+              description = t("slot_loaded_desc")
+                .replace("{size}", gridSize)
+                .replace("{seed}", seed)
+                .replace("{rock}", rock)
+                .replace("{branch}", branch);
+            } else {
+              description = `ขนาด: ${gridSize} | Seed: ${seed} | หิน: ${rock}, กิ่งไม้: ${branch}`;
+            }
           }
+
+          const deleteBtnText = typeof t === "function" ? t("delete_save") || "ลบเซฟ" : "ลบเซฟ (Delete)";
 
           html += `
                     <div class="save-slot-card game-ui"  
@@ -1125,7 +1129,7 @@
                          onmouseout="this.style.background='rgba(223, 183, 108, 0.05)'; this.style.borderColor='rgba(223, 183, 108, 0.25)'; this.style.boxShadow='none';"
                          onclick="selectSaveSlotAndStart('${slot.id}')" style="background: rgba(223, 183, 108, 0.05); border: 1px solid rgba(223, 183, 108, 0.25); padding: 14px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: auto;">
-                            <span style="color: #dfb76c; font-weight: bold; font-size: 14px; text-shadow: 0 0 4px rgba(223, 183, 108, 0.3); font-family: 'JetBrains Mono', monospace;">${slot.label}</span>
+                            <span style="color: #dfb76c; font-weight: bold; font-size: 14px; text-shadow: 0 0 4px rgba(223, 183, 108, 0.3); font-family: 'JetBrains Mono', monospace;">${slotTitle}</span>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace;">${statusText}</span>
                                 ${
@@ -1135,7 +1139,7 @@
                                          
                                         onmouseover="this.style.background='rgba(239, 68, 68, 0.35)'; this.style.borderColor='#fca5a5';" 
                                         onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'; this.style.borderColor='rgba(239, 68, 68, 0.4)';" class="game-ui" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 2px 6px; font-size: 10px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s;">
-                                    ลบเซฟ (Delete)
+                                    ${deleteBtnText}
                                 </button>
                                 `
                                     : ""
@@ -1165,7 +1169,7 @@
           renderSaveSlots();
         } else {
           buttonElement.dataset.confirm = "true";
-          buttonElement.textContent = "ยืนยันลบ? (Confirm)";
+          buttonElement.textContent = typeof t === "function" ? (t("confirm_delete") || "ยืนยันลบ?") : "ยืนยันลบ? (Confirm)";
           buttonElement.style.background = "rgba(239, 68, 68, 0.4)";
           buttonElement.style.borderColor = "#ef4444";
           buttonElement.style.color = "#ffffff";
@@ -1173,7 +1177,7 @@
           setTimeout(() => {
             if (buttonElement && buttonElement.dataset.confirm === "true") {
               buttonElement.dataset.confirm = "false";
-              buttonElement.textContent = "ลบเซฟ (Delete)";
+              buttonElement.textContent = typeof t === "function" ? (t("delete_save") || "ลบเซฟ") : "ลบเซฟ (Delete)";
               buttonElement.style.background = "rgba(239, 68, 68, 0.15)";
               buttonElement.style.borderColor = "rgba(239, 68, 68, 0.4)";
               buttonElement.style.color = "#fca5a5";

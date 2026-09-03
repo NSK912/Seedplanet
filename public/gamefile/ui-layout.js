@@ -93,12 +93,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           transition: opacity 0.5s ease-in-out;
         "
       >
-        <button class="start-btn game-ui" id="gameStartBtn">
-          เริ่มเล่น (Start Game)
+        <button class="start-btn game-ui" id="gameStartBtn" data-i18n="start_game">
+          เริ่มเล่น
         </button>
         <button
           class="start-btn game-ui"
           id="gameSettingsBtn"
+          data-i18n="settings"
           style="
             font-size: 14px;
             padding: 10px 30px;
@@ -108,11 +109,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             box-shadow: none;
           "
         >
-          ตั้งค่า (Settings)
+          ตั้งค่า
         </button>
         <button
           class="start-btn game-ui"
           id="gameDevBtn"
+          data-i18n="dev_mode"
           style="
             display: none;
             font-size: 14px;
@@ -123,7 +125,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             box-shadow: none;
           "
         >
-          โหมดผู้พัฒนา (Dev Mode)
+          โหมดผู้พัฒนา
         </button>
       </div>
     </div>
@@ -158,6 +160,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           "
         >
           <h2
+            data-i18n="select_save_slot"
             style="
               color: #dfb76c;
               font-size: 18px;
@@ -172,7 +175,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               letter-spacing: 0.5px;
             "
           >
-            📂 เลือกข้อมูลเซฟ (Select Save Slot)
+            📂 เลือกข้อมูลเซฟ
           </h2>
         </div>
 
@@ -203,7 +206,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         >
           <button
             id="btnSaveSelectBack"
-            
+            data-i18n="back"
            class="game-ui" style="flex: 1;
               background: rgba(239, 68, 68, 0.1);
               border: 1px solid rgba(239, 68, 68, 0.4);
@@ -213,9 +216,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               font-family: 'JetBrains Mono', monospace;
               cursor: pointer;
               transition: all 0.2s;
-              
               font-weight: bold;">
-            ย้อนกลับ (Back)
+            ย้อนกลับ
           </button>
           <div
             id="saveLoadingIndicator"
@@ -450,7 +452,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               >
                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
               </svg>
-              CRAFTING
+              <span data-i18n="tab_crafting">CRAFTING</span>
             </h2>
             <h2 id="tabInventory" class="active">
               <svg
@@ -470,7 +472,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                 <rect x="9" y="10" width="6" height="5" rx="1" />
               </svg>
-              INVENTORY
+              <span data-i18n="tab_inventory">INVENTORY</span>
             </h2>
             <h2 id="tabItemsList">
               <svg
@@ -488,7 +490,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 <rect x="1" y="3" width="22" height="5" />
                 <line x1="10" y1="12" x2="14" y2="12" />
               </svg>
-              ITEMS LIST
+              <span data-i18n="tab_items_list">ITEMS LIST</span>
             </h2>
             <h2 id="tabSettings">
               <svg
@@ -507,10 +509,10 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
                 />
               </svg>
-              SETTINGS
+              <span data-i18n="tab_settings">SETTINGS</span>
             </h2>
             <h2 id="tabCooking" style="display: none;">
-              COOKING
+              <span data-i18n="tab_cooking">COOKING</span>
             </h2>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
@@ -620,6 +622,36 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             gap: 18px;
           "
         >
+          <!-- ภาษา (Language) -->
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                font-family: 'JetBrains Mono', monospace;
+              "
+            >
+              <span data-i18n="language_label">ภาษา (Language)</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+              <button
+                id="langThBtn"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all 0.2s;"
+              >
+                ภาษาไทย
+              </button>
+              <button
+                id="langEnBtn"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 11px; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);"
+              >
+                English
+              </button>
+            </div>
+          </div>
+
           <!-- เสียงเอฟเฟกต์รวม (SFX Volume) -->
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div
@@ -632,7 +664,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               "
             >
               <span style="display: inline-flex; align-items: center; gap: 8px">
-                ระดับเสียงรวม (Master SFX Volume)
+                <span data-i18n="sfx_volume">ระดับเสียงรวม</span>
                 <button
                   id="sfxMuteToggle"
                   style="
@@ -695,7 +727,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'JetBrains Mono', monospace;
               "
             >
-              <span>สเกล เรนเดอร์ จอเกม (Render Scale)</span>
+              <span data-i18n="render_scale">สเกลความละเอียดเรนเดอร์</span>
               <span
                 id="renderScaleVal"
                 style="color: #dfb76c; font-weight: bold"
@@ -723,7 +755,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'CustomGoogleSans', 'Kanit', sans-serif;
               "
             >
-              <span>ขีดจำกัดเฟรมเรต (FPS Limit)</span>
+              <span data-i18n="fps_limit">จำกัดเฟรมเรต</span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
               <button
@@ -759,7 +791,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'JetBrains Mono', monospace;
               "
             >
-              <span>ความเร็วเมาส์ (Mouse Sensitivity)</span>
+              <span data-i18n="mouse_sensitivity">ความไวเมาส์</span>
               <span
                 id="mouseSensitivityVal"
                 style="color: #dfb76c; font-weight: bold"
@@ -779,13 +811,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
           <!-- การตั้งค่าโหมดแสดงผล (Screen Mode) -->
           <div id="screenModeSettingContainer" style="display: none !important; flex-direction: column; gap: 6px">
-            <span style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
-              >โหมดแสดงผล (Screen Mode)</span
+            <span data-i18n="screen_mode" style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
+              >โหมดแสดงผล</span
             >
             <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
               <button
                 id="setModeWindowed"
-                
+                data-i18n="mode_windowed"
                class="game-ui" style="flex: 1;
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
@@ -795,13 +827,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   font-family: 'JetBrains Mono', monospace;
                   cursor: pointer;
                   transition: all 0.2s;
-                  
                   text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
-                โหมดหน้าต่าง (Window)
+                โหมดหน้าต่าง
               </button>
               <button
                 id="setModeFullscreen"
-                
+                data-i18n="mode_fullscreen"
                class="game-ui" style="flex: 1;
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -811,20 +842,20 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   font-family: 'JetBrains Mono', monospace;
                   cursor: pointer;
                   transition: all 0.2s;">
-                เต็มจอ (Fullscreen)
+                เต็มจอ
               </button>
             </div>
           </div>
 
           <!-- การตั้งค่าแสดงผล FPS (FPS UI Toggle) -->
           <div style="display: flex; flex-direction: column; gap: 6px">
-            <span style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
-              >แสดงผลข้อมูล FPS (FPS Counter)</span
+            <span data-i18n="fps_display_toggle" style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
+              >แสดงตัวนับ FPS</span
             >
             <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
               <button
                 id="fpsToggleOn"
-                
+                data-i18n="on"
                class="game-ui" style="flex: 1;
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
@@ -834,13 +865,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   font-family: 'JetBrains Mono', monospace;
                   cursor: pointer;
                   transition: all 0.2s;
-                  
                   text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
-                เปิด (On)
+                เปิด
               </button>
               <button
                 id="fpsToggleOff"
-                
+                data-i18n="off"
                class="game-ui" style="flex: 1;
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -850,7 +880,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   font-family: 'JetBrains Mono', monospace;
                   cursor: pointer;
                   transition: all 0.2s;">
-                ปิด (Off)
+                ปิด
               </button>
             </div>
           </div>
@@ -858,8 +888,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- การตั้งค่า Shadow Map (Shadow Map Quality) -->
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div style="display: flex; justify-content: space-between">
-              <span style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
-                >แสดงผลเงาในเกม (Shadow Map)</span
+              <span data-i18n="shadow_quality" style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
+                >คุณภาพเงา</span
               >
               <span id="shadowMapQualityVal" style="font-size: 13px; font-family: 'JetBrains Mono', monospace; color: #dfb76c;">Medium</span>
             </div>
@@ -894,7 +924,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   cursor: pointer;
                   transition: all 0.2s;
                   text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
-                เปิด (On)
+                เปิด
               </button>
               <button
                 id="antialiasToggleOff"
@@ -907,7 +937,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   font-family: 'JetBrains Mono', monospace;
                   cursor: pointer;
                   transition: all 0.2s;">
-                ปิด (Off)
+                ปิด
               </button>
             </div>
           </div>
@@ -915,13 +945,14 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- การตั้งค่า TAAU (Temporal Anti-Aliasing Upsampling) -->
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
+              <span data-i18n="taau_label" style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
                 >TAAU (Temporal Upsampling)</span>
-              <span style="font-size: 10px; color: rgba(223, 183, 108, 0.8); font-family: 'Kanit', sans-serif;">(เพิ่มความคมชัดสด)</span>
+              <span data-i18n="taau_sub" style="font-size: 10px; color: rgba(223, 183, 108, 0.8); font-family: 'Kanit', sans-serif;">(เพิ่มความคมชัดสด)</span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
               <button
                 id="taauToggleOn"
+                data-i18n="on"
                 class="game-ui" style="flex: 1;
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
@@ -932,10 +963,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   cursor: pointer;
                   transition: all 0.2s;
                   text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
-                เปิด (On)
+                เปิด
               </button>
               <button
                 id="taauToggleOff"
+                data-i18n="off"
                 class="game-ui" style="flex: 1;
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -945,63 +977,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   font-family: 'JetBrains Mono', monospace;
                   cursor: pointer;
                   transition: all 0.2s;">
-                ปิด (Off)
+                ปิด
               </button>
             </div>
           </div>
 
-          <!-- การตั้งค่าหญ้าและพืชคลุมดิน (Grass & Nature Foliage) -->
-          <div style="display: flex; flex-direction: column; gap: 8px">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 13px; font-family: 'JetBrains Mono', monospace"
-                >🌿 ระบบหญ้า (Grass Quality)</span
-              >
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
-              <button
-                id="grassToggleOn"
-                class="game-ui" style="flex: 1;
-                  background: rgba(223, 183, 108, 0.15);
-                  border: 1px solid #dfb76c;
-                  color: #dfb76c;
-                  padding: 6px 0;
-                  font-size: 11px;
-                  font-family: 'JetBrains Mono', monospace;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                  text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
-                เปิด (On)
-              </button>
-              <button
-                id="grassToggleOff"
-                class="game-ui" style="flex: 1;
-                  background: rgba(255, 255, 255, 0.05);
-                  border: 1px solid rgba(255, 255, 255, 0.2);
-                  color: rgba(255, 255, 255, 0.6);
-                  padding: 6px 0;
-                  font-size: 11px;
-                  font-family: 'JetBrains Mono', monospace;
-                  cursor: pointer;
-                  transition: all 0.2s;">
-                ปิด (Off)
-              </button>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
-                <span style="color: rgba(255,255,255,0.7);">ความหนาแน่นหญ้า (Grass Density)</span>
-                <span id="grassDensityVal" style="color: #dfb76c; font-weight: bold;">100%</span>
-              </div>
-              <input
-                type="range"
-                id="grassDensitySlider"
-                min="10"
-                max="250"
-                step="10"
-                value="100"
-                style="width: 100%; cursor: pointer; accent-color: #dfb76c"
-              />
-            </div>
-          </div>
 
           <!-- ตั้งค่าปุ่มควบคุม (Key Bindings) -->
           <div
@@ -1014,13 +994,14 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             "
           >
             <span
+              data-i18n="key_bindings"
               style="
                 font-size: 13px;
                 font-family: 'JetBrains Mono', monospace;
                 color: #dfb76c;
                 font-weight: bold;
               "
-              >ตั้งค่าปุ่มควบคุม (Key Bindings)</span
+              >ตั้งค่าปุ่มควบคุม</span
             >
             <div
               style="display: grid; grid-template-columns: 1fr; gap: 6px"
@@ -1043,7 +1024,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           >
             <button
               id="btnRestoreDefaults"
-              
+              data-i18n="restore_defaults"
               onmouseover="this.style.background = 'rgba(239, 68, 68, 0.25)'"
               onmouseout="this.style.background = 'rgba(239, 68, 68, 0.1)'"
              class="game-ui" style="width: 100%;
@@ -1055,13 +1036,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'JetBrains Mono', monospace;
                 cursor: pointer;
                 transition: all 0.2s;
-                
                 font-weight: bold;">
-              คืนค่า การตั้งค่า (Restore Defaults)
+              คืนค่าเริ่มต้น
             </button>
             <button
               id="btnExitToMenu"
-              
+              data-i18n="main_menu"
               onmouseover="this.style.background = 'rgba(223, 183, 108, 0.25)'"
               onmouseout="this.style.background = 'rgba(223, 183, 108, 0.1)'"
              class="game-ui" style="width: 100%;
@@ -1073,9 +1053,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'JetBrains Mono', monospace;
                 cursor: pointer;
                 transition: all 0.2s;
-                
                 font-weight: bold;">
-              กลับไปหน้าเริ่มเกม (Main Menu)
+              กลับไปหน้าเริ่มเกม
             </button>
           </div>
         </div>
@@ -1097,12 +1076,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                   <line x1="12" y1="22.08" x2="12" y2="12"></line>
                 </svg>
-                กล่องเก็บของ (CHEST STORAGE)
+                <span data-i18n="chest_storage">กล่องเก็บของ</span>
               </h2>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
-              <button id="chestTakeAllBtn"  onmouseover="this.style.background='rgba(223, 183, 108, 0.1)'; this.style.borderColor='#dfb76c';" onmouseout="this.style.background='rgba(0, 0, 0, 0.85)'; this.style.borderColor='rgba(223, 183, 108, 0.3)';" class="game-ui" style="height: 32px; padding: 0 12px; font-size: 11px; background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(223, 183, 108, 0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;  display: flex; align-items: center;">
-                เก็บทั้งหมด (Take All)
+              <button id="chestTakeAllBtn" data-i18n="chest_take_all" onmouseover="this.style.background='rgba(223, 183, 108, 0.1)'; this.style.borderColor='#dfb76c';" onmouseout="this.style.background='rgba(0, 0, 0, 0.85)'; this.style.borderColor='rgba(223, 183, 108, 0.3)';" class="game-ui" style="height: 32px; padding: 0 12px; font-size: 11px; background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(223, 183, 108, 0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s; display: flex; align-items: center;">
+                เก็บทั้งหมด
               </button>
             </div>
           </div>
@@ -1124,7 +1103,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
                   <rect x="9" y="10" width="6" height="5" rx="1"/>
                 </svg>
-                กระเป๋าเดินทาง (YOUR INVENTORY)
+                <span data-i18n="your_inventory">กระเป๋าเดินทาง</span>
               </h2>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
@@ -1200,7 +1179,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <path d="M12 2a8 8 0 0 0-8 8v3a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-3a8 8 0 0 0-8-8z" />
           <path d="M10 17v3M14 17v3" />
         </svg>
-        <span>กำจัด NPC (Kill NPC)</span>
+        <span data-i18n="kill_npc">กำจัด NPC</span>
       </span>
     </button>
 

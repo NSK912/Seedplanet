@@ -94,37 +94,43 @@ function renderKeyBindingsUI() {
   const container = document.getElementById("keyBindingsContainer");
   if (!container) return;
 
-  const labels = {
-    forward: "เดินหน้า (Forward)",
-    backward: "ถอยหลัง (Backward)",
-    left: "เดินซ้าย (Left)",
-    right: "เดินขวา (Right)",
-    interact: "สำรวจ (Interact)",
-    inventory: "กระเป๋า (Inventory)",
-    diveDown: "ดำน้ำ (Dive Down)",
-    diveUp: "ว่ายขึ้น (Swim Up)",
-    toggleMouse: "ซ่อน/แสดง เมาส์จำลอง (Toggle Virtual Cursor)",
-    action1: "ช่องแอคชั่น 1 (Action Slot 1)",
-    action2: "ช่องแอคชั่น 2 (Action Slot 2)",
-    action3: "ช่องแอคชั่น 3 (Action Slot 3)",
-    action4: "ช่องแอคชั่น 4 (Action Slot 4)",
-    rotate: "หมุนโครงสร้างตอนวาง (Rotate Structure)",
-    demolish: "รื้อถอนสิ่งก่อสร้าง (Demolish)",
+  const getLabel = (key) => {
+    if (typeof t === "function") {
+      const translated = t("key_" + key);
+      if (translated && translated !== "key_" + key) return translated;
+    }
+    const defaultLabels = {
+      forward: "เดินหน้า (Forward)",
+      backward: "ถอยหลัง (Backward)",
+      left: "เดินซ้าย (Left)",
+      right: "เดินขวา (Right)",
+      interact: "สำรวจ (Interact)",
+      inventory: "กระเป๋า (Inventory)",
+      diveDown: "ดำน้ำ (Dive Down)",
+      diveUp: "ว่ายขึ้น (Swim Up)",
+      toggleMouse: "ซ่อน/แสดง เมาส์จำลอง (Toggle Virtual Cursor)",
+      action1: "ช่องแอคชั่น 1 (Action Slot 1)",
+      action2: "ช่องแอคชั่น 2 (Action Slot 2)",
+      action3: "ช่องแอคชั่น 3 (Action Slot 3)",
+      action4: "ช่องแอคชั่น 4 (Action Slot 4)",
+      rotate: "หมุนโครงสร้างตอนวาง (Rotate Structure)",
+      demolish: "รื้อถอนสิ่งก่อสร้าง (Demolish)",
+    };
+    return defaultLabels[key] || key;
   };
 
   let html = "";
   for (const [key, value] of Object.entries(currentKeyBindings)) {
-    if (labels[key]) {
-      const isLocked = key === "toggleMouse";
-      html += `
-          <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 4px 8px; border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;">
-              <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif;">${labels[key]}</span>
-              <button class="key-bind-btn game-ui" data-key="${key}" ${isLocked ? "disabled" : ""} style="background: rgba(223,183,108,0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; ${isLocked ? "opacity: 0.5; cursor: not-allowed;" : "cursor: pointer;"} min-width: 60px; text-align: center; transition: all 0.2s;">
-                  ${value.replace("Key", "").replace("Arrow", "").replace("Left", "").replace("Right", "")}
-              </button>
-          </div>
-      `;
-    }
+    const label = getLabel(key);
+    const isLocked = key === "toggleMouse";
+    html += `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 4px 8px; border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;">
+            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif;">${label}</span>
+            <button class="key-bind-btn game-ui" data-key="${key}" ${isLocked ? "disabled" : ""} style="background: rgba(223,183,108,0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; ${isLocked ? "opacity: 0.5; cursor: not-allowed;" : "cursor: pointer;"} min-width: 60px; text-align: center; transition: all 0.2s;">
+                ${value.replace("Key", "").replace("Arrow", "").replace("Left", "").replace("Right", "")}
+            </button>
+        </div>
+    `;
   }
   container.innerHTML = html;
 
@@ -137,7 +143,7 @@ function renderKeyBindingsUI() {
       e.target.style.background = "rgba(239, 68, 68, 0.2)";
       e.target.style.borderColor = "#ef4444";
       e.target.style.color = "#ef4444";
-      e.target.textContent = "กดปุ่ม...";
+      e.target.textContent = typeof t === "function" ? t("key_press_key") : "กดปุ่ม...";
 
       const keyHandler = (ev) => {
         ev.preventDefault();

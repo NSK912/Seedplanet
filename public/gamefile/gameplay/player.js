@@ -309,6 +309,9 @@
       let showActionReach = true;
       let actionReachMode = 3; // 1 = Line, 2 = Circle, 3 = Capsule (Default is 3: Capsule)
       let woodFloorHeight = 0.05;
+      if (typeof window !== "undefined") {
+        window.woodFloorHeight = woodFloorHeight;
+      }
       let campfireSize = 0.25;
       let voxelHoleRadiusMultiplier = 2.0;
 
@@ -3084,17 +3087,23 @@
           updateTerrainModBanner();
         }
         */
-        if (e.code === currentKeyBindings.rotate) {
+        if (e.code === (typeof currentKeyBindings !== "undefined" && currentKeyBindings.rotate ? currentKeyBindings.rotate : "KeyQ") || e.code === "KeyQ" || e.key === "q" || e.key === "Q") {
           if (isPlacingFloor) {
             placementRotationAngle = (placementRotationAngle + Math.PI / 2) % (Math.PI * 2);
+            if (typeof window !== "undefined") {
+              window.placementRotationAngle = placementRotationAngle;
+            }
             if (floorPreviewCollectible) {
               floorPreviewCollectible.angle = placementRotationAngle;
             }
             if (typeof playPlaceSound === "function") {
               playPlaceSound();
             }
-            showNotice("หมุนโมเดลแล้ว! (Rotated model)");
+            showNotice("หมุนหลังคา/โมเดลแล้ว (Rotated) [Q]");
             pendingCollectibleRefresh = true;
+            if (typeof refreshCollectiblesVBO === "function") {
+              refreshCollectiblesVBO('preview');
+            }
           }
         }
         if (e.key === "Alt" || e.code === "AltLeft" || e.code === "AltRight" || (typeof currentKeyBindings !== "undefined" && e.code === currentKeyBindings.toggleMouse)) {

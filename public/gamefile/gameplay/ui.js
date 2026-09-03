@@ -2049,23 +2049,103 @@ window.addEventListener("keyup", (e) => {
         console.log("🌲 สร้างวัตถุธรรมชาติ", count, "ชิ้น");
       });
 
+      function updateSettingsTogglesUI() {
+        const onText = typeof t === "function" ? t("on") : "เปิด";
+        const offText = typeof t === "function" ? t("off") : "ปิด";
+        
+        if (devInputModeToggle) {
+          if (devInputMode === "touch") {
+            devInputModeToggle.textContent = "📱 " + (typeof t === "function" ? t("input_touch") : "โหมดอินพุต: จอสัมผัส (Touch)");
+          } else if (devInputMode === "keyboard") {
+            devInputModeToggle.textContent = "⌨️ " + (typeof t === "function" ? t("input_keyboard") : "โหมดอินพุต: คีย์บอร์ด/เมาส์ (Keyboard/Mouse)");
+          } else {
+            devInputModeToggle.textContent = "🎮 " + (typeof t === "function" ? t("input_auto") : "โหมดอินพุต: อัตโนมัติ (Auto)");
+          }
+        }
+
+        if (screenModeVisibilityToggle) {
+          const screenModeText = typeof t === "function" ? t("screen_mode") : "โหมดแสดงผล";
+          screenModeVisibilityToggle.textContent = `🖥️ ${screenModeText}: ${showScreenModeUI ? onText : offText}`;
+        }
+
+        if (hitboxToggle) {
+          const hbText = typeof t === "function" ? t("toggle_hitboxes") : "แสดงโครงสร้างการชน (Show Hitboxes)";
+          hitboxToggle.textContent = `🟥 ${hbText} ${showHitboxes ? onText : offText}`;
+        }
+
+        if (frustumCullingToggle) {
+          const fcText = typeof t === "function" ? t("frustum_culling") : "Frustum Culling (คัดออกวัตถุนอกจอ)";
+          frustumCullingToggle.textContent = `👁️ ${fcText} ${frustumCullingEnabled ? onText : offText}`;
+        }
+
+        if (caveWaterToggle) {
+          const cwText = typeof t === "function" ? t("cave_water") : "น้ำในถ้ำ (Cave Water)";
+          caveWaterToggle.textContent = `💧 ${cwText} ${caveWaterEnabled ? onText : offText}`;
+        }
+
+        if (actionReachToggle) {
+          const arText = typeof t === "function" ? t("action_reach") : "แสดงวงระยะทำการ";
+          actionReachToggle.textContent = `⚪ ${arText} ${showActionReach ? onText : offText}`;
+        }
+
+        if (waterToggle) {
+          const wText = typeof t === "function" ? t("water") : "น้ำ";
+          waterToggle.textContent = `🌊 ${wText} ${waterEnabled ? onText : offText}`;
+        }
+
+        if (renderDistToggle) {
+          const rdText = typeof t === "function" ? t("render_dist_limit") : "จำกัดระยะเรนเดอร์";
+          renderDistToggle.textContent = `🛡️ ${rdText}: ${renderDistEnabled ? onText : offText}`;
+        }
+
+        if (atmosphereToggle) {
+          const atText = typeof t === "function" ? t("atmosphere") : "บรรยากาศ";
+          atmosphereToggle.textContent = `✨ ${atText} ${atmosphereEnabled ? onText : offText}`;
+        }
+
+        if (godRaysToggle) {
+          const grText = typeof t === "function" ? t("god_rays") : "ลำแสงเทวทูต (God Rays)";
+          godRaysToggle.textContent = `☀️ ${grText} ${godRaysEnabled ? onText : offText}`;
+        }
+
+        if (skyToggle) {
+          const skyText = typeof t === "function" ? t("space_sky") : "ท้องฟ้าอวกาศ";
+          skyToggle.textContent = `🌌 ${skyText} ${skyEnabled ? onText : offText}`;
+        }
+
+        if (cloudsToggle) {
+          const cloudText = typeof t === "function" ? t("clouds") : "เมฆกลุ่มก๊าซ";
+          cloudsToggle.textContent = `☁️ ${cloudText} ${cloudsEnabled ? onText : offText}`;
+        }
+
+        const ragdollToggle = document.getElementById("ragdollToggle");
+        if (ragdollToggle) {
+          const ragText = typeof t === "function" ? t("ragdoll_mode") : "โหมด Ragdoll";
+          ragdollToggle.textContent = `🦴 ${ragText}: ${ragdollEnabled ? onText : offText}`;
+        }
+
+        const invRagdollToggle = document.getElementById("invRagdollToggle");
+        if (invRagdollToggle) {
+          invRagdollToggle.textContent = ragdollEnabled ? onText : offText;
+        }
+      }
+      window.updateSettingsTogglesUI = updateSettingsTogglesUI;
+
       if (devInputModeToggle) {
         devInputModeToggle?.addEventListener("click", () => {
           if (devInputMode === "auto") {
             devInputMode = "touch";
             devInputModeToggle.classList.add("active");
-            devInputModeToggle.textContent = "📱 โหมดอินพุต: จอสัมผัส (Touch)";
             showDpad();
           } else if (devInputMode === "touch") {
             devInputMode = "keyboard";
             devInputModeToggle.classList.add("active");
-            devInputModeToggle.textContent = "⌨️ โหมดอินพุต: คีย์บอร์ด/เมาส์ (Keyboard/Mouse)";
             hideDpad();
           } else {
             devInputMode = "auto";
             devInputModeToggle.classList.remove("active");
-            devInputModeToggle.textContent = "🎮 โหมดอินพุต: อัตโนมัติ (Auto)";
           }
+          updateSettingsTogglesUI();
           window.devInputMode = devInputMode;
           if (typeof window.updateVirtualCursorVisibility === "function") {
             window.updateVirtualCursorVisibility();
@@ -2078,7 +2158,7 @@ window.addEventListener("keyup", (e) => {
         screenModeVisibilityToggle?.addEventListener("click", () => {
           if (typeof showScreenModeUI !== 'undefined') {
             showScreenModeUI = !showScreenModeUI;
-            screenModeVisibilityToggle.textContent = showScreenModeUI ? "🖥️ โหมดแสดงผล (Screen Mode): แสดง" : "🖥️ โหมดแสดงผล (Screen Mode): ซ่อน";
+            updateSettingsTogglesUI();
             if (typeof window.syncScreenModeUI === 'function') {
               window.syncScreenModeUI();
             }
@@ -2087,7 +2167,7 @@ window.addEventListener("keyup", (e) => {
       }
       hitboxToggle?.addEventListener("click", () => {
         showHitboxes = !showHitboxes;
-        hitboxToggle.textContent = showHitboxes ? "🟥 แสดงโครงสร้างการชน (Show Hitboxes) เปิด" : "🟥 แสดงโครงสร้างการชน (Show Hitboxes) ปิด";
+        updateSettingsTogglesUI();
         if (typeof buildHitboxes === "function") {
            buildHitboxes();
         }
@@ -2095,24 +2175,14 @@ window.addEventListener("keyup", (e) => {
 
       frustumCullingToggle?.addEventListener("click", () => {
         frustumCullingEnabled = !frustumCullingEnabled;
-        if (frustumCullingEnabled) {
-          frustumCullingToggle.classList.add("active");
-          frustumCullingToggle.textContent = "👁️ Frustum Culling (คัดออกวัตถุนอกจอ) เปิด";
-        } else {
-          frustumCullingToggle.classList.remove("active");
-          frustumCullingToggle.textContent = "👁️ Frustum Culling (คัดออกวัตถุนอกจอ) ปิด";
-        }
+        frustumCullingToggle.classList.toggle("active", frustumCullingEnabled);
+        updateSettingsTogglesUI();
       });
 
       caveWaterToggle?.addEventListener("click", () => {
         caveWaterEnabled = !caveWaterEnabled;
-        if (caveWaterEnabled) {
-          caveWaterToggle.classList.add("active");
-          caveWaterToggle.textContent = "💧 น้ำในถ้ำ (Cave Water) เปิด";
-        } else {
-          caveWaterToggle.classList.remove("active");
-          caveWaterToggle.textContent = "💧 น้ำในถ้ำ (Cave Water) ปิด";
-        }
+        caveWaterToggle.classList.toggle("active", caveWaterEnabled);
+        updateSettingsTogglesUI();
         if (typeof saveSettingsToLocalStorage === "function") {
           saveSettingsToLocalStorage();
         }
@@ -2209,6 +2279,9 @@ window.addEventListener("keyup", (e) => {
       if (woodFloorHeightSlider) {
         woodFloorHeightSlider?.addEventListener("input", () => {
           woodFloorHeight = parseFloat(woodFloorHeightSlider.value);
+          if (typeof window !== "undefined") {
+            window.woodFloorHeight = woodFloorHeight;
+          }
           if (woodFloorHeightLabel) woodFloorHeightLabel.textContent = woodFloorHeight.toFixed(2);
           if (typeof refreshCollectiblesVBO === "function") {
             refreshCollectiblesVBO();
@@ -2364,8 +2437,8 @@ window.addEventListener("keyup", (e) => {
 
       waterToggle?.addEventListener("click", () => {
         waterEnabled = !waterEnabled;
-        waterToggle.textContent = waterEnabled ? "🌊 น้ำ เปิด" : "🌊 น้ำ ปิด";
         waterToggle.classList.toggle("active", waterEnabled);
+        updateSettingsTogglesUI();
         if (waterEnabled) {
           buildWaterSphere(currentGridSize);
         }
@@ -2428,10 +2501,8 @@ window.addEventListener("keyup", (e) => {
       renderDistToggle?.addEventListener("click", () => {
         renderDistEnabled = !renderDistEnabled;
         if (typeof window !== "undefined") window.renderDistEnabled = renderDistEnabled;
-        renderDistToggle.textContent = renderDistEnabled
-          ? "🛡️ จำกัดระยะเรนเดอร์: เปิด"
-          : "🛡️ จำกัดระยะเรนเดอร์: ปิด";
         renderDistToggle.classList.toggle("active", renderDistEnabled);
+        updateSettingsTogglesUI();
       });
 
       terrainRenderDistSlider?.addEventListener("input", () => {
@@ -2483,10 +2554,8 @@ window.addEventListener("keyup", (e) => {
 
       atmosphereToggle?.addEventListener("click", () => {
         atmosphereEnabled = !atmosphereEnabled;
-        atmosphereToggle.textContent = atmosphereEnabled
-          ? "✨ บรรยากาศ เปิด"
-          : "✨ บรรยากาศ ปิด";
         atmosphereToggle.classList.toggle("active", atmosphereEnabled);
+        updateSettingsTogglesUI();
       });
 
       atmosphereAlphaSlider?.addEventListener("input", () => {
@@ -2510,10 +2579,8 @@ window.addEventListener("keyup", (e) => {
 
       godRaysToggle?.addEventListener("click", () => {
         godRaysEnabled = !godRaysEnabled;
-        godRaysToggle.textContent = godRaysEnabled
-          ? "☀️ ลำแสงเทวทูต (God Rays) เปิด"
-          : "☀️ ลำแสงเทวทูต (God Rays) ปิด";
         godRaysToggle.classList.toggle("active", godRaysEnabled);
+        updateSettingsTogglesUI();
       });
 
       godRaysAlphaSlider?.addEventListener("input", () => {
@@ -2536,10 +2603,8 @@ window.addEventListener("keyup", (e) => {
 
       skyToggle?.addEventListener("click", () => {
         skyEnabled = !skyEnabled;
-        skyToggle.textContent = skyEnabled
-          ? "🌌 ท้องฟ้าอวกาศ เปิด"
-          : "🌌 ท้องฟ้าอวกาศ ปิด";
         skyToggle.classList.toggle("active", skyEnabled);
+        updateSettingsTogglesUI();
       });
 
       skyGasIntensitySlider?.addEventListener("input", () => {
@@ -2549,10 +2614,8 @@ window.addEventListener("keyup", (e) => {
 
       cloudsToggle?.addEventListener("click", () => {
         cloudsEnabled = !cloudsEnabled;
-        cloudsToggle.textContent = cloudsEnabled
-          ? "☁️ เมฆกลุ่มก๊าซ เปิด"
-          : "☁️ เมฆกลุ่มก๊าซ ปิด";
         cloudsToggle.classList.toggle("active", cloudsEnabled);
+        updateSettingsTogglesUI();
       });
 
       cloudsAlphaSlider?.addEventListener("input", () => {
@@ -2597,41 +2660,11 @@ window.addEventListener("keyup", (e) => {
         cloudsColor = [r, g, b];
       });
 
-      // --- Grass & Foliage Settings Listeners ---
+      // --- Grass & Foliage Settings Listeners (DevGame Only - No Save) ---
       function updateGrassUIState() {
         const isEnabled = window.globalGrassEnabled !== false;
         const density = typeof window.globalGrassDensity === "number" ? window.globalGrassDensity : 1.0;
         const densityPercent = Math.round(density * 100);
-
-        // Player Options Modal Controls
-        const btnOn = document.getElementById("grassToggleOn");
-        const btnOff = document.getElementById("grassToggleOff");
-        if (btnOn && btnOff) {
-          if (isEnabled) {
-            btnOn.style.background = "rgba(223, 183, 108, 0.15)";
-            btnOn.style.border = "1px solid #dfb76c";
-            btnOn.style.color = "#dfb76c";
-            btnOn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
-            btnOff.style.background = "rgba(255, 255, 255, 0.05)";
-            btnOff.style.border = "1px solid rgba(255, 255, 255, 0.2)";
-            btnOff.style.color = "rgba(255, 255, 255, 0.6)";
-            btnOff.style.textShadow = "none";
-          } else {
-            btnOff.style.background = "rgba(223, 183, 108, 0.15)";
-            btnOff.style.border = "1px solid #dfb76c";
-            btnOff.style.color = "#dfb76c";
-            btnOff.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
-            btnOn.style.background = "rgba(255, 255, 255, 0.05)";
-            btnOn.style.border = "1px solid rgba(255, 255, 255, 0.2)";
-            btnOn.style.color = "rgba(255, 255, 255, 0.6)";
-            btnOn.style.textShadow = "none";
-          }
-        }
-
-        const densitySlider = document.getElementById("grassDensitySlider");
-        const densityVal = document.getElementById("grassDensityVal");
-        if (densitySlider) densitySlider.value = densityPercent;
-        if (densityVal) densityVal.textContent = densityPercent + "%";
 
         // Dev Tools Controls
         const devToggle = document.getElementById("devGrassToggle");
@@ -2646,38 +2679,7 @@ window.addEventListener("keyup", (e) => {
       }
       window.updateGrassUIState = updateGrassUIState;
 
-      // 1. Player Settings (บันทึกลง LocalStorage เสมอ)
-      const grassToggleOn = document.getElementById("grassToggleOn");
-      const grassToggleOff = document.getElementById("grassToggleOff");
-      const grassDensitySlider = document.getElementById("grassDensitySlider");
-
-      grassToggleOn?.addEventListener("click", () => {
-        window.globalGrassEnabled = true;
-        updateGrassUIState();
-        if (typeof window.rebuildNature === "function") window.rebuildNature();
-        if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
-      });
-
-      grassToggleOff?.addEventListener("click", () => {
-        window.globalGrassEnabled = false;
-        updateGrassUIState();
-        if (typeof window.rebuildNature === "function") window.rebuildNature();
-        if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
-      });
-
-      let playerGrassDebounce = null;
-      grassDensitySlider?.addEventListener("input", (e) => {
-        const val = parseFloat(e.target.value);
-        window.globalGrassDensity = Math.max(0.1, Math.min(2.5, val / 100));
-        updateGrassUIState();
-        clearTimeout(playerGrassDebounce);
-        playerGrassDebounce = setTimeout(() => {
-          if (typeof window.rebuildNature === "function") window.rebuildNature();
-          if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
-        }, 120);
-      });
-
-      // 2. Dev Tools (ปรับทันที แต่ไม่บันทึกลง LocalStorage ตามคำสั่ง)
+      // Dev Tools Listeners (ปรับทันที ไม่บันทึกการตั้งค่าลง LocalStorage หรือไฟล์เซฟ)
       const devGrassToggle = document.getElementById("devGrassToggle");
       const devGrassDensity = document.getElementById("devGrassDensity");
 
@@ -2685,7 +2687,6 @@ window.addEventListener("keyup", (e) => {
         window.globalGrassEnabled = !(window.globalGrassEnabled !== false);
         updateGrassUIState();
         if (typeof window.rebuildNature === "function") window.rebuildNature();
-        // โหมด dev ไม่เซฟ
       });
 
       let devGrassDebounce = null;
@@ -2696,7 +2697,6 @@ window.addEventListener("keyup", (e) => {
         clearTimeout(devGrassDebounce);
         devGrassDebounce = setTimeout(() => {
           if (typeof window.rebuildNature === "function") window.rebuildNature();
-          // โหมด dev ไม่เซฟ
         }, 120);
       });
 

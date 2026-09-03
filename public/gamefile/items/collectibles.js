@@ -200,6 +200,287 @@ function buildCollectibles(count, seed) {
           active: true,
           isDynamic: false
         });
+        const numStoneFloors = Math.floor((typeof RADIUS !== 'undefined' ? RADIUS * RADIUS : 400) * 0.1);
+        for (let i = 0; i < numStoneFloors; i++) {
+          const u = Math.random();
+          const v = Math.random();
+          const theta = Math.acos(2 * u - 1);
+          const phi = 2 * Math.PI * v;
+          const h = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
+          const minLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.02;
+          
+          if (h >= minLandHeight) {
+              const nx = Math.sin(theta) * Math.cos(phi);
+              const ny = Math.cos(theta);
+              const nz = Math.sin(theta) * Math.sin(phi);
+              const r = RADIUS + h * HEIGHT_SCALE;
+              const wx = r * nx;
+              const wy = r * ny;
+              const wz = r * nz;
+              if (isPositionInsideCave(wx, wy, wz, 0.5)) continue;
+
+              let txR, txY, txZ;
+              if (Math.abs(ny) < 0.9) {
+                txR = -nz; txY = 0; txZ = nx;
+              } else {
+                txR = 1; txY = 0; txZ = 0;
+              }
+              const lenTxR = Math.sqrt(txR * txR + txY * txY + txZ * txZ) || 1;
+              const R = [txR / lenTxR, txY / lenTxR, txZ / lenTxR];
+              const F = [
+                ny * R[2] - nz * R[1],
+                nz * R[0] - nx * R[2],
+                nx * R[1] - ny * R[0]
+              ];
+              const lenF = Math.sqrt(F[0]*F[0] + F[1]*F[1] + F[2]*F[2]);
+              F[0] /= lenF; F[1] /= lenF; F[2] /= lenF;
+              
+              // Procedural House on top of the stone floor
+              const wfSize = 0.25;
+              const wfW = wfSize * 1.2;
+              
+              // Constraints to ensure good looking gable roofs
+              const gridX = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+              const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+              
+              const totalW = gridX * wfW;
+              const totalD = gridY * wfW;
+              
+              collectibles.push({
+                type: "stone_floor",
+                position: [wx, wy, wz],
+                normal: [nx, ny, nz],
+                R: R,
+                F: F,
+                active: true,
+                size: 0.25,
+                width: totalW,
+                depth: totalD,
+                angle: 0.0,
+                seed: seed + i * 5000
+              });
+
+              const stoneH = wfSize * 0.15;
+              const baseWfH = (typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05;
+              const actualWfThickness = baseWfH + wfSize * 0.12;
+              
+              const floorCenterHeight = stoneH + actualWfThickness / 2;
+              const wallBaseHeight = stoneH + actualWfThickness;
+              
+              const roofStyle = Math.random() > 0.3 ? "gable" : "flat";
+              const roofAxis = Math.random() > 0.5 ? "X" : "Y";
+              
+              const isPerfect = Math.random() < 0.3;
+              const missingWallProb = isPerfect ? 0 : 0.15 + Math.random() * 0.3;
+              const missingRoofProb = isPerfect ? 0 : 0.1 + Math.random() * 0.4;
+              const missingFloorProb = isPerfect ? 0 : 0.05 + Math.random() * 0.15;
+              
+              const cells = [];
+              for (let gx = 0; gx < gridX; gx++) {
+                cells[gx] = [];
+                for (let gy = 0; gy < gridY; gy++) {
+                  cells[gx][gy] = {
+                    hasFloor: Math.random() >= missingFloorProb,
+                    hasRoof: Math.random() >= missingRoofProb,
+                    wallLeft: gx === 0 ? Math.random() >= missingWallProb : false,
+                    wallRight: gx === gridX - 1 ? Math.random() >= missingWallProb : false,
+                    wallBottom: gy === 0 ? Math.random() >= missingWallProb : false,
+                    wallTop: gy === gridY - 1 ? Math.random() >= missingWallProb : false
+                  };
+                }
+              }
+
+              // Enforce rule: A roof must be supported by its perimeter wall
+              for (let gx = 0; gx < gridX; gx++) {
+                for (let gy = 0; gy < gridY; gy++) {
+                  const c = cells[gx][gy];
+                  if (c.hasRoof) {
+                    if (gx === 0 && !c.wallLeft) c.hasRoof = false;
+                    if (gx === gridX - 1 && !c.wallRight) c.hasRoof = false;
+                    if (gy === 0 && !c.wallBottom) c.hasRoof = false;
+                    if (gy === gridY - 1 && !c.wallTop) c.hasRoof = false;
+                  }
+                }
+              }
+              
+              for (let gx = 0; gx < gridX; gx++) {
+                for (let gy = 0; gy < gridY; gy++) {
+                   const c = cells[gx][gy];
+                   const cx = -totalW/2 + wfW/2 + gx * wfW;
+                   const cy = -totalD/2 + wfW/2 + gy * wfW;
+                   
+                   const localPos = [
+                     wx + R[0]*cx + F[0]*cy,
+                     wy + R[1]*cx + F[1]*cy,
+                     wz + R[2]*cx + F[2]*cy
+                   ];
+                   
+                   if (c.hasFloor) {
+                     const fPos = [
+                       localPos[0] + nx*floorCenterHeight,
+                       localPos[1] + ny*floorCenterHeight,
+                       localPos[2] + nz*floorCenterHeight
+                     ];
+                     collectibles.push({
+                       type: "wood_floor",
+                       position: fPos,
+                       normal: [nx, ny, nz],
+                       R: R,
+                       F: F,
+                       active: true,
+                       size: wfSize,
+                       seed: seed + i*1000 + gx*10 + gy
+                     });
+                   }
+                   
+                   if (c.hasRoof) {
+                     if (roofStyle === "flat") {
+                       const roofHeight = floorCenterHeight + 0.25;
+                       const roofPos = [
+                         localPos[0] + nx*roofHeight,
+                         localPos[1] + ny*roofHeight,
+                         localPos[2] + nz*roofHeight
+                       ];
+                       collectibles.push({
+                         type: "thin_wood_floor",
+                         position: roofPos,
+                         normal: [nx, ny, nz],
+                         R: R,
+                         F: F,
+                         active: true,
+                         size: wfSize,
+                         seed: seed + i*2000 + gx*10 + gy
+                       });
+                     } else {
+                       // Gable roof logic
+                       let isSlope = false;
+                       let isFlatTop = false;
+                       let roofRDir = R;
+                       let roofFDir = F;
+                       
+                       if (roofAxis === "X") {
+                         // ridge along Y-axis, slopes down along X-axis
+                         if (gx === 0) {
+                           isSlope = true;
+                           roofFDir = R; 
+                           roofRDir = [-F[0], -F[1], -F[2]];
+                         } else if (gx === gridX - 1) {
+                           isSlope = true;
+                           roofFDir = [-R[0], -R[1], -R[2]];
+                           roofRDir = F;
+                         } else {
+                           isFlatTop = true;
+                         }
+                       } else {
+                         // ridge along X-axis, slopes down along Y-axis
+                         if (gy === 0) {
+                           isSlope = true;
+                           roofFDir = F; 
+                           roofRDir = R;
+                         } else if (gy === gridY - 1) {
+                           isSlope = true;
+                           roofFDir = [-F[0], -F[1], -F[2]];
+                           roofRDir = [-R[0], -R[1], -R[2]];
+                         } else {
+                           isFlatTop = true;
+                         }
+                       }
+    
+                       
+                       if (isFlatTop) {
+                         const peakHeight = wallBaseHeight + 0.50; // top of slopes
+                         const roofPos = [
+                           localPos[0] + nx*peakHeight,
+                           localPos[1] + ny*peakHeight,
+                           localPos[2] + nz*peakHeight
+                         ];
+                         collectibles.push({
+                           type: "thin_wood_floor",
+                           position: roofPos,
+                           normal: [nx, ny, nz],
+                           R: R,
+                           F: F,
+                           active: true,
+                           size: wfSize,
+                           seed: seed + i*2000 + gx*10 + gy
+                         });
+                       } else if (isSlope) {
+                         const roofHeight = wallBaseHeight + 0.25;
+                         const roofPos = [
+                           localPos[0] + nx*roofHeight,
+                           localPos[1] + ny*roofHeight,
+                           localPos[2] + nz*roofHeight
+                         ];
+                         collectibles.push({
+                           type: "wood_roof",
+                           position: roofPos,
+                           normal: [nx, ny, nz],
+                           R: roofRDir,
+                           F: roofFDir,
+                           active: true,
+                           size: wfSize,
+                           angle: 0,
+                           seed: seed + i*2000 + gx*10 + gy
+                         });
+                       }
+                     }
+                   }
+
+                   const wallPosBase = [
+                     localPos[0] + nx*wallBaseHeight,
+                     localPos[1] + ny*wallBaseHeight,
+                     localPos[2] + nz*wallBaseHeight
+                   ];
+
+                   const addWall = (wOffset, wR, wF, seedOffset, elevOffset = 0) => {
+                     const typeRand = Math.random();
+                     let wType = "wood_wall";
+                     if (elevOffset === 0) {
+                       if (isPerfect) {
+                          wType = typeRand > 0.5 ? "wood_wall" : "wood_window";
+                          if (typeRand < 0.1) wType = "wood_door";
+                       } else {
+                          wType = typeRand > 0.5 ? "wood_wall" : (typeRand > 0.25 ? "wood_window" : "wood_door");
+                       }
+                     }
+                     const wPos = [
+                       wallPosBase[0] + wOffset[0] + nx * elevOffset,
+                       wallPosBase[1] + wOffset[1] + ny * elevOffset,
+                       wallPosBase[2] + wOffset[2] + nz * elevOffset
+                     ];
+                     collectibles.push({
+                       type: wType,
+                       position: wPos,
+                       normal: [nx, ny, nz],
+                       R: wR,
+                       F: wF,
+                       active: true,
+                       size: wfSize,
+                       seed: seed + i*3000 + seedOffset
+                     });
+                   };
+
+                   if (c.wallLeft) addWall([-R[0]*(wfW/2), -R[1]*(wfW/2), -R[2]*(wfW/2)], F, [-R[0], -R[1], -R[2]], gy);
+                   if (c.wallRight) addWall([R[0]*(wfW/2), R[1]*(wfW/2), R[2]*(wfW/2)], F, R, gy + 100);
+                   if (c.wallBottom) addWall([-F[0]*(wfW/2), -F[1]*(wfW/2), -F[2]*(wfW/2)], R, [-F[0], -F[1], -F[2]], gx + 200);
+                   if (c.wallTop) addWall([F[0]*(wfW/2), F[1]*(wfW/2), F[2]*(wfW/2)], R, F, gx + 300);
+                   
+                   // Gable ends (triangular walls to fill gap)
+                   if (c.hasRoof && roofStyle === "gable") {
+                     if (roofAxis === "X") { // slopes along X, gable ends at gy=0 and gy=gridY-1
+                       if (gy === 0 && c.wallBottom) addWall([-F[0]*(wfW/2), -F[1]*(wfW/2), -F[2]*(wfW/2)], R, [-F[0], -F[1], -F[2]], gx + 1200, 0.25);
+                       if (gy === gridY - 1 && c.wallTop) addWall([F[0]*(wfW/2), F[1]*(wfW/2), F[2]*(wfW/2)], R, F, gx + 1300, 0.25);
+                     } else { // slopes along Y, gable ends at gx=0 and gx=gridX-1
+                       if (gx === 0 && c.wallLeft) addWall([-R[0]*(wfW/2), -R[1]*(wfW/2), -R[2]*(wfW/2)], F, [-R[0], -R[1], -R[2]], gy + 1000, 0.25);
+                       if (gx === gridX - 1 && c.wallRight) addWall([R[0]*(wfW/2), R[1]*(wfW/2), R[2]*(wfW/2)], F, R, gy + 1100, 0.25);
+                     }
+                   }
+                }
+              }
+    
+              
+          }
+        }
 
         Math.random = _origRandom;
 
@@ -677,7 +958,7 @@ function buildCollectibles(count, seed) {
         const isInventoryOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
         if (isPlacingFloor && !isInventoryOpen) {
           const placingItemName = floorPlacementInfo && floorPlacementInfo.item ? floorPlacementInfo.item.name : "";
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))));
 
           if (!floorPreviewCollectible || floorPreviewCollectible.type !== typeToPlace) {
             // Remove mismatched preview if it exists
@@ -699,9 +980,11 @@ function buildCollectibles(count, seed) {
               isPreview: true,
               seed: Math.random()
             };
+            collectibles.push(floorPreviewCollectible);
+            floorPreviewCollectible = collectibles[collectibles.length - 1];
             if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
-            } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor") {
+            } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
             } else if (typeToPlace === "stone_floor") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.STONE_FLOOR;
@@ -805,10 +1088,28 @@ function buildCollectibles(count, seed) {
             previewEast[2] * cosH - previewNorth[2] * sinH,
           ];
 
+          if (typeToPlace === "wood_roof") {
+            // Roof rotation is manual via the Q key (placementRotationAngle), independent of camera heading
+            const rotA = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+            const cosRot = Math.cos(rotA);
+            const sinRot = Math.sin(rotA);
+            pR = [
+              previewEast[0] * cosRot + previewNorth[0] * sinRot,
+              previewEast[1] * cosRot + previewNorth[1] * sinRot,
+              previewEast[2] * cosRot + previewNorth[2] * sinRot,
+            ];
+            pF = [
+              previewNorth[0] * cosRot - previewEast[0] * sinRot,
+              previewNorth[1] * cosRot - previewEast[1] * sinRot,
+              previewNorth[2] * cosRot - previewEast[2] * sinRot,
+            ];
+            floorPreviewCollectible.angle = 0.0;
+          }
+
           let pN = [pnx, pny, pnz];
 
           // "ลอยสูงจากพื้นเสมอ" -> float slightly above the ground at the preview location
-          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor") ? 0.05 : 0.12)));
+          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12)));
           let bob = typeToPlace === "campfire" ? 0.005 : (Math.sin(Date.now() * 0.003) * 0.01 + bobAmt); 
           if (typeToPlace === "robot_cockpit") bob = 0.14;
           else if (typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") bob = 0.14;
@@ -1776,6 +2077,490 @@ function buildCollectibles(count, seed) {
                 }
               }
             }
+          } else if (typeToPlace === "wood_roof") {
+            floorPreviewCollectible.size = 0.25;
+            floorPreviewCollectible.isValidPlacement = false;
+
+            const curAngle = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : (floorPreviewCollectible.angle || 0.0);
+
+            // Compute camera eye position and look direction for true 3D crosshair line-of-sight snapping
+            let eyePos = null;
+            let lookDir = null;
+            if (typeof window !== "undefined" && window.cameraSpringArm && window.cameraSpringArm.eyePos && window.cameraSpringArm.targetPos) {
+              eyePos = window.cameraSpringArm.eyePos;
+              const tP = window.cameraSpringArm.targetPos;
+              const ldx = tP[0] - eyePos[0];
+              const ldy = tP[1] - eyePos[1];
+              const ldz = tP[2] - eyePos[2];
+              const lLen = Math.sqrt(ldx * ldx + ldy * ldy + ldz * ldz);
+              if (lLen > 0.0001) {
+                lookDir = [ldx / lLen, ldy / lLen, ldz / lLen];
+              }
+            }
+            if (!eyePos || !lookDir) {
+              eyePos = [playerPt[0] + (pN ? pN[0] * 0.2 : 0), playerPt[1] + (pN ? pN[1] * 0.2 : 0), playerPt[2] + (pN ? pN[2] * 0.2 : 0)];
+              lookDir = pF || [0, 0, 1];
+            }
+
+            const maxReach = Math.max(6.5, (typeof actionReachDistance === "number" ? actionReachDistance * 4.0 : 6.5));
+
+            // Roofs snap strictly to:
+            // 1. Existing roofs (tile-to-tile / แผ่นต่อแผ่น: Slope Up, Slope Down, Left, Right, Ridge Peak, Gutter, Corners)
+            // 2. Walls (wood_wall, wood_window, wood_door on top of the wall)
+
+            const candidates = [];
+
+            // 1. ROOF-TO-ROOF CANDIDATES (แผ่นต่อแผ่น)
+            for (let other of collectibles) {
+              if (other.active && other.type === "wood_roof" && !other.isPreview) {
+                const oP = other.position;
+                const oR = other.R || [1, 0, 0];
+                const oF = other.F || [0, 0, 1];
+                const oN = other.normal || [0, 1, 0];
+                const oAngle = other.angle || 0.0;
+
+                // Check player reach distance
+                const rodx = oP[0] - playerPt[0];
+                const rody = oP[1] - playerPt[1];
+                const rodz = oP[2] - playerPt[2];
+                if (rodx * rodx + rody * rody + rodz * rodz > (maxReach + 1.2) * (maxReach + 1.2)) continue;
+
+                const cosOA = Math.cos(oAngle);
+                const sinOA = Math.sin(oAngle);
+                const roofR = [
+                  oR[0] * cosOA + oF[0] * sinOA,
+                  oR[1] * cosOA + oF[1] * sinOA,
+                  oR[2] * cosOA + oF[2] * sinOA
+                ];
+                const roofF = [
+                  oF[0] * cosOA - oR[0] * sinOA,
+                  oF[1] * cosOA - oR[1] * sinOA,
+                  oF[2] * cosOA - oR[2] * sinOA
+                ];
+                const roofN = oN;
+
+                const addRotatedCandidates = (pos, step, type, baseAngle) => {
+                  for (let rotStep = 0; rotStep < 4; rotStep++) {
+                    const angle = (baseAngle + rotStep * Math.PI / 2) % (Math.PI * 2);
+                    const cosA = Math.cos(angle);
+                    const sinA = Math.sin(angle);
+                    const wF = [
+                      oF[0] * cosA - oR[0] * sinA,
+                      oF[1] * cosA - oR[1] * sinA,
+                      oF[2] * cosA - oR[2] * sinA
+                    ];
+                    candidates.push({
+                      pos: [pos[0], pos[1], pos[2]],
+                      R: oR, F: oF, normal: oN,
+                      angle: angle,
+                      worldF: wF,
+                      step: step,
+                      type: type,
+                      rotStep: rotStep
+                    });
+                  }
+                };
+
+                // Angle difference between player's held rotation and this existing roof
+
+                // a) Slope Up (+F, height +0.25 per step) -> ต่อลาดขึ้นไปเรื่อยๆ สูงขึ้นไปเรื่อยๆ ทะลุได้
+                for (let step = 1; step <= 4; step++) {
+                  addRotatedCandidates(
+                    [
+                      oP[0] + roofF[0] * (0.30 * step) + roofN[0] * (0.25 * step),
+                      oP[1] + roofF[1] * (0.30 * step) + roofN[1] * (0.25 * step),
+                      oP[2] + roofF[2] * (0.30 * step) + roofN[2] * (0.25 * step)
+                    ],
+                    step, 'roof_slope_up', oAngle
+                  );
+                }
+
+                // b) Slope Down (-F, height -0.25 per step) -> ต่อลาดลงมาตามแนวเดิม
+                for (let step = 1; step <= 2; step++) {
+                  addRotatedCandidates(
+                    [
+                      oP[0] - roofF[0] * (0.30 * step) - roofN[0] * (0.25 * step),
+                      oP[1] - roofF[1] * (0.30 * step) - roofN[1] * (0.25 * step),
+                      oP[2] - roofF[2] * (0.30 * step) - roofN[2] * (0.25 * step)
+                    ],
+                    step, 'roof_slope_down', oAngle
+                  );
+                }
+
+                // c) Side Extension Left/Right (+/- R) -> ขยายแผ่นข้างตามแนวเดิม
+                for (let s of [-1, 1]) {
+                  addRotatedCandidates(
+                    [
+                      oP[0] + roofR[0] * (0.30 * s),
+                      oP[1] + roofR[1] * (0.30 * s),
+                      oP[2] + roofR[2] * (0.30 * s)
+                    ],
+                    1, 'roof_side', oAngle
+                  );
+                }
+
+                // d) A-Frame Ridge Peak (+F, opposing 180 deg angle, height 0.0) -> ประกบจั่วที่ยอด
+                const oppAngle = (oAngle + Math.PI) % (Math.PI * 2);
+                addRotatedCandidates(
+                  [
+                    oP[0] + roofF[0] * 0.30,
+                    oP[1] + roofF[1] * 0.30,
+                    oP[2] + roofF[2] * 0.30
+                  ],
+                  1, 'roof_peak', oppAngle
+                );
+              }
+            }
+
+            // 2. WALL TOP CANDIDATES (วางบนขอบบนของกำแพง)
+            for (let other of collectibles) {
+              if (other.active && (other.type === "wood_wall" || other.type === "wood_window" || other.type === "wood_door") && !other.isPreview) {
+                const wP = other.position;
+                const wN = other.normal || [0, 1, 0];
+
+                // Check player reach distance
+                const wodx = wP[0] - playerPt[0];
+                const wody = wP[1] - playerPt[1];
+                const wodz = wP[2] - playerPt[2];
+                if (wodx * wodx + wody * wody + wodz * wodz > (maxReach + 1.2) * (maxReach + 1.2)) continue;
+
+                // Check if this wall has another wall directly above it (if so, it is not the top wall of the column)
+                let hasWallAbove = false;
+                for (let aboveCheck of collectibles) {
+                  if (aboveCheck.active && (aboveCheck.type === "wood_wall" || aboveCheck.type === "wood_window" || aboveCheck.type === "wood_door") && !aboveCheck.isPreview && aboveCheck !== other) {
+                    const adx = aboveCheck.position[0] - (wP[0] + wN[0] * 0.25);
+                    const ady = aboveCheck.position[1] - (wP[1] + wN[1] * 0.25);
+                    const adz = aboveCheck.position[2] - (wP[2] + wN[2] * 0.25);
+                    if (adx * adx + ady * ady + adz * adz < 0.015) {
+                      hasWallAbove = true;
+                      break;
+                    }
+                  }
+                }
+                if (hasWallAbove) continue; // Only process the top-most wall in each column
+
+                const wallTopCenter = [
+                  wP[0] + wN[0] * 0.25,
+                  wP[1] + wN[1] * 0.25,
+                  wP[2] + wN[2] * 0.25
+                ];
+
+                const wR = other.R || [1, 0, 0];
+                const wF = other.F || [0, 0, 1];
+                const wAngle = other.angle || 0.0;
+                const cosWA = Math.cos(wAngle);
+                const sinWA = Math.sin(wAngle);
+                const wallR_act = [
+                  wR[0] * cosWA + wF[0] * sinWA,
+                  wR[1] * cosWA + wF[1] * sinWA,
+                  wR[2] * cosWA + wF[2] * sinWA
+                ];
+                const wallF_act = [
+                  wF[0] * cosWA - wR[0] * sinWA,
+                  wF[1] * cosWA - wR[1] * sinWA,
+                  wF[2] * cosWA - wR[2] * sinWA
+                ];
+
+                // 4 orthogonal orientations on wall top:
+                // 1) Eave on Wall: bottom eave sits flush on wallTopCenter, roof slopes up
+                // 2) Ridge on Wall: top ridge sits flush on wallTopCenter, roof slopes down
+                for (let rotStep = 0; rotStep < 4; rotStep++) {
+                  const a = rotStep * (Math.PI / 2);
+                  const cosA = Math.cos(a);
+                  const sinA = Math.sin(a);
+                  const dirF = [
+                    wallF_act[0] * cosA - wallR_act[0] * sinA,
+                    wallF_act[1] * cosA - wallR_act[1] * sinA,
+                    wallF_act[2] * cosA - wallR_act[2] * sinA
+                  ];
+
+                  // 1. Eave on Wall: pos offset horizontally by +dirF * 0.15 so eave (pos - dirF*0.15) == wallTopCenter!
+                  // No vertical offset, sits directly on wallTopCenter with zero gap!
+                  candidates.push({
+                    pos: [
+                      wallTopCenter[0] + dirF[0] * 0.15,
+                      wallTopCenter[1] + dirF[1] * 0.15,
+                      wallTopCenter[2] + dirF[2] * 0.15
+                    ],
+                    R: wallR_act,
+                    F: wallF_act,
+                    normal: wN,
+                    angle: a,
+                    worldF: dirF,
+                    rotStep: rotStep,
+                    type: 'wall_eave'
+                  });
+
+                  // 2. Ridge on Wall: pos offset by -dirF * 0.15 and -wN * 0.25 so ridge (pos + dirF*0.15 + wN*0.25) == wallTopCenter!
+                  candidates.push({
+                    pos: [
+                      wallTopCenter[0] - dirF[0] * 0.15 - wN[0] * 0.25,
+                      wallTopCenter[1] - dirF[1] * 0.15 - wN[1] * 0.25,
+                      wallTopCenter[2] - dirF[2] * 0.15 - wN[2] * 0.25
+                    ],
+                    R: wallR_act,
+                    F: wallF_act,
+                    normal: wN,
+                    angle: a,
+                    worldF: dirF,
+                    rotStep: rotStep,
+                    type: 'wall_ridge'
+                  });
+                }
+              }
+            }
+
+            // 3. FLOOR CANDIDATES (วางบนพื้น ขอบล่างแนบพื้น 100% ไม่มีช่องว่าง)
+            for (let other of collectibles) {
+              if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
+                const fP = other.position;
+                const fN = other.normal || [0, 1, 0];
+
+                const fodx = fP[0] - playerPt[0];
+                const fody = fP[1] - playerPt[1];
+                const fodz = fP[2] - playerPt[2];
+                if (fodx * fodx + fody * fody + fodz * fodz > (maxReach + 1.2) * (maxReach + 1.2)) continue;
+
+                let floorHH = 0;
+                if (other.type === "stone_floor") floorHH = (other.size * 0.15) / 2;
+                else if (other.type === "thin_wood_floor") floorHH = (other.size * 0.04) / 2;
+                else floorHH = (woodFloorHeight + (other.size || 0.25) * 0.12) / 2;
+
+                const floorTopCenter = [
+                  fP[0] + fN[0] * floorHH,
+                  fP[1] + fN[1] * floorHH,
+                  fP[2] + fN[2] * floorHH
+                ];
+
+                const fR = other.R || [1, 0, 0];
+                const fF = other.F || [0, 0, 1];
+                const fAngle = other.angle || 0.0;
+                const cosFA = Math.cos(fAngle);
+                const sinFA = Math.sin(fAngle);
+                const floorR_act = [
+                  fR[0] * cosFA + fF[0] * sinFA,
+                  fR[1] * cosFA + fF[1] * sinFA,
+                  fR[2] * cosFA + fF[2] * sinFA
+                ];
+                const floorF_act = [
+                  fF[0] * cosFA - fR[0] * sinFA,
+                  fF[1] * cosFA - fR[1] * sinFA,
+                  fF[2] * cosFA - fR[2] * sinFA
+                ];
+
+                for (let rotStep = 0; rotStep < 4; rotStep++) {
+                  const a = rotStep * (Math.PI / 2);
+                  const cosA = Math.cos(a);
+                  const sinA = Math.sin(a);
+                  const dirF = [
+                    floorF_act[0] * cosA - floorR_act[0] * sinA,
+                    floorF_act[1] * cosA - floorR_act[1] * sinA,
+                    floorF_act[2] * cosA - floorR_act[2] * sinA
+                  ];
+
+                  candidates.push({
+                    pos: [
+                      floorTopCenter[0],
+                      floorTopCenter[1],
+                      floorTopCenter[2]
+                    ],
+                    R: floorR_act,
+                    F: floorF_act,
+                    normal: fN,
+                    angle: a,
+                    worldF: dirF,
+                    rotStep: rotStep,
+                    type: 'floor'
+                  });
+                }
+              }
+            }
+
+            // Filter out candidates that are already occupied by an identical roof (same pos AND same direction)
+            // Piercing / opposing / intersecting roofs are ALLOWED!
+            const nonOccupiedCandidates = [];
+            for (let cand of candidates) {
+              let isOccupied = false;
+              const cWF = cand.worldF;
+              for (let other of collectibles) {
+                if (other.active && other.type === "wood_roof" && !other.isPreview) {
+                  const dx = other.position[0] - cand.pos[0];
+                  const dy = other.position[1] - cand.pos[1];
+                  const dz = other.position[2] - cand.pos[2];
+                  const distSq = dx * dx + dy * dy + dz * dz;
+
+                  if (distSq < 0.008) {
+                    const oAngle = other.angle || 0.0;
+                    const cosO = Math.cos(oAngle);
+                    const sinO = Math.sin(oAngle);
+                    const oR = other.R || [1, 0, 0];
+                    const oF = other.F || [0, 0, 1];
+                    const oWF = [
+                      oF[0] * cosO - oR[0] * sinO,
+                      oF[1] * cosO - oR[1] * sinO,
+                      oF[2] * cosO - oR[2] * sinO
+                    ];
+                    const dotF = cWF[0] * oWF[0] + cWF[1] * oWF[1] + cWF[2] * oWF[2];
+                    // Only occupied if already filled by a roof facing the exact same direction
+                    if (dotF > 0.8) {
+                      isOccupied = true;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (!isOccupied) {
+                nonOccupiedCandidates.push(cand);
+              }
+            }
+
+            // Score candidates based on camera crosshair line-of-sight & reach
+            const currentQRotStep = Math.round(((curAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI / 2)) % 4;
+
+            const validCandidates = [];
+            for (let cand of nonOccupiedCandidates) {
+              const pdx = cand.pos[0] - playerPt[0];
+              const pdy = cand.pos[1] - playerPt[1];
+              const pdz = cand.pos[2] - playerPt[2];
+              const pDist = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+              if (pDist > maxReach) continue;
+
+              const vx = cand.pos[0] - eyePos[0];
+              const vy = cand.pos[1] - eyePos[1];
+              const vz = cand.pos[2] - eyePos[2];
+              const proj = vx * lookDir[0] + vy * lookDir[1] + vz * lookDir[2];
+
+              if (proj > 0.05) {
+                const closeX = eyePos[0] + lookDir[0] * proj;
+                const closeY = eyePos[1] + lookDir[1] * proj;
+                const closeZ = eyePos[2] + lookDir[2] * proj;
+                const rayDist = Math.sqrt((cand.pos[0] - closeX)**2 + (cand.pos[1] - closeY)**2 + (cand.pos[2] - closeZ)**2);
+                const angularDist = rayDist / (proj * 0.6 + 0.4);
+
+                if (rayDist <= 2.2 || angularDist <= 0.8) {
+                  // Type prioritization: step 1 slope-up and lateral extension take natural priority
+                  let typeBonus = 1.0;
+                  
+                  if (cand.rotStep !== undefined) {
+                    const rotDiff = Math.abs(cand.rotStep - currentQRotStep);
+                    const minRotDiff = Math.min(rotDiff, 4 - rotDiff);
+                    if (minRotDiff !== 0) continue;
+                  }
+
+                  if (cand.type === 'roof_slope_up') {
+                    typeBonus = 0.5 + (cand.step || 1) * 0.15; // Closer slope steps take priority
+                  } else if (cand.type === 'roof_side') {
+                    typeBonus = 0.65;
+                  } else if (cand.type === 'roof_slope_down') {
+                    typeBonus = 0.75 + (cand.step || 1) * 0.2;
+                  } else if (cand.type === 'roof_peak') {
+                    typeBonus = 0.8;
+                  } else if (cand.type.startsWith('wall') || cand.type === 'floor') {
+                    const roleBonus = (cand.type === 'wall_eave') ? 1.0 : (cand.type === 'floor' ? 1.1 : 1.25);
+                    typeBonus = 0.8 * roleBonus;
+                  }
+
+                  const score = (angularDist * 2.5 + (pDist / maxReach) * 0.5) * typeBonus;
+                  validCandidates.push({
+                    ...cand,
+                    score,
+                    rayDist,
+                    pDist
+                  });
+                }
+              }
+            }
+
+            // Fallback: If camera ray didn't hit within angular threshold, check distance to targetPos
+            if (validCandidates.length === 0) {
+              for (let cand of nonOccupiedCandidates) {
+                const cdx = targetPos[0] - cand.pos[0];
+                const cdy = targetPos[1] - cand.pos[1];
+                const cdz = targetPos[2] - cand.pos[2];
+                const dist = Math.sqrt(cdx * cdx + cdy * cdy + cdz * cdz);
+                if (dist < 1.4) {
+                  if (cand.rotStep !== undefined) {
+                    const rotDiff = Math.abs(cand.rotStep - currentQRotStep);
+                    const minRotDiff = Math.min(rotDiff, 4 - rotDiff);
+                    if (minRotDiff !== 0) continue;
+                  }
+                  
+                  let typeBonus = 1.0;
+                  if (cand.type.startsWith('wall') || cand.type === 'floor') {
+                    typeBonus = 1.0;
+                  }
+                  validCandidates.push({
+                    ...cand,
+                    score: dist * 2.0 * typeBonus,
+                    rayDist: dist,
+                    pDist: dist
+                  });
+                }
+              }
+            }
+
+            // Find best candidate with lowest score
+            let bestCand = null;
+            let bestScore = Infinity;
+            for (let c of validCandidates) {
+              if (c.score < bestScore) {
+                bestScore = c.score;
+                bestCand = c;
+              }
+            }
+
+            // Snap if a valid candidate slot on wall or roof was selected
+            if (bestCand) {
+              targetPos = [bestCand.pos[0], bestCand.pos[1], bestCand.pos[2]];
+              pN = [bestCand.normal[0], bestCand.normal[1], bestCand.normal[2]];
+              pR = [bestCand.R[0], bestCand.R[1], bestCand.R[2]];
+              pF = [bestCand.F[0], bestCand.F[1], bestCand.F[2]];
+              floorPreviewCollectible.angle = bestCand.angle;
+              isSnapped = true;
+              floorPreviewCollectible.isValidPlacement = true;
+            } else {
+              isSnapped = false;
+              floorPreviewCollectible.isValidPlacement = false;
+            }
+
+            // Final duplicate collision check: only reject if duplicate roof facing identical direction exists
+            if (isSnapped && floorPreviewCollectible.isValidPlacement) {
+              const curCos = Math.cos(floorPreviewCollectible.angle);
+              const curSin = Math.sin(floorPreviewCollectible.angle);
+              const curWF = [
+                pF[0] * curCos - pR[0] * curSin,
+                pF[1] * curCos - pR[1] * curSin,
+                pF[2] * curCos - pR[2] * curSin
+              ];
+
+              for (let other of collectibles) {
+                if (other.active && other.type === "wood_roof" && !other.isPreview) {
+                  const ox = other.position[0] - targetPos[0];
+                  const oy = other.position[1] - targetPos[1];
+                  const oz = other.position[2] - targetPos[2];
+                  const distSq = ox * ox + oy * oy + oz * oz;
+
+                  if (distSq < 0.008) {
+                    const oAngle = other.angle || 0.0;
+                    const cosO = Math.cos(oAngle);
+                    const sinO = Math.sin(oAngle);
+                    const oR = other.R || [1, 0, 0];
+                    const oF = other.F || [0, 0, 1];
+                    const oWF = [
+                      oF[0] * cosO - oR[0] * sinO,
+                      oF[1] * cosO - oR[1] * sinO,
+                      oF[2] * cosO - oR[2] * sinO
+                    ];
+                    const dot = curWF[0] * oWF[0] + curWF[1] * oWF[1] + curWF[2] * oWF[2];
+
+                    if (dot > 0.8) {
+                      floorPreviewCollectible.isValidPlacement = false;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
           } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item") {
             // Find nearest wood_floor for grid snapping (Only placeable on wood floors)
             let nearestFloor = null;
@@ -1793,7 +2578,8 @@ function buildCollectibles(count, seed) {
                 }
             }
 
-            if (nearestFloor && nearestDist < 0.6) {
+            const maxFloorDist = (typeToPlace === "thin_wood_floor") ? 1.5 : 0.6;
+            if (nearestFloor && nearestDist < maxFloorDist) {
                 const sR = nearestFloor.R || [1, 0, 0];
                 const sF = nearestFloor.F || [0, 0, 1];
                 const sN = nearestFloor.normal || [0, 1, 0];
@@ -1808,7 +2594,7 @@ function buildCollectibles(count, seed) {
                 const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
 
                 // If within expanded wood_floor bounds (generous snapping)
-                let snapBound = (typeToPlace === "thin_wood_floor" && (nearestFloor.type === "thin_wood_floor" || nearestFloor.type === "wood_floor")) ? 0.55 : 0.35;
+                let snapBound = (typeToPlace === "thin_wood_floor" && (nearestFloor.type === "thin_wood_floor" || nearestFloor.type === "wood_floor")) ? 0.65 : 0.35;
                 if (Math.abs(localX) <= snapBound && Math.abs(localZ) <= snapBound) {
                     // Snap localX and localZ to 0.15 grid (-0.15, 0.0, 0.15)
                     let gridX = Math.round(localX / 0.15);
@@ -1872,18 +2658,26 @@ function buildCollectibles(count, seed) {
                     floorPreviewCollectible.isValidPlacement = true;
                     floorPreviewCollectible.size = 0.25;
 
-                    const wH = woodFloorHeight + 0.25 * 0.12; // height of wood floor
+                    const floorThickness = (typeof window !== "undefined" && window.getFloorThickness) 
+                      ? window.getFloorThickness(nearestFloor) 
+                      : (nearestFloor.type === "stone_floor" 
+                        ? (nearestFloor.size || 0.25) * 0.15 
+                        : (nearestFloor.type === "thin_wood_floor" 
+                          ? (nearestFloor.size || 0.25) * 0.04 
+                          : ((typeof window !== "undefined" && window.woodFloorHeight !== undefined ? window.woodFloorHeight : 0.05) + (nearestFloor.size || 0.25) * 0.12)));
+                    const floorTopOffset = floorThickness / 2;
 
                     // Center the wall relative to the floor plane but offset up on the floor normal
                     targetPos = [
-                        sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (wH / 2),
-                        sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (wH / 2),
-                        sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (wH / 2)
+                        sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * floorTopOffset,
+                        sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * floorTopOffset,
+                        sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * floorTopOffset
                     ];
 
                     pN = [sN[0], sN[1], sN[2]];
                     pR = [sR[0], sR[1], sR[2]];
                     pF = [sF[0], sF[1], sF[2]];
+                    floorPreviewCollectible.angle = (gridX !== 0) ? Math.PI / 2 : 0.0;
                     isSnapped = true;
 
                     // Clean column structures collection
@@ -1903,7 +2697,7 @@ function buildCollectibles(count, seed) {
                           const ogX = Math.round(olX / 0.15);
                           const ogZ = Math.round(olZ / 0.15);
                           if (ogX === gridX && ogZ === gridZ) {
-                            const oLevel = Math.round((olN - wH / 2) / 0.25);
+                            const oLevel = Math.round((olN - floorTopOffset) / 0.25);
                             columnStructures.push({
                               type: other.type,
                               level: oLevel,
@@ -1914,7 +2708,7 @@ function buildCollectibles(count, seed) {
                       }
                     }
 
-                    if (typeToPlace === "wood_wall") {
+                    if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") {
                       // Stacking: find first level >= 0 that does NOT have a wood_wall, wood_window, or wood_door
                       let targetLevel = 0;
                       while (true) {
@@ -1930,14 +2724,22 @@ function buildCollectibles(count, seed) {
                         floorPreviewCollectible.size = 0.25;
                         
                         targetPos = [
-                          sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (wH / 2 + targetLevel * 0.25),
-                          sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (wH / 2 + targetLevel * 0.25),
-                          sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (wH / 2 + targetLevel * 0.25)
+                          sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (floorTopOffset + targetLevel * 0.25),
+                          sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (floorTopOffset + targetLevel * 0.25),
+                          sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (floorTopOffset + targetLevel * 0.25)
                         ];
                         
                         pN = [sN[0], sN[1], sN[2]];
                         pR = [sR[0], sR[1], sR[2]];
                         pF = [sF[0], sF[1], sF[2]];
+
+                        const lowerWall = columnStructures.find(s => (s.type === "wood_wall" || s.type === "wood_window" || s.type === "wood_door") && s.level === targetLevel - 1);
+                        if (lowerWall && lowerWall.item && lowerWall.item.angle !== undefined) {
+                          floorPreviewCollectible.angle = lowerWall.item.angle;
+                        } else {
+                          floorPreviewCollectible.angle = (gridX !== 0) ? Math.PI / 2 : 0.0;
+                        }
+
                         isSnapped = true;
                       } else {
                         floorPreviewCollectible.isValidPlacement = false;
@@ -1971,7 +2773,7 @@ function buildCollectibles(count, seed) {
                                   (ogX === fgX && ogZ === fgZ + 1) ||
                                   (ogX === fgX && ogZ === fgZ)) {
                                   
-                                  const oLevel = Math.round((olN - wH / 2) / 0.25);
+                                  const oLevel = Math.round((olN - floorTopOffset) / 0.25);
                                   if (oLevel > maxWallLevel) maxWallLevel = oLevel;
                               }
                           }
@@ -1984,19 +2786,19 @@ function buildCollectibles(count, seed) {
                         // Centered on full floor grid, elevated to top of wall
                         const targetLevel = maxWallLevel + 1;
                         targetPos = [
-                          sP[0] + sR[0] * (fgX * 0.15) + sF[0] * (fgZ * 0.15) + sN[0] * (wH / 2 + targetLevel * 0.25),
-                          sP[1] + sR[1] * (fgX * 0.15) + sF[1] * (fgZ * 0.15) + sN[1] * (wH / 2 + targetLevel * 0.25),
-                          sP[2] + sR[2] * (fgX * 0.15) + sF[2] * (fgZ * 0.15) + sN[2] * (wH / 2 + targetLevel * 0.25)
+                          sP[0] + sR[0] * (fgX * 0.15) + sF[0] * (fgZ * 0.15) + sN[0] * (floorTopOffset + targetLevel * 0.25),
+                          sP[1] + sR[1] * (fgX * 0.15) + sF[1] * (fgZ * 0.15) + sN[1] * (floorTopOffset + targetLevel * 0.25),
+                          sP[2] + sR[2] * (fgX * 0.15) + sF[2] * (fgZ * 0.15) + sN[2] * (floorTopOffset + targetLevel * 0.25)
                         ];
                         pN = [sN[0], sN[1], sN[2]];
                         pR = [sR[0], sR[1], sR[2]];
                         pF = [sF[0], sF[1], sF[2]];
                         isSnapped = true;
                       } else {
-                        // Allow extending horizontally from an adjacent thin_wood_floor
+                        // Allow extending horizontally from an adjacent thin_wood_floor or wood_roof
                         let adjacentThinFloor = null;
                         for (let other of collectibles) {
-                          if (other.active && other.type === "thin_wood_floor" && !other.isPreview) {
+                          if (other.active && (other.type === "thin_wood_floor" || other.type === "wood_roof") && !other.isPreview) {
                              const odx = other.position[0] - sP[0];
                              const ody = other.position[1] - sP[1];
                              const odz = other.position[2] - sP[2];
@@ -2008,7 +2810,8 @@ function buildCollectibles(count, seed) {
                              if ((ogX === fgX - 2 && ogZ === fgZ) ||
                                  (ogX === fgX + 2 && ogZ === fgZ) ||
                                  (ogX === fgX && ogZ === fgZ - 2) ||
-                                 (ogX === fgX && ogZ === fgZ + 2)) {
+                                 (ogX === fgX && ogZ === fgZ + 2) ||
+                                 (ogX === fgX && ogZ === fgZ)) {
                                  adjacentThinFloor = other;
                                  break;
                              }
@@ -2023,7 +2826,7 @@ function buildCollectibles(count, seed) {
                             const ody = adjacentThinFloor.position[1] - sP[1];
                             const odz = adjacentThinFloor.position[2] - sP[2];
                             const olN = odx * sN[0] + ody * sN[1] + odz * sN[2];
-                            
+
                             targetPos = [
                               sP[0] + sR[0] * (fgX * 0.15) + sF[0] * (fgZ * 0.15) + sN[0] * olN,
                               sP[1] + sR[1] * (fgX * 0.15) + sF[1] * (fgZ * 0.15) + sN[1] * olN,
@@ -2040,17 +2843,16 @@ function buildCollectibles(count, seed) {
                                   const ox = other.position[0] - targetPos[0];
                                   const oy = other.position[1] - targetPos[1];
                                   const oz = other.position[2] - targetPos[2];
-                                  if (ox*ox + oy*oy + oz*oz < 0.01) {
+                                  if (ox*ox + oy*oy + oz*oz < 0.005) {
                                       floorPreviewCollectible.isValidPlacement = false;
                                   }
                               }
-            }
-          } else {
+                            }
+                        } else {
                             floorPreviewCollectible.isValidPlacement = false;
-                            floorPreviewCollectible.size = 0.25;
                         }
-            }
-          } else {
+                      }
+                    } else {
                       // For wood_window or wood_door: must co-locate with a wood_wall at the targeted aim level
                       const localN = dx * sN[0] + dy * sN[1] + dz * sN[2];
                       const aimLevel = Math.max(0, Math.round((localN - wH / 2) / 0.25));
