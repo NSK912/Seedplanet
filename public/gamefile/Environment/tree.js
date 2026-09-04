@@ -111,15 +111,35 @@
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
 
+    const type = (useUint32 && idxLen > 65535) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+    const bytesPerIndex = type === gl.UNSIGNED_INT ? 4 : 2;
+
+    const grassStartIdx = opts.natureGrassStartIndex !== undefined ? opts.natureGrassStartIndex : global.natureGrassStartIndex;
+    const obstacles = opts.natureObstacles !== undefined ? opts.natureObstacles : global.natureObstacles;
+    const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
+    const maxDist = (opts.renderDistEnabled !== false)
+      ? (opts.renderDistValue !== undefined ? opts.renderDistValue : (typeof global.objectRenderDistValue === "number" ? global.objectRenderDistValue : 5.0))
+      : null;
+
     // Trees & rocks use CW winding order normally, so mirrored is CCW
     gl.enable(gl.CULL_FACE);
     gl.frontFace(gl.CCW);
     gl.cullFace(gl.BACK);
 
-    if (useUint32 && idxLen > 65535) {
-      gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_INT, 0);
+    if (obstacles && obstacles.length > 0 && typeof global.getVisibleIndexRanges === "function" && eye) {
+      const ranges = global.getVisibleIndexRanges(obstacles, null, maxDist, eye);
+      for (let i = 0; i < ranges.length; i++) {
+        const range = ranges[i];
+        const rangeStart = range.start;
+        const rangeEnd = (grassStartIdx !== undefined) ? Math.min(range.end, grassStartIdx) : range.end;
+        const count = rangeEnd - rangeStart;
+        if (count > 0) {
+          gl.drawElements(gl.TRIANGLES, count, type, rangeStart * bytesPerIndex);
+        }
+      }
     } else {
-      gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_SHORT, 0);
+      const treeDrawCount = grassStartIdx !== undefined ? grassStartIdx : idxLen;
+      gl.drawElements(gl.TRIANGLES, treeDrawCount, type, 0);
     }
     gl.disable(gl.CULL_FACE);
   }
@@ -192,22 +212,26 @@
     const obstacles = opts.natureObstacles !== undefined ? opts.natureObstacles : global.natureObstacles;
     const chunks = opts.grassChunks !== undefined ? opts.grassChunks : global.grassChunks;
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
+    const grassStartIdx = opts.natureGrassStartIndex !== undefined ? opts.natureGrassStartIndex : global.natureGrassStartIndex;
+    const maxDist = (opts.renderDistEnabled !== false)
+      ? (opts.renderDistValue !== undefined ? opts.renderDistValue : (typeof global.objectRenderDistValue === "number" ? global.objectRenderDistValue : 5.0))
+      : null;
 
-    if (fcEnabled && fPlanes && typeof global.getVisibleIndexRanges === "function" && obstacles) {
-      const ranges = global.getVisibleIndexRanges(obstacles, fPlanes);
+    if (obstacles && obstacles.length > 0 && typeof global.getVisibleIndexRanges === "function" && eye) {
+      const planes = (fcEnabled && fPlanes) ? fPlanes : null;
+      const ranges = global.getVisibleIndexRanges(obstacles, planes, maxDist, eye);
       for (let i = 0; i < ranges.length; i++) {
         const range = ranges[i];
-        const count = range.end - range.start;
+        const rangeStart = range.start;
+        const rangeEnd = (grassStartIdx !== undefined) ? Math.min(range.end, grassStartIdx) : range.end;
+        const count = rangeEnd - rangeStart;
         if (count > 0) {
-          gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
+          gl.drawElements(gl.TRIANGLES, count, type, rangeStart * bytesPerIndex);
         }
       }
     } else {
-      if (isUint32) {
-        gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_INT, 0);
-      } else {
-        gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_SHORT, 0);
-      }
+      const treeDrawCount = grassStartIdx !== undefined ? grassStartIdx : idxLen;
+      gl.drawElements(gl.TRIANGLES, treeDrawCount, type, 0);
     }
     gl.disable(gl.CULL_FACE);
   }

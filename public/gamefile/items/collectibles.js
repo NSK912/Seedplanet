@@ -3546,16 +3546,67 @@ function buildCollectibles(count, seed) {
           }
         }
 
+        // Player reference position for render distance checks
+        let pPos = (typeof window !== "undefined" && window.player3DPos && window.player3DPos.length >= 3)
+          ? window.player3DPos
+          : (typeof eyePos !== "undefined" && eyePos && eyePos.length >= 3 ? eyePos : null);
+
+        if (!pPos && typeof charTheta !== "undefined" && typeof charPhi !== "undefined") {
+          const sT = Math.sin(charTheta), cT = Math.cos(charTheta);
+          const sP = Math.sin(charPhi), cP = Math.cos(charPhi);
+          const rBase = (typeof RADIUS !== "undefined" ? RADIUS : 8.0);
+          pPos = [rBase * sT * cP, rBase * cT, rBase * sT * sP];
+        }
+
+        const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
+          ? renderDistEnabled
+          : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
+
+        const curObjectDist = typeof objectRenderDistValue !== "undefined"
+          ? objectRenderDistValue
+          : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
+            ? window.objectRenderDistValue
+            : 5.0);
+
+        const maxDistLimit = curObjectDist + 1.0;
+        const maxDistSq = maxDistLimit * maxDistLimit;
+
         for (let c of collectibles) {
           if (!c.active || !c.isDynamic) continue;
-          const _oldP = c.position ? [c.position[0], c.position[1], c.position[2]] : null;
-          const _oldR = c.R ? [c.R[0], c.R[1], c.R[2]] : null;
+
+          // Check if dynamic collectible is outside the object render distance
+          let isOutOfRenderDist = false;
+          if (isRenderDistOn && pPos && c.position) {
+            const dx = c.position[0] - pPos[0];
+            const dy = c.position[1] - pPos[1];
+            const dz = c.position[2] - pPos[2];
+            const distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq > maxDistSq) {
+              isOutOfRenderDist = true;
+            }
+          }
 
           if ((typeof activeRidingBoat !== "undefined" && c === activeRidingBoat) || 
               (typeof activeRidingMech !== "undefined" && activeRidingMech && (c === activeRidingMech || (activeRidingMech.attachedParts && activeRidingMech.attachedParts.some(ep => ep.item === c))))) {
+            isOutOfRenderDist = false;
             c.vel = [0, 0, 0];
             continue;
           }
+
+          // If outside render distance, put simulation to sleep and do not trigger dynamic VBO refresh
+          if (isOutOfRenderDist) {
+            c._wasOutOfRange = true;
+            continue;
+          } else {
+            // If entering range, refresh once to ensure up-to-date position in dynamic buffer
+            if (c._wasOutOfRange) {
+              c._wasOutOfRange = false;
+              needRefresh = true;
+            }
+          }
+
+          const _oldP = c.position ? [c.position[0], c.position[1], c.position[2]] : null;
+          const _oldR = c.R ? [c.R[0], c.R[1], c.R[2]] : null;
 
           if (c.type === "arrow") {
              if (c.isStuck) {

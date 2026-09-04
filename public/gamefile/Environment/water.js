@@ -462,6 +462,30 @@
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, waterIndexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
+    // Sync Native WebGPU Buffers if WebGPU is available
+    if (typeof Graphics !== 'undefined' && Graphics.webgpu && Graphics.webgpu.device) {
+      const device = Graphics.webgpu.device;
+      if (Graphics.webgpu.waterVertexBuffer) {
+        Graphics.webgpu.waterVertexBuffer.destroy();
+      }
+      if (Graphics.webgpu.waterIndexBuffer) {
+        Graphics.webgpu.waterIndexBuffer.destroy();
+      }
+      Graphics.webgpu.waterVertexBuffer = device.createBuffer({
+        size: waterVerticesCache.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(Graphics.webgpu.waterVertexBuffer, 0, waterVerticesCache);
+
+      Graphics.webgpu.waterIndexBuffer = device.createBuffer({
+        size: indices.byteLength,
+        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(Graphics.webgpu.waterIndexBuffer, 0, indices);
+      Graphics.webgpu.waterIndicesLength = waterIndicesLength;
+      Graphics.webgpu.waterUseUint32 = isUint32;
+    }
+
     // Synchronize global references if they exist
     if (typeof window !== 'undefined') {
       window.waterVertexBuffer = waterVertexBuffer;
@@ -674,9 +698,19 @@
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, waterVertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, newVertices, gl.DYNAMIC_DRAW);
+
+    // Sync Native WebGPU Vertex Buffer directly
+    if (typeof Graphics !== 'undefined' && Graphics.webgpu && Graphics.webgpu.device && Graphics.webgpu.waterVertexBuffer) {
+      Graphics.webgpu.device.queue.writeBuffer(Graphics.webgpu.waterVertexBuffer, 0, newVertices.buffer, newVertices.byteOffset, newVertices.byteLength);
+    }
   }
 
   function drawWater(gl, params) {
+    // If running under Native WebGPU, skip WebGL draw call completely as water is rendered natively in WebGPU pass
+    if (typeof Graphics !== 'undefined' && (Graphics.mode === 'hybrid' || (Graphics.webgpu && Graphics.webgpu.ready))) {
+      return;
+    }
+
     if (!gl || !waterProgram || !waterVertexBuffer || !waterIndexBuffer || waterIndicesLength <= 0) return;
 
     const p = params || {};

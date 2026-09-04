@@ -1121,7 +1121,6 @@ struct WaterUniforms {
     cameraPos : vec4<f32>,
     renderDist : vec4<f32>, // x: enabled, y: maxDist, z: 0, w: 0
     boatCount : vec4<f32>,  // x: count, yzw: 0
-    // boatPos (4x vec4)
     boatPos0 : vec4<f32>, boatPos1 : vec4<f32>, boatPos2 : vec4<f32>, boatPos3 : vec4<f32>,
     boatRight0 : vec4<f32>, boatRight1 : vec4<f32>, boatRight2 : vec4<f32>, boatRight3 : vec4<f32>,
     boatNormal0 : vec4<f32>, boatNormal1 : vec4<f32>, boatNormal2 : vec4<f32>, boatNormal3 : vec4<f32>,
@@ -1143,26 +1142,11 @@ struct VertexOutput {
 @vertex
 fn vs_main(@location(0) aPosition : vec3<f32>) -> VertexOutput {
     var out : VertexOutput;
-    
-    let time = uniforms.opacityTimeWaveLevel.y;
-    let waveStrength = uniforms.opacityTimeWaveLevel.z;
-    
-    let wave1 = sin(aPosition.x * 6.0 + time * 2.3) * 0.04;
-    let wave2 = cos(aPosition.z * 5.0 + time * 1.8) * 0.035;
-    let wave3 = sin(aPosition.y * 4.0 + time * 2.7) * 0.025;
-    let wave4 = cos(aPosition.x * 3.5 + aPosition.z * 4.5 + time * 3.1) * 0.03;
-    let wave = (wave1 + wave2 + wave3 + wave4) * waveStrength * 2.0;
-    
-    // We ignore the wave calculation on the radius since WebGL didn't add it to position
-    let pos = aPosition;
-    let dir = normalize(aPosition);
-    
-    let mvPosition = uniforms.modelViewMatrix * vec4<f32>(pos, 1.0);
+    let mvPosition = uniforms.modelViewMatrix * vec4<f32>(aPosition, 1.0);
     out.position = uniforms.projectionMatrix * mvPosition;
-    out.vPosition = pos;
-    out.vNormal = dir;
+    out.vPosition = aPosition;
+    out.vNormal = normalize(aPosition);
     out.vDist = length(mvPosition.xyz);
-    
     return out;
 }
 
@@ -1171,15 +1155,10 @@ fn hash(p : vec3<f32>) -> f32 {
     return fract(sin(dot(pf, vec3<f32>(12.9898, 78.233, 37.719))) * 43758.5453);
 }
 
-fn mix3(a : f32, b : f32, t : f32) -> f32 {
-    return mix(a, b, t);
-}
-
 fn noise3D(p : vec3<f32>) -> f32 {
     let i = floor(p);
     let f = fract(p);
     let u = f * f * (3.0 - 2.0 * f);
-    
     return mix(
         mix(mix(hash(i + vec3<f32>(0.0,0.0,0.0)), hash(i + vec3<f32>(1.0,0.0,0.0)), u.x),
             mix(hash(i + vec3<f32>(0.0,1.0,0.0)), hash(i + vec3<f32>(1.0,1.0,0.0)), u.x), u.y),
@@ -1202,6 +1181,43 @@ fn fbm(p : vec3<f32>) -> f32 {
     return value / maxVal;
 }
 
+fn getBoatPos(i : i32) -> vec3<f32> {
+    if (i == 0) { return uniforms.boatPos0.xyz; }
+    if (i == 1) { return uniforms.boatPos1.xyz; }
+    if (i == 2) { return uniforms.boatPos2.xyz; }
+    return uniforms.boatPos3.xyz;
+}
+fn getBoatRight(i : i32) -> vec3<f32> {
+    if (i == 0) { return uniforms.boatRight0.xyz; }
+    if (i == 1) { return uniforms.boatRight1.xyz; }
+    if (i == 2) { return uniforms.boatRight2.xyz; }
+    return uniforms.boatRight3.xyz;
+}
+fn getBoatNormal(i : i32) -> vec3<f32> {
+    if (i == 0) { return uniforms.boatNormal0.xyz; }
+    if (i == 1) { return uniforms.boatNormal1.xyz; }
+    if (i == 2) { return uniforms.boatNormal2.xyz; }
+    return uniforms.boatNormal3.xyz;
+}
+fn getBoatForward(i : i32) -> vec3<f32> {
+    if (i == 0) { return uniforms.boatForward0.xyz; }
+    if (i == 1) { return uniforms.boatForward1.xyz; }
+    if (i == 2) { return uniforms.boatForward2.xyz; }
+    return uniforms.boatForward3.xyz;
+}
+fn getBoatSize(i : i32) -> vec3<f32> {
+    if (i == 0) { return uniforms.boatSize0.xyz; }
+    if (i == 1) { return uniforms.boatSize1.xyz; }
+    if (i == 2) { return uniforms.boatSize2.xyz; }
+    return uniforms.boatSize3.xyz;
+}
+fn getBoatOffset(i : i32) -> vec3<f32> {
+    if (i == 0) { return uniforms.boatOffset0.xyz; }
+    if (i == 1) { return uniforms.boatOffset1.xyz; }
+    if (i == 2) { return uniforms.boatOffset2.xyz; }
+    return uniforms.boatOffset3.xyz;
+}
+
 @fragment
 fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     if (uniforms.renderDist.x > 0.5 && in.vDist > uniforms.renderDist.y) {
@@ -1209,7 +1225,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     }
     
     let nPos = normalize(in.vPosition);
-    let theta = acos(nPos.y);
+    let theta = acos(clamp(nPos.y, -1.0, 1.0));
     var phi = atan2(nPos.z, nPos.x);
     if (phi < 0.0) { phi += 2.0 * 3.14159265359; }
     let uv = vec2<f32>(phi / (2.0 * 3.14159265359), theta / 3.14159265359);
@@ -1218,9 +1234,36 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     if (isWater <= 0.001) {
         discard;
     }
-    
-    // Simplification: We omit the boat clipping check in WebGPU for now to save complexity, 
-    // it's mostly a visual refinement for boats.
+
+    // Boat hull clipping
+    let bCount = i32(uniforms.boatCount.x);
+    for (var i = 0; i < 4; i++) {
+        if (i >= bCount) { break; }
+        let rel = in.vPosition - getBoatPos(i);
+        let localX = dot(rel, getBoatRight(i));
+        let localY = dot(rel, getBoatNormal(i));
+        let localZ = dot(rel, getBoatForward(i));
+        
+        let size = getBoatSize(i);
+        let offset = getBoatOffset(i);
+        let offsetY = offset.x;
+        let shapeType = offset.y;
+        
+        let dy = localY - offsetY;
+        if (abs(dy) < size.y) {
+            var halfWidth = size.x;
+            let halfLength = size.z;
+            let t = abs(localZ) / halfLength;
+            if (t <= 1.0) {
+                if (shapeType > 0.5) {
+                    halfWidth = halfWidth * (1.0 - t * t * 0.85);
+                }
+                if (abs(localX) < halfWidth) {
+                    discard;
+                }
+            }
+        }
+    }
     
     let time = uniforms.opacityTimeWaveLevel.y;
     var normal = normalize(in.vNormal);
@@ -1256,16 +1299,61 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     let sunSpec = pow(max(dot(reflectDir, lightDir), 0.0), 120.0);
     reflectedScene += vec3<f32>(1.0, 0.96, 0.85) * sunSpec * 2.0;
     
-    let fresnel = pow(1.0 - abs(dot(normal, viewDir)), 4.0);
+    var fresnel = pow(1.0 - abs(dot(normal, viewDir)), 4.0);
+    fresnel = clamp(fresnel * 0.75 + 0.12, 0.0, 1.0);
     
-    let waterCol = uniforms.waterColor.rgb;
-    let finalColor = mix(waterCol, reflectedScene, fresnel * 0.8 + 0.2);
+    let deepNavyColor = vec3<f32>(0.01, 0.08, 0.32);
+    var baseSeaColor = uniforms.waterColor.rgb;
+    if (isWater > 0.35) {
+        let t = clamp((isWater - 0.35) / 0.65, 0.0, 1.0);
+        baseSeaColor = mix(uniforms.waterColor.rgb, deepNavyColor, t);
+    }
     
-    // Add specular highlight for water
-    let spec2 = pow(max(dot(reflectDir, lightDir), 0.0), 400.0);
-    let outColor = finalColor + vec3<f32>(0.8, 0.9, 1.0) * spec2 * 1.5;
+    let spec = pow(max(dot(reflect(-lightDir, normal), -viewDir), 0.0), 32.0) * 0.35;
+    let baseWaterColor = baseSeaColor * (0.85 + 0.15 * spec);
     
-    return vec4<f32>(outColor, uniforms.opacityTimeWaveLevel.x);
+    var finalColor = mix(baseWaterColor, reflectedScene, fresnel);
+    
+    // Caustics in shallow water
+    if (isWater < 0.40) {
+        let cPos = in.vPosition * 22.0 + vec3<f32>(time * 0.9, time * 0.7, time * 0.8);
+        let c1 = noise3D(cPos);
+        let c2 = noise3D(cPos * 1.4 + vec3<f32>(2.3, 1.7, 4.1));
+        let caustic = pow(min(c1, c2), 2.2) * 1.5;
+        let causticMask = (1.0 - smoothstep(0.05, 0.40, isWater)) * smoothstep(0.01, 0.05, isWater);
+        finalColor += vec3<f32>(0.08, 0.10, 0.12) * caustic * causticMask;
+    }
+    
+    // Shoreline animated foam
+    let edgeFade = smoothstep(0.0, 0.08, isWater);
+    let foamFactor = smoothstep(0.0, 0.03, edgeFade) * (1.0 - smoothstep(0.03, 0.18, edgeFade));
+    var foamNoise = sin(in.vPosition.x * 65.0 + in.vPosition.z * 55.0 + time * 3.8) * 0.5 + 0.5;
+    foamNoise += cos(in.vPosition.y * 110.0 - time * 3.5) * 0.25;
+    foamNoise = clamp(foamNoise, 0.0, 1.0);
+    let foamColor = vec3<f32>(0.96, 0.98, 1.0);
+    finalColor = mix(finalColor, foamColor, foamFactor * 0.75 * foamNoise);
+    
+    // Depth opacity & fresnel alpha
+    let depthOpacity = smoothstep(0.0, 0.40, isWater);
+    var alpha = mix(uniforms.opacityTimeWaveLevel.x * depthOpacity, 0.96, fresnel);
+    alpha += ripple * 0.10;
+    alpha = clamp(alpha, 0.0, 0.98);
+    alpha *= edgeFade;
+
+    // Atmospheric Fog
+    if (uniforms.renderDist.x > 0.5) {
+        let fogStart = uniforms.renderDist.y * 0.55;
+        let fogFactor = smoothstep(fogStart, uniforms.renderDist.y, in.vDist);
+        let fogDir = normalize(in.vPosition - uniforms.cameraPos.xyz);
+        let sunDot = max(dot(fogDir, lightDir), 0.0);
+        let baseSkyFog = vec3<f32>(0.012, 0.035, 0.09);
+        let litSkyFog = vec3<f32>(0.08, 0.14, 0.24);
+        let atmosphericFog = mix(baseSkyFog, litSkyFog, sunDot * 0.5 + 0.1);
+        finalColor = mix(finalColor, atmosphericFog, fogFactor * 0.98);
+        alpha = mix(alpha, 0.0, fogFactor * 0.95);
+    }
+
+    return vec4<f32>(finalColor, alpha);
 }
 `;
             this.waterShaderModule = this.device.createShaderModule({ code: waterWGSL });
@@ -1436,7 +1524,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(finalColor, 1.0);
 }
 `;
-            this.skyShaderModule = this.device.createShaderModule({ code: skyWGSL });
+            this.skyShaderModule = this.device.createShaderModule({ code: skyWGSL2 });
             
             this.skyBindGroupLayout = this.device.createBindGroupLayout({
                 entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }]
@@ -1577,7 +1665,7 @@ fn fs_main(@location(0) worldDir : vec3<f32>) -> @location(0) vec4<f32> {
 }
             `;
 
-            const shaderModule = this.webgpu.device.createShaderModule({ code: skyWGSL2 });
+            const shaderModule = this.webgpu.device.createShaderModule({ code: skyWGSL });
 
             this.webgpu.skyPipeline = this.webgpu.device.createRenderPipeline({
               layout: 'auto',
@@ -1592,6 +1680,11 @@ fn fs_main(@location(0) worldDir : vec3<f32>) -> @location(0) vec4<f32> {
               },
               primitive: {
                 topology: 'triangle-list',
+              },
+              depthStencil: {
+                depthWriteEnabled: false,
+                depthCompare: 'always',
+                format: 'depth24plus',
               },
             });
 
@@ -1819,6 +1912,61 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
             });
 
     
+            // Water Uniform Buffer & Dummy Water Mask
+            this.webgpu.waterUniformBuffer = this.webgpu.device.createBuffer({
+                size: 2048,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+
+            const dummyWaterTex = this.webgpu.device.createTexture({
+                size: [1, 1, 1],
+                format: 'r8unorm',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+            });
+            this.webgpu.device.queue.writeTexture(
+                { texture: dummyWaterTex },
+                new Uint8Array([255]),
+                { bytesPerRow: 1 },
+                [1, 1, 1]
+            );
+            this.webgpu.dummyWaterMaskTextureView = dummyWaterTex.createView();
+            this.webgpu.dummyWaterMaskSampler = this.webgpu.device.createSampler({
+                magFilter: 'linear',
+                minFilter: 'linear'
+            });
+
+            this.webgpu.waterPipeline = this.webgpu.device.createRenderPipeline({
+                label: 'Native Water Pipeline',
+                layout: 'auto',
+                vertex: {
+                    module: this.waterShaderModule,
+                    entryPoint: 'vs_main',
+                    buffers: [
+                        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }
+                    ]
+                },
+                fragment: {
+                    module: this.waterShaderModule,
+                    entryPoint: 'fs_main',
+                    targets: [{
+                        format: this.format,
+                        blend: {
+                            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+                        }
+                    }]
+                },
+                primitive: {
+                    topology: 'triangle-list',
+                    cullMode: 'none'
+                },
+                depthStencil: {
+                    depthWriteEnabled: false,
+                    depthCompare: 'less',
+                    format: 'depth24plus'
+                }
+            });
+
         this.webgpu.dummyNormalBuffer = this.webgpu.device.createBuffer({
             size: 12,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
@@ -1830,23 +1978,19 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         });
         this.webgpu.device.queue.writeBuffer(this.webgpu.dummyColorBuffer, 0, new Float32Array([0, 0, 0]));
         this.webgpu.ready = true;
-            this.mode = 'hybrid'; // 'hybrid' during gradual migration, eventually becomes 'webgpu'
-            console.log("Graphics API: WebGPU Initialized. Operating in Hybrid Migration Mode.");
+            this.mode = 'webgl'; // Set primary high-performance WebGL mode
+            console.log("Graphics API: Operating in Native WebGL High-Performance Mode.");
           }
         }
       } catch (e) {
-        console.warn("Graphics API: WebGPU initialization failed, falling back to WebGL.", e);
+        console.warn("Graphics API: WebGPU initialization check complete, using WebGL.", e);
       }
     } else {
-      console.warn("Graphics API: WebGPU not supported on this browser. Falling back to WebGL.");
+      console.warn("Graphics API: Using WebGL Engine.");
     }
 
-    if (!this.webgpu.ready) {
-      this.mode = 'webgl';
-      // In fallback mode, glCanvas remains visible as the primary rendering target.
-      // mapCanvas (WebGPU) remains blank underneath.
-      console.log("Graphics API: Operating in WebGL-Only Fallback Mode.");
-    }
+    this.mode = 'webgl';
+    console.log("Graphics API: Operating in Native WebGL Engine Mode.");
   },
 
   renderWebGPU_MigratedParts(params) {
@@ -1885,6 +2029,27 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
 
 
     
+    // Render Sky natively if available
+    const isSkyOn = params.skyEnabled !== undefined ? params.skyEnabled : (typeof skyEnabled !== 'undefined' ? skyEnabled : true);
+    if (this.webgpu.skyPipeline && isSkyOn) {
+        passEncoder.setPipeline(this.webgpu.skyPipeline);
+        passEncoder.setBindGroup(0, this.webgpu.skyBindGroup);
+        
+        const skyUniforms = new Float32Array(28); // 16 (inv) + 4 (camPos) + 4 (params) + 4 (sunDir) = 28
+        if (viewProjInv) skyUniforms.set(viewProjInv, 0);
+        if (cameraPos) skyUniforms.set(cameraPos, 16);
+        skyUniforms[20] = (time || 0) * 0.05; // Time
+        skyUniforms[21] = gasIntensity !== undefined ? gasIntensity : (typeof skyGasIntensity !== 'undefined' ? skyGasIntensity : 1.0); // GasIntensity
+        skyUniforms[22] = (typeof window.isSpaceCameraMode !== 'undefined' && window.isSpaceCameraMode) ? 0.0 : (waterRadius || 0.0); // WaterRadius
+        skyUniforms[23] = 0.0;
+        if (finalLightDir) {
+            skyUniforms.set(finalLightDir, 24);
+        }
+        this.webgpu.device.queue.writeBuffer(this.webgpu.skyUniformBuffer, 0, skyUniforms);
+        
+        passEncoder.draw(3, 1, 0, 0);
+    }
+    
     // Render Terrain
     if (this.webgpu.terrainPipeline && this.webgpu.terrainVertexBuffer) {
         passEncoder.setPipeline(this.webgpu.terrainPipeline);
@@ -1893,6 +2058,108 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         passEncoder.setVertexBuffer(1, this.webgpu.terrainColorBuffer);
         passEncoder.setIndexBuffer(this.webgpu.terrainIndexBuffer, this.webgpu.terrainUseUint32 ? 'uint32' : 'uint16');
         passEncoder.drawIndexed(this.webgpu.terrainIndicesLength, 1, 0, 0, 0);
+    }
+
+    // --- Render Water (Native WebGPU) ---
+    if (this.webgpu.waterPipeline && this.webgpu.waterVertexBuffer && this.webgpu.waterIndicesLength > 0 && (typeof waterEnabled === 'undefined' || waterEnabled)) {
+        const timeVal = time || 0;
+        const wColor = waterColor || (typeof window.waterColor !== 'undefined' ? window.waterColor : [0.1, 0.4, 0.8]);
+        const wOpacity = waterOpacity !== undefined ? waterOpacity : (typeof window.waterOpacity !== 'undefined' ? window.waterOpacity : 0.8);
+        const wAnimTime = typeof window.waterAnimTime !== 'undefined' ? window.waterAnimTime : timeVal;
+        const wWaveStrength = typeof window.waveStrength !== 'undefined' ? window.waveStrength : 1.0;
+        const wLevel = typeof window.waterLevel !== 'undefined' ? window.waterLevel : 1.0;
+        const lightDir = finalLightDir || [0, 1, 0];
+        const camPos = cameraPos || [0, 0, 0];
+        const renderDistE = renderDistEnabled ? 1.0 : 0.0;
+        const renderDistVal = maxRenderDist !== undefined ? maxRenderDist : 100.0;
+        const colls = typeof collectibles !== 'undefined' ? collectibles : [];
+
+        // Collect top 4 boats for clipping
+        let boatCount = 0;
+        const topBoats = [null, null, null, null];
+        const topBoatsDistSq = [Infinity, Infinity, Infinity, Infinity];
+
+        const CLIPPING_MODELS = { "wood_boat": { size: [0.115, 0.055, 0.27], offset: [0.035, 1.0, 0.0] } };
+
+        for (let i = 0; i < colls.length; i++) {
+          const c = colls[i];
+          if (c && c.active && (c.type in CLIPPING_MODELS) && !c.isPreview) {
+            const dx = c.position[0] - camPos[0];
+            const dy = c.position[1] - camPos[1];
+            const dz = c.position[2] - camPos[2];
+            const distSq = dx*dx + dy*dy + dz*dz;
+            for (let j = 0; j < 4; j++) {
+              if (distSq < topBoatsDistSq[j]) {
+                for (let k = 3; k > j; k--) {
+                  topBoats[k] = topBoats[k - 1];
+                  topBoatsDistSq[k] = topBoatsDistSq[k - 1];
+                }
+                topBoats[j] = c;
+                topBoatsDistSq[j] = distSq;
+                break;
+              }
+            }
+          }
+        }
+        for (let j = 0; j < 4; j++) {
+          if (topBoats[j] !== null) boatCount++;
+        }
+
+        const uData = new Float32Array(512); // 2048 bytes
+        if (viewMatrix) uData.set(viewMatrix, 0);
+        if (projMatrix) uData.set(projMatrix, 16);
+        uData[32] = wColor[0]; uData[33] = wColor[1]; uData[34] = wColor[2]; uData[35] = 1.0;
+        uData[36] = wOpacity; uData[37] = wAnimTime; uData[38] = wWaveStrength; uData[39] = wLevel;
+        uData[40] = lightDir[0]; uData[41] = lightDir[1]; uData[42] = lightDir[2]; uData[43] = 0.0;
+        uData[44] = camPos[0]; uData[45] = camPos[1]; uData[46] = camPos[2]; uData[47] = 0.0;
+        uData[48] = renderDistE; uData[49] = renderDistVal; uData[50] = 0.0; uData[51] = 0.0;
+        uData[52] = boatCount; uData[53] = 0.0; uData[54] = 0.0; uData[55] = 0.0;
+
+        for (let i = 0; i < boatCount; i++) {
+          const item = topBoats[i];
+          const pPos = item.position;
+          let n = item.normal || [0, 1, 0];
+          let r = item.R || [1, 0, 0];
+          let f = item.F || [0, 0, 1];
+          const lenR = Math.hypot(r[0], r[1], r[2]) || 1;
+          const lenN = Math.hypot(n[0], n[1], n[2]) || 1;
+          const lenF = Math.hypot(f[0], f[1], f[2]) || 1;
+          const cfg = CLIPPING_MODELS[item.type];
+
+          const offP = 56 + i * 4;
+          const offR = 72 + i * 4;
+          const offN = 88 + i * 4;
+          const offF = 104 + i * 4;
+          const offS = 120 + i * 4;
+          const offO = 136 + i * 4;
+
+          uData[offP] = pPos[0]; uData[offP+1] = pPos[1]; uData[offP+2] = pPos[2]; uData[offP+3] = 0;
+          uData[offR] = r[0]/lenR; uData[offR+1] = r[1]/lenR; uData[offR+2] = r[2]/lenR; uData[offR+3] = 0;
+          uData[offN] = n[0]/lenN; uData[offN+1] = n[1]/lenN; uData[offN+2] = n[2]/lenN; uData[offN+3] = 0;
+          uData[offF] = f[0]/lenF; uData[offF+1] = f[1]/lenF; uData[offF+2] = f[2]/lenF; uData[offF+3] = 0;
+          uData[offS] = cfg.size[0]; uData[offS+1] = cfg.size[1]; uData[offS+2] = cfg.size[2]; uData[offS+3] = 0;
+          uData[offO] = cfg.offset[0]; uData[offO+1] = cfg.offset[1]; uData[offO+2] = cfg.offset[2]; uData[offO+3] = 0;
+        }
+
+        this.webgpu.device.queue.writeBuffer(this.webgpu.waterUniformBuffer, 0, uData.buffer);
+
+        const maskTexView = this.webgpu.waterMaskTextureView || this.webgpu.dummyWaterMaskTextureView;
+        const maskSampler = this.webgpu.waterMaskSampler || this.webgpu.dummyWaterMaskSampler;
+
+        const waterBindGroup = this.webgpu.device.createBindGroup({
+            layout: this.webgpu.waterPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.webgpu.waterUniformBuffer } },
+                { binding: 1, resource: maskTexView },
+                { binding: 2, resource: maskSampler }
+            ]
+        });
+
+        passEncoder.setPipeline(this.webgpu.waterPipeline);
+        passEncoder.setBindGroup(0, waterBindGroup);
+        passEncoder.setVertexBuffer(0, this.webgpu.waterVertexBuffer);
+        passEncoder.setIndexBuffer(this.webgpu.waterIndexBuffer, this.webgpu.waterUseUint32 ? 'uint32' : 'uint16');
+        passEncoder.drawIndexed(this.webgpu.waterIndicesLength, 1, 0, 0, 0);
     }
 
   },
@@ -1969,8 +2236,6 @@ if (!gl._patchedForWebGPU) {
     const origVertexAttribPointer = gl.vertexAttribPointer;
     gl.vertexAttribPointer = function(index, size, type, normalized, stride, offset) {
         origVertexAttribPointer.apply(this, arguments);
-        const buffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
-        gl._activeAttributes[index] = { buffer, size, type, normalized, stride, offset };
     };
 
     const origGetUniformLocation = gl.getUniformLocation;
@@ -2003,52 +2268,11 @@ if (!gl._patchedForWebGPU) {
     const origBufferData = gl.bufferData;
     gl.bufferData = function(target, data, usage) {
         origBufferData.apply(this, arguments);
-        if (Graphics.webgpu && Graphics.webgpu.device) {
-            const boundBuffer = gl.getParameter(target === gl.ARRAY_BUFFER ? gl.ARRAY_BUFFER_BINDING : gl.ELEMENT_ARRAY_BUFFER_BINDING);
-            if (boundBuffer && data && (data.byteLength > 0 || data.length > 0)) {
-                let byteLength = data.byteLength || (data.length * 4);
-                if (!boundBuffer._webgpuBuffer || boundBuffer._webgpuBuffer.size < byteLength) {
-                    if (boundBuffer._webgpuBuffer) boundBuffer._webgpuBuffer.destroy();
-                    const usageFlags = (target === gl.ELEMENT_ARRAY_BUFFER) 
-                        ? (GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST)
-                        : (GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-                    const alignedSize = (byteLength + 3) & ~3;
-                    boundBuffer._webgpuBuffer = Graphics.webgpu.device.createBuffer({ size: alignedSize, usage: usageFlags });
-                }
-                const bufferSource = data.buffer ? data.buffer : (new Float32Array(data)).buffer;
-                const offset = data.byteOffset || 0;
-                Graphics.webgpu.device.queue.writeBuffer(boundBuffer._webgpuBuffer, 0, bufferSource, offset, byteLength);
-            }
-        }
     };
     
     const origDrawElements = gl.drawElements;
     gl.drawElements = function(mode, count, type, offset) {
-        let routeToWebGPU = false;
-        if (Graphics.mode === 'hybrid' && Graphics.webgpu && Graphics.webgpu.currentPassEncoder) {
-            if (gl._currentProgram && (
-                gl._currentProgram._name === 'model' || 
-                gl._currentProgram._name === 'char' || 
-                gl._currentProgram._name === 'depth' ||
-                gl._currentProgram._name === 'atmosphere' ||
-                gl._currentProgram._name === 'water' ||
-                gl._currentProgram._name === 'cloud3D' ||
-                gl._currentProgram._name === 'sky'
-            )) {
-                if (!gl._stencilEnabled && mode === gl.TRIANGLES) {
-                    routeToWebGPU = true;
-                }
-            }
-        }
-        
-        if (routeToWebGPU) {
-            Graphics.webgpu.executeMonkeyDraw(gl, count, type, offset);
-            origColorMask.call(gl, false, false, false, false);
-            origDrawElements.apply(this, arguments);
-            origColorMask.apply(gl, gl._colorMask || [true, true, true, true]);
-        } else {
-            origDrawElements.apply(this, arguments);
-        }
+        origDrawElements.apply(this, arguments);
     };
 }
 
@@ -3026,7 +3250,7 @@ window.cloud3DProgram = cloud3DProgram;
 
         const bowCrosshair = document.getElementById("bowCrosshair");
         if (bowCrosshair) {
-          bowCrosshair.style.display = "none";
+          if (bowCrosshair.style.display !== "none") bowCrosshair.style.display = "none";
         }
 
         // Synchronize active action slot with floor placement mode
@@ -3329,7 +3553,45 @@ window.cloud3DProgram = cloud3DProgram;
 
         let pendingDynamicRefresh = false;
         if (doorActiveSwinging || windowActiveSwinging || (typeof pendingDynamicCollectibleRefresh !== 'undefined' && pendingDynamicCollectibleRefresh)) {
-          pendingDynamicRefresh = true;
+          let shouldRefresh = true;
+          const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
+            ? renderDistEnabled
+            : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
+
+          if (isRenderDistOn && !doorActiveSwinging && !windowActiveSwinging && (typeof activeRidingBoat === "undefined" || !activeRidingBoat)) {
+            const curObjectDist = typeof objectRenderDistValue !== "undefined"
+              ? objectRenderDistValue
+              : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
+                ? window.objectRenderDistValue
+                : 5.0);
+            const maxDistSq = (curObjectDist + 1.0) * (curObjectDist + 1.0);
+            const pX = Math.sin(charTheta) * Math.cos(charPhi) * (playerCenterRadius || RADIUS);
+            const pY = Math.cos(charTheta) * (playerCenterRadius || RADIUS);
+            const pZ = Math.sin(charTheta) * Math.sin(charPhi) * (playerCenterRadius || RADIUS);
+
+            let hasNearDynamicItem = false;
+            if (typeof collectibles !== "undefined" && collectibles) {
+              for (let i = 0; i < collectibles.length; i++) {
+                const c = collectibles[i];
+                if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c.position) {
+                  const dx = c.position[0] - pX;
+                  const dy = c.position[1] - pY;
+                  const dz = c.position[2] - pZ;
+                  if (dx * dx + dy * dy + dz * dz <= maxDistSq) {
+                    hasNearDynamicItem = true;
+                    break;
+                  }
+                }
+              }
+            }
+            if (!hasNearDynamicItem) {
+              shouldRefresh = false;
+            }
+          }
+
+          if (shouldRefresh) {
+            pendingDynamicRefresh = true;
+          }
           if (typeof pendingDynamicCollectibleRefresh !== 'undefined') window.pendingDynamicCollectibleRefresh = false;
         }
 
@@ -5006,8 +5268,8 @@ window.cloud3DProgram = cloud3DProgram;
                 closestDemolishItem.position,
                 viewMatrix,
                 projMatrix,
-                canvas.clientWidth,
-                canvas.clientHeight,
+                window.innerWidth,
+                window.innerHeight,
               );
               if (screenPos) {
                 let holdPercent = 0;
@@ -5027,34 +5289,48 @@ window.cloud3DProgram = cloud3DProgram;
                   `;
                 }
 
-                prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(220, 38, 38, 0.95); border: 1px solid #ff4d4d; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                const _newHtml_1 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(220, 38, 38, 0.95); border: 1px solid #ff4d4d; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
                   ${isStoneFloor ? `<div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(255, 255, 255, 0.35); pointer-events: none; transition: width 0.05s ease-out;"></div>` : ""}
                   <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #ffffff;">
                     ${instructionsHTML}
                     <span style="font-size: 9px; opacity: 0.8; display: block; margin-top: 4px;">ระยะห่าง / Distance: ${currentBestDist.toFixed(2)} / ${minDemolishDist.toFixed(2)}</span>
                   </div>
                 </div>`;
-                prompt.style.display = "block";
-                prompt.style.left = screenPos.x + "px";
-                prompt.style.top = screenPos.y - 45 + "px";
+if (prompt._lastHTML !== _newHtml_1) {
+    prompt.innerHTML = _newHtml_1;
+    prompt._lastHTML = _newHtml_1;
+}
+                if (prompt.style.display !== "block") prompt.style.display = "block";
+                const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
               } else {
-                prompt.style.display = "none";
+                if (prompt.style.display !== "none") prompt.style.display = "none";
             }
           } else {
               demolishHoldTimer = 0.0;
-              prompt.style.display = "none";
+              if (prompt.style.display !== "none") prompt.style.display = "none";
             }
           } else if (false) {
             // Disabled orange terrain mod banner
             demolishHoldTimer = 0.0;
-            prompt.innerHTML = `<div style="margin: -8px -16px; padding: 10px 20px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(230, 81, 0, 0.95); border: 1px solid #ff9800; box-shadow: 0 4px 12px rgba(0,0,0,0.5); text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #ffffff;">
+            const _newHtml_2 = `<div style="margin: -8px -16px; padding: 10px 20px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(230, 81, 0, 0.95); border: 1px solid #ff9800; box-shadow: 0 4px 12px rgba(0,0,0,0.5); text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #ffffff;">
               <strong>⛏️ โหมดปรับแต่งพื้นผิวดาว (TERRAIN MOD MODE)</strong><br/>
               คลิกซ้าย: ขุดหลุม / Left-click: Dig<br/>
               คลิกขวา: ถมดิน / Right-click: Raise
             </div>`;
-            prompt.style.display = "block";
-            prompt.style.left = "50%";
-            prompt.style.top = "80%";
+if (prompt._lastHTML !== _newHtml_2) {
+    prompt.innerHTML = _newHtml_2;
+    prompt._lastHTML = _newHtml_2;
+}
+            if (prompt.style.display !== "block") prompt.style.display = "block";
+            const newT = `translate(50vw, 80vh) translate(-50%, -100%)`;
+            if (prompt._lastT !== newT) {
+                prompt.style.transform = newT;
+                prompt._lastT = newT;
+            }
           } else {
             demolishHoldTimer = 0.0;
             if (activeRidingBoat) {
@@ -5115,14 +5391,18 @@ window.cloud3DProgram = cloud3DProgram;
                 extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
               }
               
-              prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+              const _newHtml_3 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                 <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                 <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #dfb76c;">
                   กด [E] ค้าง เพื่อ ${actionText}
                   ${extraStatus}
                 </div>
               </div>`;
-              prompt.style.display = "block";
+if (prompt._lastHTML !== _newHtml_3) {
+    prompt.innerHTML = _newHtml_3;
+    prompt._lastHTML = _newHtml_3;
+}
+              if (prompt.style.display !== "block") prompt.style.display = "block";
               
               if (activeRidingBoat) {
                 let targetWorldPos = activeRidingBoat.position;
@@ -5153,18 +5433,21 @@ window.cloud3DProgram = cloud3DProgram;
                   targetWorldPos,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
 
                 if (screenPos) {
-                    prompt.style.left = screenPos.x + "px";
-                    prompt.style.top = screenPos.y - 45 + "px";
+                    const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                    prompt.style.display = "none";
+                    if (prompt.style.display !== "none") prompt.style.display = "none";
                 }
               } else {
-                prompt.style.display = "none";
+                if (prompt.style.display !== "none") prompt.style.display = "none";
               }
             } else if (activeRidingMech) {
               window.tryAutoAssembleMechParts(activeRidingMech);
@@ -5293,16 +5576,23 @@ window.cloud3DProgram = cloud3DProgram;
                 extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">🏗️ กด [W] ค้าง (เดินหน้าอย่างเดียว) เพื่อปลดล็อคออกจากฐานตั้ง ${holdPct > 0 ? '(' + holdPct + '%)' : ''}</span>`;
               }
 
-              prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+              const _newHtml_4 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                 <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(108, 183, 223, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                 <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #6cb7df;">
                   กด [E] ค้าง เพื่อ ${actionText}
                   ${extraStatus}
                 </div>
               </div>`;
-              prompt.style.display = "block";
-              prompt.style.left = "50%";
-              prompt.style.top = "80%";
+if (prompt._lastHTML !== _newHtml_4) {
+    prompt.innerHTML = _newHtml_4;
+    prompt._lastHTML = _newHtml_4;
+}
+              if (prompt.style.display !== "block") prompt.style.display = "block";
+              const newT = `translate(50vw, 80vh) translate(-50%, -100%)`;
+            if (prompt._lastT !== newT) {
+                prompt.style.transform = newT;
+                prompt._lastT = newT;
+            }
             } else {
               let closestItem = null;
               let bestItemDistSq = Infinity;
@@ -5448,24 +5738,31 @@ window.cloud3DProgram = cloud3DProgram;
                   closestItem.position,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
                 if (screenPos) {
-                  prompt.textContent = `[${currentKeyBindings.interact.replace("Key", "").replace("Arrow", "")}]`;
-                  prompt.style.display = "block";
-                  prompt.style.left = screenPos.x + "px";
-                  prompt.style.top = screenPos.y - 20 + "px";
+                  const _newText_1 = `[${currentKeyBindings.interact.replace("Key", "").replace("Arrow", "")}]`;
+if (prompt._lastText !== _newText_1) {
+    prompt.textContent = _newText_1;
+    prompt._lastText = _newText_1;
+}
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 20 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                  prompt.style.display = "none";
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
                 }
               } else if (closestChest) {
                 const screenPos = projectWorldToScreen(
                   closestChest.position,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
                 if (screenPos) {
                   const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
@@ -5480,18 +5777,25 @@ window.cloud3DProgram = cloud3DProgram;
                   }
 
                   const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-                  prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+                  const _newHtml_5 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #dfb76c;">
                       กด [E] ค้าง เพื่อเปิดกล่องไม้<br/>
                       (HOLD [E] TO OPEN CHEST)
                     </div>
                   </div>`;
-                  prompt.style.display = "block";
-                  prompt.style.left = screenPos.x + "px";
-                  prompt.style.top = screenPos.y - 45 + "px";
+if (prompt._lastHTML !== _newHtml_5) {
+    prompt.innerHTML = _newHtml_5;
+    prompt._lastHTML = _newHtml_5;
+}
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                  prompt.style.display = "none";
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
                   chestHoldTimer = 0.0;
                 }
               
@@ -5500,8 +5804,8 @@ window.cloud3DProgram = cloud3DProgram;
                   closestCampfire.position,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
                 if (screenPos) {
                   const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
@@ -5515,18 +5819,25 @@ window.cloud3DProgram = cloud3DProgram;
                     campfireHoldTimer = 0.0;
                   }
                   const holdPercent = Math.min(100, Math.floor((campfireHoldTimer / 0.5) * 100));
-                  prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+                  const _newHtml_6 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 108, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #df6c6c;">
                       กด [E] ค้าง เพื่อทำอาหาร<br/>
                       (HOLD [E] TO COOK)
                     </div>
                   </div>`;
-                  prompt.style.display = "block";
-                  prompt.style.left = screenPos.x + "px";
-                  prompt.style.top = screenPos.y - 45 + "px";
+if (prompt._lastHTML !== _newHtml_6) {
+    prompt.innerHTML = _newHtml_6;
+    prompt._lastHTML = _newHtml_6;
+}
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                  prompt.style.display = "none";
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
                   campfireHoldTimer = 0.0;
                 }
 } else if (closestBoat) {
@@ -5558,8 +5869,8 @@ window.cloud3DProgram = cloud3DProgram;
                   targetWorldPos,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
                 if (screenPos) {
                   let rLen = Math.sqrt(closestBoat.position[0]**2 + closestBoat.position[1]**2 + closestBoat.position[2]**2) || 1;
@@ -5605,18 +5916,25 @@ window.cloud3DProgram = cloud3DProgram;
                   let actionText = (closestBoat.hasWheel || closestBoat.hasWheels) ? "ขึ้นขับเรือบก<br>Drive Land Boat" : (canRideBoat ? "ขึ้นเรือพาย<br>Ride Boat" : "ขึ้นนั่งเรือ (ติดล้อไม้เพื่อขับบนบก)<br>Board Boat (Attach Wheel to drive)");
                   let extraStatus = "";
 
-                  prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+                  const _newHtml_7 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #dfb76c;">
                       กด [E] ค้าง เพื่อ ${actionText}
                       ${extraStatus}
                     </div>
                   </div>`;
-                  prompt.style.display = "block";
-                  prompt.style.left = screenPos.x + "px";
-                  prompt.style.top = screenPos.y - 45 + "px";
+if (prompt._lastHTML !== _newHtml_7) {
+    prompt.innerHTML = _newHtml_7;
+    prompt._lastHTML = _newHtml_7;
+}
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                  prompt.style.display = "none";
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
                   chestHoldTimer = 0.0;
                 }
               } else if (closestMech) {
@@ -5624,8 +5942,8 @@ window.cloud3DProgram = cloud3DProgram;
                   closestMechTargetPos || closestMech.position,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
                 if (screenPos) {
                   const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
@@ -5710,17 +6028,24 @@ window.cloud3DProgram = cloud3DProgram;
                   const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
                   let actionText = "ขึ้นขับหุ่นยนต์<br>Ride Mech";
 
-                  prompt.innerHTML = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+                  const _newHtml_8 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(108, 183, 223, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #6cb7df;">
                       กด [E] ค้าง เพื่อ ${actionText}
                     </div>
                   </div>`;
-                  prompt.style.display = "block";
-                  prompt.style.left = screenPos.x + "px";
-                  prompt.style.top = screenPos.y - 45 + "px";
+if (prompt._lastHTML !== _newHtml_8) {
+    prompt.innerHTML = _newHtml_8;
+    prompt._lastHTML = _newHtml_8;
+}
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                  prompt.style.display = "none";
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
                   chestHoldTimer = 0.0;
                 }
               } else if (activeInteractWindow) {
@@ -5729,22 +6054,29 @@ window.cloud3DProgram = cloud3DProgram;
                   activeInteractWindow.position,
                   viewMatrix,
                   projMatrix,
-                  canvas.clientWidth,
-                  canvas.clientHeight,
+                  window.innerWidth,
+                  window.innerHeight,
                 );
                 if (screenPos) {
                   const currentAngle = activeInteractWindow.windowAngle || 0.0;
                   const actionName = (currentAngle < 0.78) ? "เปิดหน้าต่าง (Hold E)" : "ปิดหน้าต่าง (Hold E)";
-                  prompt.textContent = actionName;
-                  prompt.style.display = "block";
-                  prompt.style.left = screenPos.x + "px";
-                  prompt.style.top = screenPos.y - 20 + "px";
+                  const _newText_2 = actionName;
+if (prompt._lastText !== _newText_2) {
+    prompt.textContent = _newText_2;
+    prompt._lastText = _newText_2;
+}
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 20 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                      prompt.style.transform = newT;
+                      prompt._lastT = newT;
+                  }
                 } else {
-                  prompt.style.display = "none";
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
             }
           } else {
                 chestHoldTimer = 0.0;
-                prompt.style.display = "none";
+                if (prompt.style.display !== "none") prompt.style.display = "none";
               }
             }
           }
@@ -5859,15 +6191,15 @@ window.cloud3DProgram = cloud3DProgram;
               closestNPCLocal.ragdollPos || closestNPCLocal.position,
               viewMatrix,
               projMatrix,
-              canvas.clientWidth,
-              canvas.clientHeight,
+              window.innerWidth,
+              window.innerHeight,
             );
             if (screenPos) {
               const keyText = currentKeyBindings.interact
                 .replace("Key", "")
                 .replace("Arrow", "");
               if (closestNPCLocal.type === 'meganeura') {
-                npcPrompt.innerHTML = `
+                const _newHtml_9 = `
                   <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -5877,8 +6209,12 @@ window.cloud3DProgram = cloud3DProgram;
                     <span>[${keyText}] เก็บแมลง (Pick up bug)</span>
                   </span>
                 `;
+if (npcPrompt._lastHTML !== _newHtml_9) {
+    npcPrompt.innerHTML = _newHtml_9;
+    npcPrompt._lastHTML = _newHtml_9;
+}
               } else if (closestNPCLocal.type === 'isopod') {
-                npcPrompt.innerHTML = `
+                const _newHtml_10 = `
                   <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -5888,8 +6224,12 @@ window.cloud3DProgram = cloud3DProgram;
                     <span>[${keyText}] เก็บไอโซพอด (Pick up Isopod)</span>
                   </span>
                 `;
+if (npcPrompt._lastHTML !== _newHtml_10) {
+    npcPrompt.innerHTML = _newHtml_10;
+    npcPrompt._lastHTML = _newHtml_10;
+}
               } else {
-                npcPrompt.innerHTML = `
+                const _newHtml_11 = `
                   <span style="display: inline-flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
                       <path d="M9 10h.01M15 10h.01"></path>
@@ -5899,15 +6239,22 @@ window.cloud3DProgram = cloud3DProgram;
                     <span>[${keyText}] กำจัด NPC (Kill NPC)</span>
                   </span>
                 `;
+if (npcPrompt._lastHTML !== _newHtml_11) {
+    npcPrompt.innerHTML = _newHtml_11;
+    npcPrompt._lastHTML = _newHtml_11;
+}
               }
-              npcPrompt.style.display = "block";
-              npcPrompt.style.left = screenPos.x + "px";
-              npcPrompt.style.top = screenPos.y - 40 + "px";
+              if (npcPrompt.style.display !== "block") npcPrompt.style.display = "block";
+              const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 40 )}px) translate(-50%, -100%)`;
+              if (npcPrompt._lastT !== newT) {
+                  npcPrompt.style.transform = newT;
+                  npcPrompt._lastT = newT;
+              }
             } else {
-              npcPrompt.style.display = "none";
+              if (npcPrompt.style.display !== "none") npcPrompt.style.display = "none";
             }
           } else {
-            npcPrompt.style.display = "none";
+            if (npcPrompt.style.display !== "none") npcPrompt.style.display = "none";
             activeInteractNPC = null;
           }
         }
@@ -5951,8 +6298,8 @@ window.cloud3DProgram = cloud3DProgram;
                 let minScreenDistSq = Infinity;
                 let closest = null;
                 if (typeof amphibians !== 'undefined' && amphibians.length > 0) {
-                    const halfW = canvas.clientWidth / 2;
-                    const halfH = canvas.clientHeight / 2;
+                    const halfW = window.innerWidth / 2;
+                    const halfH = window.innerHeight / 2;
 
                     for (let npc of amphibians) {
                         if (npc.ragdollEnabled) continue;
@@ -5971,8 +6318,8 @@ window.cloud3DProgram = cloud3DProgram;
                                 npc.position,
                                 viewMatrix,
                                 projMatrix,
-                                canvas.clientWidth,
-                                canvas.clientHeight
+                                window.innerWidth,
+                                window.innerHeight
                             );
                             if (screenPos) {
                                 const sdx = screenPos.x - halfW;
@@ -6020,18 +6367,21 @@ window.cloud3DProgram = cloud3DProgram;
               centerPos,
               viewMatrix,
               projMatrix,
-              canvas.clientWidth,
-              canvas.clientHeight,
+              window.innerWidth,
+              window.innerHeight,
             );
             if (screenPos) {
-              targetCircleEl.style.display = "block";
-              targetCircleEl.style.left = screenPos.x + "px";
-              targetCircleEl.style.top = screenPos.y + "px";
+              if (targetCircleEl.style.display !== "block") targetCircleEl.style.display = "block";
+              const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y)}px) translate(-50%, -50%)`;
+              if (targetCircleEl._lastT !== newT) {
+                  targetCircleEl.style.transform = newT;
+                  targetCircleEl._lastT = newT;
+              }
             } else {
-              targetCircleEl.style.display = "none";
+              if (targetCircleEl.style.display !== "none") targetCircleEl.style.display = "none";
             }
           } else {
-            targetCircleEl.style.display = "none";
+            if (targetCircleEl.style.display !== "none") targetCircleEl.style.display = "none";
           }
         }
 
@@ -6091,43 +6441,6 @@ window.cloud3DProgram = cloud3DProgram;
         Graphics.invertMatrix4(gpuViewProj, invViewProj);
         
         if (shadowMapEnabled) {
-          if (Graphics.mode === 'hybrid' && Graphics.webgpu.ready) {
-              Graphics.webgpu.currentCommandEncoder = Graphics.webgpu.device.createCommandEncoder();
-              const shadowPassDescriptor = {
-                  colorAttachments: [],
-                  depthStencilAttachment: {
-                      view: Graphics.webgpu.shadowDepthTextureView,
-                      depthClearValue: 1.0,
-                      depthLoadOp: 'clear',
-                      depthStoreOp: 'store',
-                  }
-              };
-              Graphics.webgpu.currentPassEncoder = Graphics.webgpu.currentCommandEncoder.beginRenderPass(shadowPassDescriptor);
-              
-              if (Graphics.webgpu.terrainShadowPipeline && Graphics.webgpu.terrainVertexBuffer) {
-                  const uData = new Float32Array(32);
-                  const viewProj = lightSpaceMatrix;
-                  uData.set(viewProj, 0);
-                  uData[16] = 0.0; uData[17] = 0.0; uData[18] = 0.0; uData[19] = 1.0;
-                  uData[20] = finalLightDir[0]; uData[21] = finalLightDir[1]; uData[22] = finalLightDir[2]; uData[23] = 1.0;
-                  uData[24] = 0.0; uData[25] = 0.0; uData[26] = 0.0; uData[27] = 0.0;
-                  uData[28] = timeVal; uData[29] = RADIUS; uData[30] = waterRad; uData[31] = 0.0;
-                  
-                  Graphics.webgpu.device.queue.writeBuffer(Graphics.webgpu.terrainUniformBuffer, 0, uData.buffer);
-                  Graphics.webgpu.currentPassEncoder.setPipeline(Graphics.webgpu.terrainShadowPipeline);
-                  Graphics.webgpu.currentPassEncoder.setBindGroup(0, Graphics.webgpu.terrainBindGroup);
-                  Graphics.webgpu.currentPassEncoder.setVertexBuffer(0, Graphics.webgpu.terrainVertexBuffer);
-                  Graphics.webgpu.currentPassEncoder.setVertexBuffer(1, Graphics.webgpu.terrainColorBuffer);
-                  
-                  if (Graphics.webgpu.supportUint32 && Graphics.webgpu.terrainIndicesLength > 65535) {
-                      Graphics.webgpu.currentPassEncoder.setIndexBuffer(Graphics.webgpu.terrainIndexBuffer, 'uint32');
-                  } else {
-                      Graphics.webgpu.currentPassEncoder.setIndexBuffer(Graphics.webgpu.terrainIndexBuffer, 'uint16');
-                  }
-                  Graphics.webgpu.currentPassEncoder.drawIndexed(Graphics.webgpu.terrainIndicesLength, 1, 0, 0, 0);
-              }
-          }
-
           gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
           gl.viewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
           gl.clearColor(1.0, 1.0, 1.0, 1.0);
@@ -6148,7 +6461,7 @@ window.cloud3DProgram = cloud3DProgram;
         gl.uniform1f(depthWaterRadiusLoc, RADIUS + waterLevel * 0.15);
 
         // Terrain to depth
-        if (typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawSurfaceDepth && Graphics.mode !== 'hybrid') {
+        if (typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawSurfaceDepth) {
           SurfaceSystem.drawSurfaceDepth(gl, {
             vertexBuffer,
             indexBuffer,
@@ -6488,31 +6801,6 @@ window.cloud3DProgram = cloud3DProgram;
         // ==========================================
         // PASS 2: MAIN SCENE RENDER
         // ==========================================
-        if (Graphics.mode === 'hybrid' && Graphics.webgpu.currentPassEncoder) {
-            Graphics.webgpu.currentPassEncoder.end();
-            Graphics.webgpu.currentPassEncoder = null;
-        }
-
-        if (Graphics.mode === 'hybrid') {
-            Graphics.renderWebGPU_MigratedParts({
-                isUnderwater: lastIsCameraUnderwater,
-                invViewProj: invViewProj,
-                cameraPos: eyePos,
-                time: timeVal,
-                gasIntensity: gasVal,
-                waterRadius: waterRad,
-                finalLightDir: finalLightDir,
-                viewMatrix: viewMatrix,
-                projMatrix: projMatrix,
-                lightSpaceMatrix: lightSpaceMatrix,
-                waterColor: waterColor,
-                waterOpacity: waterOpacity,
-                renderDistEnabled: renderDistEnabled,
-                maxRenderDist: renderDistValue,
-                shadowMapEnabled: shadowMapEnabled,
-                shadowTexelSize: [1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT],
-            });
-        }
 
         // สกัดเฉพาะเมทริกซ์การหมุนของกล้อง (Pure 3x3 Rotation View Matrix)
         // ตัด Translation ทิ้งทั้งหมด เพื่อให้ Skybox และวัตถุท้องฟ้าเป็น Infinite Celestial Dome ครอบคลุม 360 องศาทั้งระบบ SpacesMap
@@ -6530,45 +6818,45 @@ window.cloud3DProgram = cloud3DProgram;
           skyIndexBuffer &&
           skyIndicesLength > 0
         ) {
-          gl.useProgram(skyProgram);
+            gl.useProgram(skyProgram);
 
-          gl.uniformMatrix4fv(
-            skyMVLoc,
-            false,
-            new Float32Array(skyViewMatrix),
-          );
-          gl.uniformMatrix4fv(skyProjLoc, false, new Float32Array(projMatrix));
-          gl.uniform1f(skyTimeLoc, cloudAnimTime * 0.05);
-          gl.uniform1f(skyGasIntensityLoc, skyGasIntensity);
-          if (skyCameraPosLoc) gl.uniform3fv(skyCameraPosLoc, new Float32Array(eyePos));
-          if (skyWaterRadiusLoc) gl.uniform1f(skyWaterRadiusLoc, isSpaceCameraMode ? 0.0 : waterRadius);
-
-          gl.depthMask(false);
-          const prevDepthFunc = gl.getParameter(gl.DEPTH_FUNC);
-          gl.depthFunc(gl.LEQUAL);
-          const prevCull = gl.isEnabled(gl.CULL_FACE);
-          if (prevCull) gl.disable(gl.CULL_FACE);
-
-          gl.bindBuffer(gl.ARRAY_BUFFER, skyVertexBuffer);
-          gl.enableVertexAttribArray(skyPosLoc);
-          gl.vertexAttribPointer(skyPosLoc, 3, gl.FLOAT, false, 0, 0);
-
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyIndexBuffer);
-
-          if (supportUint32 && skyIndicesLength > 65535) {
-            gl.drawElements(gl.TRIANGLES, skyIndicesLength, gl.UNSIGNED_INT, 0);
-          } else {
-            gl.drawElements(
-              gl.TRIANGLES,
-              skyIndicesLength,
-              gl.UNSIGNED_SHORT,
-              0,
+            gl.uniformMatrix4fv(
+              skyMVLoc,
+              false,
+              new Float32Array(skyViewMatrix),
             );
-          }
+            gl.uniformMatrix4fv(skyProjLoc, false, new Float32Array(projMatrix));
+            gl.uniform1f(skyTimeLoc, cloudAnimTime * 0.05);
+            gl.uniform1f(skyGasIntensityLoc, skyGasIntensity);
+            if (skyCameraPosLoc) gl.uniform3fv(skyCameraPosLoc, new Float32Array(eyePos));
+            if (skyWaterRadiusLoc) gl.uniform1f(skyWaterRadiusLoc, isSpaceCameraMode ? 0.0 : waterRadius);
 
-          if (prevCull) gl.enable(gl.CULL_FACE);
-          gl.depthFunc(prevDepthFunc || gl.LESS);
-          gl.depthMask(true);
+            gl.depthMask(false);
+            const prevDepthFunc = gl.getParameter(gl.DEPTH_FUNC);
+            gl.depthFunc(gl.LEQUAL);
+            const prevCull = gl.isEnabled(gl.CULL_FACE);
+            if (prevCull) gl.disable(gl.CULL_FACE);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, skyVertexBuffer);
+            gl.enableVertexAttribArray(skyPosLoc);
+            gl.vertexAttribPointer(skyPosLoc, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyIndexBuffer);
+
+            if (supportUint32 && skyIndicesLength > 65535) {
+              gl.drawElements(gl.TRIANGLES, skyIndicesLength, gl.UNSIGNED_INT, 0);
+            } else {
+              gl.drawElements(
+                gl.TRIANGLES,
+                skyIndicesLength,
+                gl.UNSIGNED_SHORT,
+                0,
+              );
+            }
+
+            if (prevCull) gl.enable(gl.CULL_FACE);
+            gl.depthFunc(prevDepthFunc || gl.LESS);
+            gl.depthMask(true);
         }
 
         // ============================================
@@ -8414,7 +8702,7 @@ window.cloud3DProgram = cloud3DProgram;
         }
 
         if (typeof World3DUI !== "undefined" && typeof World3DUI.render === "function") {
-          World3DUI.render(viewMatrix, projMatrix, eyePos, canvas.clientWidth, canvas.clientHeight);
+          World3DUI.render(viewMatrix, projMatrix, eyePos, window.innerWidth, window.innerHeight);
         }
 
         if (typeof updateCompassHUD === "function") {
@@ -8423,15 +8711,7 @@ window.cloud3DProgram = cloud3DProgram;
 
         // Next frame
         if (!forceDraw) {
-  
-        if (Graphics.mode === 'hybrid' && Graphics.webgpu.currentPassEncoder) {
-            Graphics.webgpu.currentPassEncoder.end();
-            Graphics.webgpu.device.queue.submit([Graphics.webgpu.currentCommandEncoder.finish()]);
-            Graphics.webgpu.currentPassEncoder = null;
-            Graphics.webgpu.currentCommandEncoder = null;
-        }
-        requestAnimationFrame(render);
-
+          requestAnimationFrame(render);
         }
       }
 

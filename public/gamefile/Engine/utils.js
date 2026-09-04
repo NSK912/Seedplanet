@@ -111,8 +111,7 @@ function ensureCustomCursor() {
       style.textContent = `
         #customGameCursor {
           position: fixed;
-          top: -100px;
-          left: -100px;
+          top: 0; left: 0;
           width: 18px;
           height: 18px;
           border-radius: 50%;
@@ -302,8 +301,8 @@ function createVirtualDragGhost(sourceEl) {
   // Style the cloned ghost element for fixed positioning under the virtual cursor
   ghost.style.cssText = `
     position: fixed !important;
-    top: -1000px !important;
-    left: -1000px !important;
+    top: 0 !important;
+    left: 0 !important;
     width: ${width}px !important;
     height: ${height}px !important;
     pointer-events: none !important;
@@ -430,8 +429,9 @@ window.resetVirtualCursorToCenter = function() {
   virtualCursorY = window.innerHeight / 2;
   const cursor = typeof ensureCustomCursor === "function" ? ensureCustomCursor() : document.getElementById("customVirtualCursor");
   if (cursor) {
-    cursor.style.left = virtualCursorX + "px";
-    cursor.style.top = virtualCursorY + "px";
+    
+    const newT = `translate(${virtualCursorX}px, ${virtualCursorY}px)`;
+  if (cursor._lastT !== newT) { cursor.style.transform = newT; cursor._lastT = newT; }
   }
 };
 
@@ -483,8 +483,9 @@ function handleVirtualMouseMove(e) {
     virtualCursorY = Math.max(0, Math.min(window.innerHeight, virtualCursorY));
   }
 
-  cursor.style.left = virtualCursorX + "px";
-  cursor.style.top = virtualCursorY + "px";
+  
+  const newT = `translate(${virtualCursorX}px, ${virtualCursorY}px)`;
+  if (cursor._lastT !== newT) { cursor.style.transform = newT; cursor._lastT = newT; }
 
   updateVirtualCursorVisibility();
 
@@ -523,8 +524,9 @@ function handleVirtualMouseMove(e) {
 
       if (isVirtualDraggingSlot && virtualDragSource) {
         if (virtualDragGhost) {
-          virtualDragGhost.style.left = virtualCursorX + "px";
-          virtualDragGhost.style.top = virtualCursorY + "px";
+          
+          const newT = `translate(${virtualCursorX}px, ${virtualCursorY}px) translate(-50%, -50%)`;
+          if (virtualDragGhost._lastT !== newT) { virtualDragGhost.style.setProperty('transform', newT, 'important'); virtualDragGhost._lastT = newT; }
         }
 
         isSyntheticEvent = true;

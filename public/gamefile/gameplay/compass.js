@@ -98,11 +98,15 @@
     const startOverlay = document.getElementById('gameStartOverlay');
     const saveSelectOverlay = document.getElementById('saveSelectOverlay');
     
-    // Hide overlay if start menu or save slot select is open or when in macro space camera mode
-    const isStartOpen = startOverlay && window.getComputedStyle(startOverlay).display !== 'none';
-    const isSaveOpen = saveSelectOverlay && window.getComputedStyle(saveSelectOverlay).display !== 'none';
-    if (isStartOpen || isSaveOpen) {
-      if (container) container.style.display = 'none';
+    // Hide overlay if start menu or save slot select is open
+    const isStartOpen = startOverlay && startOverlay.style.display !== 'none' && startOverlay.style.display !== '';
+    const isSaveOpen = saveSelectOverlay && saveSelectOverlay.style.display !== 'none' && saveSelectOverlay.style.display !== '';
+    
+    // Fallback logic if style.display is empty but it's logically open
+    const effectivelyStartOpen = isStartOpen || (typeof gameStarted !== 'undefined' && !gameStarted);
+    
+    if (effectivelyStartOpen || isSaveOpen) {
+      if (container && container.style.display !== 'none') container.style.display = 'none';
       return;
     }
 

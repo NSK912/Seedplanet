@@ -225,6 +225,9 @@ function updateAmphibians(deltaTime, seed) {
   const player_r = RADIUS + player_h * HEIGHT_SCALE;
   const player_pos = [player_r * player_nx, player_r * player_ny, player_r * player_nz];
 
+  const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
+    ? renderDistEnabled
+    : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
   const curObjectDist = typeof objectRenderDistValue !== "undefined"
     ? objectRenderDistValue
     : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
@@ -260,32 +263,17 @@ function updateAmphibians(deltaTime, seed) {
     const distNpcDz = refPos[2] - effPos[2];
     const distNpcSq = distNpcDx * distNpcDx + distNpcDy * distNpcDy + distNpcDz * distNpcDz;
 
-    if (distNpcSq > maxNpcDistSq) {
-      if (c.ragdollEnabled && c.ragdollPos) {
-        const dist = Math.sqrt(distNpcSq);
-        if (dist <= 5.0) {
-          continue;
-        }
-      } else {
-        continue;
-      }
+    let shouldRender = true;
+    let shouldAnimate = true;
+
+    if (isRenderDistOn && distNpcSq > maxNpcDistSq) {
+      shouldRender = false;
+      shouldAnimate = false;
     }
 
-    if (typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && typeof frustumPlanes !== 'undefined' && frustumPlanes && typeof isSphereInFrustum === 'function') {
+    if (shouldRender && typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && typeof frustumPlanes !== 'undefined' && frustumPlanes && typeof isSphereInFrustum === 'function') {
       if (!isSphereInFrustum(frustumPlanes, effPos, 2.0)) {
-        if (c.ragdollEnabled && c.ragdollPos) {
-          const dx = player_pos[0] - c.ragdollPos[0];
-          const dy = player_pos[1] - c.ragdollPos[1];
-          const dz = player_pos[2] - c.ragdollPos[2];
-          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-          if (dist > 5.0) {
-            // Allow recycle logic to run below
-          } else {
-            continue;
-          }
-        } else {
-          continue;
-        }
+        shouldRender = false;
       }
     }
 
@@ -748,7 +736,10 @@ function updateAmphibians(deltaTime, seed) {
       const walkBlend = c.walkBlend !== undefined ? c.walkBlend : (c.isIdle ? 0 : 1);
       moveSpeedBase *= walkBlend;
       
-      c.animPhase += deltaTime * animSpeed * walkBlend;
+      const prevAnimPhase = c.animPhase;
+      if (shouldAnimate) {
+        c.animPhase += deltaTime * animSpeed * walkBlend;
+      }
       const moveSpeed = moveSpeedBase * deltaTime;
 
       // Great-circle rotation to avoid polar coordinate singularities (walking around the center of the world)
@@ -860,6 +851,10 @@ function updateAmphibians(deltaTime, seed) {
         npcReg.updateBehavior(c, deltaTime, seed, gRadius, wRadius, npcCaveData);
       }
 
+      if (!shouldAnimate) {
+        c.animPhase = prevAnimPhase;
+      }
+
       if (c.lastAnimPhase === undefined) c.lastAnimPhase = c.animPhase;
       const phaseOffset = c.isSwimming ? 4.05 : 0; // Sync with max tail velocity (z=-0.95)
       const stepPrev = Math.floor(
@@ -898,150 +893,152 @@ function updateAmphibians(deltaTime, seed) {
       c.lastAnimPhase = c.animPhase;
     }
 
-    const sinTheta = Math.sin(c.theta);
-    const cosTheta = Math.cos(c.theta);
-    const sinPhi = Math.sin(c.phi);
-    const cosPhi = Math.cos(c.phi);
-    let N = [sinTheta * cosPhi, cosTheta, sinTheta * sinPhi];
+    if (shouldRender) {
+      const sinTheta = Math.sin(c.theta);
+      const cosTheta = Math.cos(c.theta);
+      const sinPhi = Math.sin(c.phi);
+      const cosPhi = Math.cos(c.phi);
+      let N = [sinTheta * cosPhi, cosTheta, sinTheta * sinPhi];
 
-    c.position = [N[0] * c.r, N[1] * c.r, N[2] * c.r];
-    c.radius = 0.15;
+      c.position = [N[0] * c.r, N[1] * c.r, N[2] * c.r];
+      c.radius = 0.15;
 
-    // Heading local frame
-    let h_rad = c.heading;
-    const sinH = Math.sin(h_rad);
-    const cosH = Math.cos(h_rad);
+      // Heading local frame
+      let h_rad = c.heading;
+      const sinH = Math.sin(h_rad);
+      const cosH = Math.cos(h_rad);
 
-    let North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
-    let East = [-sinPhi, 0, cosPhi];
+      let North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+      let East = [-sinPhi, 0, cosPhi];
 
-    let F = [
-      North[0] * cosH + East[0] * sinH,
-      North[1] * cosH + East[1] * sinH,
-      North[2] * cosH + East[2] * sinH,
-    ];
-    let R = [
-      -North[0] * sinH + East[0] * cosH,
-      -North[1] * sinH + East[1] * cosH,
-      -North[2] * sinH + East[2] * cosH,
-    ];
-
-    if (c.ragdollEnabled) {
-      const q = c.ragdollAngle;
-      const cosQ = Math.cos(q);
-      const sinQ = Math.sin(q);
-      const ax = c.ragdollAxis[0];
-      const ay = c.ragdollAxis[1];
-      const az = c.ragdollAxis[2];
-
-      const rotateVector = (v) => {
-        const dot = v[0] * ax + v[1] * ay + v[2] * az;
-        const cross = [
-          ay * v[2] - az * v[1],
-          az * v[0] - ax * v[2],
-          ax * v[1] - ay * v[0],
-        ];
-        return [
-          v[0] * cosQ + cross[0] * sinQ + ax * dot * (1.0 - cosQ),
-          v[1] * cosQ + cross[1] * sinQ + ay * dot * (1.0 - cosQ),
-          v[2] * cosQ + cross[2] * sinQ + az * dot * (1.0 - cosQ),
-        ];
-      };
-
-      N = rotateVector(N);
-      F = rotateVector(F);
-      R = rotateVector(R);
-    }
-
-    const pos = c.ragdollEnabled ? c.ragdollPos : c.position;
-
-    let f = [0, 0, 0];
-    if (c.ragdollEnabled && c.ragdollVel) {
-      const localVel = [
-        c.ragdollVel[0] * R[0] + c.ragdollVel[1] * R[1] + c.ragdollVel[2] * R[2],
-        c.ragdollVel[0] * N[0] + c.ragdollVel[1] * N[1] + c.ragdollVel[2] * N[2],
-        c.ragdollVel[0] * F[0] + c.ragdollVel[1] * F[1] + c.ragdollVel[2] * F[2],
+      let F = [
+        North[0] * cosH + East[0] * sinH,
+        North[1] * cosH + East[1] * sinH,
+        North[2] * cosH + East[2] * sinH,
       ];
-      const g = [
-        -N[0] * R[0] - N[1] * R[1] - N[2] * R[2],
-        -N[0] * N[0] - N[1] * N[1] - N[2] * N[2],
-        -N[0] * F[0] - N[1] * F[1] - N[2] * F[2],
+      let R = [
+        -North[0] * sinH + East[0] * cosH,
+        -North[1] * sinH + East[1] * cosH,
+        -North[2] * sinH + East[2] * cosH,
       ];
-      f[0] = g[0] * 1.5 - localVel[0] * 12.0;
-      f[1] = g[1] * 1.5 - localVel[1] * 12.0;
-      f[2] = g[2] * 1.5 - localVel[2] * 12.0;
-    }
 
-    const transformPoint = (px, py, pz) => {
-      let worldPos = [
-        pos[0] + (px * R[0] + py * N[0] + pz * F[0]),
-        pos[1] + (px * R[1] + py * N[1] + pz * F[1]),
-        pos[2] + (px * R[2] + py * N[2] + pz * F[2]),
-      ];
       if (c.ragdollEnabled) {
-        const dist = Math.sqrt(
-          worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
-        );
-        if (dist > 0.001) {
-          const ux = worldPos[0] / dist;
-          const uy = worldPos[1] / dist;
-          const uz = worldPos[2] / dist;
+        const q = c.ragdollAngle;
+        const cosQ = Math.cos(q);
+        const sinQ = Math.sin(q);
+        const ax = c.ragdollAxis[0];
+        const ay = c.ragdollAxis[1];
+        const az = c.ragdollAxis[2];
 
-          const caveData = c.ragdollCaveData || { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, uy))), Math.atan2(uz, ux), seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
-          const surfaceRadius = caveData.ground;
+        const rotateVector = (v) => {
+          const dot = v[0] * ax + v[1] * ay + v[2] * az;
+          const cross = [
+            ay * v[2] - az * v[1],
+            az * v[0] - ax * v[2],
+            ax * v[1] - ay * v[0],
+          ];
+          return [
+            v[0] * cosQ + cross[0] * sinQ + ax * dot * (1.0 - cosQ),
+            v[1] * cosQ + cross[1] * sinQ + ay * dot * (1.0 - cosQ),
+            v[2] * cosQ + cross[2] * sinQ + az * dot * (1.0 - cosQ),
+          ];
+        };
 
-          // Determine thickness envelope based on local coordinate
-          const scale = 0.5; // matching base scale
-          const localPx = px / scale;
-          const localPz = pz / scale;
-          let thickness = 0.06;
-          if (Math.abs(localPx) > 0.05) {
-            thickness = 0.015;
-          } else {
-            if (localPz > 0.2) thickness = 0.03;
-            else if (localPz > -0.3 && localPz <= 0.2) thickness = 0.12;
-            else if (localPz > -0.6 && localPz <= -0.3) thickness = 0.09;
-            else if (localPz <= -0.6) thickness = 0.04;
-          }
+        N = rotateVector(N);
+        F = rotateVector(F);
+        R = rotateVector(R);
+      }
 
-          if (caveData.insideTunnel) {
-             const minRad = caveData.ground + thickness * scale;
-             const maxRad = caveData.ceiling !== Infinity ? caveData.ceiling - thickness * scale : Infinity;
-             if (dist < minRad) {
-               worldPos = [ux * minRad, uy * minRad, uz * minRad];
-             } else if (dist > maxRad && maxRad !== Infinity) {
-               worldPos = [ux * maxRad, uy * maxRad, uz * maxRad];
-             }
-          } else {
-             const minRad = surfaceRadius + thickness * scale;
-             if (dist < minRad && dist > surfaceRadius - 0.5) {
-               worldPos = [ux * minRad, uy * minRad, uz * minRad];
-             }
+      const pos = c.ragdollEnabled ? c.ragdollPos : c.position;
+
+      let f = [0, 0, 0];
+      if (c.ragdollEnabled && c.ragdollVel) {
+        const localVel = [
+          c.ragdollVel[0] * R[0] + c.ragdollVel[1] * R[1] + c.ragdollVel[2] * R[2],
+          c.ragdollVel[0] * N[0] + c.ragdollVel[1] * N[1] + c.ragdollVel[2] * N[2],
+          c.ragdollVel[0] * F[0] + c.ragdollVel[1] * F[1] + c.ragdollVel[2] * F[2],
+        ];
+        const g = [
+          -N[0] * R[0] - N[1] * R[1] - N[2] * R[2],
+          -N[0] * N[0] - N[1] * N[1] - N[2] * N[2],
+          -N[0] * F[0] - N[1] * F[1] - N[2] * F[2],
+        ];
+        f[0] = g[0] * 1.5 - localVel[0] * 12.0;
+        f[1] = g[1] * 1.5 - localVel[1] * 12.0;
+        f[2] = g[2] * 1.5 - localVel[2] * 12.0;
+      }
+
+      const transformPoint = (px, py, pz) => {
+        let worldPos = [
+          pos[0] + (px * R[0] + py * N[0] + pz * F[0]),
+          pos[1] + (px * R[1] + py * N[1] + pz * F[1]),
+          pos[2] + (px * R[2] + py * N[2] + pz * F[2]),
+        ];
+        if (c.ragdollEnabled) {
+          const dist = Math.sqrt(
+            worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
+          );
+          if (dist > 0.001) {
+            const ux = worldPos[0] / dist;
+            const uy = worldPos[1] / dist;
+            const uz = worldPos[2] / dist;
+
+            const caveData = c.ragdollCaveData || { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, uy))), Math.atan2(uz, ux), seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
+            const surfaceRadius = caveData.ground;
+
+            // Determine thickness envelope based on local coordinate
+            const scale = 0.5; // matching base scale
+            const localPx = px / scale;
+            const localPz = pz / scale;
+            let thickness = 0.06;
+            if (Math.abs(localPx) > 0.05) {
+              thickness = 0.015;
+            } else {
+              if (localPz > 0.2) thickness = 0.03;
+              else if (localPz > -0.3 && localPz <= 0.2) thickness = 0.12;
+              else if (localPz > -0.6 && localPz <= -0.3) thickness = 0.09;
+              else if (localPz <= -0.6) thickness = 0.04;
+            }
+
+            if (caveData.insideTunnel) {
+               const minRad = caveData.ground + thickness * scale;
+               const maxRad = caveData.ceiling !== Infinity ? caveData.ceiling - thickness * scale : Infinity;
+               if (dist < minRad) {
+                 worldPos = [ux * minRad, uy * minRad, uz * minRad];
+               } else if (dist > maxRad && maxRad !== Infinity) {
+                 worldPos = [ux * maxRad, uy * maxRad, uz * maxRad];
+               }
+            } else {
+               const minRad = surfaceRadius + thickness * scale;
+               if (dist < minRad && dist > surfaceRadius - 0.5) {
+                 worldPos = [ux * minRad, uy * minRad, uz * minRad];
+               }
+            }
           }
         }
+        return worldPos;
+      };
+
+      const scale = c.type === 'meganeura' ? 0.25 : (c.type === 'isopod' ? 0.38 : 0.5);
+
+      // Render using the registered NPC implementation
+      const npcReg = window.NpcRegistry[c.type];
+      if (npcReg && npcReg.render) {
+        npcReg.render(
+          c,
+          allVertices,
+          allColors,
+          allIndices,
+          scale,
+          N,
+          R,
+          F,
+          pos,
+          f,
+          transformPoint,
+          seed
+        );
       }
-      return worldPos;
-    };
-
-    const scale = c.type === 'meganeura' ? 0.25 : (c.type === 'isopod' ? 0.38 : 0.5);
-
-    // Render using the registered NPC implementation
-    const npcReg = window.NpcRegistry[c.type];
-    if (npcReg && npcReg.render) {
-      npcReg.render(
-        c,
-        allVertices,
-        allColors,
-        allIndices,
-        scale,
-        N,
-        R,
-        F,
-        pos,
-        f,
-        transformPoint,
-        seed
-      );
     }
   }
 

@@ -14,6 +14,8 @@
             uniform float uWaterSwayFactor;
             uniform float uPlanetRadius;
             uniform float uWaterRadius;
+            uniform float uRenderDistEnabled;
+            uniform float uMaxRenderDist;
             
             varying vec3 vColor;
             varying vec3 vNormal;
@@ -58,7 +60,11 @@
                 float distToCenter = length(pos);
                 bool isSeaweed = (distToCenter < uWaterRadius) && (actualColor.g > 0.35 && actualColor.r < 0.45 && actualColor.b < 0.5);
                 
-                if ((isLeaf || isTree) && uSwayFactor > 0.0) {
+                vec4 baseMvPos = uModelViewMatrix * vec4(pos, 1.0);
+                float vertexCamDist = length(baseMvPos.xyz);
+                bool outsideRenderRange = (uRenderDistEnabled > 0.5 && vertexCamDist > uMaxRenderDist);
+
+                if ((isLeaf || isTree) && uSwayFactor > 0.0 && !outsideRenderRange) {
                     float h = distToCenter - uPlanetRadius;
                     
                     if (isGrass || isTree || h > 0.01) {
@@ -105,7 +111,7 @@
                             pos.z += (windZ * 0.2 + macroWindZ * 0.3) * swayAmount;
                         }
                     }
-                } else if (isSeaweed && uWaterSwayFactor > 0.0) {
+                } else if (isSeaweed && uWaterSwayFactor > 0.0 && !outsideRenderRange) {
                     // Seaweed/Kelp: Sway with fluid water viscosity
                     float h = max(0.0, distToCenter - uPlanetRadius);
                     // Pivot anchor: base doesn't sway, sway increases with height

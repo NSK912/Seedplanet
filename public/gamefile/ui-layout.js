@@ -1122,7 +1122,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <div
       id="interactPrompt"
       
-     class="game-ui" style="position: fixed;
+     class="game-ui" style="position: fixed; left: 0; top: 0; will-change: transform;
         background: rgba(10, 10, 15, 0.85);
         color: #dfb76c;
         padding: 6px 14px;
@@ -1145,7 +1145,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <button
       id="npcKillPrompt"
       style="
-        position: fixed;
+        position: fixed; left: 0; top: 0; will-change: transform;
         background: rgba(0, 0, 0, 0.8);
         color: white;
         padding: 6px 12px;
@@ -1203,7 +1203,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     </button>
 
     <div id="bowCrosshair" style="display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; border: 1.5px solid white; pointer-events: none; z-index: 1000; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></div>
-    <div id="targetCircle" style="display: none; position: absolute; width: 22px; height: 22px; border: 1.5px solid white; border-radius: 50%; pointer-events: none; z-index: 999; transform: translate(-50%, -50%); box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>
+    <div id="targetCircle" style="display: none; position: absolute; left: 0; top: 0; will-change: transform; width: 22px; height: 22px; border: 1.5px solid white; border-radius: 50%; pointer-events: none; z-index: 999; transform: translate(-50%, -50%); box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>
 
     <div class="controls" id="mainControls" style="top: 45px; display: none;">
       <div class="control-group">

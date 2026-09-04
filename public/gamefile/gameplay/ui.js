@@ -463,11 +463,7 @@ window.addEventListener("keyup", (e) => {
           }
         }
         
-        function runDemolishMonitor() {
-          updateInventoryButtonState();
-          requestAnimationFrame(runDemolishMonitor);
-        }
-        requestAnimationFrame(runDemolishMonitor);
+        setInterval(updateInventoryButtonState, 300);
       }
       const invCloseEl = document.getElementById("inventoryClose");
       if (invCloseEl) {
@@ -1651,11 +1647,7 @@ window.addEventListener("keyup", (e) => {
         }
       }
       
-      function runWaterStateMonitor() {
-        updateTouchButtonsForWaterState();
-        requestAnimationFrame(runWaterStateMonitor);
-      }
-      requestAnimationFrame(runWaterStateMonitor);
+      setInterval(updateTouchButtonsForWaterState, 300);
 
 
       // ============================================
@@ -2325,15 +2317,12 @@ window.addEventListener("keyup", (e) => {
         });
 
         function syncZoomSlider() {
-          if (typeof zoom !== "undefined") {
-            if (document.activeElement !== devCameraZoomSlider) {
-              devCameraZoomSlider.value = zoom;
-              devCameraZoomLabel.textContent = zoom.toFixed(1);
-            }
+          if (typeof zoom !== "undefined" && document.activeElement !== devCameraZoomSlider) {
+            devCameraZoomSlider.value = zoom;
+            devCameraZoomLabel.textContent = zoom.toFixed(1);
           }
-          requestAnimationFrame(syncZoomSlider);
         }
-        requestAnimationFrame(syncZoomSlider);
+        setInterval(syncZoomSlider, 300);
       }
 
       // === Drag to Scroll in Inventory Panel (for Touch Mode) ===

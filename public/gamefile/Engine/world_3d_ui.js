@@ -383,8 +383,9 @@
         const baseScale = Math.max(0.2, Math.min(2.0, 1.2 / screenPos.depth));
         const alpha = dist > sign.fadeDistance ? Math.max(0, 1.0 - (dist - sign.fadeDistance) / (sign.maxDistance - sign.fadeDistance)) : 1.0;
 
-        el.style.display = 'block';
-        el.style.opacity = alpha.toFixed(3);
+        if(el.style.display !== 'block') el.style.display = 'block';
+        const newOp = alpha.toFixed(3);
+      if (el._lastOp !== newOp) { el.style.opacity = newOp; el._lastOp = newOp; }
         el.style.transform = `translate(-50%, -50%) translate3d(${screenPos.x.toFixed(1)}px, ${screenPos.y.toFixed(1)}px, 0px) scale(${baseScale.toFixed(3)})`;
         return;
       }
@@ -434,8 +435,10 @@
       const uVec = [sUp.x - sCenter.x, sUp.y - sCenter.y];
 
       // Measured element unscaled dimensions (default 100px base or measured rect)
-      const elWidth = el.offsetWidth || 120;
-      const elHeight = el.offsetHeight || 60;
+      if(!el._cW) el._cW = el.offsetWidth || 120;
+      const elWidth = el._cW;
+      if(!el._cH) el._cH = el.offsetHeight || 60;
+      const elHeight = el._cH;
 
       // Affine transform matrix components:
       // a: horizontal basis X, b: horizontal basis Y
@@ -448,9 +451,11 @@
       // Opacity fade with distance
       const alpha = dist > sign.fadeDistance ? Math.max(0, 1.0 - (dist - sign.fadeDistance) / (sign.maxDistance - sign.fadeDistance)) : 1.0;
 
-      el.style.display = 'block';
-      el.style.opacity = alpha.toFixed(3);
-      el.style.transform = `matrix(${a.toFixed(4)}, ${b.toFixed(4)}, ${c.toFixed(4)}, ${d.toFixed(4)}, ${sCenter.x.toFixed(1)}, ${sCenter.y.toFixed(1)}) translate(-50%, -50%)`;
+      if(el.style.display !== 'block') el.style.display = 'block';
+      const newOp = alpha.toFixed(3);
+      if (el._lastOp !== newOp) { el.style.opacity = newOp; el._lastOp = newOp; }
+      const newT = `matrix(${a.toFixed(4)}, ${b.toFixed(4)}, ${c.toFixed(4)}, ${d.toFixed(4)}, ${sCenter.x.toFixed(1)}, ${sCenter.y.toFixed(1)}) translate(-50%, -50%)`;
+      if (el._lastT !== newT) { el.style.transform = newT; el._lastT = newT; }
     });
   }
 

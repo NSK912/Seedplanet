@@ -60,7 +60,10 @@
         if (!overlay) return;
         
         if (!gameStarted || !amphibians || amphibians.length === 0) {
-          overlay.innerHTML = "";
+          if (overlay._lastHtml !== "") {
+            overlay._lastHtml = "";
+            overlay.innerHTML = "";
+          }
           return;
         }
         
@@ -112,19 +115,22 @@
               slotsHtml += `<div class="npc-hp-slot${isFilled ? ' filled' : ''}"></div>`;
             }
             
-            const rect = canvas.getBoundingClientRect();
-            const cssX = rect.left + (screenPos.x / canvas.width) * rect.width;
-            const cssY = rect.top + (screenPos.y / canvas.height) * rect.height;
+            const rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+            const cssX = rect.left + (screenPos.x / window.innerWidth) * rect.width;
+            const cssY = rect.top + (screenPos.y / window.innerHeight) * rect.height;
             
             htmlContent += `
-              <div class="npc-hp-bar" style="left: ${cssX.toFixed(1)}px; top: ${cssY.toFixed(1)}px;">
+              <div class="npc-hp-bar" style="transform: translate(${Math.round(cssX)}px, ${Math.round(cssY)}px) translate(-50%, -100%); left: 0; top: 0;">
                 ${slotsHtml}
               </div>
             `;
           }
         }
         
-        overlay.innerHTML = htmlContent;
+        if (overlay._lastHtml !== htmlContent) {
+          overlay._lastHtml = htmlContent;
+          overlay.innerHTML = htmlContent;
+        }
       }
 
       function damagePlayer(amount = 1) {
