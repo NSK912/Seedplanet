@@ -5,10 +5,9 @@
 
 import React, { useState } from 'react';
 import { Settings, Home, HardDrive, Cpu, Activity, Maximize2, Minus, X, Box } from 'lucide-react';
-import DevGame from './DevGame';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('devgame');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   return (
     <div className="flex flex-col h-screen bg-[#09090b] text-slate-200 font-sans overflow-hidden select-none">
@@ -44,12 +43,6 @@ export default function App() {
                 onClick={() => setActiveTab('dashboard')} 
               />
               <NavItem 
-                icon={<Box size={18} />} 
-                label="DevGame (3D)" 
-                isActive={activeTab === 'devgame'} 
-                onClick={() => setActiveTab('devgame')} 
-              />
-              <NavItem 
                 icon={<Cpu size={18} />} 
                 label="System" 
                 isActive={activeTab === 'system'} 
@@ -76,10 +69,6 @@ export default function App() {
         </div>
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-[#09090b] p-8">
-          {activeTab === 'devgame' && (
-            <DevGame />
-          )}
-
           {activeTab === 'dashboard' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h1 className="text-xl font-medium text-white mb-6">Welcome back</h1>
