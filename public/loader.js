@@ -1,10 +1,5 @@
 (function() {
-  if (!document.querySelector('link[href="style.css"]')) {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'style.css';
-    document.head.appendChild(link);
-  }
+  document.write('<link rel="stylesheet" href="style.css">');
 
   const scripts = [
     // --- UI Layout & Settings ---
@@ -89,17 +84,5 @@
     'gamefile/gameplay/Start.js'
   ];
 
-  function loadNext(index) {
-    if (index >= scripts.length) return;
-    const s = document.createElement('script');
-    s.src = scripts[index];
-    s.onload = () => loadNext(index + 1);
-    s.onerror = (e) => {
-      console.error(`Failed to load script ${scripts[index]}:`, e);
-      loadNext(index + 1);
-    };
-    document.head.appendChild(s);
-  }
-
-  loadNext(0);
+  scripts.forEach(src => document.write(`<script src="${src}"><\/script>`));
 })();
