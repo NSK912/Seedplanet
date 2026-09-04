@@ -8,8 +8,8 @@ window.ItemRegistry["log"] = {
     const r = item.R, f = item.F, n = item.normal;
     const s = item.size;
 
-    const thickness = s * 0.4;
-    const length = s * 0.6;
+    const thickness = s * 0.28;
+    const length = s * 0.55;
 
     if (item.seed === undefined) item.seed = Math.random();
     const rotAngle = item.seed * Math.PI * 2;
@@ -20,7 +20,8 @@ window.ItemRegistry["log"] = {
     const dirY = r[1] * cosA + f[1] * sinA;
     const dirZ = r[2] * cosA + f[2] * sinA;
 
-    const elevation = thickness * 0.85;
+    // Elevation equals radius so the log cylinder rests flush on the ground surface
+    const elevation = thickness * 0.5;
     const center = [
       p[0] + n[0] * elevation,
       p[1] + n[1] * elevation,
@@ -42,7 +43,7 @@ window.ItemRegistry["log"] = {
       pStart,
       pEnd,
       thickness,
-      thickness * 0.8,
+      thickness * 0.9,
       6,
       lColor,
       vertices,

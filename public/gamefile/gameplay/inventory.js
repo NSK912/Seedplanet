@@ -3508,7 +3508,7 @@ function cancelFloorPlacement() {
         } else if (closestDemolishItem.type === "wood_floor") {
           itemData = { name: "WOOD_FLOOR", icon: "ðŸªµ", label: "WOOD_FLOOR" };
         } else if (closestDemolishItem.type === "thin_wood_floor") {
-          itemData = { name: "THIN_WOOD_FLOOR", icon: "í ¾íºµ", label: "THIN_WOOD_FLOOR" };
+          itemData = { name: "THIN_WOOD_FLOOR", icon: "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", label: "THIN_WOOD_FLOOR" };
         } else if (closestDemolishItem.type === "wood_stairs") {
           itemData = { name: "WOOD_STAIRS", icon: "ðŸªœ", label: "WOOD_STAIRS" };
         } else if (closestDemolishItem.type === "campfire") {

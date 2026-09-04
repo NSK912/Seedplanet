@@ -3,7 +3,7 @@
 
   const scripts = [
     // --- UI Layout & Settings ---
-    'gamefile/i18n.js',
+    'gamefile/Language.js',
     'gamefile/ui-layout.js',
     'gamefile/gameplay/settings.js',
 

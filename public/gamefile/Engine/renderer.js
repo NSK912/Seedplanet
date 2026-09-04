@@ -7659,7 +7659,7 @@ window.cloud3DProgram = cloud3DProgram;
           gl.disable(gl.CULL_FACE);
         }
 
-        // วาดขวานที่ถืออยู่ (Equipped Item)
+        // วาดขวาน/ไอเทมที่ถืออยู่ (Equipped Item)
         if (
           !hideCharacter &&
           !isSmashing &&
@@ -7670,9 +7670,9 @@ window.cloud3DProgram = cloud3DProgram;
           equipIndicesLength > 0
         ) {
           gl.useProgram(modelProgram);
-          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
 
-          const equipCharModelMatrix = (ragdollEnabled && ragdollInitialized) ? createIdentity() : getCharacterMatrix();
+          const isRag = (ragdollEnabled && ragdollInitialized);
+          const equipCharModelMatrix = isRag ? createIdentity() : getCharacterMatrix();
           const equipModelViewMatrix = multiplyMatrices(viewMatrix, equipCharModelMatrix);
 
           gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, equipModelViewMatrix));
@@ -7684,20 +7684,32 @@ window.cloud3DProgram = cloud3DProgram;
           );
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
+          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), 0.0);
 
-          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          // For local space vertices, prevent underwater fog unless player is actually underwater
+          const isPlayerUnderwater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.5);
+          gl.uniform1f(modelWaterRadiusLoc, isRag ? (RADIUS + waterLevel * 0.15) : (isPlayerUnderwater ? 999.0 : -999.0));
           gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
-          gl.uniform1f(
-            modelRenderDistEnabledLoc,
-            renderDistEnabled ? 1.0 : 0.0,
-          );
-          gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
+          gl.uniform1f(modelRenderDistEnabledLoc, 0.0);
+          gl.uniform1f(modelMaxRenderDistLoc, 9999.0);
           gl.uniform1f(modelTimeLoc, 0.0);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
           gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
+
+          // Rotate light direction to local model space so lighting on item is bright and consistent
+          let localLightDir = finalLightDir;
+          if (!isRag) {
+            const m = equipCharModelMatrix;
+            const lx = (m[0]*finalLightDir[0] + m[1]*finalLightDir[1] + m[2]*finalLightDir[2]);
+            const ly = (m[4]*finalLightDir[0] + m[5]*finalLightDir[1] + m[6]*finalLightDir[2]);
+            const lz = (m[8]*finalLightDir[0] + m[9]*finalLightDir[1] + m[10]*finalLightDir[2]);
+            const lLen = Math.sqrt(lx*lx + ly*ly + lz*lz) || 1.0;
+            localLightDir = [lx / lLen, ly / lLen, lz / lLen];
+          }
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, localLightDir));
 
           gl.bindBuffer(gl.ARRAY_BUFFER, equipVertexBuffer);
           gl.enableVertexAttribArray(modelPosLoc);

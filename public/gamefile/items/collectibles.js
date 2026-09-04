@@ -3814,9 +3814,9 @@ function buildCollectibles(count, seed) {
             // Check if collectible is in water
             let theta = Math.acos(Math.max(-1.0, Math.min(1.0, c.position[1] / (r || 1))));
             let phi = Math.atan2(c.position[2], c.position[0]);
-            let height = getHeightOnSphere(theta, phi, globalSeed);
-            let caveDataForCol = getTerrainSurfaceAndCeiling(c.position[0]/(r||1), c.position[1]/(r||1), c.position[2]/(r||1), r);
-            let terrainRadius = caveDataForCol.ground;
+            let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
+            let caveDataForCol = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(c.position[0]/(r||1), c.position[1]/(r||1), c.position[2]/(r||1), r) : null;
+            let terrainRadius = caveDataForCol ? caveDataForCol.ground : (RADIUS + height * HEIGHT_SCALE);
             const waterRadius = RADIUS + waterLevel * 0.15;
             
             let inWater = false;
@@ -3914,7 +3914,7 @@ function buildCollectibles(count, seed) {
           } else {
             let theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny_c)));
             let phi = Math.atan2(nz_c, nx_c);
-            let height = getHeightOnSphere(theta, phi, globalSeed);
+            let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
             terrainRadius = RADIUS + height * HEIGHT_SCALE;
           }
           
@@ -3936,7 +3936,8 @@ function buildCollectibles(count, seed) {
               }
           }
           
-          let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (c.size ? c.size : 0));
+          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "iron_ore" || c.type === "gold_ore");
+          let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           if (c.type === "wood_boat" && !isInWater) {
              const cPos = c.position;
              if (typeof Physics !== "undefined" && typeof Physics.getFloorSurfaceRadiusAt === "function") {
@@ -3975,8 +3976,8 @@ function buildCollectibles(count, seed) {
               c.F = vehicleTransform.F;
               c.R = vehicleTransform.R;
           } else if (isInWater) {
-              // Wood boat keeps exact original water depth (-0.04)
-              collisionRadius = (c.type === "wood_boat") ? (waterRadius - 0.04) : (terrainRadius + (c.size ? c.size : 0));
+              // Wood boat keeps exact original water depth (-0.04), item drops settle at ground/water
+              collisionRadius = (c.type === "wood_boat") ? (waterRadius - 0.04) : (terrainRadius + (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           }
           
           if (r < collisionRadius) {

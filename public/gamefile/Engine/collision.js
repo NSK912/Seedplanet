@@ -98,41 +98,67 @@ const CollisionCore = {
     let camCaveData = null;
     let details = "";
 
-    // 1. Voxel 3D Cave (getTerrainDensity) Check
-    if (typeof getTerrainDensity === "function") {
-       densityValue = getTerrainDensity(p[0], p[1], p[2], false);
-       if (densityValue > -actualCamCushion) {
-           isColliding = true;
-           collisionPart = "Voxel 3D Cave (Density)";
-           details = `Camera density ${densityValue.toFixed(4)} > threshold ${(-actualCamCushion).toFixed(4)}`;
-       }
-    } else if (typeof getTerrainSurfaceAndCeiling === "function") {
-       // 2. Heightmap Cave (getTerrainSurfaceAndCeiling) Check
-       camCaveData = getTerrainSurfaceAndCeiling(ux, uy, uz, distToCenter);
-       if (camCaveData && camCaveData.insideTunnel) {
-           if (distToCenter < camCaveData.ground + actualCamCushion) {
+    // 0. Visual Mesh Precision Check (Prevent Mountain Clipping)
+    const visualH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : h;
+    let visualTerrainRadius = r_planet + visualH * h_scale;
+    if (typeof getFloorTopRadiusAt === "function") {
+        visualTerrainRadius = getFloorTopRadiusAt(ux, uy, uz, visualTerrainRadius);
+    }
+    
+    let inCaveForCam = false;
+    if (tunnels && tunnels.length > 0) {
+        for (let i = 0; i < tunnels.length; i++) {
+            const dx = p[0] - tunnels[i].x, dy = p[1] - tunnels[i].y, dz = p[2] - tunnels[i].z;
+            if (dx*dx + dy*dy + dz*dz < (tunnels[i].rSq || tunnels[i].r * tunnels[i].r)) {
+                inCaveForCam = true;
+                break;
+            }
+        }
+    }
+
+    if (!inCaveForCam && distToCenter < visualTerrainRadius + actualCamCushion) {
+        isColliding = true;
+        collisionPart = "Visual Mountain Mesh";
+        details = `Camera distance ${distToCenter.toFixed(3)} < visual mesh radius ${visualTerrainRadius.toFixed(3)} + cushion ${actualCamCushion.toFixed(3)}`;
+    }
+
+    if (!isColliding) {
+        // 1. Voxel 3D Cave (getTerrainDensity) Check
+        if (typeof getTerrainDensity === "function") {
+           densityValue = getTerrainDensity(p[0], p[1], p[2], false);
+           if (densityValue > -actualCamCushion) {
                isColliding = true;
-               collisionPart = "Heightmap Cave (Ground Bounds)";
-               details = `Camera distance ${distToCenter.toFixed(3)} < ground ${camCaveData.ground.toFixed(3)} + cushion ${actualCamCushion.toFixed(3)}`;
-           } else if (camCaveData.ceiling !== Infinity && distToCenter > camCaveData.ceiling - actualCamCushion) {
-               isColliding = true;
-               collisionPart = "Heightmap Cave (Ceiling Bounds)";
-               details = `Camera distance ${distToCenter.toFixed(3)} > ceiling ${camCaveData.ceiling.toFixed(3)} - cushion ${actualCamCushion.toFixed(3)}`;
+               collisionPart = "Voxel 3D Cave (Density)";
+               details = `Camera density ${densityValue.toFixed(4)} > threshold ${(-actualCamCushion).toFixed(4)}`;
            }
-       } else if (camCaveData) {
-           if (distToCenter < camCaveData.ground + actualHeightmapBumper) {
-               isColliding = true;
-               collisionPart = "Heightmap Planet Surface";
-               details = `Camera distance ${distToCenter.toFixed(3)} < ground ${camCaveData.ground.toFixed(3)} + bumper ${actualHeightmapBumper.toFixed(3)}`;
+        } else if (typeof getTerrainSurfaceAndCeiling === "function") {
+           // 2. Heightmap Cave (getTerrainSurfaceAndCeiling) Check
+           camCaveData = getTerrainSurfaceAndCeiling(ux, uy, uz, distToCenter);
+           if (camCaveData && camCaveData.insideTunnel) {
+               if (distToCenter < camCaveData.ground + actualCamCushion) {
+                   isColliding = true;
+                   collisionPart = "Heightmap Cave (Ground Bounds)";
+                   details = `Camera distance ${distToCenter.toFixed(3)} < ground ${camCaveData.ground.toFixed(3)} + cushion ${actualCamCushion.toFixed(3)}`;
+               } else if (camCaveData.ceiling !== Infinity && distToCenter > camCaveData.ceiling - actualCamCushion) {
+                   isColliding = true;
+                   collisionPart = "Heightmap Cave (Ceiling Bounds)";
+                   details = `Camera distance ${distToCenter.toFixed(3)} > ceiling ${camCaveData.ceiling.toFixed(3)} - cushion ${actualCamCushion.toFixed(3)}`;
+               }
+           } else if (camCaveData) {
+               if (distToCenter < camCaveData.ground + actualHeightmapBumper) {
+                   isColliding = true;
+                   collisionPart = "Heightmap Planet Surface";
+                   details = `Camera distance ${distToCenter.toFixed(3)} < ground ${camCaveData.ground.toFixed(3)} + bumper ${actualHeightmapBumper.toFixed(3)}`;
+               }
            }
-       }
-    } else {
-       // 3. Fallback Planet Sphere Check (when neither voxel nor heightmap APIs exist/fire)
-       if (distToCenter < baseTerrainRadius + actualHeightmapBumper) {
-           isColliding = true;
-           collisionPart = "Fallback Planet Sphere";
-           details = `Camera distance ${distToCenter.toFixed(3)} < base radius ${baseTerrainRadius.toFixed(3)} + bumper ${actualHeightmapBumper.toFixed(3)}`;
-       }
+        } else {
+           // 3. Fallback Planet Sphere Check (when neither voxel nor heightmap APIs exist/fire)
+           if (distToCenter < baseTerrainRadius + actualHeightmapBumper) {
+               isColliding = true;
+               collisionPart = "Fallback Planet Sphere";
+               details = `Camera distance ${distToCenter.toFixed(3)} < base radius ${baseTerrainRadius.toFixed(3)} + bumper ${actualHeightmapBumper.toFixed(3)}`;
+           }
+        }
     }
 
     // --- CAVE DETECTION FOR PLAYER ---

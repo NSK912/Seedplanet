@@ -2476,15 +2476,15 @@
             };
             const scale = (v, s) => [v[0]*s, v[1]*s, v[2]*s];
 
+            const isRag = (ragdollEnabled && ragdollInitialized);
+            const itemScale = isRag ? playerScale : 1.0;
+
             const addWedge = (pBase, pTip, widthBase, widthTip, thickness, color) => {
                 const dir = sub(pTip, pBase);
-                const l = Math.sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
                 const f = normalize(dir); // points from base to tip
-                // up vector - assuming blade is flat along X, so X is right
-                const charX = (ragdollEnabled && ragdollInitialized) ? [charMat[0], charMat[1], charMat[2]] : [1, 0, 0];
-                const charZ = (ragdollEnabled && ragdollInitialized) ? [charMat[8], charMat[9], charMat[10]] : [0, 0, 1];
+                const charX = isRag ? [charMat[0], charMat[1], charMat[2]] : [1, 0, 0];
                 
-                // let's use charX as thickness direction, charZ as width direction
+                // let's use charX as thickness direction
                 const right = normalize(charX); 
                 const forward = normalize(cross(right, f)); // perpendicular to thickness and blade direction
 
@@ -2526,12 +2526,11 @@
             };
 
             if (heldItem && heldItem.name === "BOW") {
-                const isRag = (ragdollEnabled && ragdollInitialized);
                 const wGrip = isRag ? bowGripRot : transformPt(bowGripRot);
                 const wUpperTip = isRag ? bowUpperTipRot : transformPt(bowUpperTipRot);
                 const wLowerTip = isRag ? bowLowerTipRot : transformPt(bowLowerTipRot);
                 
-                const bowScale = typeof playerScale !== "undefined" ? playerScale : 1.0;
+                const bowScale = itemScale;
                 let wNock;
                 if (!arrowShotInCurrentAnim && useAnimTimer > 0) {
                     wNock = isRag ? rightHandRot : transformPt(rightHandRot);
@@ -2658,20 +2657,20 @@
                 const wBladeTip = transformPt(axeBladeP2Rot);
 
                 const handleColor = [0.4, 0.25, 0.15];
-                buildTaperedSegment(wHandleP1, wHandleP2, 0.015 * playerScale, 0.015 * playerScale, 5, handleColor, rawV, rawC, rawI);
+                buildTaperedSegment(wHandleP1, wHandleP2, 0.015 * itemScale, 0.015 * itemScale, 5, handleColor, rawV, rawC, rawI);
                 
                 const bladeColor = [0.65, 0.65, 0.65];
                 
                 if (heldItem.name === "AXE") {
                     // The wedge is wide at tip, narrow at base for axe
-                    addWedge(wBladeBase, wBladeTip, 0.04 * playerScale, 0.08 * playerScale, 0.01 * playerScale, bladeColor);
+                    addWedge(wBladeBase, wBladeTip, 0.04 * itemScale, 0.08 * itemScale, 0.01 * itemScale, bladeColor);
                 } else if (heldItem.name === "PICKAXE") {
                     // The wedge is pointy for pickaxe (narrow at tip)
-                    addWedge(wBladeBase, wBladeTip, 0.03 * playerScale, 0.005 * playerScale, 0.01 * playerScale, bladeColor);
+                    addWedge(wBladeBase, wBladeTip, 0.03 * itemScale, 0.005 * itemScale, 0.01 * itemScale, bladeColor);
                     
                     const wBlade2Base = transformPt(axeBlade2P1Rot);
                     const wBlade2Tip = transformPt(axeBlade2P2Rot);
-                    addWedge(wBlade2Base, wBlade2Tip, 0.03 * playerScale, 0.005 * playerScale, 0.01 * playerScale, bladeColor);
+                    addWedge(wBlade2Base, wBlade2Tip, 0.03 * itemScale, 0.005 * itemScale, 0.01 * itemScale, bladeColor);
                 } else if (heldItem.name === "SHOVEL") {
                     // 1. Draw D-handle components at the back of the handle
                     const wD1 = transformPt(shovelD1Rot);
@@ -2681,15 +2680,14 @@
                     
                     const shovelPartsColor = [0.25, 0.25, 0.25]; // Charcoal/dark metal
                     // Stem of D-handle
-                    buildTaperedSegment(wD1, wD2, 0.012 * playerScale, 0.012 * playerScale, 5, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wD1, wD2, 0.012 * itemScale, 0.012 * itemScale, 5, shovelPartsColor, rawV, rawC, rawI);
                     // Left and right loop branches
-                    buildTaperedSegment(wD2, wLeft, 0.01 * playerScale, 0.01 * playerScale, 4, shovelPartsColor, rawV, rawC, rawI);
-                    buildTaperedSegment(wD2, wRight, 0.01 * playerScale, 0.01 * playerScale, 4, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wD2, wLeft, 0.01 * itemScale, 0.01 * itemScale, 4, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wD2, wRight, 0.01 * itemScale, 0.01 * itemScale, 4, shovelPartsColor, rawV, rawC, rawI);
                     // Grip bar
-                    buildTaperedSegment(wLeft, wRight, 0.011 * playerScale, 0.011 * playerScale, 5, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wLeft, wRight, 0.011 * itemScale, 0.011 * itemScale, 5, shovelPartsColor, rawV, rawC, rawI);
 
-                    // 2. Draw shovel blade scoop (with socket, main wedge, and pointy scoop tip)
-                    // Interpolate points between wBladeBase and wBladeTip to get sections:
+                    // 2. Draw shovel blade scoop
                     const wBladeSocketEnd = [
                         wBladeBase[0] + (wBladeTip[0] - wBladeBase[0]) * 0.2,
                         wBladeBase[1] + (wBladeTip[1] - wBladeBase[1]) * 0.2,
@@ -2702,11 +2700,11 @@
                     ];
 
                     // Scoop neck/socket
-                    buildTaperedSegment(wBladeBase, wBladeSocketEnd, 0.016 * playerScale, 0.016 * playerScale, 5, [0.35, 0.35, 0.35], rawV, rawC, rawI);
-                    // Scoop main plate (wider wedge shape)
-                    addWedge(wBladeSocketEnd, wBladeMid, 0.07 * playerScale, 0.065 * playerScale, 0.012 * playerScale, bladeColor);
-                    // Scoop pointy tip (pointed wedge)
-                    addWedge(wBladeMid, wBladeTip, 0.065 * playerScale, 0.01 * playerScale, 0.01 * playerScale, bladeColor);
+                    buildTaperedSegment(wBladeBase, wBladeSocketEnd, 0.016 * itemScale, 0.016 * itemScale, 5, [0.35, 0.35, 0.35], rawV, rawC, rawI);
+                    // Scoop main plate
+                    addWedge(wBladeSocketEnd, wBladeMid, 0.07 * itemScale, 0.065 * itemScale, 0.012 * itemScale, bladeColor);
+                    // Scoop pointy tip
+                    addWedge(wBladeMid, wBladeTip, 0.065 * itemScale, 0.01 * itemScale, 0.01 * itemScale, bladeColor);
                 } else {
                     let itemColor = [0.55, 0.38, 0.22];
                     const name = (heldItem && heldItem.name) ? heldItem.name : "";
@@ -2719,7 +2717,7 @@
                     } else if (name.includes("CAMPFIRE")) {
                         itemColor = [0.8, 0.3, 0.1];
                     }
-                    buildTaperedSegment(wHandleP1, wBladeBase, 0.035 * playerScale, 0.035 * playerScale, 5, itemColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wHandleP1, wBladeBase, 0.035 * itemScale, 0.035 * itemScale, 5, itemColor, rawV, rawC, rawI);
                 }
             }
             
