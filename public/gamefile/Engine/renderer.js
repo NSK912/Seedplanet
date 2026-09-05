@@ -3253,6 +3253,11 @@ window.cloud3DProgram = cloud3DProgram;
           }
         }
 
+        // Glow Battery Power & Regeneration System Update
+        if (typeof window.BatterySystem !== "undefined" && typeof window.BatterySystem.update === "function") {
+          window.BatterySystem.update(dt);
+        }
+
         // --- Throttled Animation Updates ---
         const now = timestamp;
 
@@ -4054,8 +4059,21 @@ window.cloud3DProgram = cloud3DProgram;
             let brakePower = pSpeed * 0.30 * dt;
             let coastFriction = Math.pow(0.98, dt);
             
-            // Require electric engine to move a wheeled land boat
-            let canAccelerate = activeRidingBoat.hasEngine;
+            // Require electric engine and active battery in inventory to accelerate wheeled land boat
+            const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
+            let canAccelerate = activeRidingBoat.hasEngine && hasBattery;
+
+            if (activeRidingBoat.hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
+              if (typeof window.BatterySystem !== "undefined") {
+                window.BatterySystem.showEmptyNotice();
+              }
+            }
+
+            if (activeRidingBoat.hasEngine && hasBattery && Math.abs(moveForwardInput) > 0.1) {
+              if (typeof window.BatterySystem !== "undefined") {
+                window.BatterySystem.consumePower(dt);
+              }
+            }
 
             const isHandbrake = (typeof keys !== "undefined" && (keys["Space"] || keys[" "]));
             activeRidingBoat.isHandbraking = isHandbrake;
@@ -4268,19 +4286,42 @@ window.cloud3DProgram = cloud3DProgram;
             let _bDepth = waterRadius - terrainRadius;
             let _isInWater = waterEnabled && _bDepth > 0.48 * charScale;
             let _isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+            const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
             if (_isLandBoat) {
               currentSpeedVal = Math.abs(activeRidingBoat.vehicleSpeed || 0);
             } else if (_isInWater) {
-              if (activeRidingBoat.hasEngine) {
+              const hasEngineActive = activeRidingBoat.hasEngine && hasBattery;
+              if (hasEngineActive) {
                  currentSpeedVal = pSpeed * 5.0;
+                 if (Math.abs(moveForwardInput) > 0.1) {
+                   if (typeof window.BatterySystem !== "undefined") {
+                     window.BatterySystem.consumePower(dt);
+                   }
+                 }
               } else {
+                 if (activeRidingBoat.hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
+                   if (typeof window.BatterySystem !== "undefined") {
+                     window.BatterySystem.showEmptyNotice();
+                   }
+                 }
                  currentSpeedVal = pSpeed * 1.5;
               }
             } else {
               // Non-wheeled boat on land: dragged with friction
-              if (activeRidingBoat.hasEngine) {
+              const hasEngineActive = activeRidingBoat.hasEngine && hasBattery;
+              if (hasEngineActive) {
                  currentSpeedVal = pSpeed * 1.8;
+                 if (Math.abs(moveForwardInput) > 0.1) {
+                   if (typeof window.BatterySystem !== "undefined") {
+                     window.BatterySystem.consumePower(dt);
+                   }
+                 }
               } else {
+                 if (activeRidingBoat.hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
+                   if (typeof window.BatterySystem !== "undefined") {
+                     window.BatterySystem.showEmptyNotice();
+                   }
+                 }
                  currentSpeedVal = pSpeed * 0.6;
               }
             }
@@ -5473,14 +5514,67 @@ if (prompt._lastHTML !== _newHtml_2) {
                 extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
               }
               
-              const _newHtml_3 = `<div style="position: relative; width: 36px; height: 36px; padding: 1px; background: rgba(223, 183, 108, 0.55); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none; box-sizing: border-box;">
-                <div style="position: relative; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 5.5px) 0, 100% 5.5px, 100% 100%, 5.5px 100%, 0 calc(100% - 5.5px)); overflow: hidden; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
-                  <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
-                  <div style="position: relative; z-index: 1; text-align: center; font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #dfb76c; font-weight: 900; line-height: 1; letter-spacing: 0.5px; user-select: none;">
-                    E
+              const isEngineBoat_3 = !!(activeRidingBoat && activeRidingBoat.hasEngine);
+              let _newHtml_3 = "";
+              if (isEngineBoat_3) {
+                let batteryPercent = 0;
+                let batteryBarBg = "rgba(255, 120, 0, 0.42)";
+                let borderGrad = "rgba(255, 130, 0, 0.65)";
+
+                if (typeof window.BatterySystem !== "undefined") {
+                  const stats = window.BatterySystem.getStats();
+                  if (stats.readyCount > 0 && stats.activeBattery) {
+                    batteryPercent = Math.max(0, Math.min(100, (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100));
+                    if (batteryPercent <= 25) {
+                      batteryBarBg = "rgba(225, 29, 72, 0.55)";
+                      borderGrad = "rgba(225, 29, 72, 0.8)";
+                    } else {
+                      batteryBarBg = "rgba(255, 120, 0, 0.42)";
+                      borderGrad = "rgba(255, 130, 0, 0.65)";
+                    }
+                  } else if (stats.rechargingCount > 0) {
+                    const firstRecharging = window.BatterySystem.batteries.find(b => b.isRecharging);
+                    batteryPercent = firstRecharging ? Math.max(0, Math.min(100, (firstRecharging.rechargeTime / window.BatterySystem.REGEN_TIME) * 100)) : 0;
+                    batteryBarBg = "rgba(255, 100, 0, 0.4)";
+                    borderGrad = "rgba(255, 120, 0, 0.7)";
+                  } else {
+                    batteryPercent = 0;
+                    batteryBarBg = "rgba(225, 29, 72, 0.55)";
+                    borderGrad = "rgba(225, 29, 72, 0.8)";
+                  }
+                }
+
+                let batteryIconImgSrc = "";
+                if (typeof create3DIconCanvas === "function") {
+                  const iconCanvas = create3DIconCanvas("GLOW_BATTERY", 32, 32);
+                  if (iconCanvas) {
+                    if (iconCanvas.src) {
+                      batteryIconImgSrc = iconCanvas.src;
+                    } else if (typeof iconCanvas.toDataURL === "function") {
+                      try { batteryIconImgSrc = iconCanvas.toDataURL(); } catch (e) {}
+                    }
+                  }
+                }
+
+                _newHtml_3 = `<div style="position: relative; width: 36px; height: 36px; padding: 1px; background: ${borderGrad}; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none; box-sizing: border-box;">
+                  <div style="position: relative; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 5.5px) 0, 100% 5.5px, 100% 100%, 5.5px 100%, 0 calc(100% - 5.5px)); overflow: hidden; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                    <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${batteryPercent}%; background: ${batteryBarBg}; pointer-events: none; transition: width 0.1s linear;"></div>
+                    ${holdPercent > 0 ? `<div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(255, 255, 255, 0.45); pointer-events: none; transition: width 0.05s ease-out;"></div>` : ''}
+                    <div style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+                      ${batteryIconImgSrc ? `<img src="${batteryIconImgSrc}" width="28" height="28" style="display:block; object-fit:contain; pointer-events:none;" />` : `<span style="font-size:18px;">🔋</span>`}
+                    </div>
                   </div>
-                </div>
-              </div>`;
+                </div>`;
+              } else {
+                _newHtml_3 = `<div style="position: relative; width: 36px; height: 36px; padding: 1px; background: rgba(223, 183, 108, 0.55); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none; box-sizing: border-box;">
+                  <div style="position: relative; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 5.5px) 0, 100% 5.5px, 100% 100%, 5.5px 100%, 0 calc(100% - 5.5px)); overflow: hidden; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                    <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
+                    <div style="position: relative; z-index: 1; text-align: center; font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #dfb76c; font-weight: 900; line-height: 1; letter-spacing: 0.5px; user-select: none;">
+                      E
+                    </div>
+                  </div>
+                </div>`;
+              }
 
               if (prompt && prompt.style.display !== "none") prompt.style.display = "none";
               
@@ -5524,9 +5618,9 @@ if (prompt._lastHTML !== _newHtml_2) {
                             up: signUp,
                             size: [signW, signH],
                             isScreenAligned: false,
-                            backfaceCulling: false,
-                            doubleSided: true,
-                            checkOcclusion: false,
+                            backfaceCulling: true,
+                            doubleSided: false,
+                            checkOcclusion: true,
                             maxDistance: 35.0,
                             fadeDistance: 25.0,
                             visible: true,
@@ -5539,6 +5633,9 @@ if (prompt._lastHTML !== _newHtml_2) {
                             up: signUp,
                             size: [signW, signH],
                             isScreenAligned: false,
+                            backfaceCulling: true,
+                            doubleSided: false,
+                            checkOcclusion: true,
                             visible: true,
                             content: _newHtml_3
                         });
@@ -6042,9 +6139,9 @@ if (prompt._lastHTML !== _newHtml_6) {
                             up: signUp,
                             size: [signW, signH],
                             isScreenAligned: false,
-                            backfaceCulling: false,
-                            doubleSided: true,
-                            checkOcclusion: false,
+                            backfaceCulling: true,
+                            doubleSided: false,
+                            checkOcclusion: true,
                             maxDistance: 35.0,
                             fadeDistance: 25.0,
                             visible: true,
@@ -6057,6 +6154,9 @@ if (prompt._lastHTML !== _newHtml_6) {
                             up: signUp,
                             size: [signW, signH],
                             isScreenAligned: false,
+                            backfaceCulling: true,
+                            doubleSided: false,
+                            checkOcclusion: true,
                             visible: true,
                             content: _newHtml_7
                         });

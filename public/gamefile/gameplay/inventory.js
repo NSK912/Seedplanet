@@ -14,11 +14,225 @@
       let isMoveModeEnabled = false;
       let selectedActionSlotIndex = -1;
 
+      // ============================================
+      // ระบบพลังงานแบตเตอรี่หินเรืองแสง (Glow Battery Energy Points System)
+      // ============================================
+      // ใช้ระบบแต้มพลังงาน (Energy Points) เช่นเดียวกับระบบแต้ม HP ของผู้เล่น
+      // ความจุเต็ม = 72,000 แต้ม (ใช้งานขับขี่ได้เต็ม 20 นาที ที่ 60 ticks/วินาที)
+      // แต้มรีเจนเต็ม = 18,000 แต้ม (ใช้เวลารีเจน 5 นาที ที่ 60 ticks/วินาที)
+      // แบตเตอรี่ที่หมดพลังงาน = รอรีเจนสะสมแต้มจนเต็ม 18,000 แต้ม แล้วจะกลับมา 72,000 แต้มพร้อมใช้งาน
+      window.BatterySystem = {
+        MAX_CHARGE: 72000,     // 72,000 แต้มพลังงาน (เทียบเท่าขับต่อเนื่อง 20 นาที)
+        REGEN_TIME: 18000,     // 18,000 แต้มรีเจน (เทียบเท่ารีเจน 5 นาที)
+        batteries: [],         // รายการแบตเตอรี่ในตัว [{ id, charge, isRecharging, rechargeTime }]
+        _lastNoticeTime: 0,
+        _hudElement: null,
+
+        // นับจำนวนไอเทม GLOW_BATTERY ทั้งหมดในกระเป๋า (inventory) และ actionSlotsItems
+        getTotalBatteryCount() {
+          let count = 0;
+          if (typeof inventory !== "undefined" && Array.isArray(inventory)) {
+            for (let item of inventory) {
+              if (item && (item.name === "GLOW_BATTERY" || item.label === "GLOW_BATTERY")) {
+                count += (item.count || 1);
+              }
+            }
+          }
+          if (typeof actionSlotsItems !== "undefined" && Array.isArray(actionSlotsItems)) {
+            for (let item of actionSlotsItems) {
+              if (item && (item.name === "GLOW_BATTERY" || item.label === "GLOW_BATTERY")) {
+                count += (item.count || 1);
+              }
+            }
+          }
+          return count;
+        },
+
+        // ซิงค์รายการสถานะแบตเตอรี่ให้ตรงกับจำนวนไอเทมแบตเตอรี่จริงที่มีในตัว
+        syncWithInventory() {
+          const totalCount = this.getTotalBatteryCount();
+          if (this.batteries.length < totalCount) {
+            while (this.batteries.length < totalCount) {
+              this.batteries.push({
+                id: Math.random(),
+                charge: this.MAX_CHARGE,
+                isRecharging: false,
+                rechargeTime: 0
+              });
+            }
+          } else if (this.batteries.length > totalCount) {
+            this.batteries.length = totalCount;
+          }
+        },
+
+        // คืนค่าแบตเตอรี่ก้อนแรกที่พร้อมใช้งาน (พลังงาน > 0 และไม่ได้กำลังรีเจน)
+        getActiveBattery() {
+          this.syncWithInventory();
+          for (let b of this.batteries) {
+            if (!b.isRecharging && b.charge > 0) {
+              return b;
+            }
+          }
+          return null;
+        },
+
+        // ตรวจสอบว่ามีแบตเตอรี่ที่พร้อมใช้งานหรือไม่
+        hasActiveBattery() {
+          return this.getActiveBattery() !== null;
+        },
+
+        // ดึงข้อมูลสถานะโดยรวม
+        getStats() {
+          this.syncWithInventory();
+          let readyCount = 0;
+          let rechargingCount = 0;
+          let activeBattery = null;
+          let minRechargePointsRemaining = Infinity;
+
+          for (let b of this.batteries) {
+            if (!b.isRecharging && b.charge > 0) {
+              readyCount++;
+              if (!activeBattery) activeBattery = b;
+            } else if (b.isRecharging) {
+              rechargingCount++;
+              const rem = Math.max(0, this.REGEN_TIME - b.rechargeTime);
+              if (rem < minRechargePointsRemaining) minRechargePointsRemaining = rem;
+            }
+          }
+
+          // แปลงแต้มเป็นวินาทีเพื่อแสดงผลใน UI/Tooltip (60 แต้ม = 1 วินาที)
+          const minSecRemaining = minRechargePointsRemaining === Infinity ? 0 : (minRechargePointsRemaining / 60);
+
+          return {
+            total: this.batteries.length,
+            readyCount,
+            rechargingCount,
+            activeBattery,
+            minRechargeTimeRemaining: minSecRemaining
+          };
+        },
+
+        // เรียกใช้งานเมื่อเครื่องยนต์ไฟฟ้ากำลังทำงานและใช้พลังงาน (หักแต้มตาม tick/เฟรม)
+        consumePower(amount = 1) {
+          const activeBattery = this.getActiveBattery();
+          if (!activeBattery) return false;
+
+          let deduct = 1;
+          if (typeof amount === "number" && !isNaN(amount) && amount > 0) {
+            deduct = amount < 0.2 ? (amount * 60) : amount;
+          }
+
+          activeBattery.charge -= deduct;
+          if (activeBattery.charge <= 0) {
+            activeBattery.charge = 0;
+            activeBattery.isRecharging = true;
+            activeBattery.rechargeTime = 0;
+
+            const nextBattery = this.getActiveBattery();
+            if (nextBattery) {
+              if (typeof showNotice === "function") {
+                showNotice("🔋 แบตเตอรี่หมด 1 ก้อน (เริ่มรีเจน 5 นาที) ➔ สลับไปใช้ก้อนถัดไปอัตโนมัติ!");
+              }
+            } else {
+              if (typeof showNotice === "function") {
+                showNotice("⚠️ แบตเตอรี่ในกระเป๋าหมดพลังงานทั้งหมดแล้ว! (กำลังรอรีเจน 5 นาที)");
+              }
+            }
+            if (typeof renderInventory === "function" && document.getElementById("inventoryOverlay")?.classList.contains("open")) {
+              renderInventory();
+            }
+          }
+          return true;
+        },
+
+        // อัปเดตการรีเจนแต้มแบตเตอรี่ในแต่ละเฟรม
+        update(dt = 1) {
+          this.syncWithInventory();
+
+          let addPoints = 1;
+          if (typeof dt === "number" && !isNaN(dt) && dt > 0) {
+            addPoints = dt < 0.2 ? (dt * 60) : dt;
+          }
+
+          let hasRechargedAny = false;
+          for (let b of this.batteries) {
+            if (b.isRecharging) {
+              b.rechargeTime += addPoints;
+              if (b.rechargeTime >= this.REGEN_TIME) {
+                b.isRecharging = false;
+                b.rechargeTime = 0;
+                b.charge = this.MAX_CHARGE;
+                hasRechargedAny = true;
+              }
+            }
+          }
+
+          if (hasRechargedAny) {
+            if (typeof showNotice === "function") {
+              showNotice("⚡ แบตเตอรี่หินเรืองแสงรีเจนพลังงานเต็ม 100% แล้ว! (Battery Fully Recharged)");
+            }
+            if (typeof renderInventory === "function" && document.getElementById("inventoryOverlay")?.classList.contains("open")) {
+              renderInventory();
+            }
+          }
+
+          // Clean up old HUD if lingering in DOM
+          const oldHud = document.getElementById("engineBatteryHUD");
+          if (oldHud && oldHud.parentNode) {
+            oldHud.parentNode.removeChild(oldHud);
+          }
+        },
+
+        showEmptyNotice() {
+          const now = Date.now();
+          if (now - this._lastNoticeTime > 3500) {
+            this._lastNoticeTime = now;
+            const total = this.getTotalBatteryCount();
+            if (total === 0) {
+              if (typeof showNotice === "function") {
+                showNotice("⚠️ เครื่องยนต์ไฟฟ้าต้องการไอเทม [หินเรืองแสงอัดแท่ง(แบต)] ในกระเป๋าเพื่อทำงาน!");
+              }
+            } else {
+              const firstRecharging = this.batteries.find(b => b.isRecharging);
+              const remPts = firstRecharging ? Math.max(0, this.REGEN_TIME - firstRecharging.rechargeTime) : this.REGEN_TIME;
+              const remSec = Math.ceil(remPts / 60);
+              const mins = Math.floor(remSec / 60);
+              const secs = remSec % 60;
+              const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+              if (typeof showNotice === "function") {
+                showNotice(`🔋 แบตเตอรี่กำลังรีเจนพลังงาน... เหลืออีก ${timeStr} นาที (รอรีเจนครบ 5 นาที)`);
+              }
+            }
+          }
+        },
+
+        exportState() {
+          return this.batteries.map(b => ({
+            charge: b.charge,
+            isRecharging: b.isRecharging,
+            rechargeTime: b.rechargeTime
+          }));
+        },
+
+        importState(data) {
+          if (Array.isArray(data)) {
+            this.batteries = data.map(d => ({
+              id: Math.random(),
+              charge: typeof d.charge === "number" ? d.charge : this.MAX_CHARGE,
+              isRecharging: !!d.isRecharging,
+              rechargeTime: typeof d.rechargeTime === "number" ? d.rechargeTime : 0
+            }));
+          }
+        }
+      };
+
       const ALL_ITEMS = [
         { name: "ROCK", icon: "🪨" },
         { name: "BIG_ROCK", icon: "🪨" },
         { name: "IRON_ORE", icon: "🟥" },
         { name: "GOLD_ORE", icon: "🪙" },
+        { name: "GLOW_ORE", icon: "✨" },
+        { name: "GLOW_BATTERY", icon: "🔋" },
         { name: "BRANCH", icon: "🌿" },
         { name: "AXE", icon: "🪓" },
         { name: "PICKAXE", icon: "⛏️" },
@@ -104,7 +318,7 @@
         const n = [0, 1, 0];
         
         let isRegistryRendered = false;
-        const isExcluded = (name === "IRON_ORE" || name === "GOLD_ORE" || name === "FRIED_BUG");
+        const isExcluded = (name === "IRON_ORE" || name === "GOLD_ORE" || name === "GLOW_ORE" || name === "GLOW_BATTERY" || name === "FRIED_BUG");
         let registryKey = name.toLowerCase();
         if (registryKey === "meganeura") registryKey = "meganeura_item";
         if (registryKey === "isopod") registryKey = "isopod_item";
@@ -242,6 +456,13 @@
           } else if (name === "GOLD_ORE") {
             scaleFactor = 1.35;
             buildRockFormation(p, 0.55, [0.85, 0.68, 0.12], 222.22, rawVertices, rawColors, rawIndices);
+          } else if (name === "GLOW_ORE") {
+            scaleFactor = 1.35;
+            buildRockFormation(p, 0.55, [0.22, 0.95, 0.88], 333.33, rawVertices, rawColors, rawIndices);
+          } else if (name === "GLOW_BATTERY") {
+            scaleFactor = 1.35;
+            // Pure rectangular glowing rock rod (4-sided rectangular prism, no metallic caps or attachments)
+            buildTaperedSegment([0, -0.32, 0], [0, 0.32, 0], 0.13, 0.13, 4, [0.22, 0.95, 0.88], rawVertices, rawColors, rawIndices, true);
           } else if (name === "BRANCH") {
             scaleFactor = 1.4;
             buildTaperedSegment([-0.35, -0.1, 0], [0.35, 0.1, 0], 0.04, 0.02, 5, [0.45, 0.3, 0.15], rawVertices, rawColors, rawIndices);
@@ -901,6 +1122,49 @@
             slotEl.appendChild(countBadge);
           }
 
+          if (item.name === "GLOW_BATTERY" || item.label === "GLOW_BATTERY") {
+            const stats = window.BatterySystem ? window.BatterySystem.getStats() : null;
+            if (stats) {
+              const miniBar = document.createElement("div");
+              miniBar.style.position = "absolute";
+              miniBar.style.bottom = "3px";
+              miniBar.style.left = "4px";
+              miniBar.style.right = "4px";
+              miniBar.style.height = "3px";
+              miniBar.style.borderRadius = "2px";
+              miniBar.style.background = "rgba(0,0,0,0.6)";
+              miniBar.style.overflow = "hidden";
+              
+              const miniFill = document.createElement("div");
+              miniFill.style.height = "100%";
+              
+              if (stats.readyCount > 0 && stats.activeBattery) {
+                const pct = Math.round((stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100);
+                miniFill.style.width = pct + "%";
+                miniFill.style.background = "linear-gradient(90deg, #00e5ff, #00e676)";
+                const totalSecs = Math.floor(stats.activeBattery.charge / 60);
+                const m = Math.floor(totalSecs / 60);
+                const s = Math.floor(totalSecs % 60);
+                slotEl.title = `🔋 หินเรืองแสงอัดแท่ง(แบต)\n• พร้อมใช้งาน: ${stats.readyCount} ก้อน\n• พลังงานก้อนหลัก: ${pct}% (${m}:${s < 10 ? '0' : ''}${s} นาที)\n• 1 ก้อนใช้ได้ 20 นาที / รีเจนอัตโนมัติ 5 นาทีเมื่อหมด`;
+              } else if (stats.rechargingCount > 0) {
+                const firstRecharging = window.BatterySystem.batteries.find(b => b.isRecharging);
+                const pct = firstRecharging ? Math.round((firstRecharging.rechargeTime / window.BatterySystem.REGEN_TIME) * 100) : 0;
+                miniFill.style.width = pct + "%";
+                miniFill.style.background = "linear-gradient(90deg, #ff9100, #ffd600)";
+                const rem = stats.minRechargeTimeRemaining;
+                const m = Math.floor(rem / 60);
+                const s = Math.ceil(rem % 60);
+                slotEl.title = `⏳ หินเรืองแสงอัดแท่ง(แบต)\n• กำลังรีเจน: ${stats.rechargingCount} ก้อน\n• เหลือเวลารีเจน: ${m}:${s < 10 ? '0' : ''}${s} นาที`;
+              } else {
+                miniFill.style.width = "100%";
+                miniFill.style.background = "#00e5ff";
+                slotEl.title = `🔋 หินเรืองแสงอัดแท่ง(แบต)\n• พร้อมใช้งาน (20 นาที)\n• รีเจนอัตโนมัติ 5 นาทีเมื่อหมด`;
+              }
+              miniBar.appendChild(miniFill);
+              slotEl.appendChild(miniBar);
+            }
+          }
+
           slotEl.oncontextmenu = (e) => { e.preventDefault(); };
           slotEl.onmousedown = (e) => {
             if (e.button === 2) {
@@ -1180,7 +1444,7 @@
     
     for (let i = 0; i < natureObstacles.length; i++) {
        const obs = natureObstacles[i];
-       if (obs.type === "tree" || obs.type === "rock" || obs.type === "iron_ore" || obs.type === "gold_ore") {
+       if (obs.type === "tree" || obs.type === "rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore") {
           if (toolType === "AXE" && obs.type !== "tree") continue;
           if (toolType === "PICKAXE" && obs.type === "tree") continue;
           
@@ -1247,7 +1511,7 @@
        const requiredHits = 3;
        
        if (toolType === "AXE" && hitType === "tree" && typeof playChopSound === "function") playChopSound();
-       else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore") && typeof playPlaceSound === "function") playPlaceSound();
+       else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore") && typeof playPlaceSound === "function") playPlaceSound();
        else if (toolType === "HAND") { if (hitType === "tree" && typeof playChopSound === "function") playChopSound(); else if (hitType === "rock" && typeof playPlaceSound === "function") playPlaceSound(); if (obs.handHits >= 4) { obs.handHits = 0; const tNormal = obs.normal || [0, 1, 0]; let tTangent = [1, 0, 0]; if (Math.abs(tNormal[0]) > 0.9) tTangent = [0, 1, 0]; let tBitangent = [ tNormal[1] * tTangent[2] - tNormal[2] * tTangent[1], tNormal[2] * tTangent[0] - tNormal[0] * tTangent[2], tNormal[0] * tTangent[1] - tNormal[1] * tTangent[0] ]; const tBLen = Math.sqrt(tBitangent[0]*tBitangent[0] + tBitangent[1]*tBitangent[1] + tBitangent[2]*tBitangent[2]); tBitangent = [tBitangent[0]/tBLen, tBitangent[1]/tBLen, tBitangent[2]/tBLen]; tTangent = [ tBitangent[1] * tNormal[2] - tBitangent[2] * tNormal[1], tBitangent[2] * tNormal[0] - tBitangent[0] * tNormal[2], tBitangent[0] * tNormal[1] - tBitangent[1] * tNormal[0] ]; const dropType = hitType === "tree" ? "branch" : "rock"; const numDrops = 1 + Math.floor(Math.random() * 2); const dropColor = dropType === "rock" ? [0.5, 0.5, 0.5] : [0.5, 0.3, 0.15]; for (let i = 0; i < numDrops; i++) spawnDrop(obs.position, dropType, tNormal, tTangent, tBitangent, dropColor, 0.015 + Math.random() * 0.02, true); } }
        
        if (toolType !== "HAND" && obs.hits >= requiredHits) {
@@ -1274,7 +1538,7 @@
                for (let i = 0; i < numLogs; i++) spawnDrop(obs.position, "log", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.075 + Math.random() * 0.025);
                const numBranches = 1 + Math.floor(Math.random() * 2);
                for (let i = 0; i < numBranches; i++) spawnDrop(obs.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
-           } else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore")) {
+           } else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore")) {
                if (hitType === "iron_ore") {
                    const numBig = 3 + Math.floor(Math.random() * 2);
                    for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "iron_ore", tNormal, tTangent, tBitangent, [0.45, 0.22, 0.18], 0.045 + Math.random() * 0.02);
@@ -1284,6 +1548,11 @@
                    const numBig = 2 + Math.floor(Math.random() * 2);
                    for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "gold_ore", tNormal, tTangent, tBitangent, [0.85, 0.68, 0.12], 0.045 + Math.random() * 0.02);
                    const numSmall = 1 + Math.floor(Math.random() * 1);
+                   for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
+               } else if (hitType === "glow_ore") {
+                   const numBig = 2 + Math.floor(Math.random() * 2);
+                   for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "glow_ore", tNormal, tTangent, tBitangent, [0.22, 0.95, 0.88], 0.045 + Math.random() * 0.02);
+                   const numSmall = 1 + Math.floor(Math.random() * 2);
                    for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
                } else {
                    const numBig = 2 + Math.floor(Math.random() * 2);
@@ -2575,6 +2844,13 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "glow_battery",
+            output: { name: "GLOW_BATTERY", icon: "🔋", count: 1, label: "หินเรืองแสงอัดแท่ง(แบต) (GLOWING BATTERY ROD) x1" },
+            ingredients: [
+              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง (GLOWING ORE)" }
+            ]
+          },
+          {
             id: "stone_floor", output: { name: "STONE_FLOOR", icon: "🪨", count: 1, label: "พื้นหิน (STONE FLOOR) x1" }, ingredients: [ { name: "BIG_ROCK", icon: "🪨", count: 10, label: "หินใหญ่ (BIG ROCK)" } ]
           },
           {
@@ -2898,6 +3174,13 @@ function cancelFloorPlacement() {
             output: { name: "ELECTRIC_ENGINE", icon: "🔋", count: 1 },
             ingredients: [
               { name: "IRON_ORE", count: 10 }
+            ]
+          },
+          {
+            id: "glow_battery",
+            output: { name: "GLOW_BATTERY", icon: "🔋", count: 1 },
+            ingredients: [
+              { name: "GLOW_ORE", count: 1 }
             ]
           },
           {

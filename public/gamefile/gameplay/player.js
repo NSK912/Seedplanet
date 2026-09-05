@@ -2667,6 +2667,22 @@
                     ];
                     addWedge(arrowTipPos, headEnd, 0.025 * bowScale, 0.002 * bowScale, 0.006 * bowScale, flintColor);
             }
+          } else if (heldItem.name === "GLOW_BATTERY") {
+                const wHandleP1 = transformPt(axeHandleP1Rot);
+                const wHandleP2 = transformPt(axeHandleP2Rot);
+                const batteryColor = [0.22, 0.95, 0.88];
+                // Pure rectangular glowing rock rod (4-sided rectangular prism with end caps, matching inventory preview model)
+                const rodP1 = [
+                    wHandleP1[0] + (wHandleP2[0] - wHandleP1[0]) * 0.05,
+                    wHandleP1[1] + (wHandleP2[1] - wHandleP1[1]) * 0.05,
+                    wHandleP1[2] + (wHandleP2[2] - wHandleP1[2]) * 0.05
+                ];
+                const rodP2 = [
+                    wHandleP1[0] + (wHandleP2[0] - wHandleP1[0]) * 0.95,
+                    wHandleP1[1] + (wHandleP2[1] - wHandleP1[1]) * 0.95,
+                    wHandleP1[2] + (wHandleP2[2] - wHandleP1[2]) * 0.95
+                ];
+                buildTaperedSegment(rodP1, rodP2, 0.036 * itemScale, 0.036 * itemScale, 4, batteryColor, rawV, rawC, rawI, true);
           } else {
                 const wHandleP1 = transformPt(axeHandleP1Rot);
                 const wHandleP2 = transformPt(axeHandleP2Rot);
@@ -2725,7 +2741,9 @@
                 } else {
                     let itemColor = [0.55, 0.38, 0.22];
                     const name = (heldItem && heldItem.name) ? heldItem.name : "";
-                    if (name.includes("STONE") || name.includes("ROCK") || name.includes("ORE")) {
+                    if (name === "GLOW_ORE") {
+                        itemColor = [0.22, 0.95, 0.88];
+                    } else if (name.includes("STONE") || name.includes("ROCK") || name.includes("ORE")) {
                         itemColor = [0.5, 0.5, 0.5];
                     } else if (name.includes("GOLD")) {
                         itemColor = [0.9, 0.8, 0.2];
@@ -3282,6 +3300,8 @@
               else if (item.type === "big_rock") { icon = "🪨"; label = "BIG_ROCK"; }
               else if (item.type === "iron_ore") { icon = "🟥"; label = "IRON_ORE"; }
               else if (item.type === "gold_ore") { icon = "🪙"; label = "GOLD_ORE"; }
+              else if (item.type === "glow_ore") { icon = "✨"; label = "GLOW_ORE"; }
+              else if (item.type === "glow_battery") { icon = "🔋"; label = "GLOW_BATTERY"; }
               else if (item.type === "log") { icon = "🪵"; label = "LOG"; }
               else if (item.type === "axe") { icon = "🪓"; label = "AXE"; }
               else if (item.type === "pickaxe") { icon = "⛏️"; label = "PICKAXE"; }

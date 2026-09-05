@@ -96,7 +96,7 @@
   }
 
   /**
-   * Check if point is behind the planet core
+   * Check if point is behind the planet core or occluded by terrain
    */
   function isPlanetOccluded(camPos, targetPos, planetRadius) {
     if (!camPos || !targetPos) return false;
@@ -119,6 +119,63 @@
         return true;
       }
     }
+    return false;
+  }
+
+  /**
+   * Check if line-of-sight from camera to target is blocked by terrain
+   */
+  function isTerrainOccluded(camPos, targetPos) {
+    if (!camPos || !targetPos) return false;
+    const planetR = typeof RADIUS !== "undefined" ? RADIUS : 8.0;
+    const hScale = typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 0.6;
+    const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+
+    if (isPlanetOccluded(camPos, targetPos, planetR)) {
+      return true;
+    }
+
+    const dx = targetPos[0] - camPos[0];
+    const dy = targetPos[1] - camPos[1];
+    const dz = targetPos[2] - camPos[2];
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (dist < 0.25) return false;
+
+    // Raycast check along line of sight against spherical terrain
+    const steps = 6;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / (steps + 1);
+      const px = camPos[0] + dx * t;
+      const py = camPos[1] + dy * t;
+      const pz = camPos[2] + dz * t;
+      const pLen = Math.sqrt(px * px + py * py + pz * pz);
+      if (pLen < 0.01) continue;
+
+      const nx = px / pLen;
+      const ny = py / pLen;
+      const nz = pz / pLen;
+
+      let groundR;
+      if (typeof getTerrainSurfaceAndCeiling === "function") {
+        const cave = getTerrainSurfaceAndCeiling(nx, ny, nz, pLen);
+        groundR = cave.ground;
+      } else if (typeof getVisualHeightOnSphere === "function") {
+        const theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny)));
+        const phi = Math.atan2(nz, nx);
+        groundR = planetR + getVisualHeightOnSphere(theta, phi, seed) * hScale;
+      } else if (typeof getHeightOnSphere === "function") {
+        const theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny)));
+        const phi = Math.atan2(nz, nx);
+        groundR = planetR + getHeightOnSphere(theta, phi, seed) * hScale;
+      } else {
+        groundR = planetR;
+      }
+
+      if (pLen < groundR - 0.03) {
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -438,8 +495,8 @@
         return;
       }
 
-      // Check planet occlusion (don't show through planet)
-      if (sign.checkOcclusion && isPlanetOccluded(camPos, P)) {
+      // Check planet and terrain occlusion (don't show through planet or hills/mountains)
+      if (sign.checkOcclusion && isTerrainOccluded(camPos, P)) {
         el.style.display = 'none';
         return;
       }
@@ -483,8 +540,10 @@
       // Check Backface Culling (dot product of camera-to-sign vector with sign normal)
       const toCam = [camPos[0] - P[0], camPos[1] - P[1], camPos[2] - P[2]];
       const viewDotNorm = dotVec3(N, toCam);
+      const cosAngle = dist > 0.001 ? (viewDotNorm / dist) : viewDotNorm;
 
-      if (sign.backfaceCulling && !sign.doubleSided && viewDotNorm <= 0.0) {
+      // When backface culling is enabled, cull if looking from behind or edge-on (< 5 degrees)
+      if (sign.backfaceCulling && !sign.doubleSided && cosAngle <= 0.05) {
         el.style.display = 'none';
         return;
       }

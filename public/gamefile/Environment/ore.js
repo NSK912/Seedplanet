@@ -38,16 +38,30 @@
           depthFactor = 0.05 + oreRand() * 0.35; // 5% to 40% of surfRad (all the way to the core!)
         }
 
-        // Choose ore type based on depth: deeper = more gold!
+        // Choose ore type based on depth: deeper = more gold and glowing ores!
         let oreType;
+        const typeRoll = oreRand();
         if (depthCategory === 'deep') {
-          oreType = oreRand() > 0.4 ? "gold_ore" : "iron_ore"; // 60% gold in core!
+          if (typeRoll < 0.40) oreType = "gold_ore"; // 40% gold in core
+          else if (typeRoll < 0.75) oreType = "glow_ore"; // 35% glowing ore in core
+          else oreType = "iron_ore"; // 25% iron in core
         } else if (depthCategory === 'mid') {
-          oreType = oreRand() > 0.7 ? "gold_ore" : "iron_ore"; // 30% gold in mantle
+          if (typeRoll < 0.30) oreType = "gold_ore"; // 30% gold in mantle/caves
+          else if (typeRoll < 0.60) oreType = "glow_ore"; // 30% glowing ore in mantle/caves
+          else oreType = "iron_ore"; // 40% iron in mantle/caves
         } else {
-          oreType = oreRand() > 0.85 ? "gold_ore" : "iron_ore"; // 15% gold in shallow crust
+          if (typeRoll < 0.15) oreType = "gold_ore"; // 15% gold in shallow crust
+          else if (typeRoll < 0.35) oreType = "glow_ore"; // 20% glowing ore in shallow crust
+          else oreType = "iron_ore"; // 65% iron in shallow crust
         }
-        let oreColor = oreType === "iron_ore" ? [0.45, 0.22, 0.18] : [0.85, 0.68, 0.12];
+        let oreColor;
+        if (oreType === "iron_ore") {
+          oreColor = [0.45, 0.22, 0.18];
+        } else if (oreType === "gold_ore") {
+          oreColor = [0.85, 0.68, 0.12];
+        } else {
+          oreColor = [0.22, 0.95, 0.88]; // Luminous cyan-emerald glowing crystal
+        }
 
         // Position variables
         let ox = 0, oy = 0, oz = 0;
@@ -151,8 +165,8 @@
         const oreId = 990000 + k;
         if (destroyedRocks.includes(oreId)) continue;
 
-        // Generate rock-like mesh formation for the ore (core gold can be slightly larger!)
-        const oreRadius = (depthCategory === 'deep' && oreType === "gold_ore")
+        // Generate rock-like mesh formation for the ore (core gold and glowing ore can be slightly larger!)
+        const oreRadius = (depthCategory === 'deep' && (oreType === "gold_ore" || oreType === "glow_ore"))
           ? 0.05 + oreRand() * 0.06 
           : 0.035 + oreRand() * 0.045;
 

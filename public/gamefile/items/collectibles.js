@@ -384,7 +384,7 @@ function buildCollectibles(count, seed) {
               if (Math.abs(localN) > 2.5) continue;
 
               const isTree = (obs.type === "tree" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.TREE));
-              const isRock = (obs.type === "rock" || obs.type === "big_rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "copper_ore" || obs.type === "coal_ore" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.ROCK));
+              const isRock = (obs.type === "rock" || obs.type === "big_rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore" || obs.type === "copper_ore" || obs.type === "coal_ore" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.ROCK));
 
               if (isTree) {
                 const rad = obs.trunkBaseRadius ? Math.max(0.2, obs.trunkBaseRadius) : 0.25;
@@ -4149,7 +4149,7 @@ function buildCollectibles(count, seed) {
               }
           }
           
-          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "iron_ore" || c.type === "gold_ore");
+          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore");
           let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           if (c.type === "wood_boat" && !isInWater) {
              const cPos = c.position;
