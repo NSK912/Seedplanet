@@ -181,6 +181,18 @@ function startGameWithSlot(loadedData, devMode = false) {
       
       refreshCollectiblesVBO();
 
+      // 5. สุ่มสปอนตัวละครที่บ้านสุ่ม (House Spawn) สำหรับเซฟใหม่หรือเซฟที่ยังไม่มีพิกัด
+      if (!loadedData || typeof loadedData.charTheta !== "number") {
+        if (typeof window.getHouseSpawnLocation === "function") {
+          const houseSpawn = window.getHouseSpawnLocation();
+          if (houseSpawn && typeof houseSpawn.theta === "number") {
+            charTheta = houseSpawn.theta;
+            charPhi = houseSpawn.phi;
+            console.log("🏠 สปอนตัวละครที่บ้านสุ่ม (Spawned at procedural house):", houseSpawn);
+          }
+        }
+      }
+
       console.log(
         "🌍 สร้างดาวขนาด " +
           currentGridSize +
@@ -216,6 +228,7 @@ function startGameWithSlot(loadedData, devMode = false) {
           if (loadingOverlay) {
             loadingOverlay.classList.remove("loading-on-start");
             loadingOverlay.classList.remove("fade-out");
+            loadingOverlay.style.display = "none";
           }
 
           // แสดงส่วนติดต่อผู้ใช้ (UI) ทั้งหมดเมื่อเข้าสู่ดวงดาวแล้ว
@@ -223,6 +236,14 @@ function startGameWithSlot(loadedData, devMode = false) {
           gameUiElements.forEach((el) => {
             el.classList.add("visible");
           });
+
+          // Ensure mech stand UI is hidden on start until player is near a robot stand
+          const mechStandUI = document.getElementById("mechStandUI");
+          if (mechStandUI) {
+            mechStandUI.classList.remove("visible");
+          }
+          window._hadNearbyStand = false;
+          window._lastMechStandStateKey = null;
           
           const actionSlotsEl = document.getElementById("actionSlots");
           if (actionSlotsEl) {

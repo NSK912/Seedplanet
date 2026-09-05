@@ -1,5 +1,10 @@
 // === SEEDPLANET MODULE: JS/NPC.JS ===
 
+// Persistent reusable geometry arrays to eliminate GC garbage spikes completely
+const _allNpcVertices = [];
+const _allNpcColors = [];
+const _allNpcIndices = [];
+
 function calculatePlanetNpcCount(radius) {
   const r = typeof radius === 'number' ? radius : (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
   // Scales smoothly with sphere surface area:
@@ -18,6 +23,11 @@ window.calculatePlanetNpcCount = calculatePlanetNpcCount;
 function initAmphibians(count, seed) { 
   amphibians = []; 
   if (window.DISABLE_NPCS) return;
+
+  // Initialize the 5-planet living background ecosystem
+  if (window.ExtraPlanetsEcosystem && typeof window.ExtraPlanetsEcosystem.init === "function") {
+    window.ExtraPlanetsEcosystem.init(seed);
+  }
 
   const planetRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
   if (!count || count <= 0) {
@@ -85,6 +95,7 @@ function initAmphibians(count, seed) {
         const oHeight = getHeightOnSphere(offsetTheta, offsetPhi, seed);
         const oR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH) + 0.05 + Math.random() * 0.04;
         
+        const hSeed = Math.random();
         amphibians.push({
           type: 'human',
           theta: offsetTheta,
@@ -98,9 +109,16 @@ function initAmphibians(count, seed) {
           ragdollAngle: 0,
           ragdollAngularSpeed: 0,
           isSwimming: false,
-          seed: Math.random(),
+          seed: hSeed,
           hp: maxHp,
           maxHp: maxHp,
+          energy: 75 + Math.random() * 25,
+          hunger: 15 + Math.random() * 25,
+          lifeSchedule: Math.random() < 0.35 ? 'FORAGING' : (Math.random() < 0.7 ? 'WANDERING' : 'SOCIALIZING'),
+          scheduleTimer: 15 + Math.random() * 25,
+          npcName: (typeof getHumanNpcName === "function") ? getHumanNpcName(hSeed * 1000) : "Tribe Member",
+          npcRole: (typeof getHumanNpcRole === "function") ? getHumanNpcRole(hSeed * 1000) : { title: "ชาวเผ่าพสุธา", icon: "🏹" },
+          lodLevel: 0,
         });
       }
       return groupSize;
@@ -141,6 +159,7 @@ function initAmphibians(count, seed) {
         swimming = !coord.isLand;
       }
 
+      const aSeed = Math.random();
       amphibians.push({
         type: type,
         theta: coord.theta,
@@ -154,9 +173,14 @@ function initAmphibians(count, seed) {
         ragdollAngle: 0,
         ragdollAngularSpeed: 0,
         isSwimming: swimming,
-        seed: Math.random(),
+        seed: aSeed,
         hp: maxHp,
         maxHp: maxHp,
+        energy: 70 + Math.random() * 30,
+        hunger: 20 + Math.random() * 30,
+        lifeSchedule: Math.random() < 0.5 ? 'FORAGING' : 'WANDERING',
+        scheduleTimer: 15 + Math.random() * 25,
+        lodLevel: 0,
       });
       return 1;
     }
@@ -206,8 +230,114 @@ function initAmphibians(count, seed) {
   }
 }
 
+// === NPC Life-Cycle Simulation State Machine ===
+// Simulates daily schedule, energy recovery, hunger and social behavior
+function updateNpcLifeCycle(c, deltaTime, seed) {
+  if (c.energy === undefined) c.energy = 80;
+  if (c.hunger === undefined) c.hunger = 20;
+  if (c.lifeSchedule === undefined) c.lifeSchedule = (c.type === 'human') ? 'WANDERING' : (Math.random() < 0.5 ? 'FORAGING' : 'WANDERING');
+  if (c.scheduleTimer === undefined) c.scheduleTimer = 15 + Math.random() * 20;
+
+  c.scheduleTimer -= deltaTime;
+
+  // Check if human NPC is resting near a campfire
+  let isNearCampfire = false;
+  if (c.type === 'human' && typeof SpatialGrid !== "undefined" && SpatialGrid.queryRadius) {
+    const nearby = SpatialGrid.queryRadius(c.position || [0, 0, 0], 2.5);
+    if (nearby && nearby.some(it => it.type === 'campfire' || it.name === 'CAMPFIRE')) {
+      isNearCampfire = true;
+    }
+  }
+
+  if (isNearCampfire && c.lifeSchedule !== 'SLEEPING' && c.energy < 70) {
+    c.lifeSchedule = 'COOKING';
+  }
+
+  switch (c.lifeSchedule) {
+    case 'SLEEPING':
+      c.energy = Math.min(100, c.energy + deltaTime * 4.0);
+      c.hunger = Math.min(100, c.hunger + deltaTime * 0.25);
+      c.walkBlend = Math.max(0, (c.walkBlend || 0) - deltaTime * 3.0);
+      c.isIdle = true;
+      if (c.energy >= 95 && c.scheduleTimer <= 0) {
+        c.lifeSchedule = c.hunger > 60 ? 'FORAGING' : 'WANDERING';
+        c.scheduleTimer = 25 + Math.random() * 20;
+      }
+      break;
+
+    case 'RESTING':
+      c.energy = Math.min(100, c.energy + deltaTime * 3.0);
+      c.hunger = Math.min(100, c.hunger + deltaTime * 0.3);
+      c.walkBlend = Math.max(0, (c.walkBlend || 0) - deltaTime * 2.0);
+      c.isIdle = true;
+      if (c.energy >= 85 && c.scheduleTimer <= 0) {
+        c.lifeSchedule = c.hunger > 60 ? 'FORAGING' : 'WANDERING';
+        c.scheduleTimer = 20 + Math.random() * 25;
+      }
+      break;
+
+    case 'COOKING':
+      c.energy = Math.min(100, c.energy + deltaTime * 1.5);
+      c.hunger = Math.max(0, c.hunger - deltaTime * 2.5);
+      c.walkBlend = Math.max(0, (c.walkBlend || 0) - deltaTime * 2.0);
+      c.isIdle = true;
+      if (c.hunger <= 10 || c.scheduleTimer <= 0) {
+        c.lifeSchedule = 'WANDERING';
+        c.scheduleTimer = 30 + Math.random() * 20;
+      }
+      break;
+
+    case 'FORAGING':
+      c.energy = Math.max(0, c.energy - deltaTime * 0.5);
+      c.hunger = Math.max(0, c.hunger - deltaTime * 1.8);
+      if (c.hunger <= 10) {
+        c.lifeSchedule = 'WANDERING';
+        c.scheduleTimer = 30 + Math.random() * 20;
+      } else if (c.energy < 18) {
+        c.lifeSchedule = 'RESTING';
+        c.scheduleTimer = 20 + Math.random() * 15;
+      }
+      break;
+
+    case 'SOCIALIZING':
+      c.energy = Math.max(0, c.energy - deltaTime * 0.4);
+      c.hunger = Math.min(100, c.hunger + deltaTime * 0.35);
+      if (c.scheduleTimer <= 0) {
+        c.lifeSchedule = 'WANDERING';
+        c.scheduleTimer = 25 + Math.random() * 20;
+      }
+      break;
+
+    case 'WANDERING':
+    default:
+      c.energy = Math.max(0, c.energy - deltaTime * 0.7);
+      c.hunger = Math.min(100, c.hunger + deltaTime * 0.4);
+      if (c.energy < 18) {
+        c.lifeSchedule = 'RESTING';
+        c.scheduleTimer = 25 + Math.random() * 15;
+      } else if (c.hunger > 70) {
+        c.lifeSchedule = 'FORAGING';
+        c.scheduleTimer = 25 + Math.random() * 15;
+      } else if (c.scheduleTimer <= 0) {
+        if (c.type === 'human' && Math.random() < 0.3) {
+          c.lifeSchedule = 'SOCIALIZING';
+          c.scheduleTimer = 15 + Math.random() * 15;
+        } else {
+          c.lifeSchedule = Math.random() < 0.4 ? 'FORAGING' : 'WANDERING';
+          c.scheduleTimer = 20 + Math.random() * 20;
+        }
+      }
+      break;
+  }
+}
+
 function updateAmphibians(deltaTime, seed) {
   if (!amphibians || amphibians.length === 0) return;
+
+  // Background life simulation tick for the 5 extra planets
+  if (window.ExtraPlanetsEcosystem && typeof window.ExtraPlanetsEcosystem.tick === "function") {
+    window.ExtraPlanetsEcosystem.tick(deltaTime);
+  }
 
   if (playerDamageCooldown > 0) {
     playerDamageCooldown -= deltaTime;
@@ -236,9 +366,10 @@ function updateAmphibians(deltaTime, seed) {
   const refPos = (typeof eyePos !== "undefined" && eyePos && eyePos.length >= 3) ? eyePos : player_pos;
   const maxNpcDistSq = (curObjectDist + 0.6) * (curObjectDist + 0.6);
 
-  let allVertices = [];
-  let allColors = [];
-  let allIndices = [];
+  // Clear reusable persistent arrays without creating new objects
+  _allNpcVertices.length = 0;
+  _allNpcColors.length = 0;
+  _allNpcIndices.length = 0;
 
   for (let c of amphibians) {
     // Remove the forced sync with the global ragdollEnabled
@@ -265,17 +396,36 @@ function updateAmphibians(deltaTime, seed) {
 
     let shouldRender = true;
     let shouldAnimate = true;
+    let lodLevel = 0;
+
+    // AI Life-Cycle LOD Tiers:
+    // LOD 0 (< 15m): Full skeletal animation, breathing sway, full audio attenuation, full 3D mesh
+    // LOD 1 (15m - 35m): Normal skeletal animation, full 3D mesh, sound effects muted
+    // LOD 2 (> 35m or outside render distance or frustum culled): 0 3D vertices, 0 mesh calculations,
+    //                        simulation runs in lightweight numeric mode (energy, hunger, schedule, drift)
+    if (distNpcSq < 225.0) { // 15m * 15m
+      lodLevel = 0;
+    } else if (distNpcSq < 1225.0 && (!isRenderDistOn || distNpcSq <= maxNpcDistSq)) { // 35m * 35m
+      lodLevel = 1;
+    } else {
+      lodLevel = 2;
+      shouldRender = false;
+      shouldAnimate = false;
+    }
 
     if (isRenderDistOn && distNpcSq > maxNpcDistSq) {
       shouldRender = false;
       shouldAnimate = false;
+      lodLevel = 2;
     }
 
     if (shouldRender && typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && typeof frustumPlanes !== 'undefined' && frustumPlanes && typeof isSphereInFrustum === 'function') {
       if (!isSphereInFrustum(frustumPlanes, effPos, 2.0)) {
         shouldRender = false;
+        lodLevel = 2;
       }
     }
+    c.lodLevel = lodLevel;
 
     if (c.ragdollEnabled) {
       if (c.ragdollPos) {
@@ -727,6 +877,22 @@ function updateAmphibians(deltaTime, seed) {
         damagePlayer(1);
       }
 
+      // Update living NPC life-cycle state machine (Energy, Hunger, Daily Activities)
+      updateNpcLifeCycle(c, deltaTime, seed);
+
+      if (c.lodLevel === 2) {
+        // Fast numeric off-screen drift - updates position without heavy 3D math
+        if (!c.isIdle && c.lifeSchedule !== 'RESTING' && c.lifeSchedule !== 'SLEEPING') {
+          const moveSpeed = (c.isSwimming ? 0.20 : 0.04) * deltaTime;
+          c.heading += (Math.random() - 0.5) * 0.4 * deltaTime;
+          const dTheta = Math.cos(c.heading) * (moveSpeed / (c.r || RADIUS));
+          const dPhi = Math.sin(c.heading) * (moveSpeed / ((c.r || RADIUS) * Math.max(0.1, Math.sin(c.theta))));
+          c.theta = Math.max(0.05, Math.min(Math.PI - 0.05, c.theta + dTheta));
+          c.phi = (c.phi + dPhi + Math.PI * 2) % (Math.PI * 2);
+        }
+        continue; // Skip all heavy 3D mesh transformations, trigonometry, and audio raycasts!
+      }
+
       c.ragdollInitialized = false;
       const npcRegConfig = window.NpcRegistry && window.NpcRegistry[c.type];
       const animSpeed = npcRegConfig && npcRegConfig.animSpeed !== undefined ? npcRegConfig.animSpeed : 4.0;
@@ -862,7 +1028,7 @@ function updateAmphibians(deltaTime, seed) {
       );
       const stepCurr = Math.floor((c.animPhase - phaseOffset) / Math.PI);
 
-      if (stepPrev !== stepCurr) {
+      if (c.lodLevel === 0 && stepPrev !== stepCurr) {
         // A step was taken. Calculate distance to player to determine volume
         const distAngle = Math.acos(
           Math.max(
@@ -1026,9 +1192,9 @@ function updateAmphibians(deltaTime, seed) {
       if (npcReg && npcReg.render) {
         npcReg.render(
           c,
-          allVertices,
-          allColors,
-          allIndices,
+          _allNpcVertices,
+          _allNpcColors,
+          _allNpcIndices,
           scale,
           N,
           R,
@@ -1042,69 +1208,50 @@ function updateAmphibians(deltaTime, seed) {
     }
   }
 
-  if (allIndices.length > 0) {
-    const flatGeom = makeFlatShadedGeometry(
-      allVertices,
-      allColors,
-      allIndices,
-      true
-    );
-    amphibianIndicesLength = flatGeom.indices.length;
-
-    if (!amphibianVertexBuffer) amphibianVertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, amphibianVertexBuffer);
-    const vCount = flatGeom.vertices.length;
-    const vertTyped = getReusableFloat32Array(1, vCount).subarray(0, vCount);
-    vertTyped.set(flatGeom.vertices);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      vertTyped,
-      gl.DYNAMIC_DRAW,
-    );
-
-    if (!amphibianColorBuffer) amphibianColorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, amphibianColorBuffer);
-    const cCount = flatGeom.colors.length;
-    const colTyped = getReusableFloat32Array(2, cCount).subarray(0, cCount);
-    colTyped.set(flatGeom.colors);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      colTyped,
-      gl.DYNAMIC_DRAW,
-    );
-
-    if (!amphibianNormalBuffer) amphibianNormalBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, amphibianNormalBuffer);
-    const nCount = flatGeom.normals.length;
-    const normTyped = getReusableFloat32Array(3, nCount).subarray(0, nCount);
-    normTyped.set(flatGeom.normals);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      normTyped,
-      gl.DYNAMIC_DRAW,
-    );
-
-    if (!amphibianIndexBuffer) amphibianIndexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, amphibianIndexBuffer);
-    const iCount = flatGeom.indices.length;
-    if (supportUint32 && iCount > 65535) {
-      const indTyped = getReusableUint32Array(iCount).subarray(0, iCount);
-      indTyped.set(flatGeom.indices);
-      gl.bufferData(
-        gl.ELEMENT_ARRAY_BUFFER,
-        indTyped,
-        gl.DYNAMIC_DRAW,
-      );
-    } else {
-      const indTyped = getReusableUint16Array(iCount).subarray(0, iCount);
-      indTyped.set(flatGeom.indices);
-      gl.bufferData(
-        gl.ELEMENT_ARRAY_BUFFER,
-        indTyped,
-        gl.DYNAMIC_DRAW,
-      );
-    }
+  if (_allNpcIndices.length === 0) {
+    amphibianIndicesLength = 0;
+    return;
   }
+
+  const flatGeom = makeFlatShadedGeometry(
+    _allNpcVertices,
+    _allNpcColors,
+    _allNpcIndices,
+    true
+  );
+  amphibianIndicesLength = flatGeom.indices.length;
+
+  if (!amphibianVertexBuffer) amphibianVertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, amphibianVertexBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    flatGeom.vertices,
+    gl.DYNAMIC_DRAW,
+  );
+
+  if (!amphibianColorBuffer) amphibianColorBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, amphibianColorBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    flatGeom.colors,
+    gl.DYNAMIC_DRAW,
+  );
+
+  if (!amphibianNormalBuffer) amphibianNormalBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, amphibianNormalBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    flatGeom.normals,
+    gl.DYNAMIC_DRAW,
+  );
+
+  if (!amphibianIndexBuffer) amphibianIndexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, amphibianIndexBuffer);
+  gl.bufferData(
+    gl.ELEMENT_ARRAY_BUFFER,
+    flatGeom.indices,
+    gl.DYNAMIC_DRAW,
+  );
 }
 
 function clearActiveNPCs() {

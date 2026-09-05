@@ -399,13 +399,17 @@ const CollisionCore = {
           const dy = dx_vec[0] * other.normal[0] + dx_vec[1] * other.normal[1] + dx_vec[2] * other.normal[2];
           
           const isStone = other.type === "stone_floor";
-          const hw = isStone ? other.size * 6.0 : 0.15;
+          const floorW = typeof other.width === "number" ? other.width : (isStone ? other.size * 12.0 : 0.3);
+          const floorD = typeof other.depth === "number" ? other.depth : (isStone ? other.size * 12.0 : 0.3);
+          const hw = floorW / 2;
+          const hd = floorD / 2;
           const h = isStone ? other.size * 0.15 : (other.type === "wood_floor" ? woodFloorHeight + 0.25 * 0.12 : 0.25 * 0.04);
           
-          const cushionR = hw + 0.1;
+          const cushionW = hw + 0.1;
+          const cushionD = hd + 0.1;
           const cushionUp = 0.1;
           
-          if (Math.abs(dx) < cushionR && Math.abs(dz) < cushionR && dy >= -h/2 - cushionUp && dy <= h/2 + cushionUp) {
+          if (Math.abs(dx) < cushionW && Math.abs(dz) < cushionD && dy >= -h/2 - cushionUp && dy <= h/2 + cushionUp) {
             return true;
           }
         } else if (other.type === "wood_roof") {
@@ -765,13 +769,17 @@ const CollisionCore = {
             const dy = dx_vec[0] * other.normal[0] + dx_vec[1] * other.normal[1] + dx_vec[2] * other.normal[2];
             
             const isStone = other.type === "stone_floor";
-            const hw = isStone ? other.size * 6.0 : 0.15;
+            const floorW = typeof other.width === "number" ? other.width : (isStone ? other.size * 12.0 : 0.3);
+            const floorD = typeof other.depth === "number" ? other.depth : (isStone ? other.size * 12.0 : 0.3);
+            const hw = floorW / 2;
+            const hd = floorD / 2;
             const h = isStone ? other.size * 0.15 : (other.type === "wood_floor" ? woodFloorHeight + 0.25 * 0.12 : 0.25 * 0.04);
             
-            const cushionR = hw + 0.1;
+            const cushionW = hw + 0.1;
+            const cushionD = hd + 0.1;
             const cushionUp = 0.1;
             
-            if (Math.abs(dx) < cushionR && Math.abs(dz) < cushionR && dy >= -h/2 - cushionUp && dy <= h/2 + cushionUp) {
+            if (Math.abs(dx) < cushionW && Math.abs(dz) < cushionD && dy >= -h/2 - cushionUp && dy <= h/2 + cushionUp) {
               const pushDir = dy >= 0 ? 1 : -1;
               const penetration = (h/2 + cushionUp) - Math.abs(dy);
               currentP[0] += other.normal[0] * pushDir * (penetration + 0.015);
@@ -1045,7 +1053,9 @@ const CollisionCore = {
 
         // Check solid stone floor legs/foundation collision from the side at ground level
         const testPos3D = [P[0] * testFeetRadius, P[1] * testFeetRadius, P[2] * testFeetRadius];
-        const itemsList = typeof collectibles !== "undefined" ? collectibles : [];
+        const itemsList = (typeof SpatialGrid !== "undefined")
+          ? SpatialGrid.queryRadius(testPos3D[0], testPos3D[1], testPos3D[2], 9.0, other => !other.isPreview && other.type === "stone_floor")
+          : (typeof collectibles !== "undefined" ? collectibles : []);
         const charRad = 0.18 * charScale;
 
         for (let other of itemsList) {
@@ -1062,8 +1072,10 @@ const CollisionCore = {
             const dy = dx_vec[0] * other.normal[0] + dx_vec[1] * other.normal[1] + dx_vec[2] * other.normal[2];
 
             const sizeVal = other.size || 0.25;
-            const hw = (sizeVal * 12.0) / 2 + charRad - 0.02; // inside margin for smooth sliding
-            const hd = (sizeVal * 12.0) / 2 + charRad - 0.02;
+            const floorW = typeof other.width === "number" ? other.width : sizeVal * 12.0;
+            const floorD = typeof other.depth === "number" ? other.depth : sizeVal * 12.0;
+            const hw = floorW / 2 + charRad - 0.02; // inside margin for smooth sliding
+            const hd = floorD / 2 + charRad - 0.02;
 
             if (Math.abs(dx) < hw && Math.abs(dz) < hd) {
               // Only block from side if top slab is higher than maxStepUp above player's feet (e.g. high pillar/wall)
@@ -1084,7 +1096,11 @@ const CollisionCore = {
     }
 
     // Smooth sliding push out for stone floor foundation box at ground level
-    const itemsList = typeof collectibles !== "undefined" ? collectibles : [];
+    let feetR_init = pushR - 0.46 * charScale;
+    let p3D_init = [pushP[0] * feetR_init, pushP[1] * feetR_init, pushP[2] * feetR_init];
+    const itemsList = (typeof SpatialGrid !== "undefined")
+      ? SpatialGrid.queryRadius(p3D_init[0], p3D_init[1], p3D_init[2], 9.0, other => !other.isPreview && other.type === "stone_floor")
+      : (typeof collectibles !== "undefined" ? collectibles : []);
     const charRad = 0.18 * charScale;
 
     for (let pass = 0; pass < 2; pass++) {
@@ -1105,8 +1121,10 @@ const CollisionCore = {
           const dy = dx_vec[0] * other.normal[0] + dx_vec[1] * other.normal[1] + dx_vec[2] * other.normal[2];
 
           const sizeVal = other.size || 0.25;
-          const hw = (sizeVal * 12.0) / 2 + charRad; // 1.5m + charRad
-          const hd = (sizeVal * 12.0) / 2 + charRad; // 1.5m + charRad
+          const floorW = typeof other.width === "number" ? other.width : sizeVal * 12.0;
+          const floorD = typeof other.depth === "number" ? other.depth : sizeVal * 12.0;
+          const hw = floorW / 2 + charRad;
+          const hd = floorD / 2 + charRad;
 
           if (dy < -0.05 && dy > -2.0) {
             if (Math.abs(dx) < hw && Math.abs(dz) < hd) {

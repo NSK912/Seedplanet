@@ -3178,6 +3178,14 @@ window.cloud3DProgram = cloud3DProgram;
       // ============================================
       // Render - พร้อม FPS Counter และ Lock
       // ============================================
+      let _cachedBowCrosshair = null;
+      let _cachedDistanceInfo = null;
+      let _cachedInvOverlay = null;
+      let _cachedChestOverlay = null;
+      let _cachedInteractPrompt = null;
+      let _cachedNpcPrompt = null;
+      let _cachedTargetCircle = null;
+
       function render(timestamp, forceDraw = false) {
         if (lastFrameTime === 0) {
           lastFrameTime = timestamp;
@@ -3248,9 +3256,9 @@ window.cloud3DProgram = cloud3DProgram;
         // --- Throttled Animation Updates ---
         const now = timestamp;
 
-        const bowCrosshair = document.getElementById("bowCrosshair");
-        if (bowCrosshair) {
-          if (bowCrosshair.style.display !== "none") bowCrosshair.style.display = "none";
+        if (!_cachedBowCrosshair) _cachedBowCrosshair = document.getElementById("bowCrosshair");
+        if (_cachedBowCrosshair && _cachedBowCrosshair.style.display !== "none") {
+          _cachedBowCrosshair.style.display = "none";
         }
 
         // Synchronize active action slot with floor placement mode
@@ -3326,7 +3334,8 @@ window.cloud3DProgram = cloud3DProgram;
 
         // Update Distance Display
         if (distanceDisplayEnabled) {
-            const distanceInfo = document.getElementById("distanceInfo");
+            if (!_cachedDistanceInfo) _cachedDistanceInfo = document.getElementById("distanceInfo");
+            const distanceInfo = _cachedDistanceInfo;
             if (distanceInfo) {
                 const sinTheta = Math.sin(charTheta);
                 const cosTheta = Math.cos(charTheta);
@@ -3391,14 +3400,25 @@ window.cloud3DProgram = cloud3DProgram;
           lastCloudAnimTime = now - ((now - lastCloudAnimTime) % cloudInterval);
         }
 
-        // Door swinging physics simulation
+        // Door swinging physics simulation (Accelerated with SpatialGrid)
         let doorActiveSwinging = false;
         const pRadius = playerCenterRadius || RADIUS;
         const pX = Math.sin(charTheta) * Math.cos(charPhi) * pRadius;
         const pY = Math.cos(charTheta) * pRadius;
         const pZ = Math.sin(charTheta) * Math.sin(charPhi) * pRadius;
 
-        for (let other of collectibles) {
+        let doorsToCheck = [];
+        if (typeof SpatialGrid !== "undefined") {
+          doorsToCheck = SpatialGrid.queryRadius(pX, pY, pZ, 2.5, item => item.type === "wood_door" && !item.isPreview);
+          if (!window._activeSwingingDoors) window._activeSwingingDoors = new Set();
+          for (const d of window._activeSwingingDoors) {
+            if (!doorsToCheck.includes(d)) doorsToCheck.push(d);
+          }
+        } else {
+          doorsToCheck = collectibles;
+        }
+
+        for (let other of doorsToCheck) {
           if (other.active && other.type === "wood_door" && !other.isPreview) {
             if (other.doorAngle === undefined) other.doorAngle = 0.0;
             if (other.doorVel === undefined) other.doorVel = 0.0;
@@ -3415,6 +3435,7 @@ window.cloud3DProgram = cloud3DProgram;
             if (!isSwinging && !playerIsNear) {
               other.doorAngle = 0.0;
               other.doorVel = 0.0;
+              if (window._activeSwingingDoors) window._activeSwingingDoors.delete(other);
               continue;
             }
 
@@ -3425,6 +3446,7 @@ window.cloud3DProgram = cloud3DProgram;
             other.doorVel *= damping;
 
             if (Math.abs(other.doorVel) > 0.005 || Math.abs(other.doorAngle) > 0.005) {
+              if (window._activeSwingingDoors) window._activeSwingingDoors.add(other);
               other.doorAngle += other.doorVel * dt;
 
               // Only constrain door swing angle by player position if player is near
@@ -3501,18 +3523,31 @@ window.cloud3DProgram = cloud3DProgram;
             } else {
               other.doorAngle = 0.0;
               other.doorVel = 0.0;
+              if (window._activeSwingingDoors) window._activeSwingingDoors.delete(other);
             }
           }
         }
 
-        // Window swinging physics and "E" holding interaction
+        // Window swinging physics and "E" holding interaction (Accelerated with SpatialGrid)
         let windowActiveSwinging = false;
         let activeInteractWindow = null;
         let bestT_window = Infinity;
 
         const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
 
-        for (let other of collectibles) {
+        let windowsToCheck = [];
+        if (typeof SpatialGrid !== "undefined") {
+          const maxWinReach = Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)) + 1.5;
+          windowsToCheck = SpatialGrid.queryRadius(pX, pY, pZ, maxWinReach, item => item.type === "wood_window" && !item.isPreview);
+          if (!window._activeSwingingWindows) window._activeSwingingWindows = new Set();
+          for (const w of window._activeSwingingWindows) {
+            if (!windowsToCheck.includes(w)) windowsToCheck.push(w);
+          }
+        } else {
+          windowsToCheck = collectibles;
+        }
+
+        for (let other of windowsToCheck) {
           if (other.active && other.type === "wood_window" && !other.isPreview) {
             const reachInfo = isTargetWithinReach(other.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
             if (reachInfo.valid) {
@@ -3524,7 +3559,7 @@ window.cloud3DProgram = cloud3DProgram;
           }
         }
 
-        for (let other of collectibles) {
+        for (let other of windowsToCheck) {
           if (other.active && other.type === "wood_window" && !other.isPreview) {
             if (other.windowAngle === undefined) other.windowAngle = 0.0;
             if (other.windowTargetAngle === undefined) other.windowTargetAngle = 0.0;
@@ -3539,13 +3574,32 @@ window.cloud3DProgram = cloud3DProgram;
               if (other.windowAngle < other.windowTargetAngle) {
                 other.windowAngle = Math.min(other.windowTargetAngle, other.windowAngle + speed * dt);
                 windowActiveSwinging = true;
+                if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
               } else if (other.windowAngle > other.windowTargetAngle) {
                 other.windowAngle = Math.max(other.windowTargetAngle, other.windowAngle - speed * dt);
                 windowActiveSwinging = true;
-            }
-          } else {
+                if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
+              } else {
+                if (window._activeSwingingWindows) window._activeSwingingWindows.delete(other);
+              }
+            } else {
               if (other === activeInteractWindow) {
                 other.isBeingHeld = false;
+              }
+              // If still animating to target angle
+              if (Math.abs(other.windowAngle - other.windowTargetAngle) > 0.005) {
+                const speed = 2.0;
+                if (other.windowAngle < other.windowTargetAngle) {
+                  other.windowAngle = Math.min(other.windowTargetAngle, other.windowAngle + speed * dt);
+                  windowActiveSwinging = true;
+                  if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
+                } else {
+                  other.windowAngle = Math.max(other.windowTargetAngle, other.windowAngle - speed * dt);
+                  windowActiveSwinging = true;
+                  if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
+                }
+              } else {
+                if (window._activeSwingingWindows) window._activeSwingingWindows.delete(other);
               }
             }
           }
@@ -3570,7 +3624,10 @@ window.cloud3DProgram = cloud3DProgram;
             const pZ = Math.sin(charTheta) * Math.sin(charPhi) * (playerCenterRadius || RADIUS);
 
             let hasNearDynamicItem = false;
-            if (typeof collectibles !== "undefined" && collectibles) {
+            if (typeof SpatialGrid !== "undefined") {
+              const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window"));
+              hasNearDynamicItem = nearDyn.length > 0;
+            } else if (typeof collectibles !== "undefined" && collectibles) {
               for (let i = 0; i < collectibles.length; i++) {
                 const c = collectibles[i];
                 if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c.position) {
@@ -3623,8 +3680,10 @@ window.cloud3DProgram = cloud3DProgram;
         let moveForwardInput = 0;
         let moveSidewaysInput = 0;
 
-        const isInvOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
-        const isCstOpen = document.getElementById("chestOverlay")?.classList.contains("open");
+        if (!_cachedInvOverlay) _cachedInvOverlay = document.getElementById("inventoryOverlay");
+        if (!_cachedChestOverlay) _cachedChestOverlay = document.getElementById("chestOverlay");
+        const isInvOpen = _cachedInvOverlay?.classList.contains("open");
+        const isCstOpen = _cachedChestOverlay?.classList.contains("open");
         const isFreeCamActive = (cameraMode === "freecam" || (typeof window.cameraMode !== "undefined" && window.cameraMode === "freecam"));
         const isUIOpen = isInvOpen || isCstOpen || isFreeCamActive;
 
@@ -4158,7 +4217,19 @@ window.cloud3DProgram = cloud3DProgram;
               // Check proximity to Robot Stand for manual re-docking via holding [E]
               let closestStand = null;
               let minStandDistSq = 0.81; // within 0.9 meters (close proximity)
-              if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+              if (typeof SpatialGrid !== "undefined") {
+                const nearStands = SpatialGrid.queryRadius(activeRidingMech.position[0], activeRidingMech.position[1], activeRidingMech.position[2], 0.95, item => item.active && !item.isPreview && item.type === "robot_stand");
+                for (let item of nearStands) {
+                  const dx = item.position[0] - activeRidingMech.position[0];
+                  const dy = item.position[1] - activeRidingMech.position[1];
+                  const dz = item.position[2] - activeRidingMech.position[2];
+                  const distSq = dx*dx + dy*dy + dz*dz;
+                  if (distSq < minStandDistSq) {
+                    minStandDistSq = distSq;
+                    closestStand = item;
+                  }
+                }
+              } else if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
                 for (let item of collectibles) {
                   if (item.active && !item.isPreview && item.type === "robot_stand") {
                     const dx = item.position[0] - activeRidingMech.position[0];
@@ -4902,9 +4973,12 @@ window.cloud3DProgram = cloud3DProgram;
                 // Ensure robot_stand is never in attachedParts
                 activeRidingMech.attachedParts = activeRidingMech.attachedParts.filter(entry => entry.item && entry.item.type !== "robot_stand");
 
-                if (typeof collectibles !== "undefined" && collectibles) {
-                    for (let p of collectibles) {
-                        if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech) {
+                const candidateParts = (typeof SpatialGrid !== "undefined")
+                  ? SpatialGrid.queryRadius(activeRidingMech.position[0], activeRidingMech.position[1], activeRidingMech.position[2], 1.75, p => p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech)
+                  : (typeof collectibles !== "undefined" && collectibles ? collectibles : []);
+
+                for (let p of candidateParts) {
+                    if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech) {
                             if (!activeRidingMech.attachedParts.some(entry => entry.item === p)) {
                                 const dx = p.position[0] - activeRidingMech.position[0];
                                 const dy = p.position[1] - activeRidingMech.position[1];
@@ -4929,7 +5003,6 @@ window.cloud3DProgram = cloud3DProgram;
                             }
                         }
                     }
-                }
 
                 for (let entry of activeRidingMech.attachedParts) {
                     let p = entry.item;
@@ -5219,7 +5292,8 @@ window.cloud3DProgram = cloud3DProgram;
         // Old WebGPU hook removed
 
         // Check interaction distance for UI prompt
-        const prompt = document.getElementById("interactPrompt");
+        if (!_cachedInteractPrompt) _cachedInteractPrompt = document.getElementById("interactPrompt");
+        const prompt = _cachedInteractPrompt;
         if (prompt) {
           const px = charTheta;
           const py = charPhi;
@@ -5235,7 +5309,12 @@ window.cloud3DProgram = cloud3DProgram;
             let closestDemolishItem = null;
             let minDemolishDist = actionReachDistance;
             let currentBestDist = Infinity;
-            for (let item of collectibles) {
+            const maxDemolishReach = Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)) + 1.5;
+            const candidates = (typeof SpatialGrid !== "undefined")
+              ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], maxDemolishReach, item => item.active && !item.isPreview && item.position && demolishableTypes.includes(item.type))
+              : collectibles;
+
+            for (let item of candidates) {
               if (!item.active || item.isPreview || !item.position) continue;
               if (demolishableTypes.includes(item.type)) {
                 const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
@@ -5374,6 +5453,9 @@ if (prompt._lastHTML !== _newHtml_2) {
                   boatToDismount.isDynamic = true;
                   boatToDismount.vel = [0, 0, 0];
                   activeRidingBoat = null;
+                  if (typeof World3DUI !== "undefined" && World3DUI.hasSign("boat_world_sign")) {
+                    World3DUI.removeSign("boat_world_sign");
+                  }
                   if (typeof stopWheeledBoatSound === "function") stopWheeledBoatSound();
             }
           } else {
@@ -5391,27 +5473,25 @@ if (prompt._lastHTML !== _newHtml_2) {
                 extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
               }
               
-              const _newHtml_3 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
-                <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
-                <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #dfb76c;">
-                  กด [E] ค้าง เพื่อ ${actionText}
-                  ${extraStatus}
+              const _newHtml_3 = `<div style="position: relative; width: 36px; height: 36px; padding: 1px; background: rgba(223, 183, 108, 0.55); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none; box-sizing: border-box;">
+                <div style="position: relative; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 5.5px) 0, 100% 5.5px, 100% 100%, 5.5px 100%, 0 calc(100% - 5.5px)); overflow: hidden; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                  <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
+                  <div style="position: relative; z-index: 1; text-align: center; font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #dfb76c; font-weight: 900; line-height: 1; letter-spacing: 0.5px; user-select: none;">
+                    E
+                  </div>
                 </div>
               </div>`;
-if (prompt._lastHTML !== _newHtml_3) {
-    prompt.innerHTML = _newHtml_3;
-    prompt._lastHTML = _newHtml_3;
-}
-              if (prompt.style.display !== "block") prompt.style.display = "block";
+
+              if (prompt && prompt.style.display !== "none") prompt.style.display = "none";
               
               if (activeRidingBoat) {
                 let targetWorldPos = activeRidingBoat.position;
+                let bf = activeRidingBoat.F || [0, 0, 1];
+                let bn = activeRidingBoat.normal || [0, 1, 0];
                 if (activeRidingBoat.position && activeRidingBoat.F && activeRidingBoat.normal) {
-                    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 1.0) * playerScale;
-                    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 1.5) * playerScale;
+                    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 2.47) * playerScale;
+                    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 0.43) * playerScale;
                     
-                    let bf = activeRidingBoat.F;
-                    let bn = activeRidingBoat.normal;
                     if (activeRidingBoat.angle !== undefined && activeRidingBoat.angle !== 0 && activeRidingBoat.R) {
                         const cosH = Math.cos(activeRidingBoat.angle);
                         const sinH = Math.sin(activeRidingBoat.angle);
@@ -5429,24 +5509,45 @@ if (prompt._lastHTML !== _newHtml_3) {
                     ];
                 }
 
-                const screenPos = projectWorldToScreen(
-                  targetWorldPos,
-                  viewMatrix,
-                  projMatrix,
-                  window.innerWidth,
-                  window.innerHeight,
-                );
-
-                if (screenPos) {
-                    const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
-                  if (prompt._lastT !== newT) {
-                      prompt.style.transform = newT;
-                      prompt._lastT = newT;
-                  }
-                } else {
-                    if (prompt.style.display !== "none") prompt.style.display = "none";
+                if (typeof World3DUI !== "undefined") {
+                    const signNormal = [-bf[0], -bf[1], -bf[2]];
+                    const signUp = [bn[0], bn[1], bn[2]];
+                    const boatScale = (typeof window.boatUiScale === 'number' ? window.boatUiScale : 0.47);
+                    const signW = 0.18 * boatScale * (playerScale / 0.1);
+                    const signH = 0.18 * boatScale * (playerScale / 0.1);
+                    const boatSignId = "boat_world_sign";
+                    if (!World3DUI.hasSign(boatSignId)) {
+                        World3DUI.createSign({
+                            id: boatSignId,
+                            position: targetWorldPos,
+                            normal: signNormal,
+                            up: signUp,
+                            size: [signW, signH],
+                            isScreenAligned: false,
+                            backfaceCulling: false,
+                            doubleSided: true,
+                            checkOcclusion: false,
+                            maxDistance: 35.0,
+                            fadeDistance: 25.0,
+                            visible: true,
+                            content: _newHtml_3
+                        });
+                    } else {
+                        World3DUI.updateSign(boatSignId, {
+                            position: targetWorldPos,
+                            normal: signNormal,
+                            up: signUp,
+                            size: [signW, signH],
+                            isScreenAligned: false,
+                            visible: true,
+                            content: _newHtml_3
+                        });
+                    }
                 }
               } else {
+                if (typeof World3DUI !== "undefined" && World3DUI.hasSign("boat_world_sign") && !closestBoat) {
+                    World3DUI.removeSign("boat_world_sign");
+                }
                 if (prompt.style.display !== "none") prompt.style.display = "none";
               }
             } else if (activeRidingMech) {
@@ -5596,7 +5697,12 @@ if (prompt._lastHTML !== _newHtml_4) {
             } else {
               let closestItem = null;
               let bestItemDistSq = Infinity;
-              for (let item of collectibles) {
+
+              const nearbyCandidates = (typeof SpatialGrid !== "undefined")
+                ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], 4.0)
+                : collectibles;
+
+              for (let item of nearbyCandidates) {
                 if (!item.active) continue;
                 if (item.type === "wood_stairs" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
@@ -5614,7 +5720,7 @@ if (prompt._lastHTML !== _newHtml_4) {
               let closestLineItem = null;
               let bestLineItemT = Infinity;
               if (!closestItem) {
-                for (let item of collectibles) {
+                for (let item of nearbyCandidates) {
                   if (item.active && (item.type === "axe" || item.type === "pickaxe")) {
                     const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
                     if (reachInfo.valid) {
@@ -5639,10 +5745,13 @@ if (prompt._lastHTML !== _newHtml_4) {
                 let bestMechT = Infinity;
                 let candidateMech = null;
                 let candidateMechTargetPos = null;
-                for (let item of collectibles) {
+                for (let item of nearbyCandidates) {
                   if (item.active && item.type === "robot_cockpit" && !item.isPreview) {
                     let mechParts = [item];
-                    for (let p of collectibles) {
+                    const nearbyParts = (typeof SpatialGrid !== "undefined")
+                      ? SpatialGrid.queryRadius(item.position[0], item.position[1], item.position[2], 1.75, p => p.active && !p.isPreview && p !== item && p.type.startsWith("robot_") && p.type !== "robot_stand")
+                      : nearbyCandidates;
+                    for (let p of nearbyParts) {
                       if (p.active && !p.isPreview && p !== item && p.type.startsWith("robot_") && p.type !== "robot_stand") {
                         const dx = p.position[0] - item.position[0];
                         const dy = p.position[1] - item.position[1];
@@ -5667,7 +5776,7 @@ if (prompt._lastHTML !== _newHtml_4) {
 
                 let bestBoatT = Infinity;
                 let candidateBoat = null;
-                for (let item of collectibles) {
+                for (let item of nearbyCandidates) {
                   if (item.active && item.type === "wood_boat" && !item.isPreview) {
                     const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.22 * (playerScale / 0.1)));
                     if (reachInfo.valid) {
@@ -5681,7 +5790,7 @@ if (prompt._lastHTML !== _newHtml_4) {
 
                 let bestChestT = Infinity;
                 let candidateChest = null;
-                for (let item of collectibles) {
+                for (let item of nearbyCandidates) {
                   if (item.active && item.type === "wood_chest" && !item.isPreview) {
                     const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
                     if (reachInfo.valid) {
@@ -5695,7 +5804,7 @@ if (prompt._lastHTML !== _newHtml_4) {
 
                 let bestCampfireT = Infinity;
                 let candidateCampfire = null;
-                for (let item of collectibles) {
+                for (let item of nearbyCandidates) {
                   if (item.active && item.type === "campfire" && !item.isPreview) {
                     const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
                     if (reachInfo.valid) {
@@ -5841,13 +5950,14 @@ if (prompt._lastHTML !== _newHtml_6) {
                   campfireHoldTimer = 0.0;
                 }
 } else if (closestBoat) {
+                if (prompt && prompt.style.display !== "none") prompt.style.display = "none";
                 let targetWorldPos = closestBoat.position;
+                let bf = closestBoat.F || [0, 0, 1];
+                let bn = closestBoat.normal || [0, 1, 0];
                 if (closestBoat.position && closestBoat.F && closestBoat.normal) {
-                    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 1.0) * playerScale;
-                    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 1.5) * playerScale;
+                    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 2.47) * playerScale;
+                    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 0.43) * playerScale;
                     
-                    let bf = closestBoat.F;
-                    let bn = closestBoat.normal;
                     if (closestBoat.angle !== undefined && closestBoat.angle !== 0 && closestBoat.R) {
                         const cosH = Math.cos(closestBoat.angle);
                         const sinH = Math.sin(closestBoat.angle);
@@ -5865,25 +5975,17 @@ if (prompt._lastHTML !== _newHtml_6) {
                     ];
                 }
 
-                const screenPos = projectWorldToScreen(
-                  targetWorldPos,
-                  viewMatrix,
-                  projMatrix,
-                  window.innerWidth,
-                  window.innerHeight,
-                );
-                if (screenPos) {
-                  let rLen = Math.sqrt(closestBoat.position[0]**2 + closestBoat.position[1]**2 + closestBoat.position[2]**2) || 1;
-                  let bTheta = Math.acos(Math.max(-1, Math.min(1, closestBoat.position[1] / rLen)));
-                  let bPhi = Math.atan2(closestBoat.position[2], closestBoat.position[0]);
-                  let bHeight = getHeightOnSphere(bTheta, bPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-                  let bTerrainRadius = RADIUS + bHeight * HEIGHT_SCALE;
-                  const bWaterRadius = RADIUS + waterLevel * 0.15;
-                  const bDepth = bWaterRadius - bTerrainRadius;
-                  const canRideBoat = (waterEnabled && bDepth > 0.48 * playerScale) || closestBoat.hasWheel || closestBoat.hasWheels;
+                let rLen = Math.sqrt(closestBoat.position[0]**2 + closestBoat.position[1]**2 + closestBoat.position[2]**2) || 1;
+                let bTheta = Math.acos(Math.max(-1, Math.min(1, closestBoat.position[1] / rLen)));
+                let bPhi = Math.atan2(closestBoat.position[2], closestBoat.position[0]);
+                let bHeight = getHeightOnSphere(bTheta, bPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+                let bTerrainRadius = RADIUS + bHeight * HEIGHT_SCALE;
+                const bWaterRadius = RADIUS + waterLevel * 0.15;
+                const bDepth = bWaterRadius - bTerrainRadius;
+                const canRideBoat = (waterEnabled && bDepth > 0.48 * playerScale) || closestBoat.hasWheel || closestBoat.hasWheels;
 
-                  const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
-                  if (isInteractHeld) {
+                const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
+                if (isInteractHeld) {
                     chestHoldTimer += delta / 1000;
                     if (chestHoldTimer >= 0.8) {
                       chestHoldTimer = 0.0;
@@ -5908,36 +6010,62 @@ if (prompt._lastHTML !== _newHtml_6) {
                           const fEast = activeRidingBoat.F[0]*East[0] + activeRidingBoat.F[1]*East[1] + activeRidingBoat.F[2]*East[2];
                           charHeading = Math.atan2(fEast, fNorth);
                       }
-            }
-          } else {
-                    chestHoldTimer = 0.0;
-                  }
-                  const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-                  let actionText = (closestBoat.hasWheel || closestBoat.hasWheels) ? "ขึ้นขับเรือบก<br>Drive Land Boat" : (canRideBoat ? "ขึ้นเรือพาย<br>Ride Boat" : "ขึ้นนั่งเรือ (ติดล้อไม้เพื่อขับบนบก)<br>Board Boat (Attach Wheel to drive)");
-                  let extraStatus = "";
-
-                  const _newHtml_7 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
-                    <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
-                    <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #dfb76c;">
-                      กด [E] ค้าง เพื่อ ${actionText}
-                      ${extraStatus}
-                    </div>
-                  </div>`;
-if (prompt._lastHTML !== _newHtml_7) {
-    prompt.innerHTML = _newHtml_7;
-    prompt._lastHTML = _newHtml_7;
-}
-                  if (prompt.style.display !== "block") prompt.style.display = "block";
-                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
-                  if (prompt._lastT !== newT) {
-                      prompt.style.transform = newT;
-                      prompt._lastT = newT;
-                  }
+                    }
                 } else {
-                  if (prompt.style.display !== "none") prompt.style.display = "none";
-                  chestHoldTimer = 0.0;
+                    chestHoldTimer = 0.0;
+                }
+                const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
+                let actionText = (closestBoat.hasWheel || closestBoat.hasWheels) ? "ขึ้นขับเรือบก<br>Drive Land Boat" : (canRideBoat ? "ขึ้นเรือพาย<br>Ride Boat" : "ขึ้นนั่งเรือ (ติดล้อไม้เพื่อขับบนบก)<br>Board Boat (Attach Wheel to drive)");
+                let extraStatus = "";
+
+                const _newHtml_7 = `<div style="position: relative; width: 36px; height: 36px; padding: 1px; background: rgba(223, 183, 108, 0.55); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none; box-sizing: border-box;">
+                  <div style="position: relative; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 5.5px) 0, 100% 5.5px, 100% 100%, 5.5px 100%, 0 calc(100% - 5.5px)); overflow: hidden; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                    <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
+                    <div style="position: relative; z-index: 1; text-align: center; font-size: 16px; font-family: 'JetBrains Mono', monospace; color: #dfb76c; font-weight: 900; line-height: 1; letter-spacing: 0.5px; user-select: none;">
+                      E
+                    </div>
+                  </div>
+                </div>`;
+
+                if (typeof World3DUI !== "undefined") {
+                    const signNormal = [-bf[0], -bf[1], -bf[2]];
+                    const signUp = [bn[0], bn[1], bn[2]];
+                    const boatScale = (typeof window.boatUiScale === 'number' ? window.boatUiScale : 0.47);
+                    const signW = 0.18 * boatScale * (playerScale / 0.1);
+                    const signH = 0.18 * boatScale * (playerScale / 0.1);
+                    const boatSignId = "boat_world_sign";
+                    if (!World3DUI.hasSign(boatSignId)) {
+                        World3DUI.createSign({
+                            id: boatSignId,
+                            position: targetWorldPos,
+                            normal: signNormal,
+                            up: signUp,
+                            size: [signW, signH],
+                            isScreenAligned: false,
+                            backfaceCulling: false,
+                            doubleSided: true,
+                            checkOcclusion: false,
+                            maxDistance: 35.0,
+                            fadeDistance: 25.0,
+                            visible: true,
+                            content: _newHtml_7
+                        });
+                    } else {
+                        World3DUI.updateSign(boatSignId, {
+                            position: targetWorldPos,
+                            normal: signNormal,
+                            up: signUp,
+                            size: [signW, signH],
+                            isScreenAligned: false,
+                            visible: true,
+                            content: _newHtml_7
+                        });
+                    }
                 }
               } else if (closestMech) {
+                if (typeof World3DUI !== "undefined" && World3DUI.hasSign("boat_world_sign") && !activeRidingBoat) {
+                    World3DUI.removeSign("boat_world_sign");
+                }
                 const screenPos = projectWorldToScreen(
                   closestMechTargetPos || closestMech.position,
                   viewMatrix,
@@ -5956,7 +6084,10 @@ if (prompt._lastHTML !== _newHtml_7) {
                       activeRidingMech.isDynamic = true;
 
                       let mStand = null;
-                      if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+                      if (typeof SpatialGrid !== "undefined") {
+                        const nearStands = SpatialGrid.queryRadius(activeRidingMech.position[0], activeRidingMech.position[1], activeRidingMech.position[2], 1.0, item => item.active && !item.isPreview && item.type === "robot_stand");
+                        if (nearStands.length > 0) mStand = nearStands[0];
+                      } else if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
                         for (let item of collectibles) {
                           if (item.active && !item.isPreview && item.type === "robot_stand") {
                             const dx = item.position[0] - activeRidingMech.position[0];
@@ -5975,7 +6106,10 @@ if (prompt._lastHTML !== _newHtml_7) {
                       activeRidingMech._redockCooldown = 0;
 
                       activeRidingMech.attachedParts = [];
-                      for (let p of collectibles) {
+                      const nearbyRobotParts = (typeof SpatialGrid !== "undefined")
+                        ? SpatialGrid.queryRadius(activeRidingMech.position[0], activeRidingMech.position[1], activeRidingMech.position[2], 1.75, p => p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech)
+                        : (typeof collectibles !== "undefined" ? collectibles : []);
+                      for (let p of nearbyRobotParts) {
                         if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand" && p !== activeRidingMech) {
                           const dx = p.position[0] - activeRidingMech.position[0];
                           const dy = p.position[1] - activeRidingMech.position[1];
@@ -6077,6 +6211,9 @@ if (prompt._lastText !== _newText_2) {
           } else {
                 chestHoldTimer = 0.0;
                 if (prompt.style.display !== "none") prompt.style.display = "none";
+                if (typeof World3DUI !== "undefined" && World3DUI.hasSign("boat_world_sign") && !activeRidingBoat && !closestBoat) {
+                    World3DUI.removeSign("boat_world_sign");
+                }
               }
             }
           }
@@ -6104,7 +6241,11 @@ if (prompt._lastText !== _newText_2) {
             ];
           }
 
-          for (let item of collectibles) {
+          const candidateStands = (typeof SpatialGrid !== "undefined")
+            ? SpatialGrid.queryRadius(player3D[0], player3D[1], player3D[2], 3.0, item => item.active && !item.isPreview && item.type === "robot_stand")
+            : collectibles;
+
+          for (let item of candidateStands) {
             if (item.active && !item.isPreview && item.type === "robot_stand") {
               const dx = item.position[0] - player3D[0];
               const dy = item.position[1] - player3D[1];
@@ -6119,7 +6260,10 @@ if (prompt._lastText !== _newText_2) {
         }
 
         if (nearbyStand) {
-          for (let p of collectibles) {
+          const candidateParts = (typeof SpatialGrid !== "undefined")
+            ? SpatialGrid.queryRadius(nearbyStand.position[0], nearbyStand.position[1], nearbyStand.position[2], 2.45, p => p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand")
+            : collectibles;
+          for (let p of candidateParts) {
             if (p.active && !p.isPreview && p.type.startsWith("robot_") && p.type !== "robot_stand") {
               const dx = p.position[0] - nearbyStand.position[0];
               const dy = p.position[1] - nearbyStand.position[1];
@@ -6145,12 +6289,16 @@ if (prompt._lastText !== _newText_2) {
           }
         }
 
-        if (typeof window.updateMechStandUI === "function") {
-          window.updateMechStandUI(nearbyStand, standParts);
+        if (nearbyStand || window._hadNearbyStand !== false) {
+          if (typeof window.updateMechStandUI === "function") {
+            window.updateMechStandUI(nearbyStand, standParts);
+          }
+          window._hadNearbyStand = !!nearbyStand;
         }
 
         // Check distance to closest alive NPC for Kill Prompt
-        const npcPrompt = document.getElementById("npcKillPrompt");
+        if (!_cachedNpcPrompt) _cachedNpcPrompt = document.getElementById("npcKillPrompt");
+        const npcPrompt = _cachedNpcPrompt;
         if (npcPrompt) {
           const px = charTheta;
           const py = charPhi;
@@ -6167,7 +6315,7 @@ if (prompt._lastText !== _newText_2) {
           if (amphibians && amphibians.length > 0) {
             for (let npc of amphibians) {
               if ((npc.type === 'meganeura' || npc.type === 'isopod') && !npc.ragdollEnabled) continue;
-              if (npc.type !== 'meganeura' && npc.type !== 'isopod' && !isDevMode) continue;
+              if (npc.type !== 'meganeura' && npc.type !== 'isopod' && npc.type !== 'human' && !isDevMode) continue;
               if (npc.type !== 'meganeura' && npc.type !== 'isopod' && npc.ragdollEnabled) continue;
 
               const pos = npc.ragdollPos || npc.position;
@@ -6176,7 +6324,7 @@ if (prompt._lastText !== _newText_2) {
               const dy = pVec[1] - pos[1];
               const dz = pVec[2] - pos[2];
               const distSq = dx * dx + dy * dy + dz * dz;
-              if (distSq < 0.25) {
+              if (distSq < (npc.type === 'human' ? 0.9 : 0.25)) {
                 if (distSq < minDistSq) {
                   minDistSq = distSq;
                   closestNPCLocal = npc;
@@ -6227,6 +6375,21 @@ if (npcPrompt._lastHTML !== _newHtml_9) {
 if (npcPrompt._lastHTML !== _newHtml_10) {
     npcPrompt.innerHTML = _newHtml_10;
     npcPrompt._lastHTML = _newHtml_10;
+}
+              } else if (closestNPCLocal.type === 'human') {
+                const hName = closestNPCLocal.name || "ชาวบ้าน";
+                const hRole = closestNPCLocal.role || "นักสำรวจ";
+                const _newHtml_human = `
+                  <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>[${keyText}] พูดคุยกับ ${hName} (${hRole})</span>
+                  </span>
+                `;
+if (npcPrompt._lastHTML !== _newHtml_human) {
+    npcPrompt.innerHTML = _newHtml_human;
+    npcPrompt._lastHTML = _newHtml_human;
 }
               } else {
                 const _newHtml_11 = `
@@ -6340,7 +6503,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         }
 
         // Update Bow Auto-Lock Target Circle overlay
-        const targetCircleEl = document.getElementById("targetCircle");
+        if (!_cachedTargetCircle) _cachedTargetCircle = document.getElementById("targetCircle");
+        const targetCircleEl = _cachedTargetCircle;
         if (targetCircleEl) {
           if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && activeItem.name === "BOW" && activeTargetNPC && activeTargetNPC.position) {
             const npc = activeTargetNPC;
@@ -7189,8 +7353,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const py = charModelMatrix[13];
           const pz = charModelMatrix[14];
 
-          for (let i = 0; i < collectibles.length; i++) {
-            const item = collectibles[i];
+          const mirrorCandidates = (typeof SpatialGrid !== "undefined")
+            ? SpatialGrid.queryRadius(px, py, pz, 3.0, item => item.active && !item.isPreview && item.type === "wood_window_mirror_disabled")
+            : collectibles;
+
+          for (let i = 0; i < mirrorCandidates.length; i++) {
+            const item = mirrorCandidates[i];
             if (item.active && item.type === "wood_window_mirror_disabled" && !item.isPreview) {
               const dx = px - item.position[0];
               const dy = py - item.position[1];

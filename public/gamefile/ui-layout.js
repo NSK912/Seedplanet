@@ -1807,7 +1807,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     </div>
 
     <!-- Mech Stand System UI (8 horizontal slots in 2 rows, bottom-center) -->
-    <div class="mech-stand-container game-ui" id="mechStandUI">
+    <div class="mech-stand-container" id="mechStandUI">
       <div class="mech-stand-header">
         <div class="mech-stand-title">
           <span>⚙️</span>

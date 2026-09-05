@@ -363,7 +363,10 @@
             const dx_dist = playerPos[0] - other.position[0];
             const dy_dist = playerPos[1] - other.position[1];
             const dz_dist = playerPos[2] - other.position[2];
-            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > 36.0) {
+            const maxReach = (other.width !== undefined || other.depth !== undefined)
+              ? (Math.max(other.width || 3.0, other.depth || 3.0) * 0.75 + 2.0)
+              : 6.0;
+            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > maxReach * maxReach) {
               continue;
             }
             // Project the direction vector [nx, ny, nz] onto the flat floor's plane
@@ -375,8 +378,8 @@
               const isStone = other.type === "stone_floor";
               const isStand = other.type === "robot_stand";
               const sizeVal = other.size || 0.25;
-              const w = isStand ? 0.72 : (isStone ? sizeVal * 12.0 : sizeVal * 1.2);
-              const d = isStand ? 0.72 : (isStone ? sizeVal * 12.0 : sizeVal * 1.2);
+              const w = isStand ? 0.72 : (isStone ? (typeof other.width === "number" ? other.width : sizeVal * 12.0) : sizeVal * 1.2);
+              const d = isStand ? 0.72 : (isStone ? (typeof other.depth === "number" ? other.depth : sizeVal * 12.0) : sizeVal * 1.2);
               const h = isStand ? 0.06 : (isStone ? sizeVal * 0.15 : (other.type === "wood_floor" ? (woodFloorHeight + 0.25 * 0.12) : (other.type === "thin_wood_floor" ? 0.25 * 0.04 : 0.25 * 0.08)));
               
               const hh = isStand ? 0.06 : (isStone ? h * 0.9 : h * 0.5);

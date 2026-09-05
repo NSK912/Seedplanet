@@ -22,16 +22,16 @@
       if (!uiRoot) {
         uiRoot = document.createElement('div');
         uiRoot.id = 'world3DUIRoot';
-        uiRoot.style.position = 'absolute';
+        uiRoot.style.position = 'fixed';
         uiRoot.style.top = '0';
         uiRoot.style.left = '0';
-        uiRoot.style.width = '100%';
-        uiRoot.style.height = '100%';
+        uiRoot.style.width = '100vw';
+        uiRoot.style.height = '100vh';
         uiRoot.style.pointerEvents = 'none';
         uiRoot.style.overflow = 'hidden';
-        uiRoot.style.zIndex = '50';
+        uiRoot.style.zIndex = '100';
 
-        const gameContainer = document.getElementById('gameContainer') || document.body;
+        const gameContainer = document.getElementById('gameContainer') || document.body || document.documentElement;
         gameContainer.appendChild(uiRoot);
       }
     }
@@ -141,7 +141,7 @@
     elem.style.position = 'absolute';
     elem.style.top = '0';
     elem.style.left = '0';
-    elem.style.transformOrigin = '50% 50%';
+    elem.style.transformOrigin = '0 0';
     elem.style.display = 'none';
     elem.style.pointerEvents = config.interactive ? 'auto' : 'none';
     elem.style.userSelect = 'none';
@@ -155,14 +155,19 @@
     // Default stylized badge design if no custom HTML provided
     if (typeof config.content === 'string') {
       elem.innerHTML = config.content;
+      elem._lastContent = config.content;
     } else if (config.content instanceof HTMLElement) {
       elem.appendChild(config.content);
     } else {
-      elem.innerHTML = `
-        <div style="padding: 6px 12px; background: rgba(20, 20, 25, 0.88); border: 1px solid #dfb76c; border-radius: 6px; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
-          ${config.text || '3D Sign'}
+      const defaultHtml = `
+        <div style="position: relative; padding: 1px; background: rgba(223, 183, 108, 0.55); clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none;">
+          <div style="position: relative; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 7.5px) 0, 100% 7.5px, 100% 100%, 7.5px 100%, 0 calc(100% - 7.5px)); padding: 6px 14px; overflow: hidden; text-align: center; color: #dfb76c; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; white-space: nowrap;">
+            ${config.text || '3D Sign'}
+          </div>
         </div>
       `;
+      elem.innerHTML = defaultHtml;
+      elem._lastContent = defaultHtml;
     }
 
     uiRoot.appendChild(elem);
@@ -170,15 +175,18 @@
     const sign = {
       id: id,
       element: elem,
-      position: config.position || [0, 1, 0],
+      position: config.position ? [config.position[0], config.position[1], config.position[2]] : [0, 1, 0],
       normal: normalizeVec3(config.normal || [0, 0, 1]),
       up: normalizeVec3(config.up || [0, 1, 0]),
       parent: config.parent || null,
-      offset: config.offset || [0, 0, 0],
+      offset: config.offset ? [config.offset[0], config.offset[1], config.offset[2]] : [0, 0, 0],
+      localNormal: config.localNormal ? normalizeVec3(config.localNormal) : null,
+      localUp: config.localUp ? normalizeVec3(config.localUp) : null,
       size: config.size || [0.35, 0.18], // world units [width, height]
       isScreenAligned: !!config.isScreenAligned, // default false: does NOT rotate with screen
       backfaceCulling: config.backfaceCulling !== undefined ? !!config.backfaceCulling : true,
-      doubleSided: !!config.doubleSided,
+      doubleSided: config.doubleSided !== undefined ? !!config.doubleSided : false,
+      checkOcclusion: config.checkOcclusion !== undefined ? !!config.checkOcclusion : true,
       maxDistance: config.maxDistance || 25.0,
       fadeDistance: config.fadeDistance || 20.0,
       visible: config.visible !== undefined ? !!config.visible : true,
@@ -197,16 +205,20 @@
     const sign = activeSigns.get(id);
     if (!sign) return false;
 
-    if (config.position) sign.position = config.position;
+    if (config.position) sign.position = [config.position[0], config.position[1], config.position[2]];
     if (config.normal) sign.normal = normalizeVec3(config.normal);
     if (config.up) sign.up = normalizeVec3(config.up);
     if (config.parent !== undefined) sign.parent = config.parent;
-    if (config.offset) sign.offset = config.offset;
+    if (config.offset) sign.offset = [config.offset[0], config.offset[1], config.offset[2]];
+    if (config.localNormal) sign.localNormal = normalizeVec3(config.localNormal);
+    if (config.localUp) sign.localUp = normalizeVec3(config.localUp);
     if (config.size) sign.size = config.size;
     if (config.isScreenAligned !== undefined) sign.isScreenAligned = !!config.isScreenAligned;
     if (config.backfaceCulling !== undefined) sign.backfaceCulling = !!config.backfaceCulling;
     if (config.doubleSided !== undefined) sign.doubleSided = !!config.doubleSided;
+    if (config.checkOcclusion !== undefined) sign.checkOcclusion = !!config.checkOcclusion;
     if (config.maxDistance !== undefined) sign.maxDistance = config.maxDistance;
+    if (config.fadeDistance !== undefined) sign.fadeDistance = config.fadeDistance;
     if (config.visible !== undefined) sign.visible = !!config.visible;
     if (config.interactive !== undefined) {
       sign.interactive = !!config.interactive;
@@ -214,11 +226,18 @@
     }
 
     if (config.content !== undefined) {
-      sign.element.innerHTML = '';
       if (typeof config.content === 'string') {
-        sign.element.innerHTML = config.content;
+        if (sign.element._lastContent !== config.content) {
+          sign.element.innerHTML = config.content;
+          sign.element._lastContent = config.content;
+          sign.element._cW = 0;
+          sign.element._cH = 0;
+        }
       } else if (config.content instanceof HTMLElement) {
+        sign.element.innerHTML = '';
         sign.element.appendChild(config.content);
+        sign.element._cW = 0;
+        sign.element._cH = 0;
       }
     }
 
@@ -309,24 +328,80 @@
     let up = [sign.up[0], sign.up[1], sign.up[2]];
 
     if (sign.parent) {
-      const pPos = sign.parent.position || [0, 0, 0];
-      const pRot = sign.parent.rotation || [0, 0, 0]; // pitch, yaw, roll
+      const p = sign.parent;
+      const pPos = p.position || [0, 0, 0];
 
-      // If parent has position, add offset
-      if (sign.offset && (sign.offset[0] || sign.offset[1] || sign.offset[2])) {
-        // Simple spherical/world offset or parent orientation offset
-        pos = [
-          pPos[0] + sign.offset[0],
-          pPos[1] + sign.offset[1],
-          pPos[2] + sign.offset[2]
-        ];
+      if (p.normal && p.F) {
+        let pN = p.normal;
+        let pF = p.F;
+        let pR = p.R || crossVec3(pN, pF);
+
+        // Handle steering angle if present on vehicle
+        if (p.angle !== undefined && p.angle !== 0 && pR) {
+          const cosH = Math.cos(p.angle);
+          const sinH = Math.sin(p.angle);
+          pF = [
+            p.F[0] * cosH + pR[0] * sinH,
+            p.F[1] * cosH + pR[1] * sinH,
+            p.F[2] * cosH + pR[2] * sinH
+          ];
+          pR = crossVec3(pN, pF);
+        }
+
+        pN = normalizeVec3(pN);
+        pF = normalizeVec3(pF);
+        pR = normalizeVec3(pR);
+
+        if (sign.offset) {
+          // Local offset: [right, up, forward]
+          const ox = sign.offset[0] || 0;
+          const oy = sign.offset[1] || 0;
+          const oz = sign.offset[2] || 0;
+          pos = [
+            pPos[0] + pR[0] * ox + pN[0] * oy + pF[0] * oz,
+            pPos[1] + pR[1] * ox + pN[1] * oy + pF[1] * oz,
+            pPos[2] + pR[2] * ox + pN[2] * oy + pF[2] * oz
+          ];
+        } else {
+          pos = [pPos[0], pPos[1], pPos[2]];
+        }
+
+        if (sign.localNormal) {
+          const lx = sign.localNormal[0], ly = sign.localNormal[1], lz = sign.localNormal[2];
+          norm = [
+            pR[0] * lx + pN[0] * ly + pF[0] * lz,
+            pR[1] * lx + pN[1] * ly + pF[1] * lz,
+            pR[2] * lx + pN[2] * ly + pF[2] * lz
+          ];
+        } else {
+          // Default: face backwards towards camera/viewer behind vehicle (-pF)
+          norm = [-pF[0], -pF[1], -pF[2]];
+        }
+
+        if (sign.localUp) {
+          const lx = sign.localUp[0], ly = sign.localUp[1], lz = sign.localUp[2];
+          up = [
+            pR[0] * lx + pN[0] * ly + pF[0] * lz,
+            pR[1] * lx + pN[1] * ly + pF[1] * lz,
+            pR[2] * lx + pN[2] * ly + pF[2] * lz
+          ];
+        } else {
+          // Default: vehicle surface normal (upwards)
+          up = [pN[0], pN[1], pN[2]];
+        }
       } else {
-        pos = [pPos[0], pPos[1], pPos[2]];
-      }
-
-      // If parent has facing/normal orientation, align sign normal
-      if (sign.parent.normal) {
-        norm = [sign.parent.normal[0], sign.parent.normal[1], sign.parent.normal[2]];
+        if (sign.offset) {
+          pos = [
+            pPos[0] + (sign.offset[0] || 0),
+            pPos[1] + (sign.offset[1] || 0),
+            pPos[2] + (sign.offset[2] || 0)
+          ];
+        } else {
+          pos = [pPos[0], pPos[1], pPos[2]];
+        }
+        if (sign.parent.normal) {
+          norm = [sign.parent.normal[0], sign.parent.normal[1], sign.parent.normal[2]];
+        }
       }
     }
 
@@ -364,7 +439,7 @@
       }
 
       // Check planet occlusion (don't show through planet)
-      if (isPlanetOccluded(camPos, P)) {
+      if (sign.checkOcclusion && isPlanetOccluded(camPos, P)) {
         el.style.display = 'none';
         return;
       }
@@ -383,17 +458,18 @@
         const baseScale = Math.max(0.2, Math.min(2.0, 1.2 / screenPos.depth));
         const alpha = dist > sign.fadeDistance ? Math.max(0, 1.0 - (dist - sign.fadeDistance) / (sign.maxDistance - sign.fadeDistance)) : 1.0;
 
-        if(el.style.display !== 'block') el.style.display = 'block';
+        if (el.style.display !== 'block') el.style.display = 'block';
         const newOp = alpha.toFixed(3);
-      if (el._lastOp !== newOp) { el.style.opacity = newOp; el._lastOp = newOp; }
-        el.style.transform = `translate(-50%, -50%) translate3d(${screenPos.x.toFixed(1)}px, ${screenPos.y.toFixed(1)}px, 0px) scale(${baseScale.toFixed(3)})`;
+        if (el._lastOp !== newOp) { el.style.opacity = newOp; el._lastOp = newOp; }
+        const newT = `translate(-50%, -50%) translate3d(${screenPos.x.toFixed(1)}px, ${screenPos.y.toFixed(1)}px, 0px) scale(${baseScale.toFixed(3)})`;
+        if (el._lastT !== newT) { el.style.transform = newT; el._lastT = newT; }
         return;
       }
 
       // ----------------------------------------------------
       // CASE 2: WORLD-ANCHORED 3D SIGN (DOES NOT ROTATE WITH SCREEN)
       // ----------------------------------------------------
-      const N = normalizeVec3(N_raw);
+      let N = normalizeVec3(N_raw);
       let U = normalizeVec3(U_raw);
       let R = crossVec3(U, N);
       if (dotVec3(R, R) < 1e-6) {
@@ -411,6 +487,12 @@
       if (sign.backfaceCulling && !sign.doubleSided && viewDotNorm <= 0.0) {
         el.style.display = 'none';
         return;
+      }
+
+      // When double-sided and viewed from behind, flip normal and right vector so text is readable (not mirrored)
+      if (sign.doubleSided && viewDotNorm < 0.0) {
+        N = [-N[0], -N[1], -N[2]];
+        R = [-R[0], -R[1], -R[2]];
       }
 
       // 3D Quad Projection using 3 sample points: Center, Right, Up
@@ -434,10 +516,22 @@
       const rVec = [sRight.x - sCenter.x, sRight.y - sCenter.y];
       const uVec = [sUp.x - sCenter.x, sUp.y - sCenter.y];
 
-      // Measured element unscaled dimensions (default 100px base or measured rect)
-      if(!el._cW) el._cW = el.offsetWidth || 120;
+      // Hide if viewed edge-on (screen width < 2px) to prevent graphical glitch
+      const projWSq = rVec[0] * rVec[0] + rVec[1] * rVec[1];
+      if (projWSq < 2.0) {
+        el.style.display = 'none';
+        return;
+      }
+
+      // Ensure element is visible before measuring to get accurate bounding dimensions
+      if (el.style.display !== 'block') {
+        el.style.display = 'block';
+      }
+
+      // Measured element unscaled dimensions
+      if (!el._cW || el._cW <= 0) el._cW = el.offsetWidth || 140;
+      if (!el._cH || el._cH <= 0) el._cH = el.offsetHeight || 60;
       const elWidth = el._cW;
-      if(!el._cH) el._cH = el.offsetHeight || 60;
       const elHeight = el._cH;
 
       // Affine transform matrix components:
@@ -451,7 +545,6 @@
       // Opacity fade with distance
       const alpha = dist > sign.fadeDistance ? Math.max(0, 1.0 - (dist - sign.fadeDistance) / (sign.maxDistance - sign.fadeDistance)) : 1.0;
 
-      if(el.style.display !== 'block') el.style.display = 'block';
       const newOp = alpha.toFixed(3);
       if (el._lastOp !== newOp) { el.style.opacity = newOp; el._lastOp = newOp; }
       const newT = `matrix(${a.toFixed(4)}, ${b.toFixed(4)}, ${c.toFixed(4)}, ${d.toFixed(4)}, ${sCenter.x.toFixed(1)}, ${sCenter.y.toFixed(1)}) translate(-50%, -50%)`;
@@ -466,6 +559,7 @@
     removeSign: removeSign,
     getSign: getSign,
     getAllSigns: getAllSigns,
+    hasSign: (id) => activeSigns.has(id),
     attachToObject: attachToObject,
     detachFromObject: detachFromObject,
     clearAll: clearAll,

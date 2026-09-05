@@ -576,7 +576,6 @@ function handleVirtualMouseMove(e) {
   }
 
   // Virtual hover state dispatch - ONLY for interactive buttons / slots
-  cursor.style.pointerEvents = "none";
   const rawHoverEl = document.elementFromPoint(virtualCursorX, virtualCursorY);
   const interactiveTarget = getInteractiveTarget(rawHoverEl);
 

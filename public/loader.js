@@ -16,6 +16,7 @@
     'gamefile/Engine/SpacesMap.js',
     'gamefile/Engine/terrain.js',
     'gamefile/Engine/debugLog.js',
+    'gamefile/Engine/SpatialGrid.js',
     'gamefile/Engine/collision.js',
     'gamefile/Engine/physics.js',
     'gamefile/Engine/camera.js',
@@ -71,6 +72,7 @@
     'gamefile/npcs/placoderm.js',
     'gamefile/npcs/isopod.js',
     'gamefile/npcs/human.js',
+    'gamefile/npcs/ecosystem.js',
     'gamefile/npcs/npc.js',
 
     // --- Gameplay Core & System ---

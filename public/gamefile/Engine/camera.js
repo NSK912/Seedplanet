@@ -398,14 +398,22 @@ class CameraSpringArm {
       filterArraySwept(cubeObstacles, prefiltered.cubes, layer.collisionMask);
       filterArraySwept(amphibians, prefiltered.amphibians, layer.collisionMask);
 
-      // Collectibles prefiltering
-      for (let i = 0; i < collectibles.length; i++) {
-        const other = collectibles[i];
-        if (other.active && !other.isPreview) {
-          const maxRad = 3.0; // Safe bounding radius for player-built structures
-          const distSq = distanceSegmentToPointSq(shoulderOffsetPos, E_initial, other.position);
-          if (distSq < maxRad * maxRad) {
-            prefiltered.collectibles.push(other);
+      // Collectibles prefiltering (Accelerated by SpatialGrid)
+      if (typeof SpatialGrid !== "undefined") {
+        const maxRad = 3.0;
+        const nearItems = SpatialGrid.querySegment(shoulderOffsetPos, E_initial, maxRad, other => other.active && !other.isPreview);
+        for (let i = 0; i < nearItems.length; i++) {
+          prefiltered.collectibles.push(nearItems[i]);
+        }
+      } else {
+        for (let i = 0; i < collectibles.length; i++) {
+          const other = collectibles[i];
+          if (other.active && !other.isPreview) {
+            const maxRad = 3.0; // Safe bounding radius for player-built structures
+            const distSq = distanceSegmentToPointSq(shoulderOffsetPos, E_initial, other.position);
+            if (distSq < maxRad * maxRad) {
+              prefiltered.collectibles.push(other);
+            }
           }
         }
       }

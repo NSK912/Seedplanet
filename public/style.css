@@ -1275,7 +1275,7 @@
         height: 100vh;
         background: radial-gradient(circle at center, #111115 0%, #070709 100%);
         z-index: 20000;
-        display: flex;
+        display: none;
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -1285,7 +1285,9 @@
         color: #dfb76c;
         font-family: 'JetBrains Mono', monospace;
       }
-      .aaa-loading-overlay.active {
+      .aaa-loading-overlay.active,
+      .aaa-loading-overlay.loading-on-start {
+        display: flex;
         opacity: 1;
         pointer-events: auto;
       }
@@ -1334,15 +1336,17 @@
         content: '';
         position: absolute;
         top: 0;
-        left: -100%;
+        left: 0;
         width: 50%;
         height: 2px;
         background: linear-gradient(90deg, transparent, #dfb76c, transparent);
+        transform: translateX(-100%);
         animation: aaa-scan 3s infinite linear;
+        will-change: transform;
       }
       @keyframes aaa-scan {
-        0% { left: -100%; }
-        100% { left: 150%; }
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(300%); }
       }
       .aaa-loading-title {
         font-size: 24px;

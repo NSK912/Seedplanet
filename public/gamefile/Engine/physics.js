@@ -84,17 +84,22 @@ const Physics = {
             if (!o.active || o.isPreview) continue;
             if (o.type !== "wood_floor" && o.type !== "thin_wood_floor" && o.type !== "stone_floor" && o.type !== "wood_roof") continue;
             
+            const isStone = o.type === "stone_floor";
+            const floorW = o.width !== undefined ? o.width : (isStone ? (o.size || 0.25) * 12.0 : (o.size || 0.25) * 1.2);
+            const floorD = o.depth !== undefined ? o.depth : (isStone ? (o.size || 0.25) * 12.0 : (o.size || 0.25) * 1.2);
+            const maxBound = Math.max(floorW, floorD) / 2 + 0.5;
+
             const dx = o.position[0] - px, dy = o.position[1] - py, dz = o.position[2] - pz;
             const distSq = dx*dx + dy*dy + dz*dz;
-            if (distSq > 0.36) continue; // Skip if clearly outside 0.6m bounding distance
+            if (distSq > maxBound * maxBound) continue;
 
             const oR = o.R || [1, 0, 0];
             const oF = o.F || [0, 0, 1];
             const oN = o.normal || [0, 1, 0];
 
             if (o.type === "wood_floor" || o.type === "thin_wood_floor" || o.type === "stone_floor") {
-                const halfW = (o.width !== undefined ? o.width : (o.size || 0.25) * 1.2) / 2 + 0.03;
-                const halfD = (o.depth !== undefined ? o.depth : (o.size || 0.25) * 1.2) / 2 + 0.03;
+                const halfW = floorW / 2 + 0.03;
+                const halfD = floorD / 2 + 0.03;
                 
                 const lx = (px - o.position[0]) * oR[0] + (py - o.position[1]) * oR[1] + (pz - o.position[2]) * oR[2];
                 const lz = (px - o.position[0]) * oF[0] + (py - o.position[1]) * oF[1] + (pz - o.position[2]) * oF[2];

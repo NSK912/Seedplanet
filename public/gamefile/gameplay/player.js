@@ -183,39 +183,50 @@
 
         // Wait 3 seconds in ragdoll mode before respawning (No black screen fade)
         setTimeout(() => {
-          let foundSpot = false;
-          let newTheta = charTheta;
-          let newPhi = charPhi;
-          for (let attempts = 0; attempts < 30; attempts++) {
-            const distOffset = 0.15 + Math.random() * 0.20;
-            const angleDir = Math.random() * Math.PI * 2;
-            
-            const testTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
-            let testPhi = charPhi + Math.sin(angleDir) * distOffset;
-            if (testPhi < 0) testPhi += Math.PI * 2;
-            if (testPhi > Math.PI * 2) testPhi -= Math.PI * 2;
-            
-            const height = getVisualHeightOnSphere(testTheta, testPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-            const terrainRad = RADIUS + height * HEIGHT_SCALE;
-            const waterRadius = RADIUS + waterLevel * 0.15;
-            if (!waterEnabled || terrainRad > waterRadius) {
-              newTheta = testTheta;
-              newPhi = testPhi;
-              foundSpot = true;
-              break;
+          let spawned = false;
+          if (typeof window.getHouseSpawnLocation === "function") {
+            const houseSpawn = window.getHouseSpawnLocation();
+            if (houseSpawn && typeof houseSpawn.theta === "number") {
+              charTheta = houseSpawn.theta;
+              charPhi = houseSpawn.phi;
+              spawned = true;
             }
           }
-          if (!foundSpot) {
-            const distOffset = 0.15 + Math.random() * 0.20;
-            const angleDir = Math.random() * Math.PI * 2;
-            newTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
-            newPhi = charPhi + Math.sin(angleDir) * distOffset;
-            if (newPhi < 0) newPhi += Math.PI * 2;
-            if (newPhi > Math.PI * 2) newPhi -= Math.PI * 2;
+
+          if (!spawned) {
+            let foundSpot = false;
+            let newTheta = charTheta;
+            let newPhi = charPhi;
+            for (let attempts = 0; attempts < 30; attempts++) {
+              const distOffset = 0.15 + Math.random() * 0.20;
+              const angleDir = Math.random() * Math.PI * 2;
+              
+              const testTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
+              let testPhi = charPhi + Math.sin(angleDir) * distOffset;
+              if (testPhi < 0) testPhi += Math.PI * 2;
+              if (testPhi > Math.PI * 2) testPhi -= Math.PI * 2;
+              
+              const height = getVisualHeightOnSphere(testTheta, testPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+              const terrainRad = RADIUS + height * HEIGHT_SCALE;
+              const waterRadius = RADIUS + waterLevel * 0.15;
+              if (!waterEnabled || terrainRad > waterRadius) {
+                newTheta = testTheta;
+                newPhi = testPhi;
+                foundSpot = true;
+                break;
+              }
+            }
+            if (!foundSpot) {
+              const distOffset = 0.15 + Math.random() * 0.20;
+              const angleDir = Math.random() * Math.PI * 2;
+              newTheta = Math.max(0.1, Math.min(Math.PI - 0.1, charTheta + Math.cos(angleDir) * distOffset));
+              newPhi = charPhi + Math.sin(angleDir) * distOffset;
+              if (newPhi < 0) newPhi += Math.PI * 2;
+              if (newPhi > Math.PI * 2) newPhi -= Math.PI * 2;
+            }
+            charTheta = newTheta;
+            charPhi = newPhi;
           }
-          
-          charTheta = newTheta;
-          charPhi = newPhi;
           
           playerHP = playerMaxHP;
           updatePlayerHPUI();
@@ -3210,6 +3221,10 @@
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
               }
+            } else if (activeInteractNPC.type === 'human') {
+              if (typeof showNpcDialogue === "function") {
+                showNpcDialogue(activeInteractNPC);
+              }
             } else {
               activeInteractNPC.hp = 0;
               activeInteractNPC.ragdollEnabled = true;
@@ -3495,6 +3510,10 @@
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
+              }
+            } else if (activeInteractNPC.type === 'human') {
+              if (typeof showNpcDialogue === "function") {
+                showNpcDialogue(activeInteractNPC);
               }
             } else {
               activeInteractNPC.hp = 0;

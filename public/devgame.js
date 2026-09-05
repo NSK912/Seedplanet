@@ -1235,10 +1235,11 @@ if (toggleControlsBtn && mainControls) {
 
 
 
-// --- ระบบปรับตำแหน่ง UI ลอยของเรือ (Boat UI Offset System) ---
+// --- ระบบปรับตำแหน่งและสเกล UI ลอยของเรือ (Boat UI Offset & Scale System) ---
 (function initDevBoatUiOffset() {
-  if (typeof window.boatUiBackOffset !== "number") window.boatUiBackOffset = 1.0;
-  if (typeof window.boatUiUpOffset !== "number") window.boatUiUpOffset = 1.5;
+  if (typeof window.boatUiBackOffset !== "number") window.boatUiBackOffset = 2.47;
+  if (typeof window.boatUiUpOffset !== "number") window.boatUiUpOffset = 0.43;
+  if (typeof window.boatUiScale !== "number") window.boatUiScale = 0.47;
 
   const mainControls = document.getElementById("mainControls");
   if (!mainControls || document.getElementById("devBoatUiOffsetGroup")) return;
@@ -1247,43 +1248,82 @@ if (toggleControlsBtn && mainControls) {
   group.className = "control-group";
   group.id = "devBoatUiOffsetGroup";
   group.innerHTML = `
-    <label>🚤 ระยะห่าง UI ลอยของเรือ (Boat UI Offset)</label>
+    <label>🚤 ระยะห่าง & สเกล UI เรือ (Boat UI Settings)</label>
     
     <div style="margin-top: 8px;">
-        <div style="display: flex; justify-content: space-between;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px;">ย่อ/ขยายสเกล UI (Scale):</label>
+            <span id="devBoatUiScaleLabel" style="font-size: 11px; font-weight: bold; color: #dfb76c;">${Math.round(window.boatUiScale * 100)}%</span>
+        </div>
+        <input type="range" id="devBoatUiScaleSlider" min="20" max="300" value="${Math.round(window.boatUiScale * 100)}" style="width: 100%;">
+    </div>
+
+    <div style="margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px;">เลื่อนไปด้านหลังเรือ (Back):</label>
-            <span id="devBoatUiBackLabel" style="font-size: 11px;">${window.boatUiBackOffset.toFixed(2)}</span>
+            <span id="devBoatUiBackLabel" style="font-size: 11px; font-weight: bold; color: #dfb76c;">${window.boatUiBackOffset.toFixed(2)} (${Math.round(window.boatUiBackOffset * 100)}%)</span>
         </div>
         <input type="range" id="devBoatUiBackSlider" min="-200" max="500" value="${Math.round(window.boatUiBackOffset * 100)}" style="width: 100%;">
     </div>
 
     <div style="margin-top: 8px;">
-        <div style="display: flex; justify-content: space-between;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-size: 11px;">เลื่อนขึ้น/ลง (Up):</label>
-            <span id="devBoatUiUpLabel" style="font-size: 11px;">${window.boatUiUpOffset.toFixed(2)}</span>
+            <span id="devBoatUiUpLabel" style="font-size: 11px; font-weight: bold; color: #dfb76c;">${window.boatUiUpOffset.toFixed(2)} (${Math.round(window.boatUiUpOffset * 100)}%)</span>
         </div>
         <input type="range" id="devBoatUiUpSlider" min="-200" max="500" value="${Math.round(window.boatUiUpOffset * 100)}" style="width: 100%;">
+    </div>
+
+    <div style="margin-top: 10px; text-align: right;">
+        <button id="devBoatUiResetBtn" style="font-size: 11px; padding: 4px 10px; background: rgba(255,255,255,0.08); border: 1px solid rgba(223, 183, 108, 0.4); border-radius: 4px; color: #dfb76c; cursor: pointer;">↺ รีเซ็ตค่าเริ่มต้น (Reset)</button>
     </div>
   `;
   mainControls.appendChild(group);
 
+  const scaleSlider = document.getElementById("devBoatUiScaleSlider");
+  const scaleLabel = document.getElementById("devBoatUiScaleLabel");
   const backSlider = document.getElementById("devBoatUiBackSlider");
   const backLabel = document.getElementById("devBoatUiBackLabel");
   const upSlider = document.getElementById("devBoatUiUpSlider");
   const upLabel = document.getElementById("devBoatUiUpLabel");
+  const resetBtn = document.getElementById("devBoatUiResetBtn");
 
+  if (scaleSlider) {
+    scaleSlider.addEventListener("input", (e) => {
+      const pct = parseInt(e.target.value, 10);
+      const val = pct / 100;
+      window.boatUiScale = val;
+      if (scaleLabel) scaleLabel.textContent = `${pct}%`;
+    });
+  }
   if (backSlider) {
     backSlider.addEventListener("input", (e) => {
-      const val = parseInt(e.target.value, 10) / 100;
+      const pct = parseInt(e.target.value, 10);
+      const val = pct / 100;
       window.boatUiBackOffset = val;
-      if (backLabel) backLabel.textContent = val.toFixed(2);
+      if (backLabel) backLabel.textContent = `${val.toFixed(2)} (${pct}%)`;
     });
   }
   if (upSlider) {
     upSlider.addEventListener("input", (e) => {
-      const val = parseInt(e.target.value, 10) / 100;
+      const pct = parseInt(e.target.value, 10);
+      const val = pct / 100;
       window.boatUiUpOffset = val;
-      if (upLabel) upLabel.textContent = val.toFixed(2);
+      if (upLabel) upLabel.textContent = `${val.toFixed(2)} (${pct}%)`;
+    });
+  }
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      window.boatUiScale = 0.47;
+      window.boatUiBackOffset = 2.47;
+      window.boatUiUpOffset = 0.43;
+
+      if (scaleSlider) scaleSlider.value = "47";
+      if (scaleLabel) scaleLabel.textContent = "47%";
+      if (backSlider) backSlider.value = "247";
+      if (backLabel) backLabel.textContent = "2.47 (247%)";
+      if (upSlider) upSlider.value = "43";
+      if (upLabel) upLabel.textContent = "0.43 (43%)";
     });
   }
 })();

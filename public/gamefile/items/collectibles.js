@@ -442,7 +442,11 @@ function buildCollectibles(count, seed) {
               F: F,
               radius: houseRadius,
               totalW: totalW,
-              totalD: totalD
+              totalD: totalD,
+              gridX: gridX,
+              gridY: gridY,
+              wfW: wfW,
+              entranceDoor: null
             });
             break;
           }
@@ -571,6 +575,9 @@ function buildCollectibles(count, seed) {
           let entranceDoor = null;
           if (doorCandidates.length > 0 && (isPerfect || Math.random() < 0.75)) {
             entranceDoor = doorCandidates[Math.floor(Math.random() * doorCandidates.length)];
+          }
+          if (placedHouses.length > 0) {
+            placedHouses[placedHouses.length - 1].entranceDoor = entranceDoor;
           }
           
           for (let gx = 0; gx < gridX; gx++) {
@@ -1019,7 +1026,152 @@ function buildCollectibles(count, seed) {
         }
 
         refreshCollectiblesVBO();
+        if (typeof SpatialGrid !== "undefined") {
+          SpatialGrid.rebuild(collectibles);
+        }
+
+        window.placedHouses = placedHouses;
       }
+
+      function getHouseSpawnLocation(preferredHouseIndex = -1) {
+        const houses = (typeof window !== "undefined" && window.placedHouses && window.placedHouses.length > 0)
+          ? window.placedHouses
+          : [];
+
+        const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+        const pRad = (typeof RADIUS !== "undefined") ? RADIUS : 32;
+        const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
+        const wLevel = (typeof waterLevel !== "undefined") ? waterLevel : 1.0;
+        const effectiveWaterRad = pRad + wLevel * (hScale * 0.25) + 0.05;
+
+        if (houses.length > 0) {
+          const indices = [];
+          for (let i = 0; i < houses.length; i++) indices.push(i);
+          if (preferredHouseIndex >= 0 && preferredHouseIndex < houses.length) {
+            indices.unshift(indices.splice(preferredHouseIndex, 1)[0]);
+          } else {
+            for (let i = indices.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              const temp = indices[i];
+              indices[i] = indices[j];
+              indices[j] = temp;
+            }
+          }
+
+          for (const hIdx of indices) {
+            const house = houses[hIdx];
+            if (!house) continue;
+
+            const hx = house.x, hy = house.y, hz = house.z;
+            const hR = house.R || [1, 0, 0];
+            const hF = house.F || [0, 0, 1];
+            const wfW = house.wfW || 0.30;
+            const totalW = house.totalW || 0.6;
+            const totalD = house.totalD || 0.6;
+            const door = house.entranceDoor;
+
+            // Safe clearance distance (เว้นระยะห่างหน้าประตู / หน้าระเบียงบ้าน 0.55 - 0.80 เมตร อย่างสวยงาม ไม่ติดกำแพง)
+            const safeClearance = 0.60;
+
+            const candidateOffsets = [];
+            if (door) {
+              const cellCx = -totalW / 2 + wfW / 2 + door.gx * wfW;
+              const cellCy = -totalD / 2 + wfW / 2 + door.gy * wfW;
+              if (door.side === "bottom") {
+                candidateOffsets.push({ offR: cellCx, offF: cellCy - wfW / 2 - safeClearance });
+                candidateOffsets.push({ offR: cellCx, offF: cellCy - wfW / 2 - (safeClearance + 0.35) });
+              } else if (door.side === "top") {
+                candidateOffsets.push({ offR: cellCx, offF: cellCy + wfW / 2 + safeClearance });
+                candidateOffsets.push({ offR: cellCx, offF: cellCy + wfW / 2 + (safeClearance + 0.35) });
+              } else if (door.side === "left") {
+                candidateOffsets.push({ offR: cellCx - wfW / 2 - safeClearance, offF: cellCy });
+                candidateOffsets.push({ offR: cellCx - wfW / 2 - (safeClearance + 0.35), offF: cellCy });
+              } else if (door.side === "right") {
+                candidateOffsets.push({ offR: cellCx + wfW / 2 + safeClearance, offF: cellCy });
+                candidateOffsets.push({ offR: cellCx + wfW / 2 + (safeClearance + 0.35), offF: cellCy });
+              }
+            }
+
+            // เพิ่มจุดรอบๆ ตัวบ้านกรณีไม่มีประตู หรือหน้าประตูมีสิ่งกีดขวาง
+            const houseRad = house.radius || Math.sqrt((totalW / 2) * (totalW / 2) + (totalD / 2) * (totalD / 2));
+            const testAngles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2, Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4];
+            for (const ang of testAngles) {
+              candidateOffsets.push({
+                offR: Math.cos(ang) * (houseRad + safeClearance),
+                offF: Math.sin(ang) * (houseRad + safeClearance)
+              });
+            }
+
+            for (const offset of candidateOffsets) {
+              const candWx = hx + hR[0] * offset.offR + hF[0] * offset.offF;
+              const candWy = hy + hR[1] * offset.offR + hF[1] * offset.offF;
+              const candWz = hz + hR[2] * offset.offR + hF[2] * offset.offF;
+
+              const candDist = Math.sqrt(candWx * candWx + candWy * candWy + candWz * candWz) || 1;
+              const candNx = candWx / candDist;
+              const candNy = candWy / candDist;
+              const candNz = candWz / candDist;
+
+              const theta = Math.acos(Math.max(-1.0, Math.min(1.0, candNy)));
+              let phi = Math.atan2(candNz, candNx);
+              if (phi < 0) phi += Math.PI * 2;
+
+              const hVal = typeof getVisualHeightOnSphere === "function"
+                ? getVisualHeightOnSphere(theta, phi, seed)
+                : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, seed) : 0);
+              const surfaceRad = pRad + hVal * hScale;
+
+              // ข้ามหากจมน้ำ
+              if (surfaceRad < effectiveWaterRad) continue;
+
+              // ข้ามหากอยู่ในถ้ำ
+              if (typeof isPositionInsideCave === "function" && isPositionInsideCave(candWx, candWy, candWz, 0.3)) {
+                continue;
+              }
+
+              return {
+                theta: theta,
+                phi: phi,
+                house: house,
+                houseIndex: hIdx,
+                x: candWx,
+                y: candWy,
+                z: candWz,
+                success: true
+              };
+            }
+          }
+        }
+
+        // Fallback: หากไม่มีบ้านที่เหมาะสม ให้สุ่มหาพิกัดบนบกที่ไม่จมน้ำ
+        let fallbackTheta = Math.PI / 2;
+        let fallbackPhi = 0;
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const u = Math.random();
+          const v = Math.random();
+          const testTheta = Math.acos(2 * u - 1);
+          const testPhi = 2 * Math.PI * v;
+          const hVal = typeof getVisualHeightOnSphere === "function"
+            ? getVisualHeightOnSphere(testTheta, testPhi, seed)
+            : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(testTheta, testPhi, seed) : 0);
+          const surfaceRad = pRad + hVal * hScale;
+          if (surfaceRad >= effectiveWaterRad) {
+            fallbackTheta = testTheta;
+            fallbackPhi = testPhi;
+            break;
+          }
+        }
+
+        return {
+          theta: fallbackTheta,
+          phi: fallbackPhi,
+          house: null,
+          houseIndex: -1,
+          success: false
+        };
+      }
+      window.getHouseSpawnLocation = getHouseSpawnLocation;
+      window.getRandomHouseSpawn = getHouseSpawnLocation;
 
       window.addBox = addBox;
       function addBox(center, w, h, d, color, right, up, forward, outVertices, outColors, outIndices) {
@@ -2396,65 +2548,75 @@ function buildCollectibles(count, seed) {
                 }
             }
 
-            if (nearestStone && nearestDist < 2.5) {
-                const sR = nearestStone.R || [1, 0, 0];
-                const sF = nearestStone.F || [0, 0, 1];
-                const sN = nearestStone.normal || [0, 1, 0];
-                const sP = nearestStone.position;
+            if (nearestStone) {
+                const sW = typeof nearestStone.width === "number" ? nearestStone.width : 3.0;
+                const sD = typeof nearestStone.depth === "number" ? nearestStone.depth : 3.0;
+                const maxReachDist = Math.max(sW, sD) / 2 + 1.5;
 
-                // Project targetPos onto stone floor's plane
-                const dx = targetPos[0] - sP[0];
-                const dy = targetPos[1] - sP[1];
-                const dz = targetPos[2] - sP[2];
+                if (nearestDist < maxReachDist) {
+                    const sR = nearestStone.R || [1, 0, 0];
+                    const sF = nearestStone.F || [0, 0, 1];
+                    const sN = nearestStone.normal || [0, 1, 0];
+                    const sP = nearestStone.position;
 
-                const localX = dx * sR[0] + dy * sR[1] + dz * sR[2];
-                const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
+                    // Project targetPos onto stone floor's plane
+                    const dx = targetPos[0] - sP[0];
+                    const dy = targetPos[1] - sP[1];
+                    const dz = targetPos[2] - sP[2];
 
-                // Check if projected point is within the bounds of stone floor
-                // Width of stone floor is 3.0 meters (so half width is 1.5). 
-                // We allow snapping slightly outside (e.g. 1.65) to cover edges cleanly.
-                if (Math.abs(localX) <= 1.65 && Math.abs(localZ) <= 1.65) {
-                    // Snap to 0.3 grid
-                    let gridX = Math.round(localX / 0.3);
-                    let gridZ = Math.round(localZ / 0.3);
+                    const localX = dx * sR[0] + dy * sR[1] + dz * sR[2];
+                    const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
 
-                    // Limit gridX and gridZ to -5 to 5 (covering the 3.0m x 3.0m stone floor)
-                    gridX = Math.max(-5, Math.min(5, gridX));
-                    gridZ = Math.max(-5, Math.min(5, gridZ));
+                    // Check if projected point is within the bounds of stone floor
+                    const halfW = sW / 2;
+                    const halfD = sD / 2;
+                    if (Math.abs(localX) <= halfW + 0.15 && Math.abs(localZ) <= halfD + 0.15) {
+                        // Snap to 0.3 grid
+                        let gridX = Math.round(localX / 0.3);
+                        let gridZ = Math.round(localZ / 0.3);
 
-                    floorPreviewCollectible.isValidPlacement = true;
-                    floorPreviewCollectible.size = 0.25;
+                        const maxGridX = Math.round(halfW / 0.3);
+                        const maxGridZ = Math.round(halfD / 0.3);
+                        gridX = Math.max(-maxGridX, Math.min(maxGridX, gridX));
+                        gridZ = Math.max(-maxGridZ, Math.min(maxGridZ, gridZ));
 
-                    const sH = nearestStone.size * 0.15; // stone floor height
-                    const wH = woodFloorHeight + 0.25 * 0.12;       // wood floor height
+                        floorPreviewCollectible.isValidPlacement = true;
+                        floorPreviewCollectible.size = 0.25;
 
-                    targetPos = [
-                        sP[0] + sR[0] * (gridX * 0.3) + sF[0] * (gridZ * 0.3) + sN[0] * (sH/2 + wH/2),
-                        sP[1] + sR[1] * (gridX * 0.3) + sF[1] * (gridZ * 0.3) + sN[1] * (sH/2 + wH/2),
-                        sP[2] + sR[2] * (gridX * 0.3) + sF[2] * (gridZ * 0.3) + sN[2] * (sH/2 + wH/2)
-                    ];
+                        const sH = nearestStone.size * 0.15; // stone floor height
+                        const wH = woodFloorHeight + 0.25 * 0.12;       // wood floor height
 
-                    pN = [sN[0], sN[1], sN[2]];
-                    pR = [sR[0], sR[1], sR[2]];
-                    pF = [sF[0], sF[1], sF[2]];
-                    isSnapped = true;
+                        targetPos = [
+                            sP[0] + sR[0] * (gridX * 0.3) + sF[0] * (gridZ * 0.3) + sN[0] * (sH/2 + wH/2),
+                            sP[1] + sR[1] * (gridX * 0.3) + sF[1] * (gridZ * 0.3) + sN[1] * (sH/2 + wH/2),
+                            sP[2] + sR[2] * (gridX * 0.3) + sF[2] * (gridZ * 0.3) + sN[2] * (sH/2 + wH/2)
+                        ];
 
-                    // Check if another wood_floor is already at this exact snapped position
-                    for (let other of collectibles) {
-                      if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor") && !other.isPreview) {
-                          const ox = other.position[0] - targetPos[0];
-                          const oy = other.position[1] - targetPos[1];
-                          const oz = other.position[2] - targetPos[2];
-                          if (ox*ox + oy*oy + oz*oz < 0.01) {
-                              floorPreviewCollectible.isValidPlacement = false;
-                          }
-                      }
-            }
-          } else {
+                        pN = [sN[0], sN[1], sN[2]];
+                        pR = [sR[0], sR[1], sR[2]];
+                        pF = [sF[0], sF[1], sF[2]];
+                        isSnapped = true;
+
+                        // Check if another wood_floor is already at this exact snapped position
+                        for (let other of collectibles) {
+                            if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor") && !other.isPreview) {
+                                const ox = other.position[0] - targetPos[0];
+                                const oy = other.position[1] - targetPos[1];
+                                const oz = other.position[2] - targetPos[2];
+                                if (ox*ox + oy*oy + oz*oz < 0.01) {
+                                    floorPreviewCollectible.isValidPlacement = false;
+                                }
+                            }
+                        }
+                    } else {
+                        floorPreviewCollectible.isValidPlacement = false;
+                        floorPreviewCollectible.size = 0.25;
+                    }
+                } else {
                     floorPreviewCollectible.isValidPlacement = false;
                     floorPreviewCollectible.size = 0.25;
-            }
-          } else {
+                }
+            } else {
                 // No stone floor found nearby or too far
                 floorPreviewCollectible.isValidPlacement = false;
                 floorPreviewCollectible.size = 0.25;
@@ -4191,6 +4353,7 @@ function buildCollectibles(count, seed) {
       function clearActiveCollectibles() {
         collectibles.length = 0;
         if (window.collectibles) window.collectibles.length = 0;
+        if (typeof SpatialGrid !== "undefined") SpatialGrid.clear();
         window.pendingCollectibleRefresh = true;
         window.pendingDynamicCollectibleRefresh = true;
       }

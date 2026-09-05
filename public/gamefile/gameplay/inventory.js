@@ -1371,9 +1371,11 @@ function cancelFloorPlacement() {
         const overlay = document.getElementById("aaaLoadingOverlay");
         if (overlay) {
           if (show) {
+            overlay.style.display = "flex";
             overlay.classList.add("active");
           } else {
             overlay.classList.remove("active");
+            overlay.style.display = "none";
           }
         }
       }
@@ -3579,12 +3581,16 @@ function cancelFloorPlacement() {
         if (!uiContainer || !gridContainer) return;
 
         if (!activeStand) {
-          uiContainer.classList.remove("visible");
+          if (uiContainer.classList.contains("visible")) {
+            uiContainer.classList.remove("visible");
+          }
           window._lastMechStandStateKey = null;
           return;
         }
 
-        uiContainer.classList.add("visible");
+        if (!uiContainer.classList.contains("visible")) {
+          uiContainer.classList.add("visible");
+        }
 
         function getRobotPartLabel(typeOrName) {
           const t = (typeOrName || "").toLowerCase();
@@ -3626,7 +3632,7 @@ function cancelFloorPlacement() {
         const itemsKey = equippedItems.map(eq => eq.type).join("|");
         const currentStateKey = `${standId}_${itemsKey}`;
 
-        if (window._lastMechStandStateKey === currentStateKey) {
+        if (window._lastMechStandStateKey === currentStateKey && gridContainer.children.length > 0) {
           return;
         }
         window._lastMechStandStateKey = currentStateKey;
