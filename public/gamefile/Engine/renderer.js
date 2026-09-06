@@ -5524,7 +5524,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                 if (typeof window.BatterySystem !== "undefined") {
                   const stats = window.BatterySystem.getStats();
                   if (stats.readyCount > 0 && stats.activeBattery) {
-                    batteryPercent = Math.max(0, Math.min(100, (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100));
+                    batteryPercent = Math.round(Math.max(0, Math.min(100, (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100)));
                     if (batteryPercent <= 25) {
                       batteryBarBg = "rgba(225, 29, 72, 0.55)";
                       borderGrad = "rgba(225, 29, 72, 0.8)";
@@ -5534,7 +5534,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                     }
                   } else if (stats.rechargingCount > 0) {
                     const firstRecharging = window.BatterySystem.batteries.find(b => b.isRecharging);
-                    batteryPercent = firstRecharging ? Math.max(0, Math.min(100, (firstRecharging.rechargeTime / window.BatterySystem.REGEN_TIME) * 100)) : 0;
+                    batteryPercent = firstRecharging ? Math.round(Math.max(0, Math.min(100, (firstRecharging.rechargeTime / window.BatterySystem.REGEN_TIME) * 100))) : 0;
                     batteryBarBg = "rgba(255, 100, 0, 0.4)";
                     borderGrad = "rgba(255, 120, 0, 0.7)";
                   } else {
@@ -5544,17 +5544,18 @@ if (prompt._lastHTML !== _newHtml_2) {
                   }
                 }
 
-                let batteryIconImgSrc = "";
-                if (typeof create3DIconCanvas === "function") {
+                // Cache 3D Battery Icon DataURL once to avoid canvas toDataURL on every frame
+                if (!window._cachedBatteryIconSrc && typeof create3DIconCanvas === "function") {
                   const iconCanvas = create3DIconCanvas("GLOW_BATTERY", 32, 32);
                   if (iconCanvas) {
                     if (iconCanvas.src) {
-                      batteryIconImgSrc = iconCanvas.src;
+                      window._cachedBatteryIconSrc = iconCanvas.src;
                     } else if (typeof iconCanvas.toDataURL === "function") {
-                      try { batteryIconImgSrc = iconCanvas.toDataURL(); } catch (e) {}
+                      try { window._cachedBatteryIconSrc = iconCanvas.toDataURL(); } catch (e) {}
                     }
                   }
                 }
+                const batteryIconImgSrc = window._cachedBatteryIconSrc || "";
 
                 _newHtml_3 = `<div style="position: relative; width: 36px; height: 36px; padding: 1px; background: ${borderGrad}; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)); filter: drop-shadow(0 4px 15px rgba(0,0,0,0.6)); user-select: none; box-sizing: border-box;">
                   <div style="position: relative; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.88); backdrop-filter: blur(8px); clip-path: polygon(0 0, calc(100% - 5.5px) 0, 100% 5.5px, 100% 100%, 5.5px 100%, 0 calc(100% - 5.5px)); overflow: hidden; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
@@ -5617,6 +5618,8 @@ if (prompt._lastHTML !== _newHtml_2) {
                             normal: signNormal,
                             up: signUp,
                             size: [signW, signH],
+                            pixelWidth: 36,
+                            pixelHeight: 36,
                             isScreenAligned: false,
                             backfaceCulling: true,
                             doubleSided: false,
@@ -5632,6 +5635,8 @@ if (prompt._lastHTML !== _newHtml_2) {
                             normal: signNormal,
                             up: signUp,
                             size: [signW, signH],
+                            pixelWidth: 36,
+                            pixelHeight: 36,
                             isScreenAligned: false,
                             backfaceCulling: true,
                             doubleSided: false,
@@ -6138,6 +6143,8 @@ if (prompt._lastHTML !== _newHtml_6) {
                             normal: signNormal,
                             up: signUp,
                             size: [signW, signH],
+                            pixelWidth: 36,
+                            pixelHeight: 36,
                             isScreenAligned: false,
                             backfaceCulling: true,
                             doubleSided: false,
@@ -6153,6 +6160,8 @@ if (prompt._lastHTML !== _newHtml_6) {
                             normal: signNormal,
                             up: signUp,
                             size: [signW, signH],
+                            pixelWidth: 36,
+                            pixelHeight: 36,
                             isScreenAligned: false,
                             backfaceCulling: true,
                             doubleSided: false,

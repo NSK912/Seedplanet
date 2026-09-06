@@ -205,6 +205,10 @@
     elem.style.boxSizing = 'border-box';
     elem.style.willChange = 'transform, opacity';
 
+    // Store pixel dimensions to prevent reading offsetWidth/offsetHeight in the render loop
+    elem._cW = config.pixelWidth || (config.size ? Math.round(config.size[0] * 200) : 36) || 36;
+    elem._cH = config.pixelHeight || (config.size ? Math.round(config.size[1] * 200) : 36) || 36;
+
     if (config.style) {
       Object.assign(elem.style, config.style);
     }
@@ -282,19 +286,20 @@
       sign.element.style.pointerEvents = sign.interactive ? 'auto' : 'none';
     }
 
+    if (config.pixelWidth) sign.element._cW = config.pixelWidth;
+    if (config.pixelHeight) sign.element._cH = config.pixelHeight;
+
     if (config.content !== undefined) {
       if (typeof config.content === 'string') {
         if (sign.element._lastContent !== config.content) {
           sign.element.innerHTML = config.content;
           sign.element._lastContent = config.content;
-          sign.element._cW = 0;
-          sign.element._cH = 0;
         }
       } else if (config.content instanceof HTMLElement) {
-        sign.element.innerHTML = '';
-        sign.element.appendChild(config.content);
-        sign.element._cW = 0;
-        sign.element._cH = 0;
+        if (sign.element.firstChild !== config.content) {
+          sign.element.innerHTML = '';
+          sign.element.appendChild(config.content);
+        }
       }
     }
 
@@ -582,16 +587,13 @@
         return;
       }
 
-      // Ensure element is visible before measuring to get accurate bounding dimensions
+      // Element dimensions (using cached pixel sizes to avoid layout reflows)
+      const elWidth = el._cW || 36;
+      const elHeight = el._cH || 36;
+
       if (el.style.display !== 'block') {
         el.style.display = 'block';
       }
-
-      // Measured element unscaled dimensions
-      if (!el._cW || el._cW <= 0) el._cW = el.offsetWidth || 140;
-      if (!el._cH || el._cH <= 0) el._cH = el.offsetHeight || 60;
-      const elWidth = el._cW;
-      const elHeight = el._cH;
 
       // Affine transform matrix components:
       // a: horizontal basis X, b: horizontal basis Y
