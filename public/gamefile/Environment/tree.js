@@ -2,6 +2,24 @@
 
 (function(global) {
 
+  const _f32_identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const _f32_lightDir = new Float32Array(3);
+  const _f32_eyePos = new Float32Array(3);
+  const _f32_waterColor = new Float32Array(3);
+  const _f32_modelView = new Float32Array(16);
+  const _f32_proj = new Float32Array(16);
+  const _f32_lightSpace = new Float32Array(16);
+
+  function setVec3(dest, src) {
+    dest[0] = src[0]; dest[1] = src[1]; dest[2] = src[2];
+    return dest;
+  }
+
+  function setMat4(dest, src) {
+    for (let i = 0; i < 16; i++) dest[i] = src[i];
+    return dest;
+  }
+
   function drawTreeDepth(gl, opts = {}) {
     const vBuf = opts.natureVertexBuffer !== undefined ? opts.natureVertexBuffer : global.natureVertexBuffer;
     const iBuf = opts.natureIndexBuffer !== undefined ? opts.natureIndexBuffer : global.natureIndexBuffer;
@@ -14,11 +32,11 @@
 
     if (opts.depthSwayFactorLoc) gl.uniform1f(opts.depthSwayFactorLoc, opts.natureSway !== undefined ? opts.natureSway : (global.natureSway || 0));
     if (opts.depthWaterSwayFactorLoc) gl.uniform1f(opts.depthWaterSwayFactorLoc, opts.waterPlantSway !== undefined ? opts.waterPlantSway : (global.waterPlantSway || 0));
-    if (opts.depthModelLoc && opts.createIdentity) {
+    if (opts.depthModelLoc) {
       gl.uniformMatrix4fv(
         opts.depthModelLoc,
         false,
-        new Float32Array(opts.createIdentity()),
+        _f32_identity,
       );
     }
 
@@ -77,19 +95,19 @@
     if (!vBuf || !iBuf || !idxLen || idxLen <= 0) return;
 
     if (opts.modelProgram) gl.useProgram(opts.modelProgram);
-    if (opts.modelLightDirLoc && opts.finalLightDir) gl.uniform3fv(opts.modelLightDirLoc, new Float32Array(opts.finalLightDir));
-    if (opts.modelMVLoc && opts.reflectedModelViewMatrixStatic) gl.uniformMatrix4fv(opts.modelMVLoc, false, new Float32Array(opts.reflectedModelViewMatrixStatic));
-    if (opts.modelProjLoc && opts.projMatrix) gl.uniformMatrix4fv(opts.modelProjLoc, false, new Float32Array(opts.projMatrix));
+    if (opts.modelLightDirLoc && opts.finalLightDir) gl.uniform3fv(opts.modelLightDirLoc, setVec3(_f32_lightDir, opts.finalLightDir));
+    if (opts.modelMVLoc && opts.reflectedModelViewMatrixStatic) gl.uniformMatrix4fv(opts.modelMVLoc, false, setMat4(_f32_modelView, opts.reflectedModelViewMatrixStatic));
+    if (opts.modelProjLoc && opts.projMatrix) gl.uniformMatrix4fv(opts.modelProjLoc, false, setMat4(_f32_proj, opts.projMatrix));
     if (opts.modelWaterRadiusLoc && opts.RADIUS !== undefined && opts.waterLevel !== undefined) {
       gl.uniform1f(opts.modelWaterRadiusLoc, opts.RADIUS + opts.waterLevel * 0.15);
     }
-    if (opts.modelWaterColorLoc && opts.waterColor) gl.uniform3fv(opts.modelWaterColorLoc, new Float32Array(opts.waterColor));
+    if (opts.modelWaterColorLoc && opts.waterColor) gl.uniform3fv(opts.modelWaterColorLoc, setVec3(_f32_waterColor, opts.waterColor));
     if (opts.modelWaterOpacityLoc && opts.waterOpacity !== undefined) gl.uniform1f(opts.modelWaterOpacityLoc, opts.waterOpacity);
     if (opts.modelRenderDistEnabledLoc) gl.uniform1f(opts.modelRenderDistEnabledLoc, opts.renderDistEnabled ? 1.0 : 0.0);
     if (opts.modelMaxRenderDistLoc && opts.renderDistValue !== undefined) gl.uniform1f(opts.modelMaxRenderDistLoc, opts.renderDistValue);
     if (opts.modelTimeLoc && opts.leafAnimTime !== undefined) gl.uniform1f(opts.modelTimeLoc, opts.leafAnimTime);
     if (opts.modelPlanetRadiusLoc && opts.RADIUS !== undefined) gl.uniform1f(opts.modelPlanetRadiusLoc, opts.RADIUS);
-    if (opts.modelCameraPosLoc && opts.eyePos) gl.uniform3fv(opts.modelCameraPosLoc, new Float32Array(opts.eyePos));
+    if (opts.modelCameraPosLoc && opts.eyePos) gl.uniform3fv(opts.modelCameraPosLoc, setVec3(_f32_eyePos, opts.eyePos));
     if (opts.modelSwayFactorLoc) gl.uniform1f(opts.modelSwayFactorLoc, opts.natureSway !== undefined ? opts.natureSway : (global.natureSway || 0));
     if (opts.modelWaterSwayFactorLoc) gl.uniform1f(opts.modelWaterSwayFactorLoc, opts.waterPlantSway !== undefined ? opts.waterPlantSway : (global.waterPlantSway || 0));
 
@@ -159,31 +177,36 @@
     gl.cullFace(gl.BACK);
 
     if (opts.modelProgram) gl.useProgram(opts.modelProgram);
-    if (opts.modelLightDirLoc && opts.finalLightDir) gl.uniform3fv(opts.modelLightDirLoc, new Float32Array(opts.finalLightDir));
-    if (opts.modelMVLoc && opts.modelViewMatrix) gl.uniformMatrix4fv(opts.modelMVLoc, false, new Float32Array(opts.modelViewMatrix));
-    if (opts.modelProjLoc && opts.projMatrix) gl.uniformMatrix4fv(opts.modelProjLoc, false, new Float32Array(opts.projMatrix));
+    if (opts.modelLightDirLoc && opts.finalLightDir) gl.uniform3fv(opts.modelLightDirLoc, setVec3(_f32_lightDir, opts.finalLightDir));
+    if (opts.modelMVLoc && opts.modelViewMatrix) gl.uniformMatrix4fv(opts.modelMVLoc, false, setMat4(_f32_modelView, opts.modelViewMatrix));
+    if (opts.modelProjLoc && opts.projMatrix) gl.uniformMatrix4fv(opts.modelProjLoc, false, setMat4(_f32_proj, opts.projMatrix));
 
     if (opts.modelProgram) {
-      const uLightSpaceLoc = gl.getUniformLocation(opts.modelProgram, "uLightSpaceMatrix");
-      if (uLightSpaceLoc && opts.lightSpaceMatrix) {
-        gl.uniformMatrix4fv(uLightSpaceLoc, false, new Float32Array(opts.lightSpaceMatrix));
+      if (!opts.modelProgram._treeLocs) {
+        opts.modelProgram._treeLocs = {
+          uLightSpaceLoc: gl.getUniformLocation(opts.modelProgram, "uLightSpaceMatrix"),
+          uShadowMapLoc: gl.getUniformLocation(opts.modelProgram, "uShadowMap"),
+          uWaterMaskLoc: gl.getUniformLocation(opts.modelProgram, "uWaterMaskTex")
+        };
       }
-      const uShadowMapLoc = gl.getUniformLocation(opts.modelProgram, "uShadowMap");
-      if (uShadowMapLoc) gl.uniform1i(uShadowMapLoc, 1);
-      const uWaterMaskLoc = gl.getUniformLocation(opts.modelProgram, "uWaterMaskTex");
-      if (uWaterMaskLoc) gl.uniform1i(uWaterMaskLoc, 2);
+      const locs = opts.modelProgram._treeLocs;
+      if (locs.uLightSpaceLoc && opts.lightSpaceMatrix) {
+        gl.uniformMatrix4fv(locs.uLightSpaceLoc, false, setMat4(_f32_lightSpace, opts.lightSpaceMatrix));
+      }
+      if (locs.uShadowMapLoc) gl.uniform1i(locs.uShadowMapLoc, 1);
+      if (locs.uWaterMaskLoc) gl.uniform1i(locs.uWaterMaskLoc, 2);
     }
 
     if (opts.modelWaterRadiusLoc && opts.RADIUS !== undefined && opts.waterLevel !== undefined) {
       gl.uniform1f(opts.modelWaterRadiusLoc, opts.RADIUS + opts.waterLevel * 0.15);
     }
-    if (opts.modelWaterColorLoc && opts.waterColor) gl.uniform3fv(opts.modelWaterColorLoc, new Float32Array(opts.waterColor));
+    if (opts.modelWaterColorLoc && opts.waterColor) gl.uniform3fv(opts.modelWaterColorLoc, setVec3(_f32_waterColor, opts.waterColor));
     if (opts.modelWaterOpacityLoc && opts.waterOpacity !== undefined) gl.uniform1f(opts.modelWaterOpacityLoc, opts.waterOpacity);
     if (opts.modelRenderDistEnabledLoc) gl.uniform1f(opts.modelRenderDistEnabledLoc, opts.renderDistEnabled ? 1.0 : 0.0);
     if (opts.modelMaxRenderDistLoc && opts.renderDistValue !== undefined) gl.uniform1f(opts.modelMaxRenderDistLoc, opts.renderDistValue);
     if (opts.modelTimeLoc && opts.leafAnimTime !== undefined) gl.uniform1f(opts.modelTimeLoc, opts.leafAnimTime);
     if (opts.modelPlanetRadiusLoc && opts.RADIUS !== undefined) gl.uniform1f(opts.modelPlanetRadiusLoc, opts.RADIUS);
-    if (opts.modelCameraPosLoc && opts.eyePos) gl.uniform3fv(opts.modelCameraPosLoc, new Float32Array(opts.eyePos));
+    if (opts.modelCameraPosLoc && opts.eyePos) gl.uniform3fv(opts.modelCameraPosLoc, setVec3(_f32_eyePos, opts.eyePos));
     if (opts.modelSwayFactorLoc) gl.uniform1f(opts.modelSwayFactorLoc, opts.natureSway !== undefined ? opts.natureSway : (global.natureSway || 0));
     if (opts.modelWaterSwayFactorLoc) gl.uniform1f(opts.modelWaterSwayFactorLoc, opts.waterPlantSway !== undefined ? opts.waterPlantSway : (global.waterPlantSway || 0));
 

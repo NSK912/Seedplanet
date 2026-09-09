@@ -134,9 +134,6 @@ window.ItemRegistry["wood_boat"] = {
 
       let spinAngle = item.spinAngle || 0;
       let steerAngle = item.steerAngle || 0;
-      if (!item.spinAngle && typeof boatRowTimer !== "undefined" && typeof activeRidingBoat !== "undefined" && activeRidingBoat === item) {
-        spinAngle = boatRowTimer * 0.1;
-      }
 
       const fAxleLen = typeof window.wheelFrontAxleLength === "number" ? window.wheelFrontAxleLength : 0.36;
       const fSideOff = typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;

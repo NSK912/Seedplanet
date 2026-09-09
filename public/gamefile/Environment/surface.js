@@ -3,6 +3,13 @@
 (function(global) {
   // Shared color array to avoid GC allocations
   const sharedColor = new Float32Array(3);
+  const f32_identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const f32_waterColor = new Float32Array(3);
+  const f32_cameraPos = new Float32Array(3);
+  function setF32(target, source) {
+    for (let i = 0; i < source.length; i++) target[i] = source[i];
+    return target;
+  }
 
   // Terrain cache data structures
   const TERRAIN_CACHE_SIZE = 32768;
@@ -334,11 +341,11 @@
 
     if (opts.depthSwayFactorLoc) gl.uniform1f(opts.depthSwayFactorLoc, 0.0);
     if (opts.depthWaterSwayFactorLoc) gl.uniform1f(opts.depthWaterSwayFactorLoc, 0.0);
-    if (opts.depthModelLoc && opts.createIdentity) {
+    if (opts.depthModelLoc) {
       gl.uniformMatrix4fv(
         opts.depthModelLoc,
         false,
-        new Float32Array(opts.createIdentity()),
+        f32_identity,
       );
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
@@ -363,7 +370,7 @@
 
     if (opts.terrainWaterRadiusLoc) gl.uniform1f(opts.terrainWaterRadiusLoc, opts.waterRadius);
     if (opts.terrainWaterColorLoc && opts.waterColor) {
-      gl.uniform3fv(opts.terrainWaterColorLoc, new Float32Array(opts.waterColor));
+      gl.uniform3fv(opts.terrainWaterColorLoc, setF32(f32_waterColor, opts.waterColor));
     }
     if (opts.terrainWaterOpacityLoc) gl.uniform1f(opts.terrainWaterOpacityLoc, opts.waterOpacity);
 
@@ -375,7 +382,7 @@
     }
     if (opts.terrainMaxRenderDistLoc) gl.uniform1f(opts.terrainMaxRenderDistLoc, opts.renderDistValue);
     if (opts.terrainCameraPosLoc && opts.eyePos) {
-      gl.uniform3fv(opts.terrainCameraPosLoc, new Float32Array(opts.eyePos));
+      gl.uniform3fv(opts.terrainCameraPosLoc, setF32(f32_cameraPos, opts.eyePos));
     }
 
     // Setup tunnels data and count (sorted by distance to camera)

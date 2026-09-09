@@ -36,8 +36,8 @@
 
         // Shadow distance limit for grass based on object render distance
         const r = chunk.radius || 0;
-        const effDist = Math.max(0, Math.sqrt(distSq) - r);
-        if (effDist * effDist <= maxDistSq) {
+        const maxThreshold = maxDist + r;
+        if (distSq <= maxThreshold * maxThreshold) {
           if (batchStart === -1) {
             batchStart = chunk.start;
             batchCount = chunk.count;

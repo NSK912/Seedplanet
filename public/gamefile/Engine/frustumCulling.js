@@ -234,8 +234,8 @@
         const dy = pos[1] - eyePos[1];
         const dz = pos[2] - eyePos[2];
         const distSq = dx * dx + dy * dy + dz * dz;
-        const effDist = Math.max(0, Math.sqrt(distSq) - radius);
-        if (effDist * effDist > maxDistSq) {
+        const maxThreshold = maxDistance + radius;
+        if (distSq > maxThreshold * maxThreshold) {
           continue;
         }
       }

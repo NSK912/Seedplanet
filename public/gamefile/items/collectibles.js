@@ -931,9 +931,9 @@ function buildCollectibles(count, seed) {
               const lenR = Math.sqrt(txR*txR + txY*txY + txZ*txZ) || 1;
               const bR_vec = [txR / lenR, txY / lenR, txZ / lenR];
               const bF_vec = [
-                bny * bR_vec[2] - bnz * bR_vec[1],
-                bnz * bR_vec[0] - bnx * bR_vec[2],
-                bnx * bR_vec[1] - bny * bR_vec[0]
+                bR_vec[1] * bnz - bR_vec[2] * bny,
+                bR_vec[2] * bnx - bR_vec[0] * bnz,
+                bR_vec[0] * bny - bR_vec[1] * bnx
               ];
               const lenF = Math.sqrt(bF_vec[0]*bF_vec[0] + bF_vec[1]*bF_vec[1] + bF_vec[2]*bF_vec[2]) || 1;
               bF_vec[0] /= lenF; bF_vec[1] /= lenF; bF_vec[2] /= lenF;
@@ -1039,9 +1039,9 @@ function buildCollectibles(count, seed) {
           const lenR = Math.sqrt(txR * txR + txY * txY + txZ * txZ) || 1;
           const bR = [txR / lenR, txY / lenR, txZ / lenR];
           const bF = [
-            candNy * bR[2] - candNz * bR[1],
-            candNz * bR[0] - candNx * bR[2],
-            candNx * bR[1] - candNy * bR[0]
+            bR[1] * candNz - bR[2] * candNy,
+            bR[2] * candNx - bR[0] * candNz,
+            bR[0] * candNy - bR[1] * candNx
           ];
           const lenF = Math.sqrt(bF[0]*bF[0] + bF[1]*bF[1] + bF[2]*bF[2]) || 1;
           bF[0] /= lenF; bF[1] /= lenF; bF[2] /= lenF;
@@ -1516,7 +1516,8 @@ function buildCollectibles(count, seed) {
               delete item.meshEnd;
             }
           }
-          itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window");
+          const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
+          itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window" && c !== currentActiveBoat);
         } else if (targetBuffer === 'dynamic') {
           for (let item of collectibles) {
             if (item.isDynamic || item.type === "wood_door" || item.type === "wood_window") {
@@ -1524,7 +1525,8 @@ function buildCollectibles(count, seed) {
               delete item.meshEnd;
             }
           }
-          itemsToProcess = collectibles.filter(c => c.isDynamic || c.type === "wood_door" || c.type === "wood_window");
+          const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
+          itemsToProcess = collectibles.filter(c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c !== currentActiveBoat);
         } else {
           itemsToProcess = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible ? [floorPreviewCollectible] : []);
         }
@@ -4168,12 +4170,17 @@ function buildCollectibles(count, seed) {
           
           // Random tumbling rotation logic for the logs
           if (!c.spinAxis) {
-              const ax = Math.random() - 0.5;
-              const ay = Math.random() - 0.5;
-              const az = Math.random() - 0.5;
-              const alen = Math.sqrt(ax*ax + ay*ay + az*az) || 1;
-              c.spinAxis = [ax/alen, ay/alen, az/alen];
-              c.spinSpeed = (Math.random() - 0.5) * 0.2;
+              if (c.type === "wood_boat") {
+                  c.spinAxis = [0, 1, 0];
+                  c.spinSpeed = 0;
+              } else {
+                  const ax = Math.random() - 0.5;
+                  const ay = Math.random() - 0.5;
+                  const az = Math.random() - 0.5;
+                  const alen = Math.sqrt(ax*ax + ay*ay + az*az) || 1;
+                  c.spinAxis = [ax/alen, ay/alen, az/alen];
+                  c.spinSpeed = (Math.random() - 0.5) * 0.2;
+              }
           }
           
           // Ground collision
@@ -4229,26 +4236,35 @@ function buildCollectibles(count, seed) {
               const ny = c.position[1] / (r || 1);
               const nz = c.position[2] / (r || 1);
 
-              const vehicleTransform = Physics.calculateLandBoatTransform({
-                  position: c.position,
-                  nx, ny, nz,
-                  F: c.F,
-                  R: c.R,
-                  baseRadius: groundRadius,
-                  waterEnabled,
-                  waterLevel,
-                  waterAnimTime,
-                  waveStrength,
-                  hasWheels: true,
-                  isInWater: false
-              });
+              const isRidden = (typeof activeRidingBoat !== "undefined" && activeRidingBoat === c);
 
-              collisionRadius = vehicleTransform.targetGroundRadius;
-              pitchGrade = vehicleTransform.pitchGrade;
-              rollGrade = vehicleTransform.rollGrade;
-              c.normal = vehicleTransform.normal;
-              c.F = vehicleTransform.F;
-              c.R = vehicleTransform.R;
+              if (c._isSleeping && !isRidden) {
+                  collisionRadius = c._cachedCollisionRadius || groundRadius;
+                  pitchGrade = 0;
+                  rollGrade = 0;
+              } else {
+                  const vehicleTransform = Physics.calculateLandBoatTransform({
+                      position: c.position,
+                      nx, ny, nz,
+                      F: c.F,
+                      R: c.R,
+                      baseRadius: groundRadius,
+                      waterEnabled,
+                      waterLevel,
+                      waterAnimTime,
+                      waveStrength,
+                      hasWheels: true,
+                      isInWater: false
+                  });
+
+                  collisionRadius = vehicleTransform.targetGroundRadius;
+                  c._cachedCollisionRadius = collisionRadius;
+                  pitchGrade = vehicleTransform.pitchGrade;
+                  rollGrade = vehicleTransform.rollGrade;
+                  c.normal = vehicleTransform.normal;
+                  c.F = vehicleTransform.F;
+                  c.R = vehicleTransform.R;
+              }
           } else if (isInWater) {
               // Wood boat keeps exact original water depth (-0.04), item drops settle at ground/water
               collisionRadius = (c.type === "wood_boat") ? (waterRadius - 0.04) : (terrainRadius + (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
@@ -4267,10 +4283,10 @@ function buildCollectibles(count, seed) {
             // bounce and friction
             const dot = c.vel[0] * nx + c.vel[1] * ny + c.vel[2] * nz;
             if (dot < 0) {
-                let restitution = isWheeledBoat ? 1.0 : 1.3;
-                c.vel[0] -= dot * nx * restitution;
-                c.vel[1] -= dot * ny * restitution;
-                c.vel[2] -= dot * nz * restitution;
+                let restitution = (isWheeledBoat || c.type === "wood_boat") ? 0.0 : 1.3;
+                c.vel[0] -= dot * nx * (1.0 + restitution);
+                c.vel[1] -= dot * ny * (1.0 + restitution);
+                c.vel[2] -= dot * nz * (1.0 + restitution);
             }
             let friction = 0.6;
             if (isWheeledBoat && !isInWater) {
@@ -4283,26 +4299,41 @@ function buildCollectibles(count, seed) {
                 let vehSpeed = typeof c.vehicleSpeed !== "undefined" ? c.vehicleSpeed : 0;
                 let dt = typeof window.timeScale !== "undefined" ? window.timeScale : 1.0;
 
-                // 1. Apply gravity to vehSpeed
-                let gravityRollPower = pitchGrade * pSpeed * 0.5 * dt;
-                vehSpeed -= gravityRollPower;
+                const isRidden = (typeof activeRidingBoat !== "undefined" && activeRidingBoat === c);
 
-                // 2. Apply coast friction
-                vehSpeed *= Math.pow(0.98, dt);
-                if (Math.abs(vehSpeed) < 0.00001) vehSpeed = 0;
-                c.vehicleSpeed = vehSpeed;
+                if (!isRidden && c._isSleeping) {
+                    vehSpeed = 0;
+                    c.vehicleSpeed = 0;
+                    c.vel[0] = 0; c.vel[1] = 0; c.vel[2] = 0;
+                } else {
+                    // 1. Apply gravity to vehSpeed
+                    let gravityRollPower = pitchGrade * pSpeed * 0.5 * dt;
+                    vehSpeed -= gravityRollPower;
 
-                // 3. Move along forward vector
-                c.vel[0] = bF[0] * vehSpeed;
-                c.vel[1] = bF[1] * vehSpeed;
-                c.vel[2] = bF[2] * vehSpeed;
+                    // 2. Apply coast friction
+                    vehSpeed *= Math.pow(0.96, dt);
+                    if (Math.abs(vehSpeed) < 0.0005) {
+                        vehSpeed = 0;
+                        if (!isRidden) {
+                            c._isSleeping = true;
+                        }
+                    }
+                    c.vehicleSpeed = vehSpeed;
 
-                // 4. Update wheel spin visually
-                let moveDir = vehSpeed >= 0 ? 1 : -1;
-                const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
-                const wheelRadius = 0.16 * wheelScale;
-                const distTraveled = vehSpeed * dt;
-                c.spinAngle = (c.spinAngle || 0) + (distTraveled / wheelRadius);
+                    // 3. Move along forward vector
+                    c.vel[0] = bF[0] * vehSpeed;
+                    c.vel[1] = bF[1] * vehSpeed;
+                    c.vel[2] = bF[2] * vehSpeed;
+
+                    // 4. Update wheel spin visually
+                    if (Math.abs(vehSpeed) > 0.0001) {
+                        let moveDir = vehSpeed >= 0 ? 1 : -1;
+                        const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+                        const wheelRadius = 0.16 * wheelScale;
+                        const distTraveled = vehSpeed * dt;
+                        c.spinAngle = (c.spinAngle || 0) + (distTraveled / wheelRadius);
+                    }
+                }
 
                 // 5. Turn based on steer angle
                 let currentSteer = c.steerAngle || 0;
@@ -4345,6 +4376,15 @@ function buildCollectibles(count, seed) {
                 c.vel[1] = 0;
                 c.vel[2] = 0;
                 c.spinSpeed = 0;
+            } else if (isWheeledBoat && !isInWater && (!activeRidingBoat || activeRidingBoat !== c)) {
+                if (speedSq < 0.0004 && Math.abs(c.vehicleSpeed || 0) < 0.0005) {
+                    c.vel[0] = 0;
+                    c.vel[1] = 0;
+                    c.vel[2] = 0;
+                    c.spinSpeed = 0;
+                    c.vehicleSpeed = 0;
+                    c._isSleeping = true;
+                }
             } else if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
                 
                 
@@ -4376,23 +4416,40 @@ function buildCollectibles(count, seed) {
             }
           } else {
              // apply spin
-             const sAngle = c.spinSpeed;
-             const sCos = Math.cos(sAngle);
-             const sSin = Math.sin(sAngle);
-             const ax = c.spinAxis[0], ay = c.spinAxis[1], az = c.spinAxis[2];
-             
-             const rotateVec = (v) => {
-                 const dot = v[0]*ax + v[1]*ay + v[2]*az;
-                 return [
-                     v[0]*sCos + (ay*v[2] - az*v[1])*sSin + ax*dot*(1-sCos),
-                     v[1]*sCos + (az*v[0] - ax*v[2])*sSin + ay*dot*(1-sCos),
-                     v[2]*sCos + (ax*v[1] - ay*v[0])*sSin + az*dot*(1-sCos)
-                 ];
-             };
-             
-             c.R = rotateVec(c.R);
-             c.F = rotateVec(c.F);
-             c.normal = rotateVec(c.normal);
+             if (c.type !== "wood_boat") {
+                 const sAngle = c.spinSpeed;
+                 const sCos = Math.cos(sAngle);
+                 const sSin = Math.sin(sAngle);
+                 const ax = c.spinAxis[0], ay = c.spinAxis[1], az = c.spinAxis[2];
+                 
+                 const rotateVec = (v) => {
+                     const dot = v[0]*ax + v[1]*ay + v[2]*az;
+                     return [
+                         v[0]*sCos + (ay*v[2] - az*v[1])*sSin + ax*dot*(1-sCos),
+                         v[1]*sCos + (az*v[0] - ax*v[2])*sSin + ay*dot*(1-sCos),
+                         v[2]*sCos + (ax*v[1] - ay*v[0])*sSin + az*dot*(1-sCos)
+                     ];
+                 };
+                 
+                 c.R = rotateVec(c.R);
+                 c.F = rotateVec(c.F);
+                 c.normal = rotateVec(c.normal);
+             } else {
+                 // Keep boat upright towards planet normal
+                 const upN = [nx_c, ny_c, nz_c];
+                 c.normal = upN;
+                 if (c.F) {
+                     const dotF = c.F[0]*upN[0] + c.F[1]*upN[1] + c.F[2]*upN[2];
+                     c.F = [c.F[0] - dotF*upN[0], c.F[1] - dotF*upN[1], c.F[2] - dotF*upN[2]];
+                     const fLen = Math.sqrt(c.F[0]*c.F[0] + c.F[1]*c.F[1] + c.F[2]*c.F[2]) || 1;
+                     c.F = [c.F[0]/fLen, c.F[1]/fLen, c.F[2]/fLen];
+                     c.R = [
+                         c.normal[1]*c.F[2] - c.normal[2]*c.F[1],
+                         c.normal[2]*c.F[0] - c.normal[0]*c.F[2],
+                         c.normal[0]*c.F[1] - c.normal[1]*c.F[0]
+                     ];
+                 }
+             }
           }
           
           if (_oldP && (Math.abs(c.position[0]-_oldP[0])>1e-6 || Math.abs(c.position[1]-_oldP[1])>1e-6 || Math.abs(c.position[2]-_oldP[2])>1e-6)) needRefresh = true;
@@ -4400,7 +4457,11 @@ function buildCollectibles(count, seed) {
         }
         
         if (activeRidingBoat) {
-            needRefresh = true;
+            const bSpeed = Math.abs(activeRidingBoat.vehicleSpeed || 0);
+            if (bSpeed > 0.0001 || activeRidingBoat._moved) {
+                needRefresh = true;
+                activeRidingBoat._moved = false;
+            }
         }
 
         if (needMainRefresh) {

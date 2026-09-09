@@ -2,6 +2,9 @@
 // Independent Player Clones System (Spawned at procedural houses)
 
 (function() {
+  const f32_cloneModel = new Float32Array(16);
+  const f32_cloneMV = new Float32Array(16);
+
   // Rich collection of cute expressive anime / kaomoji / emoji faces
   const CLONE_EMOJI_FACES = [
     "(^_^)",    // Happy smile
@@ -501,18 +504,17 @@
         }
       }
 
-      const cloneModelMatrix = [
-        cR[0] * charScale, cR[1] * charScale, cR[2] * charScale, 0,
-        cN[0] * charScale, cN[1] * charScale, cN[2] * charScale, 0,
-        cF[0] * charScale, cF[1] * charScale, cF[2] * charScale, 0,
-        finalPos[0], finalPos[1], finalPos[2], 1
-      ];
+      f32_cloneModel[0] = cR[0] * charScale; f32_cloneModel[1] = cR[1] * charScale; f32_cloneModel[2] = cR[2] * charScale; f32_cloneModel[3] = 0;
+      f32_cloneModel[4] = cN[0] * charScale; f32_cloneModel[5] = cN[1] * charScale; f32_cloneModel[6] = cN[2] * charScale; f32_cloneModel[7] = 0;
+      f32_cloneModel[8] = cF[0] * charScale; f32_cloneModel[9] = cF[1] * charScale; f32_cloneModel[10] = cF[2] * charScale; f32_cloneModel[11] = 0;
+      f32_cloneModel[12] = finalPos[0]; f32_cloneModel[13] = finalPos[1]; f32_cloneModel[14] = finalPos[2]; f32_cloneModel[15] = 1;
 
-      const cloneMV = mulMat(viewMatrix, cloneModelMatrix);
+      const cloneMV = mulMat(viewMatrix, f32_cloneModel);
+      for (let mi = 0; mi < 16; mi++) f32_cloneMV[mi] = cloneMV[mi];
 
-      gl.uniformMatrix4fv(charMVLoc, false, new Float32Array(cloneMV));
+      gl.uniformMatrix4fv(charMVLoc, false, f32_cloneMV);
       if (charModelMatrixLoc) {
-        gl.uniformMatrix4fv(charModelMatrixLoc, false, new Float32Array(cloneModelMatrix));
+        gl.uniformMatrix4fv(charModelMatrixLoc, false, f32_cloneModel);
       }
 
       if (charFaceTexLoc) {
@@ -592,14 +594,12 @@
         cPos[2] + (walkBob + idleBob) * cN[2]
       ];
 
-      const cloneModelMatrix = [
-        cR[0] * charScale, cR[1] * charScale, cR[2] * charScale, 0,
-        cN[0] * charScale, cN[1] * charScale, cN[2] * charScale, 0,
-        cF[0] * charScale, cF[1] * charScale, cF[2] * charScale, 0,
-        finalPos[0], finalPos[1], finalPos[2], 1
-      ];
+      f32_cloneModel[0] = cR[0] * charScale; f32_cloneModel[1] = cR[1] * charScale; f32_cloneModel[2] = cR[2] * charScale; f32_cloneModel[3] = 0;
+      f32_cloneModel[4] = cN[0] * charScale; f32_cloneModel[5] = cN[1] * charScale; f32_cloneModel[6] = cN[2] * charScale; f32_cloneModel[7] = 0;
+      f32_cloneModel[8] = cF[0] * charScale; f32_cloneModel[9] = cF[1] * charScale; f32_cloneModel[10] = cF[2] * charScale; f32_cloneModel[11] = 0;
+      f32_cloneModel[12] = finalPos[0]; f32_cloneModel[13] = finalPos[1]; f32_cloneModel[14] = finalPos[2]; f32_cloneModel[15] = 1;
 
-      gl.uniformMatrix4fv(depthModelLoc, false, new Float32Array(cloneModelMatrix));
+      gl.uniformMatrix4fv(depthModelLoc, false, f32_cloneModel);
 
       if (supportUint32 && currentIndicesLen > 65535) {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_INT, 0);

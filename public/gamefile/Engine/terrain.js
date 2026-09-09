@@ -859,11 +859,13 @@
             
             buildWireframe(gridSize);
             buildWaterSphere(gridSize);
-            buildAtmosphereSphere(gridSize);
-            buildSkySphere(gridSize);
-            cubeObstacles = [];
-
-            setTimeout(generateFloraAndFauna, 0);
+            
+            setTimeout(() => {
+              buildAtmosphereSphere(gridSize);
+              buildSkySphere(gridSize);
+              cubeObstacles = [];
+              setTimeout(generateFloraAndFauna, 0);
+            }, 0);
           }
 
           async function generateFloraAndFauna() {
@@ -1458,6 +1460,7 @@
           indices: flatIndices,
         };
       }
+      window.makeFlatShadedGeometry = makeFlatShadedGeometry;
 
       // ============================================
       // สร้างวัตถุสี่เหลี่ยมบนดาว

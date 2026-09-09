@@ -22,7 +22,7 @@ window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, sp
     ];
   }
 
-  const segs = 16;
+  const segs = 12;
   const rimWidth = radius * 0.24;
   const rOuter = radius;
   const rInner = radius - rimWidth;
@@ -62,8 +62,8 @@ window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, sp
     const curr = ringBaseIdx + i * 4;
     const next = ringBaseIdx + (i + 1) * 4;
 
-    indices.push(curr + 0, curr + 1, next + 1); indices.push(curr + 0, next + 1, curr + 1);
-    indices.push(curr + 0, next + 1, next + 0); indices.push(curr + 0, next + 0, next + 1);
+    indices.push(curr + 0, next + 0, next + 1); indices.push(curr + 0, next + 1, next + 0);
+    indices.push(curr + 0, next + 1, curr + 1); indices.push(curr + 0, curr + 1, next + 1);
 
     indices.push(curr + 2, curr + 3, next + 3); indices.push(curr + 2, next + 3, curr + 3);
     indices.push(curr + 2, next + 3, next + 2); indices.push(curr + 2, next + 2, next + 3);
@@ -78,7 +78,7 @@ window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, sp
   // Hub
   const hubRadius = radius * 0.28;
   const hubThick = thickness * 1.4;
-  const hubSegs = 12;
+  const hubSegs = 8;
   const hubHalfThick = hubThick * 0.5;
   const hubBaseIdx = vertices.length / 3;
 
@@ -150,13 +150,13 @@ window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, sp
     ];
 
     if (typeof buildTaperedSegment === "function") {
-      buildTaperedSegment(pStart, pEnd, spokeThick, spokeThick * 0.8, 4, cSpoke, vertices, colors, indices, true);
+      buildTaperedSegment(pStart, pEnd, spokeThick, spokeThick * 0.8, 4, cSpoke, vertices, colors, indices, false);
     }
   }
 
   // Iron outer band
   if (!isPreview) {
-    const ironSegs = 16;
+    const ironSegs = 12;
     const ironOuter = rOuter + 0.003;
     const ironThick = halfThick * 0.92;
     const ironBaseIdx = vertices.length / 3;
@@ -185,8 +185,8 @@ window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, sp
       const curr = ironBaseIdx + i * 2;
       const next = ironBaseIdx + (i + 1) * 2;
 
-      indices.push(curr + 0, curr + 1, next + 1); indices.push(curr + 0, next + 1, curr + 1);
-      indices.push(curr + 0, next + 1, next + 0); indices.push(curr + 0, next + 0, next + 1);
+      indices.push(curr + 0, next + 0, next + 1); indices.push(curr + 0, next + 1, next + 0);
+      indices.push(curr + 0, next + 1, curr + 1); indices.push(curr + 0, curr + 1, next + 1);
     }
   }
 };

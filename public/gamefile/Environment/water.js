@@ -19,10 +19,10 @@
             float wave2 = cos(aPosition.z * 5.0 + uTime * 1.8) * 0.035;
             float wave3 = sin(aPosition.y * 4.0 + uTime * 2.7) * 0.025;
             float wave4 = cos(aPosition.x * 3.5 + aPosition.z * 4.5 + uTime * 3.1) * 0.03;
-            float wave = (wave1 + wave2 + wave3 + wave4) * uWaveStrength * 2.0;
+            float wave = (wave1 + wave2 + wave3 + wave4) * uWaveStrength * 1.2;
             
-            vec3 pos = aPosition;
             vec3 dir = normalize(aPosition);
+            vec3 pos = aPosition + dir * wave;
             
             vec4 mvPosition = uModelViewMatrix * vec4(pos, 1.0);
             gl_Position = uProjectionMatrix * mvPosition;
@@ -290,6 +290,15 @@
   const f32_boatOffsets = new Float32Array(12);
 
   const f32_waterTunnelsData = new Float32Array(64 * 4);
+  const f32_mv = new Float32Array(16);
+  const f32_proj = new Float32Array(16);
+  const f32_color = new Float32Array(3);
+  const f32_light = new Float32Array(3);
+  const f32_cam = new Float32Array(3);
+  function setF32(target, source) {
+    for (let i = 0; i < source.length; i++) target[i] = source[i];
+    return target;
+  }
   const tunnelsWithDistPool = [];
 
   const CLIPPING_MODELS = {
@@ -637,71 +646,15 @@
     const wEnabled = typeof waterEnabled !== 'undefined' ? waterEnabled : true;
     if (!wEnabled || !waterVertexBuffer || !waterVerticesCache) return;
 
-    const waveStrVal = (typeof waveStrength !== 'undefined' ? waveStrength : 1.0) * 1.5;
     const wLevel = typeof waterLevel !== 'undefined' ? waterLevel : 1.0;
-    const planetR = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
     const gSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 400;
     const tMods = typeof terrainMods !== 'undefined' ? terrainMods : null;
     const t3D = typeof tunnels3D !== 'undefined' ? tunnels3D : null;
-
-    const vertices = waterVerticesCache;
-    const baseWaterRadius = planetR + wLevel * 0.15;
 
     const currentModCount = (tMods ? tMods.length : 0) + (t3D ? t3D.length : 0) + Math.round(wLevel * 1000) + gSize * 100000;
     if (currentModCount !== lastTerrainModCount || !waterMask) {
        updateWaterMask();
        lastTerrainModCount = currentModCount;
-    }
-
-    if (!reusableWaterFloat32Array || reusableWaterFloat32Array.length !== vertices.length) {
-      reusableWaterFloat32Array = new Float32Array(vertices.length);
-    }
-    const newVertices = reusableWaterFloat32Array;
-    const latSeg = Math.min(gSize, 200);
-    const longSeg = Math.min(gSize, 200);
-
-    let idx = 0;
-    for (let lat = 0; lat <= latSeg; lat++) {
-      const theta = (lat / latSeg) * Math.PI;
-      const sinTheta = Math.sin(theta);
-      const cosTheta = Math.cos(theta);
-
-      for (let long = 0; long <= longSeg; long++) {
-        const phi = (long / longSeg) * Math.PI * 2;
-        const sinPhi = Math.sin(phi);
-        const cosPhi = Math.cos(phi);
-
-        const gridIdx = lat * (longSeg + 1) + long;
-        const tr = waterTerrainHeights[gridIdx];
-         
-        const baseX = baseWaterRadius * sinTheta * cosPhi;
-        const baseY = baseWaterRadius * cosTheta;
-        const baseZ = baseWaterRadius * sinTheta * sinPhi;
-         
-        const wave1 = Math.sin(baseX * 6.0 + time * 2.3) * 0.04;
-        const wave2 = Math.cos(baseZ * 5.0 + time * 1.8) * 0.035;
-        const wave3 = Math.sin(baseY * 4.0 + time * 2.7) * 0.025;
-        const wave4 = Math.cos(baseX * 3.5 + baseZ * 4.5 + time * 3.1) * 0.03;
-         
-        let depth = Math.max(0.0, baseWaterRadius - tr);
-        let depthFactor = Math.min(1.0, depth / 0.03);
-         
-        const waveOffset = (wave1 + wave2 + wave3 + wave4) * waveStrVal * 1.2 * depthFactor;
-        const finalRadius = baseWaterRadius + waveOffset;
-
-        newVertices[idx] = finalRadius * sinTheta * cosPhi;
-        newVertices[idx + 1] = finalRadius * cosTheta;
-        newVertices[idx + 2] = finalRadius * sinTheta * sinPhi;
-        
-        idx += 3;
-      }
-    }
-    gl.bindBuffer(gl.ARRAY_BUFFER, waterVertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, newVertices, gl.DYNAMIC_DRAW);
-
-    // Sync Native WebGPU Vertex Buffer directly
-    if (typeof Graphics !== 'undefined' && Graphics.webgpu && Graphics.webgpu.device && Graphics.webgpu.waterVertexBuffer) {
-      Graphics.webgpu.device.queue.writeBuffer(Graphics.webgpu.waterVertexBuffer, 0, newVertices.buffer, newVertices.byteOffset, newVertices.byteLength);
     }
   }
 
@@ -734,15 +687,15 @@
 
     gl.useProgram(waterProgram);
 
-    gl.uniformMatrix4fv(waterMVLoc, false, new Float32Array(modelViewMatrix));
-    gl.uniformMatrix4fv(waterProjLoc, false, new Float32Array(projMatrix));
-    gl.uniform3fv(waterColorLoc, new Float32Array(wColor));
+    gl.uniformMatrix4fv(waterMVLoc, false, setF32(f32_mv, modelViewMatrix));
+    gl.uniformMatrix4fv(waterProjLoc, false, setF32(f32_proj, projMatrix));
+    gl.uniform3fv(waterColorLoc, setF32(f32_color, wColor));
     gl.uniform1f(waterOpacityLoc, wOpacity);
     gl.uniform1f(waterTimeLoc, time);
     gl.uniform1f(waterWaveStrengthLoc, wWaveStrength);
     gl.uniform1f(waterLevelLoc, wLevel);
-    gl.uniform3fv(waterLightDirLoc, new Float32Array(lightDir));
-    gl.uniform3fv(waterCameraPosLoc, new Float32Array(cameraPos));
+    gl.uniform3fv(waterLightDirLoc, setF32(f32_light, lightDir));
+    gl.uniform3fv(waterCameraPosLoc, setF32(f32_cam, cameraPos));
     gl.uniform1i(gl.getUniformLocation(waterProgram, "uWaterMaskTex"), 2);
     gl.uniform1f(waterRenderDistEnabledLoc, renderDistE);
     gl.uniform1f(waterMaxRenderDistLoc, renderDistVal);
@@ -875,11 +828,16 @@
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, waterIndexBuffer);
 
+    // Transparent water pass should not write to depth buffer so 3D UI and other transparent passes are not clipped
+    gl.depthMask(false);
+
     if (isUint32 && waterIndicesLength > 65535) {
       gl.drawElements(gl.TRIANGLES, waterIndicesLength, gl.UNSIGNED_INT, 0);
     } else {
       gl.drawElements(gl.TRIANGLES, waterIndicesLength, gl.UNSIGNED_SHORT, 0);
     }
+
+    gl.depthMask(true);
   }
 
   function getMaskTexture() {

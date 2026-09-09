@@ -4,6 +4,12 @@
         if (typeof isPlacingFloor !== "undefined" && isPlacingFloor) {
           return null; // When in PRE_PLACE preview/placement mode, never hold any item in hand
         }
+        if (typeof activeRidingBoat !== "undefined" && activeRidingBoat) {
+          return null; // When riding boat/vehicle, hands steer or row
+        }
+        if (typeof activeRidingMech !== "undefined" && activeRidingMech) {
+          return null; // When piloting mech, hands are on cockpit controls
+        }
         let item = null;
         if (typeof selectedActionSlotIndex !== "undefined" && selectedActionSlotIndex !== -1 && typeof actionSlotsItems !== "undefined" && actionSlotsItems && actionSlotsItems[selectedActionSlotIndex]) {
           const candidate = actionSlotsItems[selectedActionSlotIndex];
@@ -3205,26 +3211,30 @@
                 }
             }
             
-            const flatEquip = makeFlatShadedGeometry(rawV, rawC, rawI);
-            equipIndicesLength = flatEquip.indices.length;
+            if (!isClone) {
+                const flatEquip = makeFlatShadedGeometry(rawV, rawC, rawI);
+                equipIndicesLength = flatEquip.indices.length;
 
-            if (!equipVertexBuffer) equipVertexBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, equipVertexBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatEquip.vertices), gl.DYNAMIC_DRAW);
+                if (!equipVertexBuffer) equipVertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, equipVertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatEquip.vertices), gl.DYNAMIC_DRAW);
 
-            if (!equipColorBuffer) equipColorBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, equipColorBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatEquip.colors), gl.DYNAMIC_DRAW);
+                if (!equipColorBuffer) equipColorBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, equipColorBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatEquip.colors), gl.DYNAMIC_DRAW);
 
-            if (!equipNormalBuffer) equipNormalBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, equipNormalBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatEquip.normals), gl.DYNAMIC_DRAW);
+                if (!equipNormalBuffer) equipNormalBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, equipNormalBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatEquip.normals), gl.DYNAMIC_DRAW);
 
-            if (!equipIndexBuffer) equipIndexBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, supportUint32 && equipIndicesLength > 65535 ? new Uint32Array(flatEquip.indices) : new Uint16Array(flatEquip.indices), gl.DYNAMIC_DRAW);
+                if (!equipIndexBuffer) equipIndexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, supportUint32 && equipIndicesLength > 65535 ? new Uint32Array(flatEquip.indices) : new Uint16Array(flatEquip.indices), gl.DYNAMIC_DRAW);
+            }
         } else {
-            equipIndicesLength = 0;
+            if (!isClone) {
+                equipIndicesLength = 0;
+            }
         }
 
 

@@ -80,7 +80,11 @@ const Physics = {
             return fallbackTerrainRad;
         }
         let surfaceRad = fallbackTerrainRad;
-        for (let o of collectibles) {
+        let candidates = collectibles;
+        if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
+            candidates = SpatialGrid.queryRadius(px, py, pz, 4.0, o => o.active && !o.isPreview && (o.type === "wood_floor" || o.type === "thin_wood_floor" || o.type === "stone_floor" || o.type === "wood_roof"));
+        }
+        for (let o of candidates) {
             if (!o.active || o.isPreview) continue;
             if (o.type !== "wood_floor" && o.type !== "thin_wood_floor" && o.type !== "stone_floor" && o.type !== "wood_roof") continue;
             

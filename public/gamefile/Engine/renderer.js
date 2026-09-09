@@ -34,6 +34,9 @@ const f32_charModelMatrix = new Float32Array(16);
 
 const f32_identity = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const f32_forceZFarProj = new Float32Array(16);
+const f32_gpuViewProj = new Float32Array(16);
+const f32_invViewProj = new Float32Array(16);
+const f32_cloudOrbitMatrix = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 
 const f32_boatPositions = new Float32Array(4 * 3);
 const f32_boatRights = new Float32Array(4 * 3);
@@ -43,6 +46,9 @@ const f32_boatSizes = new Float32Array(4 * 3);
 const f32_boatOffsets = new Float32Array(4 * 3);
 
 const f32_waterTunnelsData = new Float32Array(64 * 4);
+const f32_monkeyUData = new Float32Array(84);
+const f32_webgpuSkyUniforms = new Float32Array(28);
+const f32_webgpuWaterUData = new Float32Array(512);
 const tunnelsWithDistPool = [];
 
 function setF32(target, source) {
@@ -810,7 +816,8 @@ fn fs_main(in: VertexOutput) {
                 const currentOffset = this.monkeyUniformOffset;
                 this.monkeyUniformOffset += 512;
                 
-                const uData = new Float32Array(84);
+                f32_monkeyUData.fill(0);
+                const uData = f32_monkeyUData;
                 const setMat4 = (name, arrOff) => { if(vals[name]) uData.set(vals[name], arrOff); };
                 const setVec3 = (name, arrOff) => { if(vals[name]) { uData[arrOff] = vals[name][0]; uData[arrOff+1] = vals[name][1]; uData[arrOff+2] = vals[name][2]; } };
                 const setFloat = (name, arrOff) => { if(vals[name]) uData[arrOff] = vals[name][0]; };
@@ -2040,7 +2047,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         passEncoder.setPipeline(this.webgpu.skyPipeline);
         passEncoder.setBindGroup(0, this.webgpu.skyBindGroup);
         
-        const skyUniforms = new Float32Array(28); // 16 (inv) + 4 (camPos) + 4 (params) + 4 (sunDir) = 28
+        const skyUniforms = f32_webgpuSkyUniforms; // 16 (inv) + 4 (camPos) + 4 (params) + 4 (sunDir) = 28
         if (viewProjInv) skyUniforms.set(viewProjInv, 0);
         if (cameraPos) skyUniforms.set(cameraPos, 16);
         skyUniforms[20] = (time || 0) * 0.05; // Time
@@ -2110,7 +2117,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
           if (topBoats[j] !== null) boatCount++;
         }
 
-        const uData = new Float32Array(512); // 2048 bytes
+        f32_webgpuWaterUData.fill(0);
+        const uData = f32_webgpuWaterUData; // 2048 bytes
         if (viewMatrix) uData.set(viewMatrix, 0);
         if (projMatrix) uData.set(projMatrix, 16);
         uData[32] = wColor[0]; uData[33] = wColor[1]; uData[34] = wColor[2]; uData[35] = 1.0;
@@ -2232,21 +2240,24 @@ if (!gl._patchedForWebGPU) {
 
     const origGetAttribLocation = gl.getAttribLocation;
     gl.getAttribLocation = function(prog, name) {
-        const loc = origGetAttribLocation.apply(this, arguments);
+        if (!prog) return -1;
+        if (!prog._attribLocCache) prog._attribLocCache = {};
+        if (prog._attribLocCache[name] !== undefined) return prog._attribLocCache[name];
+        const loc = origGetAttribLocation.call(this, prog, name);
         if (!prog._attribNamesInv) prog._attribNamesInv = {};
         prog._attribNamesInv[name] = loc;
+        prog._attribLocCache[name] = loc;
         return loc;
-    };
-
-    const origVertexAttribPointer = gl.vertexAttribPointer;
-    gl.vertexAttribPointer = function(index, size, type, normalized, stride, offset) {
-        origVertexAttribPointer.apply(this, arguments);
     };
 
     const origGetUniformLocation = gl.getUniformLocation;
     gl.getUniformLocation = function(prog, name) {
-        const loc = origGetUniformLocation.apply(this, arguments);
+        if (!prog) return null;
+        if (!prog._uniformLocCache) prog._uniformLocCache = {};
+        if (prog._uniformLocCache[name] !== undefined) return prog._uniformLocCache[name];
+        const loc = origGetUniformLocation.call(this, prog, name);
         if (loc) { loc._name = name; loc._prog = prog; }
+        prog._uniformLocCache[name] = loc;
         return loc;
     };
 
@@ -2269,16 +2280,6 @@ if (!gl._patchedForWebGPU) {
     const origUniform1i = gl.uniform1i; gl.uniform1i = function(loc, v0) { origUniform1i.apply(this, arguments); trackUniform(loc, [v0]); };
     const origUniform3fv = gl.uniform3fv; gl.uniform3fv = function(loc, v) { origUniform3fv.apply(this, arguments); trackUniform(loc, v); };
     const origUniformMatrix4fv = gl.uniformMatrix4fv; gl.uniformMatrix4fv = function(loc, trans, v) { origUniformMatrix4fv.apply(this, arguments); trackUniform(loc, v); };
-
-    const origBufferData = gl.bufferData;
-    gl.bufferData = function(target, data, usage) {
-        origBufferData.apply(this, arguments);
-    };
-    
-    const origDrawElements = gl.drawElements;
-    gl.drawElements = function(mode, count, type, offset) {
-        origDrawElements.apply(this, arguments);
-    };
 }
 
 
@@ -3092,6 +3093,65 @@ window.cloud3DProgram = cloud3DProgram;
         ];
       }
 
+      const _closestPtOut = [0, 0, 0];
+      function closestPointOnTriangleFast(px, py, pz, ax, ay, az, bx, by, bz, cx, cy, cz) {
+        const abX = bx - ax, abY = by - ay, abZ = bz - az;
+        const acX = cx - ax, acY = cy - ay, acZ = cz - az;
+        const apX = px - ax, apY = py - ay, apZ = pz - az;
+
+        const d1 = abX * apX + abY * apY + abZ * apZ;
+        const d2 = acX * apX + acY * apY + acZ * apZ;
+        if (d1 <= 0.0 && d2 <= 0.0) {
+          _closestPtOut[0] = ax; _closestPtOut[1] = ay; _closestPtOut[2] = az;
+          return _closestPtOut;
+        }
+
+        const bpX = px - bx, bpY = py - by, bpZ = pz - bz;
+        const d3 = abX * bpX + abY * bpY + abZ * bpZ;
+        const d4 = acX * bpX + acY * bpY + acZ * bpZ;
+        if (d3 >= 0.0 && d4 <= d3) {
+          _closestPtOut[0] = bx; _closestPtOut[1] = by; _closestPtOut[2] = bz;
+          return _closestPtOut;
+        }
+
+        const vc = d1 * d4 - d3 * d2;
+        if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+          const v = d1 / (d1 - d3);
+          _closestPtOut[0] = ax + v * abX; _closestPtOut[1] = ay + v * abY; _closestPtOut[2] = az + v * abZ;
+          return _closestPtOut;
+        }
+
+        const cpX = px - cx, cpY = py - cy, cpZ = pz - cz;
+        const d5 = abX * cpX + abY * cpY + abZ * cpZ;
+        const d6 = acX * cpX + acY * cpY + acZ * cpZ;
+        if (d6 >= 0.0 && d5 <= d6) {
+          _closestPtOut[0] = cx; _closestPtOut[1] = cy; _closestPtOut[2] = cz;
+          return _closestPtOut;
+        }
+
+        const vb = d5 * d2 - d1 * d6;
+        if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+          const w = d2 / (d2 - d6);
+          _closestPtOut[0] = ax + w * acX; _closestPtOut[1] = ay + w * acY; _closestPtOut[2] = az + w * acZ;
+          return _closestPtOut;
+        }
+
+        const va = d3 * d6 - d5 * d4;
+        if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+          const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+          _closestPtOut[0] = bx + w * (cx - bx); _closestPtOut[1] = by + w * (cy - by); _closestPtOut[2] = bz + w * (cz - bz);
+          return _closestPtOut;
+        }
+
+        const denom = 1.0 / (va + vb + vc);
+        const v = vb * denom;
+        const w = vc * denom;
+        _closestPtOut[0] = ax + abX * v + acX * w;
+        _closestPtOut[1] = ay + abY * v + acY * w;
+        _closestPtOut[2] = az + abZ * v + acZ * w;
+        return _closestPtOut;
+      }
+
       function projectWorldToScreen(worldPos, viewMat, projMat, width, height) {
         if (!viewMat || !projMat) return null;
         const vx =
@@ -3182,6 +3242,85 @@ window.cloud3DProgram = cloud3DProgram;
       // ============================================
       // Frustum Culling Functions (Separated to /public/js/frustumCulling.js)
       // ============================================
+
+      // ============================================
+      // Dedicated Active Vehicle Renderer (Boat & 3D UI Synchronization)
+      // ============================================
+      let activeBoatVBO = null;
+      let activeBoatColorBuffer = null;
+      let activeBoatNormalBuffer = null;
+      let activeBoatIndexBuffer = null;
+      let activeBoatIndicesLength = 0;
+
+      function drawDedicatedActiveBoat(gl, posLoc, colorLoc, normalLoc) {
+        const boat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
+        if (!boat || !boat.position) return;
+
+        if (!activeBoatVBO) {
+          activeBoatVBO = gl.createBuffer();
+          activeBoatColorBuffer = gl.createBuffer();
+          activeBoatNormalBuffer = gl.createBuffer();
+          activeBoatIndexBuffer = gl.createBuffer();
+        }
+
+        const rawVerts = [];
+        const rawColors = [];
+        const rawIndices = [];
+
+        if (window.ItemRegistry && window.ItemRegistry["wood_boat"] && window.ItemRegistry["wood_boat"].render) {
+          window.ItemRegistry["wood_boat"].render(boat, rawVerts, rawColors, rawIndices, 'dynamic');
+        }
+
+        if (rawIndices.length === 0) {
+          activeBoatIndicesLength = 0;
+          return;
+        }
+
+        const makeFlat = (typeof makeFlatShadedGeometry === "function") 
+          ? makeFlatShadedGeometry 
+          : (typeof window !== "undefined" ? window.makeFlatShadedGeometry : null);
+        if (!makeFlat) return;
+
+        const flat = makeFlat(rawVerts, rawColors, rawIndices, true);
+        if (!flat || !flat.indices) return;
+
+        activeBoatIndicesLength = flat.indices.length;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatVBO);
+        gl.bufferData(gl.ARRAY_BUFFER, flat.vertices, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, flat.colors, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+        if (normalLoc !== -1 && activeBoatNormalBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatNormalBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, flat.normals, gl.DYNAMIC_DRAW);
+          gl.enableVertexAttribArray(normalLoc);
+          gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
+        }
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBoatIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, flat.indices, gl.DYNAMIC_DRAW);
+
+        const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && activeBoatIndicesLength > 65535;
+        gl.drawElements(gl.TRIANGLES, activeBoatIndicesLength, isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+      }
+      window.drawDedicatedActiveBoat = drawDedicatedActiveBoat;
+
+      function drawDedicatedActiveBoatShadow(gl, depthPosLoc) {
+        if (!activeBoatVBO || !activeBoatIndexBuffer || activeBoatIndicesLength <= 0) return;
+        gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatVBO);
+        gl.enableVertexAttribArray(depthPosLoc);
+        gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBoatIndexBuffer);
+        const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && activeBoatIndicesLength > 65535;
+        gl.drawElements(gl.TRIANGLES, activeBoatIndicesLength, isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+      }
+      window.drawDedicatedActiveBoatShadow = drawDedicatedActiveBoatShadow;
 
       // ============================================
       // Render - พร้อม FPS Counter และ Lock
@@ -3357,7 +3496,8 @@ window.cloud3DProgram = cloud3DProgram;
         if (distanceDisplayEnabled) {
             if (!_cachedDistanceInfo) _cachedDistanceInfo = document.getElementById("distanceInfo");
             const distanceInfo = _cachedDistanceInfo;
-            if (distanceInfo) {
+            if (distanceInfo && (!window._lastDistUpdate || now - window._lastDistUpdate > 80)) {
+                window._lastDistUpdate = now;
                 const sinTheta = Math.sin(charTheta);
                 const cosTheta = Math.cos(charTheta);
                 const sinPhi = Math.sin(charPhi);
@@ -3367,18 +3507,22 @@ window.cloud3DProgram = cloud3DProgram;
                 const nz = sinTheta * sinPhi;
                 const height = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
                 const terrainRadius = RADIUS + height * HEIGHT_SCALE;
-                const charPos = [terrainRadius * nx, terrainRadius * ny, terrainRadius * nz];
+                const posX = terrainRadius * nx;
+                const posY = terrainRadius * ny;
+                const posZ = terrainRadius * nz;
 
-                let minDistance = Infinity;
-                for (const obs of natureObstacles) {
+                let minDistanceSq = Infinity;
+                for (let i = 0; i < natureObstacles.length; i++) {
+                    const obs = natureObstacles[i];
                     if (obs.type === "tree" || obs.type === "rock") {
-                        const dx = charPos[0] - obs.position[0];
-                        const dy = charPos[1] - obs.position[1];
-                        const dz = charPos[2] - obs.position[2];
-                        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                        if (dist < minDistance) minDistance = dist;
+                        const dx = posX - obs.position[0];
+                        const dy = posY - obs.position[1];
+                        const dz = posZ - obs.position[2];
+                        const distSq = dx * dx + dy * dy + dz * dz;
+                        if (distSq < minDistanceSq) minDistanceSq = distSq;
                     }
                 }
+                const minDistance = minDistanceSq === Infinity ? Infinity : Math.sqrt(minDistanceSq);
                 distanceInfo.textContent = `ระยะห่าง: ${minDistance === Infinity ? "ไม่มีใกล้เคียง" : minDistance.toFixed(2)}`;
             }
         }
@@ -4372,24 +4516,25 @@ window.cloud3DProgram = cloud3DProgram;
           );
           P_new = [P_new[0] / pLen, P_new[1] / pLen, P_new[2] / pLen];
 
-          const allObstacles = [
-            ...natureObstacles,
-            ...cubeObstacles,
-            ...amphibians,
-          ];
           const nearbyObstacles = [];
           const playerPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
           const filterDistSq = (maxColliderDistance + 1.5) * (maxColliderDistance + 1.5);
-          for (let i = 0; i < allObstacles.length; i++) {
-            const obs = allObstacles[i];
-            if (!obs.position) continue;
-            const dx = playerPos3D[0] - obs.position[0];
-            const dy = playerPos3D[1] - obs.position[1];
-            const dz = playerPos3D[2] - obs.position[2];
-            if (dx*dx + dy*dy + dz*dz < filterDistSq) {
-              nearbyObstacles.push(obs);
+          const filterObstacles = (list) => {
+            if (!list) return;
+            for (let i = 0; i < list.length; i++) {
+              const obs = list[i];
+              if (!obs || !obs.position) continue;
+              const dx = playerPos3D[0] - obs.position[0];
+              const dy = playerPos3D[1] - obs.position[1];
+              const dz = playerPos3D[2] - obs.position[2];
+              if (dx*dx + dy*dy + dz*dz < filterDistSq) {
+                nearbyObstacles.push(obs);
+              }
             }
-          }
+          };
+          filterObstacles(natureObstacles);
+          filterObstacles(cubeObstacles);
+          filterObstacles(amphibians);
 
           // --- ระบบป้องกันการเดินชนต้นไม้ หิน และสี่เหลี่ยม (ใช้ Simplified Mesh/Capsule Collider) ---
           const maxDistSq = maxColliderDistance * maxColliderDistance;
@@ -4416,11 +4561,16 @@ window.cloud3DProgram = cloud3DProgram;
 
                   for(let j=0; j<count; j+=3) {
                       const vIdx = obs.meshStart + j;
-                      const a = [natureRawVertices[vIdx*3], natureRawVertices[vIdx*3+1], natureRawVertices[vIdx*3+2]];
-                      const b = [natureRawVertices[(vIdx+1)*3], natureRawVertices[(vIdx+1)*3+1], natureRawVertices[(vIdx+1)*3+2]];
-                      const c = [natureRawVertices[(vIdx+2)*3], natureRawVertices[(vIdx+2)*3+1], natureRawVertices[(vIdx+2)*3+2]];
+                      const v0 = vIdx * 3;
+                      const v1 = (vIdx + 1) * 3;
+                      const v2 = (vIdx + 2) * 3;
                       
-                      const closest = closestPointOnTriangle(C, a, b, c);
+                      const closest = closestPointOnTriangleFast(
+                          C[0], C[1], C[2],
+                          natureRawVertices[v0], natureRawVertices[v0+1], natureRawVertices[v0+2],
+                          natureRawVertices[v1], natureRawVertices[v1+1], natureRawVertices[v1+2],
+                          natureRawVertices[v2], natureRawVertices[v2+1], natureRawVertices[v2+2]
+                      );
                       const px = C[0] - closest[0];
                       const py = C[1] - closest[1];
                       const pz = C[2] - closest[2];
@@ -5002,8 +5152,22 @@ window.cloud3DProgram = cloud3DProgram;
             activeRidingBoat.F = bF;
             activeRidingBoat.R = bR_vec;
             
-            if (typeof refreshCollectiblesVBO === "function") {
-                refreshCollectiblesVBO('dynamic');
+            const boatMoved = (
+                Math.abs(activeRidingBoat.vehicleSpeed || 0) > 0.0001 ||
+                Math.abs(moveForwardInput || 0) > 0.01 ||
+                Math.abs(moveSidewaysInput || 0) > 0.01 ||
+                (activeRidingBoat._prevPx !== undefined && (
+                    Math.abs(activeRidingBoat.position[0] - activeRidingBoat._prevPx) > 1e-5 ||
+                    Math.abs(activeRidingBoat.position[1] - activeRidingBoat._prevPy) > 1e-5 ||
+                    Math.abs(activeRidingBoat.position[2] - activeRidingBoat._prevPz) > 1e-5
+                ))
+            );
+            activeRidingBoat._prevPx = activeRidingBoat.position[0];
+            activeRidingBoat._prevPy = activeRidingBoat.position[1];
+            activeRidingBoat._prevPz = activeRidingBoat.position[2];
+
+            if (activeRidingBoat) {
+                if (typeof window !== "undefined") window.activeRidingBoat = activeRidingBoat;
             }
         } else if (activeRidingMech) {
             let height = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
@@ -5507,7 +5671,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                   const boatToDismount = activeRidingBoat;
                   // Dismounting - place player slightly to the right side of the boat to prevent collision trapping
                   if (boatToDismount.R) {
-                     const sideOffset = 0.45;
+                     const sideOffset = 0.65;
                      const p3d = [
                        boatToDismount.position[0] + boatToDismount.R[0] * sideOffset,
                        boatToDismount.position[1] + boatToDismount.R[1] * sideOffset,
@@ -5521,14 +5685,27 @@ if (prompt._lastHTML !== _newHtml_2) {
                      const pnx = p3d[0] / pLen, pny = p3d[1] / pLen, pnz = p3d[2] / pLen;
                      const pFeetRad = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * playerScale) : (pLen - 0.46 * playerScale);
                      const pCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(pnx, pny, pnz, pFeetRad) : null;
-                     const pGroundRad = pCaveData ? pCaveData.ground : (RADIUS + bHeight * HEIGHT_SCALE);
+                     const actualGroundHeight = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+                     const pGroundRad = pCaveData ? pCaveData.ground : (RADIUS + actualGroundHeight * HEIGHT_SCALE);
                      playerCenterRadius = pGroundRad + 0.46 * playerScale;
                      isPlayerGrounded = true;
                      playerVerticalVel = 0.0;
                   }
                   boatToDismount.isDynamic = true;
                   boatToDismount.vel = [0, 0, 0];
+                  boatToDismount.verticalVel = 0;
+                  boatToDismount.vehicleSpeed = 0;
+                  boatToDismount.spinSpeed = 0;
+                  boatToDismount.spinAxis = [0, 1, 0];
+                  boatToDismount._isSleeping = true;
                   activeRidingBoat = null;
+                  window.activeRidingBoat = null;
+                  if (typeof updateCharacterMesh === "function") {
+                    updateCharacterMesh(walkPhase);
+                  }
+                  if (typeof refreshCollectiblesVBO === "function") {
+                    refreshCollectiblesVBO('dynamic');
+                  }
                   if (typeof World3DUI !== "undefined") {
                     World3DUI.hideBoatUI();
                   }
@@ -6002,8 +6179,12 @@ if (prompt._lastHTML !== _newHtml_6) {
                     if (chestHoldTimer >= 0.8) {
                       chestHoldTimer = 0.0;
                       activeRidingBoat = closestBoat;
+                      window.activeRidingBoat = activeRidingBoat;
                       activeRidingBoat.isDynamic = true;
                       pendingCollectibleRefresh = true;
+                      if (typeof refreshCollectiblesVBO === "function") {
+                        refreshCollectiblesVBO('dynamic');
+                      }
                       // Teleport player to the boat's exact position on boarding so the boat doesn't jump
                       if (activeRidingBoat.position) {
                           const bPos = activeRidingBoat.position;
@@ -6585,12 +6766,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         const waterRad = typeof waterRadius !== 'undefined' ? waterRadius : 0.0;
         const gasVal = typeof skyGasIntensity !== 'undefined' ? skyGasIntensity : 0.75;
         
-        const gpuViewProj = new Float32Array(16);
-        Graphics.multiplyMatrices4(projMatrix, viewMatrix, gpuViewProj);
-        const invViewProj = new Float32Array(16);
-        Graphics.invertMatrix4(gpuViewProj, invViewProj);
-        window.gpuViewProj = gpuViewProj;
-        window.invViewProj = invViewProj;
+        Graphics.multiplyMatrices4(projMatrix, viewMatrix, f32_gpuViewProj);
+        Graphics.invertMatrix4(f32_gpuViewProj, f32_invViewProj);
+        window.gpuViewProj = f32_gpuViewProj;
+        window.invViewProj = f32_invViewProj;
         
         if (shadowMapEnabled) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
@@ -6606,7 +6785,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         gl.uniformMatrix4fv(
           depthLightSpaceLoc,
           false,
-          new Float32Array(lightSpaceMatrix),
+          setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
         );
         gl.uniform1f(depthTimeLoc, leafAnimTime);
         gl.uniform1f(depthPlanetRadiusLoc, RADIUS);
@@ -6634,7 +6813,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
-            new Float32Array(createIdentity()),
+            f32_identity,
           );
           gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexBuffer);
           gl.enableVertexAttribArray(depthPosLoc);
@@ -6724,7 +6903,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
-            new Float32Array(createIdentity()),
+            f32_identity,
           );
           gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
           gl.enableVertexAttribArray(depthPosLoc);
@@ -6764,7 +6943,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
-            new Float32Array(createIdentity()),
+            f32_identity,
           );
           gl.bindBuffer(gl.ARRAY_BUFFER, dynamicCollectibleVertexBuffer);
           gl.enableVertexAttribArray(depthPosLoc);
@@ -6794,6 +6973,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
         }
 
+        if (activeRidingBoat && typeof drawDedicatedActiveBoatShadow === "function") {
+          drawDedicatedActiveBoatShadow(gl, depthPosLoc);
+        }
+
         // Amphibians to depth (Cull creatures if outside object render distance)
         if (
           amphibianVertexBuffer &&
@@ -6818,7 +7001,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.uniformMatrix4fv(
               depthModelLoc,
               false,
-              new Float32Array(createIdentity()),
+              f32_identity,
             );
             gl.bindBuffer(gl.ARRAY_BUFFER, amphibianVertexBuffer);
             gl.enableVertexAttribArray(depthPosLoc);
@@ -6855,7 +7038,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.uniformMatrix4fv(
               depthModelLoc,
               false,
-              new Float32Array(createIdentity()),
+              f32_identity,
             );
             gl.bindBuffer(gl.ARRAY_BUFFER, fireVertexBuffer);
             gl.enableVertexAttribArray(depthPosLoc);
@@ -6877,7 +7060,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
-            new Float32Array(charModelMatrix),
+            setF32(f32_charModelMatrix, charModelMatrix),
           );
           gl.bindBuffer(gl.ARRAY_BUFFER, charVertexBuffer);
           gl.enableVertexAttribArray(depthPosLoc);
@@ -6980,12 +7163,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.uniformMatrix4fv(
               skyMVLoc,
               false,
-              new Float32Array(skyViewMatrix),
+              setF32(f32_modelViewMatrix, skyViewMatrix),
             );
-            gl.uniformMatrix4fv(skyProjLoc, false, new Float32Array(projMatrix));
+            gl.uniformMatrix4fv(skyProjLoc, false, setF32(f32_projMatrix, projMatrix));
             gl.uniform1f(skyTimeLoc, cloudAnimTime * 0.05);
             gl.uniform1f(skyGasIntensityLoc, skyGasIntensity);
-            if (skyCameraPosLoc) gl.uniform3fv(skyCameraPosLoc, new Float32Array(eyePos));
+            if (skyCameraPosLoc) gl.uniform3fv(skyCameraPosLoc, setF32(f32_eyePos, eyePos));
             if (skyWaterRadiusLoc) gl.uniform1f(skyWaterRadiusLoc, isSpaceCameraMode ? 0.0 : waterRadius);
 
             gl.depthMask(false);
@@ -7037,7 +7220,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             if (satProg === sunProgram) {
               if (sunIsSunLoc) gl.uniform1f(sunIsSunLoc, 1.0);
               if (sunTimeLoc) gl.uniform1f(sunTimeLoc, sunTime);
-              if (sunTintLoc) gl.uniform3fv(sunTintLoc, new Float32Array([1.0, 1.0, 1.0]));
+              if (sunTintLoc) gl.uniform3f(sunTintLoc, 1.0, 1.0, 1.0);
             } else if (modelLightDirLoc) {
               setF32(f32_finalLightDir, finalLightDir);
               gl.uniform3fv(modelLightDirLoc, f32_finalLightDir);
@@ -7182,21 +7365,21 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.useProgram(program);
           gl.uniform1f(gl.getUniformLocation(program, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
           gl.uniform1f(useLightingLoc, 1.0); // เปิดแสงเงาดิฟฟิวส์
-          gl.uniform3fv(lightDirLoc, new Float32Array(finalLightDir));
+          gl.uniform3fv(lightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelViewLoc,
             false,
-            new Float32Array(modelViewMatrix),
+            setF32(f32_modelViewMatrix, modelViewMatrix),
           );
           gl.uniformMatrix4fv(
             projectionLoc,
             false,
-            new Float32Array(projMatrix),
+            setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
             gl.getUniformLocation(program, "uLightSpaceMatrix"),
             false,
-            new Float32Array(lightSpaceMatrix),
+            setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(gl.getUniformLocation(program, "uShadowMap"), 1);
           gl.uniform2f(gl.getUniformLocation(program, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
@@ -7487,8 +7670,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
                 // Draw the glass pane box to the stencil buffer
                 gl.useProgram(modelProgram);
-                gl.uniformMatrix4fv(modelMVLoc, false, new Float32Array(viewMatrix));
-                gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
+                gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, viewMatrix));
+                gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, windowGlassVertexBuffer);
                 gl.enableVertexAttribArray(modelPosLoc);
@@ -7513,13 +7696,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
 
                 // Force projected Z to be 1.0 (far plane)
-                const forceZFarProj = [...projMatrix];
-                forceZFarProj[2] = projMatrix[3];
-                forceZFarProj[6] = projMatrix[7];
-                forceZFarProj[10] = projMatrix[11];
-                forceZFarProj[14] = projMatrix[15];
+                setF32(f32_forceZFarProj, projMatrix);
+                f32_forceZFarProj[2] = projMatrix[3];
+                f32_forceZFarProj[6] = projMatrix[7];
+                f32_forceZFarProj[10] = projMatrix[11];
+                f32_forceZFarProj[14] = projMatrix[15];
 
-                gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(forceZFarProj));
+                gl.uniformMatrix4fv(modelProjLoc, false, f32_forceZFarProj);
                 gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
 
                 // Re-enable color/depth writes, configure stencil to ONLY pass where stencil is 1
@@ -7544,24 +7727,24 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 gl.uniformMatrix4fv(
                   charMVLoc,
                   false,
-                  new Float32Array(reflectedModelViewMatrix),
+                  setF32(f32_reflectedModelViewMatrix, reflectedModelViewMatrix),
                 );
                 gl.uniformMatrix4fv(
                   gl.getUniformLocation(charProgram, "uModelMatrix"),
                   false,
-                  new Float32Array(reflectedModelMatrix),
+                  setF32(f32_reflectedModelMatrix, reflectedModelMatrix),
                 );
-                gl.uniformMatrix4fv(charProjLoc, false, new Float32Array(projMatrix));
-                gl.uniform3fv(charLightDirLoc, new Float32Array(finalLightDir));
+                gl.uniformMatrix4fv(charProjLoc, false, setF32(f32_projMatrix, projMatrix));
+                gl.uniform3fv(charLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                 gl.uniformMatrix4fv(
                   gl.getUniformLocation(charProgram, "uLightSpaceMatrix"),
                   false,
-                  new Float32Array(lightSpaceMatrix),
+                  setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
                 );
                 gl.uniform1i(gl.getUniformLocation(charProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(charProgram, "uWaterMaskTex"), 2);
                 gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-                gl.uniform3fv(charWaterColorLoc, new Float32Array(waterColor));
+                gl.uniform3fv(charWaterColorLoc, setF32(f32_waterColor, waterColor));
                 gl.uniform1f(charWaterOpacityLoc, waterOpacity);
                 if (charUseFaceTexLoc) {
                   gl.uniform1f(charUseFaceTexLoc, 0.0);
@@ -7603,17 +7786,17 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 // 2) Draw Mirrored Placed Cubes/Structures
                 if (cubeVertexBuffer && cubeIndicesLength > 0) {
                   gl.useProgram(modelProgram);
-                  gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
-                  gl.uniformMatrix4fv(modelMVLoc, false, new Float32Array(reflectedModelViewMatrixStatic));
-                  gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
+                  gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+                  gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
+                  gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
                   gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-                  gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+                  gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
                   gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
                   gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
                   gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
                   gl.uniform1f(modelTimeLoc, leafAnimTime);
                   gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-                  gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+                  gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
                   gl.uniform1f(modelSwayFactorLoc, 0.0);
                   gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -7687,17 +7870,17 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 // 4) Draw Mirrored Creatures (Amphibians)
                 if (amphibianVertexBuffer && amphibianIndicesLength > 0) {
                   gl.useProgram(modelProgram);
-                  gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
-                  gl.uniformMatrix4fv(modelMVLoc, false, new Float32Array(reflectedModelViewMatrixStatic));
-                  gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
+                  gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+                  gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
+                  gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
                   gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-                  gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+                  gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
                   gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
                   gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
                   gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
                   gl.uniform1f(modelTimeLoc, waterAnimTime);
                   gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-                  gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+                  gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
                   gl.uniform1f(modelSwayFactorLoc, 0.0);
                   gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -7733,17 +7916,17 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 // 5) Draw Mirrored Fire Particles
                 if (fireVertexBuffer && fireIndicesLength > 0) {
                   gl.useProgram(modelProgram);
-                  gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
-                  gl.uniformMatrix4fv(modelMVLoc, false, new Float32Array(reflectedModelViewMatrixStatic));
-                  gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
+                  gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+                  gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
+                  gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
                   gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-                  gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+                  gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
                   gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
                   gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
                   gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
                   gl.uniform1f(modelTimeLoc, waterAnimTime);
                   gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-                  gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+                  gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
                   gl.uniform1f(modelSwayFactorLoc, 0.0);
                   gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -7789,28 +7972,28 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         ) {
           gl.useProgram(modelProgram);
           gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
-          gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
             false,
-            new Float32Array(modelViewMatrix),
+            setF32(f32_modelViewMatrix, modelViewMatrix),
           );
           gl.uniformMatrix4fv(
             modelProjLoc,
             false,
-            new Float32Array(projMatrix),
+            setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
             gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
             false,
-            new Float32Array(lightSpaceMatrix),
+            setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform2f(gl.getUniformLocation(modelProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-          gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
             modelRenderDistEnabledLoc,
@@ -7819,7 +8002,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
           gl.uniform1f(modelTimeLoc, leafAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-          gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -7967,35 +8150,36 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
         const hasStaticCollectibles = collectibleVertexBuffer && collectibleColorBuffer && collectibleIndexBuffer && collectibleIndicesLength > 0;
         const hasDynamicCollectibles = dynamicCollectibleVertexBuffer && dynamicCollectibleColorBuffer && dynamicCollectibleIndexBuffer && dynamicCollectibleIndicesLength > 0;
+        const hasActiveBoat = !!activeRidingBoat;
 
         // วาดไอเทมสวมใส่ (Collectibles)
-        if (hasStaticCollectibles || hasDynamicCollectibles) {
+        if (hasStaticCollectibles || hasDynamicCollectibles || hasActiveBoat) {
           gl.enable(gl.CULL_FACE);
           gl.frontFace(gl.CW);
           gl.cullFace(gl.BACK);
 
           gl.useProgram(modelProgram);
-          gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
             false,
-            new Float32Array(modelViewMatrix),
+            setF32(f32_modelViewMatrix, modelViewMatrix),
           );
           gl.uniformMatrix4fv(
             modelProjLoc,
             false,
-            new Float32Array(projMatrix),
+            setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
             gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
             false,
-            new Float32Array(lightSpaceMatrix),
+            setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-          gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
             modelRenderDistEnabledLoc,
@@ -8004,7 +8188,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
           gl.uniform1f(modelTimeLoc, leafAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-          gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -8081,6 +8265,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               }
             }
           }
+
+          if (hasActiveBoat && typeof drawDedicatedActiveBoat === "function") {
+            drawDedicatedActiveBoat(gl, modelPosLoc, modelColorLoc, modelNormalLoc);
+          }
           
           gl.disable(gl.CULL_FACE);
         }
@@ -8097,20 +8285,20 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
           gl.useProgram(modelProgram);
 
-          gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
-          gl.uniformMatrix4fv(modelMVLoc, false, new Float32Array(modelViewMatrix));
-          gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
-          gl.uniformMatrix4fv(gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"), false, new Float32Array(lightSpaceMatrix));
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+          gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, modelViewMatrix));
+          gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
+          gl.uniformMatrix4fv(gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"), false, setF32(f32_lightSpaceMatrix, lightSpaceMatrix));
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-          gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
           gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
           gl.uniform1f(modelTimeLoc, leafAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-          gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -8154,11 +8342,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const equipModelViewMatrix = multiplyMatrices(viewMatrix, equipCharModelMatrix);
 
           gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, equipModelViewMatrix));
-          gl.uniformMatrix4fv(modelProjLoc, false, new Float32Array(projMatrix));
+          gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
           gl.uniformMatrix4fv(
             gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
             false,
-            new Float32Array(lightSpaceMatrix),
+            setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
@@ -8167,13 +8355,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           // For local space vertices, prevent underwater fog unless player is actually underwater
           const isPlayerUnderwater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.5);
           gl.uniform1f(modelWaterRadiusLoc, isRag ? (RADIUS + waterLevel * 0.15) : (isPlayerUnderwater ? 999.0 : -999.0));
-          gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(modelRenderDistEnabledLoc, 0.0);
           gl.uniform1f(modelMaxRenderDistLoc, 9999.0);
           gl.uniform1f(modelTimeLoc, 0.0);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-          gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -8234,27 +8422,27 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(modelProgram);
-          gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
             false,
-            new Float32Array(modelViewMatrix),
+            setF32(f32_modelViewMatrix, modelViewMatrix),
           );
           gl.uniformMatrix4fv(
             modelProjLoc,
             false,
-            new Float32Array(projMatrix),
+            setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
             gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
             false,
-            new Float32Array(lightSpaceMatrix),
+            setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-          gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
             modelRenderDistEnabledLoc,
@@ -8263,7 +8451,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
           gl.uniform1f(modelTimeLoc, waterAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-          gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -8308,27 +8496,27 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           fireIndicesLength > 0
         ) {
           gl.useProgram(modelProgram);
-          gl.uniform3fv(modelLightDirLoc, new Float32Array(finalLightDir));
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
             false,
-            new Float32Array(modelViewMatrix),
+            setF32(f32_modelViewMatrix, modelViewMatrix),
           );
           gl.uniformMatrix4fv(
             modelProjLoc,
             false,
-            new Float32Array(projMatrix),
+            setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
             gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
             false,
-            new Float32Array(lightSpaceMatrix),
+            setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-          gl.uniform3fv(modelWaterColorLoc, new Float32Array(waterColor));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
             modelRenderDistEnabledLoc,
@@ -8337,7 +8525,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
           gl.uniform1f(modelTimeLoc, waterAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
-          gl.uniform3fv(modelCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
@@ -8675,6 +8863,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
         }
         
+        // วาด 3D UI (ป้ายในโลก 3D เช่น UI เรือ/NPC) ก่อนวาดผิวน้ำ เพื่อให้จมน้ำ/ลอยน้ำเป็นเนื้อเดียวกับโลกแบบเดียวกับเรือและ NPC
+        if (typeof World3DUI !== "undefined" && World3DUI.backend) {
+          World3DUI.render(gl, f32_gpuViewProj);
+        }
+
         // ---- ENABLE BLENDING FOR TRANSPARENT PASSES ----
         gl.enable(gl.BLEND);
 
@@ -8710,17 +8903,17 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(
             atmosphereMVLoc,
             false,
-            new Float32Array(modelViewMatrix),
+            setF32(f32_modelViewMatrix, modelViewMatrix),
           );
           gl.uniformMatrix4fv(
             atmosphereProjLoc,
             false,
-            new Float32Array(projMatrix),
+            setF32(f32_projMatrix, projMatrix),
           );
-          gl.uniform3fv(atmosphereColorLoc, new Float32Array(atmosphereColor));
+          gl.uniform3fv(atmosphereColorLoc, setF32(f32_atmosphereColor, atmosphereColor));
           gl.uniform1f(atmosphereAlphaLoc, atmosphereAlpha);
-          gl.uniform3fv(atmosphereLightDirLoc, new Float32Array(finalLightDir));
-          gl.uniform3fv(atmosphereCameraPosLoc, new Float32Array(eyePos));
+          gl.uniform3fv(atmosphereLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+          gl.uniform3fv(atmosphereCameraPosLoc, setF32(f32_eyePos, eyePos));
 
           // ปิดเขียนลง Depth Buffer ชั่วคราวเพื่อให้เบลนด์กับเบื้องหลังได้อย่างสมบูรณ์แบบ
           gl.depthMask(false);
@@ -8776,8 +8969,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
               if (cloud3DVertexBuffer) {
                   gl.useProgram(cloud3DProgram);
-                  gl.uniformMatrix4fv(cloud3DMVLoc, false, new Float32Array(modelViewMatrix));
-                  gl.uniformMatrix4fv(cloud3DProjLoc, false, new Float32Array(projMatrix));
+                  gl.uniformMatrix4fv(cloud3DMVLoc, false, setF32(f32_modelViewMatrix, modelViewMatrix));
+                  gl.uniformMatrix4fv(cloud3DProjLoc, false, setF32(f32_projMatrix, projMatrix));
                   
                   // Calculate Clouds3D Orbital Rotation Matrix around planet
                   const orbAngle = typeof window.cloud3DOrbitAngle === "number" ? window.cloud3DOrbitAngle : 0.0;
@@ -8785,17 +8978,27 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   const sinA = Math.sin(orbAngle);
                   const cosT = Math.cos(0.21); // ~12 degree orbital tilt
                   const sinT = Math.sin(0.21);
-                  const orbitMatrix = new Float32Array([
-                    cosA,        sinA * sinT,   sinA * cosT,  0,
-                    0,           cosT,          -sinT,        0,
-                   -sinA,        cosA * sinT,   cosA * cosT,  0,
-                    0,           0,             0,            1
-                  ]);
+                  f32_cloudOrbitMatrix[0] = cosA;
+                  f32_cloudOrbitMatrix[1] = sinA * sinT;
+                  f32_cloudOrbitMatrix[2] = sinA * cosT;
+                  f32_cloudOrbitMatrix[3] = 0;
+                  f32_cloudOrbitMatrix[4] = 0;
+                  f32_cloudOrbitMatrix[5] = cosT;
+                  f32_cloudOrbitMatrix[6] = -sinT;
+                  f32_cloudOrbitMatrix[7] = 0;
+                  f32_cloudOrbitMatrix[8] = -sinA;
+                  f32_cloudOrbitMatrix[9] = cosA * sinT;
+                  f32_cloudOrbitMatrix[10] = cosA * cosT;
+                  f32_cloudOrbitMatrix[11] = 0;
+                  f32_cloudOrbitMatrix[12] = 0;
+                  f32_cloudOrbitMatrix[13] = 0;
+                  f32_cloudOrbitMatrix[14] = 0;
+                  f32_cloudOrbitMatrix[15] = 1;
                   if (cloud3DOrbitMatrixLoc) {
-                    gl.uniformMatrix4fv(cloud3DOrbitMatrixLoc, false, orbitMatrix);
+                    gl.uniformMatrix4fv(cloud3DOrbitMatrixLoc, false, f32_cloudOrbitMatrix);
                   }
 
-                  gl.uniform3fv(cloud3DColorLoc, new Float32Array(cloudsColor));
+                  gl.uniform3fv(cloud3DColorLoc, setF32(f32_cloudsColor, cloudsColor));
                   gl.uniform1f(cloud3DAlphaLoc, cloudsAlpha);
 
                   const c3dAnimT = typeof window.cloud3DAnimTime === "number" ? window.cloud3DAnimTime : cloudAnimTime * 0.01;
@@ -8804,8 +9007,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                     gl.uniform1f(cloud3DAnimTimeLoc, c3dAnimT);
                   }
 
-                  gl.uniform3fv(cloud3DLightDirLoc, new Float32Array(finalLightDir));
-                  gl.uniform3fv(cloud3DCameraPosLoc, new Float32Array(eyePos));
+                  gl.uniform3fv(cloud3DLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+                  gl.uniform3fv(cloud3DCameraPosLoc, setF32(f32_eyePos, eyePos));
                   if (cloud3DWaterRadiusLoc) {
                     gl.uniform1f(cloud3DWaterRadiusLoc, waterRadius);
                   }
@@ -8826,7 +9029,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   let ranges = [];
                   const fPlanes = typeof frustumPlanes !== 'undefined' ? frustumPlanes : null;
                   if (window.FrustumCullingSystem && typeof window.FrustumCullingSystem.getVisibleCloudRanges === 'function' && fPlanes && typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && window.cloud3DData.chunks) {
-                      ranges = window.FrustumCullingSystem.getVisibleCloudRanges(window.cloud3DData.chunks, orbitMatrix, fPlanes);
+                      ranges = window.FrustumCullingSystem.getVisibleCloudRanges(window.cloud3DData.chunks, f32_cloudOrbitMatrix, fPlanes);
                   }
                   if (!ranges || ranges.length === 0) {
                       ranges = [{ start: 0, end: window.cloud3DData.indices.length }];
@@ -8885,11 +9088,6 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
             gl.enable(gl.DEPTH_TEST);
           }
-        }
-
-        // Render 3D UI in world space after FXAA Post-Processing so UI text/icons are NOT blurred by FXAA
-        if (typeof World3DUI !== "undefined" && World3DUI.backend) {
-          World3DUI.render(gl, gpuViewProj);
         }
 
         if (typeof updateFloatingNpcHpBars === "function") {
