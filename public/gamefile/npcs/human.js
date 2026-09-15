@@ -51,16 +51,8 @@ window.buildHumanModel = function(
 
   const sagVec = f || (isRagdoll ? F : [0, 0, 0]);
 
-  const mp = (x, y, z, sagScale = 0) => {
-    let lx = x;
-    let ly = y;
-    let lz = z;
-    if (isRagdoll) {
-      lx += sagVec[0] * sagScale;
-      ly += sagVec[1] * sagScale;
-      lz += sagVec[2] * sagScale;
-    }
-    return transformPoint(lx * scale, ly * scale, lz * scale);
+  const mp = (x, y, z) => {
+    return transformPoint(x * scale, y * scale, z * scale);
   };
 
   const breathePhase = (c && c.idleAnimPhase) ? c.idleAnimPhase : 0;
@@ -78,16 +70,16 @@ window.buildHumanModel = function(
 
   // Joint bend angles - anatomically synchronized human gait
   // Left arm swings forward when moveR > 0 (opposite to Left leg moveL)
-  const elbowBendL = isRagdoll ? 0 : (0.12 + Math.max(0, moveR) * 0.38) * walkBlend + 0.10 * (1 - walkBlend);
-  const elbowBendR = isRagdoll ? 0 : (0.12 + Math.max(0, moveL) * 0.38) * walkBlend + 0.10 * (1 - walkBlend);
+  const elbowBendL = isRagdoll ? 0.08 : (0.12 + Math.max(0, moveR) * 0.38) * walkBlend + 0.10 * (1 - walkBlend);
+  const elbowBendR = isRagdoll ? 0.08 : (0.12 + Math.max(0, moveL) * 0.38) * walkBlend + 0.10 * (1 - walkBlend);
 
   // Knee bending during walk cycle:
   // Knee flexes backward to lift foot clear of ground during swing phase (when leg transitions from back to forward)
   const kneePhaseL = -Math.sin(walkPhase - 0.4);
-  const kneeBendL = isRagdoll ? 0 : Math.max(0.04, (kneePhaseL * 0.42 + 0.08) * walkBlend);
+  const kneeBendL = isRagdoll ? 0.06 : Math.max(0.04, (kneePhaseL * 0.42 + 0.08) * walkBlend);
   
   const kneePhaseR = -Math.sin(walkPhase + Math.PI - 0.4);
-  const kneeBendR = isRagdoll ? 0 : Math.max(0.04, (kneePhaseR * 0.42 + 0.08) * walkBlend);
+  const kneeBendR = isRagdoll ? 0.06 : Math.max(0.04, (kneePhaseR * 0.42 + 0.08) * walkBlend);
 
   // Body dynamics during gait:
   // Pelvis swivel & shoulder counter-swivel around vertical axis Y

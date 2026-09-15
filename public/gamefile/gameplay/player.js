@@ -4972,10 +4972,6 @@ window.characterVertexShaderSource = `
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
               }
-            } else if (activeInteractNPC.type === 'human') {
-              if (typeof showNpcDialogue === "function") {
-                showNpcDialogue(activeInteractNPC);
-              }
             } else {
               activeInteractNPC.hp = 0;
               activeInteractNPC.ragdollEnabled = true;
@@ -5263,10 +5259,6 @@ window.characterVertexShaderSource = `
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
-              }
-            } else if (activeInteractNPC.type === 'human') {
-              if (typeof showNpcDialogue === "function") {
-                showNpcDialogue(activeInteractNPC);
               }
             } else {
               activeInteractNPC.hp = 0;

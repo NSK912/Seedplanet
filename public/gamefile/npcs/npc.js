@@ -196,217 +196,13 @@ window.NpcRegistry = window.NpcRegistry || {};
     }
   };
 
-  // --- Dialogue Generation for Human NPCs ---
-  function getNpcDialogue(npc) {
-    const role = npc.npcRole ? npc.npcRole.title : "ชาวเผ่าพสุธา";
-    const name = npc.npcName || "สหาย";
-    const schedule = npc.lifeSchedule || "WANDERING";
-    const energy = Math.round(npc.energy !== undefined ? npc.energy : 80);
+  // Human NPC dialogue removed (not normal humans)
+  const existingModal = document.getElementById("npc-dialogue-modal");
+  if (existingModal) existingModal.remove();
 
-    const dialogues = {
-      COOKING: [
-        `"กลิ่นอาหารย่างหอมชวนน้ำลายสอจริงเชียว มาผิงไฟอุ่นๆ ด้วยกันสิสหาย ${name} กล่าว"`,
-        `"ไฟนี้ช่วยปกป้องพวกเราจากความมืดและสัตว์ร้ายยามค่ำคืน นั่งพักข้างกองไฟก่อนสิ"`,
-        `"การปรุงอาหารช่วยเพิ่มพลังชีวิตได้ดีมาก เจ้าพกอาหารติดตัวไว้บ้างหรือยัง?"`
-      ],
-      FORAGING: [
-        `"แถวนี้มีทั้งผลไม้ป่าและเปลือกไม้ที่นำไปทำสิ่งของได้ ข้ากำลังสำรวจหาเสบียงเพิ่มอยู่พอดี"`,
-        `"ถ้าเจ้าสังเกตดีๆ ริมชายฝั่งมักมีไอโซพอดและปลาดึกดำบรรพ์ว่ายน้ำอยู่เสมอ"`,
-        `"สมุนไพรและพืชพันธุ์บนดาวดวงนี้เติบโตตามแสงแดดและผืนน้ำ หากินช่วงกลางวันปลอดภัยที่สุด"`
-      ],
-      RESTING: [
-        `"ฮู่ว... ข้าเดินทางสำรวจมาทั้งวัน ขอแวะพักผ่อนใต้ร่มไม้นี้สักครู่ ลมพัดเย็นสบายจริงๆ"`,
-        `"ยามพลังงานใกล้หมด การหยุดพักสักครู่จะช่วยฟื้นกำลังวังชาให้พร้อมออกเดินทางต่อ"`,
-        `"สวัสดีสหาย ${name}... ข้ากำลังซึมซับเสียงคลื่นและสายลมแห่งดาวพสุธา"`
-      ],
-      SLEEPING: [
-        `"Zzz... ท้องฟ้ายามราตรีช่างเงียบสงบ... (กำลังหลับสบาย)"`,
-        `"(กำลังพักผ่อนอย่างเงียบสงบเพื่อฟื้นฟูพลังงานเต็มเปี่ยม)"`
-      ],
-      SOCIALIZING: [
-        `"ยินดีที่ได้พบกัน! เผ่าของเราสร้างบ้านเรือนและแบ่งปันอาหารกันอย่างสงบสุข"`,
-        `"พวกเราต่างช่วยกันดูแลดาวดวงนี้ หากเจ้าต้องการสร้างสิ่งใด ลองรวบรวมท่อนไม้และหินดูสิ"`,
-        `"การร่วมมือกันทำให้การอยู่รอดบนดาวดวงนี้ง่ายขึ้นมาก เจ้าเป็นมิตรที่ดีของเรา"`
-      ],
-      WANDERING: [
-        `"สวัสดีนักเดินทาง! ข้าคือ ${name} (${role}) เจ้าพบเห็นสิ่งอัศจรรย์ใดบนดาวดวงนี้บ้างรึยัง?"`,
-        `"ระวังตัวด้วยนะ บนท้องฟ้าบางครั้งมีแมลงปอยักษ์บินโฉบลงมา หากมีธนูหรืออาวุธจะช่วยได้มาก"`,
-        `"ใต้พื้นดินลึกลงไปมีถ้ำและแร่ธาตุเรืองแสง หากมีคบเพลิงจะช่วยนำทางเจ้าได้ดีทีเดียว"`
-      ]
-    };
-
-    const pool = dialogues[schedule] || dialogues.WANDERING;
-    const line = pool[Math.floor(Math.random() * pool.length)];
-    return { name, role, schedule, energy, line };
-  }
-
-  // --- Dynamic Dialogue Modal UI ---
-  let dialogueModal = null;
-
-  function ensureDialogueModal() {
-    if (dialogueModal) return dialogueModal;
-    dialogueModal = document.createElement("div");
-    dialogueModal.id = "npc-dialogue-modal";
-    dialogueModal.style.cssText = `
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      width: min(92vw, 480px);
-      background: rgba(14, 18, 27, 0.94);
-      border: 1px solid rgba(74, 222, 128, 0.4);
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(74, 222, 128, 0.15);
-      border-radius: 14px;
-      padding: 18px 22px;
-      color: #f1f5f9;
-      font-family: system-ui, -apple-system, sans-serif;
-      z-index: 100000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease, transform 0.25s ease;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    `;
-    document.body.appendChild(dialogueModal);
-    return dialogueModal;
-  }
-
-  function showNpcDialogue(npc) {
-    if (!npc || npc.ragdollEnabled) return;
-    const modal = ensureDialogueModal();
-    const data = getNpcDialogue(npc);
-
-    const scheduleLabels = {
-      COOKING: { text: "กำลังปรุงอาหาร (Cooking)", color: "#f97316", icon: "🍖" },
-      FORAGING: { text: "กำลังหาอาหาร (Foraging)", color: "#10b981", icon: "🌿" },
-      RESTING: { text: "กำลังพักผ่อน (Resting)", color: "#38bdf8", icon: "💤" },
-      SLEEPING: { text: "กำลังหลับ (Sleeping)", color: "#818cf8", icon: "🌙" },
-      SOCIALIZING: { text: "กำลังสนทนากับเพื่อน (Socializing)", color: "#ec4899", icon: "👥" },
-      WANDERING: { text: "กำลังสำรวจพื้นที่ (Exploring)", color: "#fbbf24", icon: "🚶" }
-    };
-
-    const sInfo = scheduleLabels[data.schedule] || scheduleLabels.WANDERING;
-
-    modal.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #0284c7); display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
-            🧑
-          </div>
-          <div>
-            <div style="font-weight: 700; font-size: 16px; color: #f8fafc; display: flex; align-items: center; gap: 6px;">
-              ${data.name}
-              <span style="font-size: 11px; font-weight: 500; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 12px;">${data.role}</span>
-            </div>
-            <div style="font-size: 12px; color: ${sInfo.color}; display: flex; align-items: center; gap: 4px; margin-top: 2px;">
-              <span>${sInfo.icon}</span>
-              <span>${sInfo.text}</span>
-            </div>
-          </div>
-        </div>
-        <button id="npc-dialogue-close-btn" style="background: transparent; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: color 0.15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">✕</button>
-      </div>
-
-      <!-- Life-Cycle Status Bars -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; font-size: 11px;">
-        <div style="background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #94a3b8;">
-            <span>⚡ พลังงาน (Energy)</span>
-            <span style="color: #38bdf8; font-weight: 600;">${data.energy}%</span>
-          </div>
-          <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-            <div style="height: 100%; width: ${Math.max(5, data.energy)}%; background: linear-gradient(90deg, #0284c7, #38bdf8); border-radius: 2px;"></div>
-          </div>
-        </div>
-        <div style="background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #94a3b8;">
-            <span>❤️ พลังชีวิต (HP)</span>
-            <span style="color: #4ade80; font-weight: 600;">${npc.hp || 10}/${npc.maxHp || 10}</span>
-          </div>
-          <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-            <div style="height: 100%; width: ${Math.round(((npc.hp || 10) / (npc.maxHp || 10)) * 100)}%; background: linear-gradient(90deg, #15803d, #4ade80); border-radius: 2px;"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Dialogue Content -->
-      <div id="npc-dialogue-text" style="background: rgba(0,0,0,0.25); border-left: 3px solid #10b981; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13.5px; line-height: 1.55; color: #e2e8f0; margin-bottom: 14px; font-style: italic;">
-        ${data.line}
-      </div>
-
-      <!-- Action Buttons -->
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="npc-dialogue-gift-btn" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7; padding: 6px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: background 0.15s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.3)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.2)'">
-          <span>🍎</span> มอบเสบียง (Gift Food)
-        </button>
-        <button id="npc-dialogue-talk-btn" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #7dd3fc; padding: 6px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: background 0.15s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.3)'" onmouseout="this.style.background='rgba(56, 189, 248, 0.2)'">
-          <span>💬</span> สนทนาต่อ (Inquire)
-        </button>
-      </div>
-    `;
-
-    modal.style.opacity = "1";
-    modal.style.pointerEvents = "auto";
-    modal.style.transform = "translateX(-50%) translateY(0)";
-
-    // Wire up events
-    const closeBtn = document.getElementById("npc-dialogue-close-btn");
-    if (closeBtn) {
-      closeBtn.onclick = () => hideNpcDialogue();
-    }
-
-    const talkBtn = document.getElementById("npc-dialogue-talk-btn");
-    if (talkBtn) {
-      talkBtn.onclick = () => {
-        const freshData = getNpcDialogue(npc);
-        const textElem = document.getElementById("npc-dialogue-text");
-        if (textElem) {
-          textElem.textContent = freshData.line;
-        }
-      };
-    }
-
-    const giftBtn = document.getElementById("npc-dialogue-gift-btn");
-    if (giftBtn) {
-      giftBtn.onclick = () => {
-        // Attempt to find food in inventory
-        let fed = false;
-        if (typeof inventory !== "undefined" && Array.isArray(inventory)) {
-          const foodItem = inventory.find(it => it && (it.name === "FRIED_BUG" || it.name === "BERRY" || it.name === "ISOPOD" || it.name === "FISH"));
-          if (foodItem) {
-            foodItem.count--;
-            if (foodItem.count <= 0) {
-              const idx = inventory.indexOf(foodItem);
-              if (idx !== -1) inventory.splice(idx, 1);
-            }
-            if (typeof updateInventoryUI === "function") updateInventoryUI();
-            fed = true;
-          }
-        }
-
-        const textElem = document.getElementById("npc-dialogue-text");
-        if (fed) {
-          npc.energy = Math.min(100, (npc.energy || 50) + 40);
-          npc.hunger = Math.max(0, (npc.hunger || 50) - 50);
-          if (textElem) {
-            textElem.innerHTML = `<span style="color: #4ade80; font-weight: bold;">"ขอบน้ำใจเจ้ามากสหาย! อาหารมื้อนี้ช่วยเติมพลังให้ข้าได้มากจริง!"</span>`;
-          }
-        } else {
-          if (textElem) {
-            textElem.innerHTML = `<span style="color: #fbbf24;">"เจ้ายังไม่มีเสบียงอาหารติดตัวเลย แต่แค่น้ำใจของเจ้า ข้าก็ซาบซึ้งใจแล้ว"</span>`;
-          }
-        }
-      };
-    }
-  }
-
-  function hideNpcDialogue() {
-    if (dialogueModal) {
-      dialogueModal.style.opacity = "0";
-      dialogueModal.style.pointerEvents = "none";
-      dialogueModal.style.transform = "translateX(-50%) translateY(20px)";
-    }
-  }
+  function showNpcDialogue() {}
+  function hideNpcDialogue() {}
+  function getNpcDialogue() { return null; }
 
   window.ExtraPlanetsEcosystem = ExtraPlanetsEcosystem;
   window.getHumanNpcName = getHumanNpcName;
@@ -961,21 +757,44 @@ function updateAmphibians(deltaTime, seed) {
           (Math.random() - 0.5) * 0.001,
         ];
 
-        c.ragdollAxis = [
-          Math.random() - 0.5,
-          Math.random() - 0.5,
-          Math.random() - 0.5,
-        ];
-        const len = Math.sqrt(
-          c.ragdollAxis[0] ** 2 +
-            c.ragdollAxis[1] ** 2 +
-            c.ragdollAxis[2] ** 2,
-        );
-        c.ragdollAxis[0] /= len;
-        c.ragdollAxis[1] /= len;
-        c.ragdollAxis[2] /= len;
-        c.ragdollAngle = 0;
-        c.ragdollAngularSpeed = (Math.random() - 0.5) * 0.15;
+        if (c.type === 'human') {
+          // Human falls flat to ground (lying down naturally like a fallen NPC)
+          const heading = c.heading || 0;
+          const cosH = Math.cos(heading);
+          const sinH = Math.sin(heading);
+          const F_init = [-cosT * cosP, sinT, -cosT * sinP];
+          const R_init = [sinP, 0, -cosP];
+          const R_dir = [
+            -F_init[0] * sinH + R_init[0] * cosH,
+            -F_init[1] * sinH + R_init[1] * cosH,
+            -F_init[2] * sinH + R_init[2] * cosH,
+          ];
+          const rLen = Math.sqrt(R_dir[0] ** 2 + R_dir[1] ** 2 + R_dir[2] ** 2) || 1;
+          c.ragdollAxis = [R_dir[0] / rLen, R_dir[1] / rLen, R_dir[2] / rLen];
+          c.ragdollAngle = (Math.random() < 0.5 ? 1 : -1) * (Math.PI * 0.48);
+          c.ragdollAngularSpeed = 0;
+          const caveDataInit = typeof getTerrainSurfaceAndCeiling === "function"
+            ? getTerrainSurfaceAndCeiling(N_init[0], N_init[1], N_init[2], c.r)
+            : { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(c.theta, c.phi, seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
+          const groundR = caveDataInit.ground + 0.04;
+          c.ragdollPos = [N_init[0] * groundR, N_init[1] * groundR, N_init[2] * groundR];
+        } else {
+          c.ragdollAxis = [
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+          ];
+          const len = Math.sqrt(
+            c.ragdollAxis[0] ** 2 +
+              c.ragdollAxis[1] ** 2 +
+              c.ragdollAxis[2] ** 2,
+          );
+          c.ragdollAxis[0] /= len;
+          c.ragdollAxis[1] /= len;
+          c.ragdollAxis[2] /= len;
+          c.ragdollAngle = 0;
+          c.ragdollAngularSpeed = (Math.random() - 0.5) * 0.15;
+        }
 
         // Initialize diedOnSurface for NPC
         const waterRadius = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
@@ -1122,7 +941,7 @@ function updateAmphibians(deltaTime, seed) {
         const caveData = c.ragdollCaveData || { ground: RADIUS + getHeightOnSphere(c.theta, c.phi, seed) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
         const surfaceRadius = caveData.ground;
 
-        const colRadius = 0.15 * 0.5; // matching NPC model scale
+        const colRadius = c.type === 'human' ? 0.04 : 0.15 * 0.5; // matching NPC model scale
         
         let target = distToCenter;
         let hitSolid = false;
@@ -1557,6 +1376,26 @@ function updateAmphibians(deltaTime, seed) {
           pos[2] + (px * R[2] + py * N[2] + pz * F[2]),
         ];
         if (c.ragdollEnabled) {
+          if (c.type === 'human') {
+            // Human model: maintain rigid anatomical integrity, only clamp vertices above ground
+            const dist = Math.sqrt(
+              worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
+            );
+            if (dist > 0.001) {
+              const ux = worldPos[0] / dist;
+              const uy = worldPos[1] / dist;
+              const uz = worldPos[2] / dist;
+
+              const caveData = c.ragdollCaveData || { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, uy))), Math.atan2(uz, ux), seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
+              const surfaceRadius = caveData.ground;
+              const minRad = surfaceRadius + 0.005;
+              if (dist < minRad && dist > surfaceRadius - 0.5) {
+                worldPos = [ux * minRad, uy * minRad, uz * minRad];
+              }
+            }
+            return worldPos;
+          }
+
           const dist = Math.sqrt(
             worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
           );

@@ -7562,7 +7562,7 @@ if (prompt._lastText !== _newText_2) {
               const dy = pVec[1] - pos[1];
               const dz = pVec[2] - pos[2];
               const distSq = dx * dx + dy * dy + dz * dz;
-              if (distSq < (npc.type === 'human' ? 0.9 : 0.25)) {
+              if (distSq < 0.25) {
                 if (distSq < minDistSq) {
                   minDistSq = distSq;
                   closestNPCLocal = npc;
@@ -7613,21 +7613,6 @@ if (npcPrompt._lastHTML !== _newHtml_9) {
 if (npcPrompt._lastHTML !== _newHtml_10) {
     npcPrompt.innerHTML = _newHtml_10;
     npcPrompt._lastHTML = _newHtml_10;
-}
-              } else if (closestNPCLocal.type === 'human') {
-                const hName = closestNPCLocal.name || "ชาวบ้าน";
-                const hRole = closestNPCLocal.role || "นักสำรวจ";
-                const _newHtml_human = `
-                  <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span>[${keyText}] พูดคุยกับ ${hName} (${hRole})</span>
-                  </span>
-                `;
-if (npcPrompt._lastHTML !== _newHtml_human) {
-    npcPrompt.innerHTML = _newHtml_human;
-    npcPrompt._lastHTML = _newHtml_human;
 }
               } else {
                 const _newHtml_11 = `
