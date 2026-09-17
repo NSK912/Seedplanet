@@ -7363,7 +7363,7 @@ if (prompt._lastHTML !== _newHtml_6) {
                         holdPercent: holdPercent,
                         isDismount: false,
                         batteryPercent: batteryPercent,
-                        hasBattery: (typeof window.BatterySystem !== "undefined")
+                        hasBattery: false
                       });
                   }
                 } else {

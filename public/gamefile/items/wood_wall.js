@@ -33,50 +33,64 @@ window.ItemRegistry["wood_wall"] = {
     const itemsList = window.collectibles || [];
     const colLen = itemsList.length;
 
-    if (item._hasCoLocatedDoor === undefined || item._colLen !== colLen) {
-      let hasCoLocatedDoor = false;
-      const key = Math.floor(p[0] / 0.5) + "_" + Math.floor(p[1] / 0.5) + "_" + Math.floor(p[2] / 0.5);
-      const candidates = window._spatialDoors ? window._spatialDoors.get(key) : null;
-      const searchList = candidates || itemsList;
-      for (let other of searchList) {
-        if (other.active && other.type === "wood_door") {
-          const ox = other.position[0] - p[0];
-          const oy = other.position[1] - p[1];
-          const oz = other.position[2] - p[2];
-          if (ox*ox + oy*oy + oz*oz < 0.005) {
-            hasCoLocatedDoor = true;
-            break;
-          }
-        }
-      }
-      if (!item.isPreview) { item._hasCoLocatedDoor = hasCoLocatedDoor; item._colLen = colLen; }
-      else item._previewHasDoor = hasCoLocatedDoor;
-    }
-
-    if (item._hasCoLocatedWindow === undefined || item._colLen !== colLen) {
-      let hasCoLocatedWindow = false;
-      if (item.type === "wood_wall") {
-        const key = Math.floor(p[0] / 0.5) + "_" + Math.floor(p[1] / 0.5) + "_" + Math.floor(p[2] / 0.5);
-        const candidates = window._spatialWindows ? window._spatialWindows.get(key) : null;
-        const searchList = candidates || itemsList;
-        for (let other of searchList) {
-          if (other.active && other.type === "wood_window") {
-            const ox = other.position[0] - p[0];
-            const oy = other.position[1] - p[1];
-            const oz = other.position[2] - p[2];
-            if (ox*ox + oy*oy + oz*oz < 0.005) {
-              hasCoLocatedWindow = true;
-              break;
+    function checkCoLocatedFixture(fixtureType) {
+      const cx = Math.floor(p[0] / 0.5);
+      const cy = Math.floor(p[1] / 0.5);
+      const cz = Math.floor(p[2] / 0.5);
+      const spatialMap = (fixtureType === "wood_door") ? window._spatialDoors : window._spatialWindows;
+      if (spatialMap) {
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const k = (cx + dx) + "_" + (cy + dy) + "_" + (cz + dz);
+              const list = spatialMap.get(k);
+              if (list) {
+                for (let i = 0; i < list.length; i++) {
+                  const other = list[i];
+                  if (other && other.active && other.type === fixtureType && !other.isPreview) {
+                    const ox = other.position[0] - p[0];
+                    const oy = other.position[1] - p[1];
+                    const oz = other.position[2] - p[2];
+                    if (ox * ox + oy * oy + oz * oz < 0.02) {
+                      return true;
+                    }
+                  }
+                }
+              }
             }
           }
         }
       }
-      if (!item.isPreview) { item._hasCoLocatedWindow = hasCoLocatedWindow; item._colLen = colLen; }
-      else item._previewHasWindow = hasCoLocatedWindow;
+      for (let i = 0; i < itemsList.length; i++) {
+        const other = itemsList[i];
+        if (other && other.active && other.type === fixtureType && !other.isPreview) {
+          const ox = other.position[0] - p[0];
+          const oy = other.position[1] - p[1];
+          const oz = other.position[2] - p[2];
+          if (ox * ox + oy * oy + oz * oz < 0.02) {
+            return true;
+          }
+        }
+      }
+      return false;
     }
 
-    const hasCoLocatedDoor = item.isPreview ? item._previewHasDoor : item._hasCoLocatedDoor;
-    const hasCoLocatedWindow = item.isPreview ? item._previewHasWindow : item._hasCoLocatedWindow;
+    let hasCoLocatedDoor = checkCoLocatedFixture("wood_door");
+    let hasCoLocatedWindow = (item.type === "wood_wall") ? checkCoLocatedFixture("wood_window") : false;
+
+    // Check preview hovering over this wall in real time
+    if (typeof window !== "undefined" && window.floorPreviewCollectible && window.floorPreviewCollectible.isPreview && window.floorPreviewCollectible.active) {
+      const prev = window.floorPreviewCollectible;
+      if (prev.type === "wood_door" || prev.type === "wood_window") {
+        const ox = prev.position[0] - p[0];
+        const oy = prev.position[1] - p[1];
+        const oz = prev.position[2] - p[2];
+        if (ox * ox + oy * oy + oz * oz < 0.02) {
+          if (prev.type === "wood_door") hasCoLocatedDoor = true;
+          if (prev.type === "wood_window") hasCoLocatedWindow = true;
+        }
+      }
+    }
 
     function getTrimHeight(tOffset, defaultMax) {
       if (!item._trimCache || item._trimColLen !== colLen) {

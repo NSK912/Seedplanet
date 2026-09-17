@@ -2,6 +2,13 @@
 // Genuine 3D UI rendered in WebGL or WebGPU as textured billboards
 
 const World3DUI = {
+  // Centralized theme colors for 3D UI buttons (เรือ, หุ่น, ทุกปุ่ม E)
+  BORDER_COLOR: 'rgba(255, 255, 255, 0.65)',    // ขอบขาว
+  BG_COLOR: 'rgba(60, 60, 60, 0.88)',            // พื้นหลังเทา
+  PROGRESS_COLOR: 'rgba(255, 255, 255, 0.45)',   // Progress bar ขาว
+  BUTTON_COLOR: '#dfb76c',                       // ปุ่ม E ทอง
+  BUTTON_PROGRESS_COLOR: 'rgba(255, 255, 255, 0.45)',
+
   backend: null,
   signs: new Map(),
   hoveredSlotIndex: -1,
@@ -578,8 +585,8 @@ const World3DUI = {
       const innerW = w - p * 2;
       const innerH = h - p * 2;
 
-      // Draw outer border
-      ctx.fillStyle = isEngineBoat ? 'rgba(150, 150, 150, 0.55)' : 'rgba(223, 183, 108, 0.55)';
+      // Draw outer border (ขอบขาว)
+      ctx.fillStyle = World3DUI.BORDER_COLOR;
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(w - 20, 0);
@@ -590,8 +597,8 @@ const World3DUI = {
       ctx.closePath();
       ctx.fill();
 
-      // Draw inner background
-      ctx.fillStyle = 'rgba(10, 10, 15, 0.88)';
+      // Draw inner background (พื้นหลังเทา)
+      ctx.fillStyle = World3DUI.BG_COLOR;
       ctx.beginPath();
       ctx.moveTo(p, p);
       ctx.lineTo(w - 20, p);
@@ -602,9 +609,9 @@ const World3DUI = {
       ctx.closePath();
       ctx.fill();
 
-      // Draw progress bars
+      // Draw progress bars (Progress bar ขาว)
       if (holdPercent > 0) {
-        ctx.fillStyle = isEngineBoat ? 'rgba(255, 255, 255, 0.45)' : 'rgba(223, 183, 108, 0.4)';
+        ctx.fillStyle = World3DUI.PROGRESS_COLOR;
         ctx.fillRect(p, p, innerW * (holdPercent / 100), innerH);
       }
 
@@ -630,7 +637,7 @@ const World3DUI = {
            ctx.fillText('🔋', w / 2, h / 2);
         }
       } else {
-        ctx.fillStyle = '#dfb76c';
+        ctx.fillStyle = World3DUI.BUTTON_COLOR || '#dfb76c';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 120px "JetBrains Mono", monospace';
@@ -808,8 +815,8 @@ const World3DUI = {
       const innerW = w - p * 2;
       const innerH = h - p * 2;
 
-      // Draw outer border
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      // Draw outer border (ขอบขาว)
+      ctx.fillStyle = World3DUI.BORDER_COLOR;
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(w - 20, 0);
@@ -820,8 +827,8 @@ const World3DUI = {
       ctx.closePath();
       ctx.fill();
 
-      // Draw inner background
-      ctx.fillStyle = 'rgba(60, 60, 60, 0.88)';
+      // Draw inner background (พื้นหลังเทา)
+      ctx.fillStyle = World3DUI.BG_COLOR;
       ctx.beginPath();
       ctx.moveTo(p, p);
       ctx.lineTo(w - 20, p);
@@ -832,13 +839,14 @@ const World3DUI = {
       ctx.closePath();
       ctx.fill();
 
-      // Draw progress bars (only hold to dismount)
+      // Draw progress bars (Progress bar ขาว)
       if (holdPercent > 0) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.fillStyle = World3DUI.PROGRESS_COLOR;
         ctx.fillRect(p, p, innerW * (holdPercent / 100), innerH);
       }
 
-      if (hasBattery) {
+      // If riding the mech and has battery, show battery icon; when mounting (before getting on) or without battery, show 'E'
+      if (isDismount && hasBattery) {
         if (typeof create3DIconCanvas === 'function') {
            const c = create3DIconCanvas("GLOW_BATTERY", 128, 128);
            if (c) {
@@ -859,7 +867,7 @@ const World3DUI = {
            ctx.fillText('🔋', w / 2, h / 2);
         }
       } else {
-        ctx.fillStyle = '#6cb7df';
+        ctx.fillStyle = World3DUI.BUTTON_COLOR || '#dfb76c';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 120px "JetBrains Mono", monospace';

@@ -3399,23 +3399,77 @@ function buildCollectibles(count, seed) {
               }
             }
           } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item") {
+            // Direct wall snap for wood_window and wood_door
+            if (typeToPlace === "wood_window" || typeToPlace === "wood_door") {
+              let nearestWall = null;
+              let nearestWallDist = Infinity;
+              for (let other of collectibles) {
+                if (other.active && other.type === "wood_wall" && !other.isPreview) {
+                  const dx = other.position[0] - targetPos[0];
+                  const dy = other.position[1] - targetPos[1];
+                  const dz = other.position[2] - targetPos[2];
+                  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                  if (dist < nearestWallDist && dist < 2.0) {
+                    nearestWallDist = dist;
+                    nearestWall = other;
+                  }
+                }
+              }
+
+              if (nearestWall) {
+                let hasFixture = false;
+                for (let other of collectibles) {
+                  if (other.active && (other.type === "wood_window" || other.type === "wood_door") && !other.isPreview) {
+                    const ox = other.position[0] - nearestWall.position[0];
+                    const oy = other.position[1] - nearestWall.position[1];
+                    const oz = other.position[2] - nearestWall.position[2];
+                    if (ox * ox + oy * oy + oz * oz < 0.02) {
+                      hasFixture = true;
+                      break;
+                    }
+                  }
+                }
+
+                floorPreviewCollectible.isValidPlacement = !hasFixture;
+                floorPreviewCollectible.size = 0.25;
+
+                targetPos = [
+                  nearestWall.position[0],
+                  nearestWall.position[1],
+                  nearestWall.position[2]
+                ];
+
+                pN = [nearestWall.normal[0], nearestWall.normal[1], nearestWall.normal[2]];
+                pR = [nearestWall.R[0], nearestWall.R[1], nearestWall.R[2]];
+                pF = [nearestWall.F[0], nearestWall.F[1], nearestWall.F[2]];
+
+                const baseAngle = (nearestWall.angle !== undefined) ? nearestWall.angle : 0.0;
+                const rotQ = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+                const flipAngle = Math.round(rotQ / Math.PI) * Math.PI;
+                floorPreviewCollectible.angle = baseAngle + flipAngle;
+                isSnapped = true;
+              }
+            }
+
             // Find nearest wood_floor for grid snapping (Only placeable on wood floors)
             let nearestFloor = null;
             let nearestDist = Infinity;
-            for (let other of collectibles) {
+            if (!isSnapped) {
+              for (let other of collectibles) {
                 if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
-                    const dx = other.position[0] - targetPos[0];
-                    const dy = other.position[1] - targetPos[1];
-                    const dz = other.position[2] - targetPos[2];
-                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                    if (dist < nearestDist) {
-                        nearestDist = dist;
-                        nearestFloor = other;
-                    }
+                  const dx = other.position[0] - targetPos[0];
+                  const dy = other.position[1] - targetPos[1];
+                  const dz = other.position[2] - targetPos[2];
+                  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                  if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestFloor = other;
+                  }
                 }
+              }
             }
 
-            const maxFloorDist = (typeToPlace === "thin_wood_floor") ? 1.5 : 0.6;
+            const maxFloorDist = (typeToPlace === "thin_wood_floor" || typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") ? 2.5 : 0.6;
             if (nearestFloor && nearestDist < maxFloorDist) {
                 const sR = nearestFloor.R || [1, 0, 0];
                 const sF = nearestFloor.F || [0, 0, 1];
@@ -3545,7 +3599,7 @@ function buildCollectibles(count, seed) {
                       }
                     }
 
-                    if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") {
+                    if (typeToPlace === "wood_wall") {
                       // Stacking: find first level >= 0 that does NOT have a wood_wall, wood_window, or wood_door
                       let targetLevel = 0;
                       while (true) {
@@ -3692,38 +3746,57 @@ function buildCollectibles(count, seed) {
                     } else {
                       // For wood_window or wood_door: must co-locate with a wood_wall at the targeted aim level
                       const localN = dx * sN[0] + dy * sN[1] + dz * sN[2];
-                      const aimLevel = Math.max(0, Math.round((localN - wH / 2) / 0.25));
+                      const aimLevel = Math.max(0, Math.round((localN - floorTopOffset) / 0.25));
                       
-                      const hasWallAtAimLevel = columnStructures.some(s => s.type === "wood_wall" && s.level === aimLevel);
+                      const targetWall = columnStructures.find(s => s.type === "wood_wall" && s.level === aimLevel);
                       const hasFixtureAtAimLevel = columnStructures.some(s => (s.type === "wood_window" || s.type === "wood_door") && s.level === aimLevel);
                       
-                      if (hasWallAtAimLevel && !hasFixtureAtAimLevel) {
+                      if (targetWall && !hasFixtureAtAimLevel) {
                         floorPreviewCollectible.isValidPlacement = true;
                         floorPreviewCollectible.size = 0.25;
                         
                         targetPos = [
-                          sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (wH / 2 + aimLevel * 0.25),
-                          sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (wH / 2 + aimLevel * 0.25),
-                          sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (wH / 2 + aimLevel * 0.25)
+                          targetWall.item.position[0],
+                          targetWall.item.position[1],
+                          targetWall.item.position[2]
                         ];
                         
-                        pN = [sN[0], sN[1], sN[2]];
-                        pR = [sR[0], sR[1], sR[2]];
-                        pF = [sF[0], sF[1], sF[2]];
+                        pN = [targetWall.item.normal[0], targetWall.item.normal[1], targetWall.item.normal[2]];
+                        pR = [targetWall.item.R[0], targetWall.item.R[1], targetWall.item.R[2]];
+                        pF = [targetWall.item.F[0], targetWall.item.F[1], targetWall.item.F[2]];
+                        const baseAngle = (targetWall.item.angle !== undefined) ? targetWall.item.angle : 0.0;
+                        const rotQ = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+                        const flipAngle = Math.round(rotQ / Math.PI) * Math.PI;
+                        floorPreviewCollectible.angle = baseAngle + flipAngle;
                         isSnapped = true;
                       } else {
                         floorPreviewCollectible.isValidPlacement = false;
                         floorPreviewCollectible.size = 0.25;
                         
-                        targetPos = [
-                          sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (wH / 2 + aimLevel * 0.25),
-                          sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (wH / 2 + aimLevel * 0.25),
-                          sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (wH / 2 + aimLevel * 0.25)
-                        ];
-                        
-                        pN = [sN[0], sN[1], sN[2]];
-                        pR = [sR[0], sR[1], sR[2]];
-                        pF = [sF[0], sF[1], sF[2]];
+                        if (targetWall) {
+                          targetPos = [
+                            targetWall.item.position[0],
+                            targetWall.item.position[1],
+                            targetWall.item.position[2]
+                          ];
+                          pN = [targetWall.item.normal[0], targetWall.item.normal[1], targetWall.item.normal[2]];
+                          pR = [targetWall.item.R[0], targetWall.item.R[1], targetWall.item.R[2]];
+                          pF = [targetWall.item.F[0], targetWall.item.F[1], targetWall.item.F[2]];
+                          const baseAngle = (targetWall.item.angle !== undefined) ? targetWall.item.angle : 0.0;
+                          const rotQ = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+                          const flipAngle = Math.round(rotQ / Math.PI) * Math.PI;
+                          floorPreviewCollectible.angle = baseAngle + flipAngle;
+                        } else {
+                          targetPos = [
+                            sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (floorTopOffset + aimLevel * 0.25),
+                            sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (floorTopOffset + aimLevel * 0.25),
+                            sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (floorTopOffset + aimLevel * 0.25)
+                          ];
+                          pN = [sN[0], sN[1], sN[2]];
+                          pR = [sR[0], sR[1], sR[2]];
+                          pF = [sF[0], sF[1], sF[2]];
+                          floorPreviewCollectible.angle = (gridX !== 0) ? Math.PI / 2 : 0.0;
+                        }
                         isSnapped = true;
                       }
                     }
@@ -3735,7 +3808,7 @@ function buildCollectibles(count, seed) {
                         pN = [pnx, pny, pnz];
                         pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
                         pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
-                    } else {
+                    } else if (!isSnapped) {
                         floorPreviewCollectible.isValidPlacement = false;
                         floorPreviewCollectible.size = 0.25;
                     }
@@ -3748,7 +3821,7 @@ function buildCollectibles(count, seed) {
                     pN = [pnx, pny, pnz];
                     pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
                     pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
-                } else {
+                } else if (!isSnapped) {
                     floorPreviewCollectible.isValidPlacement = false;
                     floorPreviewCollectible.size = 0.25;
                 }
