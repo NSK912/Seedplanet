@@ -2360,6 +2360,63 @@ window.characterVertexShaderSource = `
         model.setPonytailRotation(qx, qy, qz, qw);
       }
 
+      // =========================================================================
+      // Chibi Hand Pose & Finger Controls (กำมือ, แบมือ, แยกนิ้ว)
+      // =========================================================================
+      const chibiHandState = {
+        rightCurl: 0.0,    // -0.5 (แบมือกางสุด) to 0.0 (ธรรมชาติ) to 1.0 (กำมือ)
+        leftCurl: 0.0,
+        rightSpread: 0.0,  // -1.0 (หุบนิ้วชิดกัน) to 0.0 (ธรรมชาติ) to 1.0 (แยกนิ้วกว้าง)
+        leftSpread: 0.0,
+        syncBoth: true
+      };
+
+      if (typeof window !== "undefined") {
+        window.chibiHandState = chibiHandState;
+        window.setChibiHandCurl = function(val, hand = "both") {
+          if (hand === "both" || hand === "right") chibiHandState.rightCurl = val;
+          if (hand === "both" || hand === "left") chibiHandState.leftCurl = val;
+          if (window.chibiGlbModel && typeof window.chibiGlbModel.setHandPose === "function") {
+            window.chibiGlbModel.setHandPose(chibiHandState);
+          }
+          if (typeof window.updateCharacterMesh === "function") {
+            window.updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
+          }
+        };
+        window.setChibiHandSpread = function(val, hand = "both") {
+          if (hand === "both" || hand === "right") chibiHandState.rightSpread = val;
+          if (hand === "both" || hand === "left") chibiHandState.leftSpread = val;
+          if (window.chibiGlbModel && typeof window.chibiGlbModel.setHandPose === "function") {
+            window.chibiGlbModel.setHandPose(chibiHandState);
+          }
+          if (typeof window.updateCharacterMesh === "function") {
+            window.updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
+          }
+        };
+      }
+
+      function updateChibiHandPose(model, heldItem, isItemAction) {
+        if (!model || typeof model.setHandPose !== "function") return;
+
+        // Base values from dev sliders
+        let rCurl = chibiHandState.rightCurl;
+        let lCurl = chibiHandState.leftCurl;
+        let rSpread = chibiHandState.rightSpread;
+        let lSpread = chibiHandState.leftSpread;
+
+        // If character is holding a tool/item and no manual override is active, naturally grip hand
+        if (heldItem && rCurl === 0.0) {
+          rCurl = 0.85; // Natural firm grip on tool handle
+        }
+
+        model.setHandPose({
+          rightCurl: rCurl,
+          leftCurl: lCurl,
+          rightSpread: rSpread,
+          leftSpread: lSpread
+        });
+      }
+
       function getGlbCharacterMeshData(phase, isClone = false, cloneWalkBlend = 1.0) {
         if (typeof window === "undefined" || !window.chibiGlbModel) return null;
         if (isClone) return null; // Force clones to use procedural classic model
@@ -2580,6 +2637,11 @@ window.characterVertexShaderSource = `
           updateChibiVirtualHair(model, isMovingActive, isSprintingActive, phase, dt);
         }
 
+        // 7.1 Update Hand Pose & Finger Controls (กำมือ, แบมือ, แยกนิ้ว)
+        if (!isClone && typeof updateChibiHandPose === "function") {
+          updateChibiHandPose(model, heldItem, isItemAction);
+        }
+
         // 8. Sample and Mesh Skinning
         let skinned = null;
 
@@ -2668,13 +2730,14 @@ window.characterVertexShaderSource = `
         const colorByParts = typeof window !== "undefined" && !!window.devColorByParts;
         const partVis = (typeof window !== "undefined" && window.devPartVisibility) ? window.devPartVisibility : null;
         const selectedBone = (typeof window !== "undefined") ? window.devSelectedBone : null;
+        const hasHiddenParts = partVis ? Object.values(partVis).some(v => v === false) : false;
         const partGroups = model.vertexPartGroups;
         const dominantBones = model.vertexDominantBones;
         const selectedBoneNodeIdx = (selectedBone && model.nodes)
           ? model.nodes.findIndex(n => n && n.name === selectedBone)
           : -1;
 
-        if (!colorByParts && !partVis && selectedBoneNodeIdx === -1) {
+        if (!colorByParts && !hasHiddenParts && selectedBoneNodeIdx === -1) {
           // Fast-path for production gameplay: direct flat transforms without dev branching
           for (let i = 0; i < vCount; i++) {
             const i3 = i * 3;
@@ -2684,9 +2747,15 @@ window.characterVertexShaderSource = `
             outNormals[i3] = normals[i3];
             outNormals[i3 + 1] = normals[i3 + 1];
             outNormals[i3 + 2] = normals[i3 + 2];
-          }
-          if (modelColors && modelColors.length >= vCount * 3) {
-            _glbCachedColors = modelColors;
+            if (modelColors && modelColors.length >= (i + 1) * 3) {
+              outColors[i3] = modelColors[i3];
+              outColors[i3 + 1] = modelColors[i3 + 1];
+              outColors[i3 + 2] = modelColors[i3 + 2];
+            } else {
+              outColors[i3] = 1.0;
+              outColors[i3 + 1] = 1.0;
+              outColors[i3 + 2] = 1.0;
+            }
           }
         } else {
           // Debug / Dev visualizer path
@@ -2704,7 +2773,7 @@ window.characterVertexShaderSource = `
           for (let i = 0; i < vCount; i++) {
             const i3 = i * 3;
             const pGroup = partGroups ? partGroups[i] : 1;
-            const pKey = partKeys[pGroup];
+            const pKey = partKeys[pGroup] || "torso";
 
             if (partVis && partVis[pKey] === false) {
               outVertices[i3] = 0;
@@ -2730,6 +2799,18 @@ window.characterVertexShaderSource = `
               outColors[i3] = col[0] * shade;
               outColors[i3 + 1] = col[1] * shade;
               outColors[i3 + 2] = col[2] * shade;
+            } else if (selectedBoneNodeIdx !== -1) {
+              outColors[i3] = 0.35;
+              outColors[i3 + 1] = 0.38;
+              outColors[i3 + 2] = 0.42;
+            } else if (modelColors && modelColors.length >= (i + 1) * 3) {
+              outColors[i3] = modelColors[i3];
+              outColors[i3 + 1] = modelColors[i3 + 1];
+              outColors[i3 + 2] = modelColors[i3 + 2];
+            } else {
+              outColors[i3] = 1.0;
+              outColors[i3 + 1] = 1.0;
+              outColors[i3 + 2] = 1.0;
             }
           }
         }
@@ -2775,10 +2856,12 @@ window.characterVertexShaderSource = `
             if (!charNormalBuffer) charNormalBuffer = gl.createBuffer();
             uploadDynamicBuffer(gl, charNormalBuffer, gl.ARRAY_BUFFER, glbData.normals);
 
+            const isDevColorOrBone = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
             if (!charColorBuffer) charColorBuffer = gl.createBuffer();
-            if (charColorBuffer._sourceType !== "chibi" || (typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone))) {
+            if (charColorBuffer._sourceType !== "chibi" || isDevColorOrBone || charColorBuffer._lastIsDevColor) {
               uploadDynamicBuffer(gl, charColorBuffer, gl.ARRAY_BUFFER, glbData.colors);
               charColorBuffer._sourceType = "chibi";
+              charColorBuffer._lastIsDevColor = isDevColorOrBone;
             }
 
             if (glbData.texcoords) {

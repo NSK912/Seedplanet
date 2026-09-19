@@ -2250,7 +2250,14 @@ if (typeof window !== "undefined") {
     if (!charModelMatrix) return;
 
     const scale = 0.59;
-    const yOffset = -0.46;
+    let yOffset = -0.46;
+    if (typeof activeRidingBoat !== "undefined" && activeRidingBoat) {
+      yOffset = -0.15;
+    } else if (typeof activeRidingMech !== "undefined" && activeRidingMech) {
+      yOffset = -0.15;
+    } else if (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0) {
+      yOffset = -0.46 - currentSwimFactor * 0.12;
+    }
     const now = Date.now() * 0.005;
 
     // 1. Calculate World Coordinates of all joints in the skeleton
@@ -2380,10 +2387,20 @@ if (typeof window !== "undefined") {
 
       // Sample triangles cleanly for performance
       const step = triangleCount > 4000 ? 2 : 1;
+      const partGroups = model.vertexPartGroups;
+      const partKeys = ["head", "torso", "left_arm", "right_arm", "left_leg", "right_leg", "hair"];
+      const partVis = window.devPartVisibility;
+
       for (let t = 0; t < triangleCount; t += step) {
         const i0 = indices[t * 3] * 3;
         const i1 = indices[t * 3 + 1] * 3;
         const i2 = indices[t * 3 + 2] * 3;
+
+        if (partVis && partGroups) {
+          const pGroup = partGroups[indices[t * 3]];
+          const pKey = partKeys[pGroup] || "torso";
+          if (partVis[pKey] === false) continue;
+        }
 
         // Model space to world space
         const p0 = transformPoint(charModelMatrix, positions[i0] * scale, positions[i0 + 1] * scale + yOffset, positions[i0 + 2] * scale);
@@ -2554,6 +2571,10 @@ if (typeof window !== "undefined") {
       }
     });
 
+    if (typeof window.updateCharacterMesh === "function") {
+      window.updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
+    }
+
     if (typeof showNotice === "function" && boneName) {
       showNotice("🔍 ส่องกระดูก: " + boneName);
     }
@@ -2710,6 +2731,114 @@ if (typeof window !== "undefined") {
       const lbl = document.getElementById("devHairInertiaVal");
       if (lbl) lbl.innerText = val.toFixed(1);
       if (typeof window.triggerHairJiggle === "function") window.triggerHairJiggle(25.0, 35.0, 15.0);
+    }
+  });
+
+  // Wire up Hand & Finger Pose UI Controls (กำมือ, แบมือ, แยกนิ้ว)
+  let activeHandTarget = "both"; // "both", "right", "left"
+
+  function updateHandTargetUI(target) {
+    activeHandTarget = target;
+    const badge = document.getElementById("devHandPoseTargetBadge");
+    const bBoth = document.getElementById("devHandTargetBothBtn");
+    const bRight = document.getElementById("devHandTargetRightBtn");
+    const bLeft = document.getElementById("devHandTargetLeftBtn");
+
+    if (badge) {
+      badge.innerText = target === "both" ? "สองข้าง (Both)" : (target === "right" ? "มือขวา (Right)" : "มือซ้าย (Left)");
+    }
+    const setBtnStyle = (btn, active) => {
+      if (!btn) return;
+      btn.style.background = active ? "#ffb300" : "#333";
+      btn.style.color = active ? "#000" : "#ccc";
+      btn.style.fontWeight = active ? "bold" : "normal";
+      btn.style.border = active ? "1px solid #ffca28" : "1px solid #555";
+    };
+    setBtnStyle(bBoth, target === "both");
+    setBtnStyle(bRight, target === "right");
+    setBtnStyle(bLeft, target === "left");
+
+    // Sync sliders to reflect current values of selected target
+    if (window.chibiHandState) {
+      const curlVal = target === "left" ? window.chibiHandState.leftCurl : window.chibiHandState.rightCurl;
+      const spreadVal = target === "left" ? window.chibiHandState.leftSpread : window.chibiHandState.rightSpread;
+      const curlSlider = document.getElementById("devHandCurlSlider");
+      const spreadSlider = document.getElementById("devHandSpreadSlider");
+      if (curlSlider) curlSlider.value = Math.round(curlVal * 100);
+      if (spreadSlider) spreadSlider.value = Math.round(spreadVal * 100);
+      updateHandCurlLabel(curlVal);
+      updateHandSpreadLabel(spreadVal);
+    }
+  }
+
+  function updateHandCurlLabel(val) {
+    const lbl = document.getElementById("devHandCurlVal");
+    if (!lbl) return;
+    const pct = Math.round(val * 100);
+    if (pct === 0) lbl.innerText = "0% (ผ่อนคลาย)";
+    else if (pct > 0) lbl.innerText = `+${pct}% (กำมือ✊)`;
+    else lbl.innerText = `${pct}% (แบมือ✋)`;
+  }
+
+  function updateHandSpreadLabel(val) {
+    const lbl = document.getElementById("devHandSpreadVal");
+    if (!lbl) return;
+    const pct = Math.round(val * 100);
+    if (pct === 0) lbl.innerText = "0% (ปกติ)";
+    else if (pct > 0) lbl.innerText = `+${pct}% (กางแยกนิ้ว🖐️)`;
+    else lbl.innerText = `${pct}% (หุบนิ้วชิด🤏)`;
+  }
+
+  function applyHandPose(curl, spread) {
+    if (typeof window.setChibiHandCurl === "function") {
+      window.setChibiHandCurl(curl, activeHandTarget);
+    }
+    if (typeof window.setChibiHandSpread === "function") {
+      window.setChibiHandSpread(spread, activeHandTarget);
+    }
+    const cSlider = document.getElementById("devHandCurlSlider");
+    const sSlider = document.getElementById("devHandSpreadSlider");
+    if (cSlider) cSlider.value = Math.round(curl * 100);
+    if (sSlider) sSlider.value = Math.round(spread * 100);
+    updateHandCurlLabel(curl);
+    updateHandSpreadLabel(spread);
+  }
+
+  document.addEventListener("click", function(e) {
+    if (!e.target) return;
+    const id = e.target.id;
+    if (id === "devHandTargetBothBtn") updateHandTargetUI("both");
+    else if (id === "devHandTargetRightBtn") updateHandTargetUI("right");
+    else if (id === "devHandTargetLeftBtn") updateHandTargetUI("left");
+    else if (id === "devHandPresetRelaxed") {
+      applyHandPose(0.0, 0.0);
+      if (typeof showNotice === "function") showNotice("🖐️ ผ่อนคลายมือ (Relaxed)");
+    } else if (id === "devHandPresetFist") {
+      applyHandPose(1.0, -0.2);
+      if (typeof showNotice === "function") showNotice("✊ กำมือแน่น (Closed Fist)");
+    } else if (id === "devHandPresetOpen") {
+      applyHandPose(-0.35, 0.0);
+      if (typeof showNotice === "function") showNotice("✋ แบมือตรง (Flat Open Hand)");
+    } else if (id === "devHandPresetSpread") {
+      applyHandPose(-0.15, 0.95);
+      if (typeof showNotice === "function") showNotice("🖐️ กางแยกนิ้วกว้าง (Finger Spread)");
+    }
+  });
+
+  document.addEventListener("input", function(e) {
+    if (!e.target) return;
+    if (e.target.id === "devHandCurlSlider") {
+      const val = parseFloat(e.target.value) / 100.0;
+      updateHandCurlLabel(val);
+      if (typeof window.setChibiHandCurl === "function") {
+        window.setChibiHandCurl(val, activeHandTarget);
+      }
+    } else if (e.target.id === "devHandSpreadSlider") {
+      const val = parseFloat(e.target.value) / 100.0;
+      updateHandSpreadLabel(val);
+      if (typeof window.setChibiHandSpread === "function") {
+        window.setChibiHandSpread(val, activeHandTarget);
+      }
     }
   });
 

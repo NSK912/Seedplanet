@@ -5075,15 +5075,21 @@ window.cloud3DProgram = cloud3DProgram;
             const hasEngine = !!activeRidingBoat.hasEngine;
             const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
             
-            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : pSpeed * 2.2);
-            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : pSpeed * 1.0;
-            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : pSpeed * 0.08 * dt;
+            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : (isInWater ? pSpeed * 1.5 : 0));
+            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (isInWater ? pSpeed * 0.8 : 0));
+            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
             let brakePower = pSpeed * 0.30 * dt;
             let coastFriction = Math.pow(isInWater ? 0.96 : 0.985, dt);
             
-            let canAccelerate = (hasEngine && hasBattery) || (!hasEngine);
+            let canAccelerate = (hasEngine && hasBattery) || (isInWater && !hasEngine);
 
-            if (hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
+            if (!hasEngine && !isInWater && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
+              const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+              if (typeof showNotice === "function" && (!activeRidingBoat._lastEngineNotice || nowTime - activeRidingBoat._lastEngineNotice > 3000)) {
+                activeRidingBoat._lastEngineNotice = nowTime;
+                showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
+              }
+            } else if (hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
               if (typeof window.BatterySystem !== "undefined") {
                 window.BatterySystem.showEmptyNotice();
               }
@@ -5129,16 +5135,19 @@ window.cloud3DProgram = cloud3DProgram;
 
             // 3. Vehicle Turning / Steering Heading (GTA PS2 Car Physics)
             // Turns proportionally to speed, plus smooth low-speed / floating rudder steering so it never feels heavy
+            const refMaxSpeed = pSpeed * 5.0;
             if (Math.abs(vehSpeed) > 0.001) {
               const turnDir = vehSpeed >= 0 ? 1 : -1;
               const driftMultiplier = isHandbrake ? 2.4 : 1.0;
-              const turnRate = currentSteer * (Math.abs(vehSpeed) / topFwdSpeed) * 0.035 * turnDir * driftMultiplier;
+              const turnRate = currentSteer * (Math.abs(vehSpeed) / refMaxSpeed) * 0.035 * turnDir * driftMultiplier;
               charHeading += turnRate * dt;
             }
             if (Math.abs(moveSidewaysInput) > 0.05) {
               // Smooth, lightweight steering give at low speeds or in water (GTA PS2 arcade feel)
-              const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / topFwdSpeed);
-              charHeading += -moveSidewaysInput * 0.018 * dt * lowSpeedTurning;
+              const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / refMaxSpeed);
+              if (canAccelerate || Math.abs(vehSpeed) > 0.0005 || isInWater) {
+                charHeading += -moveSidewaysInput * 0.018 * dt * lowSpeedTurning;
+              }
             }
 
             // 4. Wheel Spin Angle
@@ -5185,7 +5194,11 @@ window.cloud3DProgram = cloud3DProgram;
             moveNorthFactor = 0;
             moveEastFactor = 0;
             if (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1) {
-              showNotice("เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
+              const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+              if (typeof showNotice === "function" && (!activeRidingBoat._lastLandNotice || nowTime - activeRidingBoat._lastLandNotice > 3000)) {
+                activeRidingBoat._lastLandNotice = nowTime;
+                showNotice("เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
+              }
             }
           }
         } else if (activeRidingMech) {
@@ -5193,7 +5206,9 @@ window.cloud3DProgram = cloud3DProgram;
             moveNorthFactor = 0;
             moveEastFactor = 0;
             if (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1) {
-              if (typeof showNotice === "function") {
+              const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+              if (typeof showNotice === "function" && (!activeRidingMech._lastAssembledNotice || nowTime - activeRidingMech._lastAssembledNotice > 3000)) {
+                activeRidingMech._lastAssembledNotice = nowTime;
                 const noticeMsg = (typeof window.t === "function") ? window.t("mech_need_4_parts") : "⚠️ Must assemble all 4 parts (Left Leg, Right Leg, Left Arm, Right Arm) before piloting!";
                 showNotice(noticeMsg);
               }
@@ -6435,46 +6450,32 @@ window.cloud3DProgram = cloud3DProgram;
         let isCameraUnderwater = camDist < waterRadius;
         lastIsCameraUnderwater = isCameraUnderwater;
 
-        // คำนวณทิศทางแสงวงโคจรของดวงอาทิตย์ (หมุนตามวงโคจร)
-        const orbitSpeed = (typeof window !== "undefined" && typeof window.dayNightOrbitSpeed === "number") ? window.dayNightOrbitSpeed : 0.01; // ความเร็วของดวงอาทิตย์ (0.01 ให้เวลา 1 วันประมาณ 10 นาทีครึ่ง)
-        const orbitAngle = waterTime * orbitSpeed;
-        const baseLightDir = [0.8, 0.45, 0.4];
-        const baseLen = Math.sqrt(
-          baseLightDir[0] * baseLightDir[0] +
-            baseLightDir[1] * baseLightDir[1] +
-            baseLightDir[2] * baseLightDir[2],
-        );
-        const normalizedBase = [
-          baseLightDir[0] / baseLen,
-          baseLightDir[1] / baseLen,
-          baseLightDir[2] / baseLen,
-        ];
+        // คำนวณทิศทางแสงตรงตามพิกัดดวงอาทิตย์ 3D ในระบบสุริยะจริง (SpacesMap 3D Satellite Sun Position)
+        let actualSunPos = [-800.0, 0.0, 0.0];
+        if (window.SpacesMap && typeof window.SpacesMap.getCelestialTransform === "function") {
+          const cel = window.SpacesMap.getCelestialTransform("sun");
+          if (cel && cel.pos) actualSunPos = cel.pos;
+        } else if (typeof window.getSunWorldPosition === "function") {
+          actualSunPos = window.getSunWorldPosition();
+        }
 
-        // หมุนรอบแกน Y เพื่อจำลองวงโคจร
-        const cosO = Math.cos(orbitAngle);
-        const sinO = Math.sin(orbitAngle);
-        const currentLightDir = [
-          normalizedBase[0] * cosO - normalizedBase[2] * sinO,
-          normalizedBase[1], // รักษาระดับความสูงแนวตั้งเฉียงไว้สวยงาม
-          normalizedBase[0] * sinO + normalizedBase[2] * cosO,
-        ];
-        const curLen = Math.sqrt(
-          currentLightDir[0] * currentLightDir[0] +
-            currentLightDir[1] * currentLightDir[1] +
-            currentLightDir[2] * currentLightDir[2],
-        );
+        const sunLen = Math.sqrt(
+          actualSunPos[0] * actualSunPos[0] +
+            actualSunPos[1] * actualSunPos[1] +
+            actualSunPos[2] * actualSunPos[2],
+        ) || 1.0;
+
         const finalLightDir = [
-          currentLightDir[0] / curLen,
-          currentLightDir[1] / curLen,
-          currentLightDir[2] / curLen,
+          actualSunPos[0] / sunLen,
+          actualSunPos[1] / sunLen,
+          actualSunPos[2] / sunLen,
         ];
         window.finalLightDir = finalLightDir;
-        const currentSunDist = RADIUS * 23481;
-        window.sunDistance = currentSunDist;
+        window.sunDistance = sunLen;
         window.sunPosition = [
-          finalLightDir[0] * currentSunDist,
-          finalLightDir[1] * currentSunDist,
-          finalLightDir[2] * currentSunDist,
+          actualSunPos[0],
+          actualSunPos[1],
+          actualSunPos[2],
         ];
 
         // อัปเดตตำแหน่งและรูปทรงเงามืดตามวงโคจรของแสงดวงอาทิตย์ (ใช้ระบบเงาคำนวณสดบน GPU ไม่ต้องรันฝั่ง CPU แล้ว)
@@ -6719,41 +6720,45 @@ if (prompt._lastHTML !== _newHtml_2) {
           } else {
                 chestHoldTimer = 0.0;
               }
-              const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-              let actionText = "ลงจากเรือ<br>Dismount Boat";
-              let isBoatInWater = waterEnabled && (bTerrainRadius < bWaterRadius) && (bDepth > 0.48 * playerScale);
-              let extraStatus = "";
-              if (!isBoatInWater) {
-                if (!hasWheels) {
-                  extraStatus = "<br><span style='font-size: 9px; color: #ffaa44;'>เรืออยู่บนบก - ติดล้อไม้เพื่อขับเคลื่อนเต็มที่<br>(On land - attach Wooden Wheels to drive)</span>";
+              if (activeRidingBoat) {
+                const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
+                let actionText = "ลงจากเรือ<br>Dismount Boat";
+                let isBoatInWater = waterEnabled && (bTerrainRadius < bWaterRadius) && (bDepth > 0.48 * playerScale);
+                let extraStatus = "";
+                if (!isBoatInWater) {
+                  if (!hasWheels) {
+                    extraStatus = "<br><span style='font-size: 9px; color: #ffaa44;'>เรืออยู่บนบก - ติดล้อไม้เพื่อขับเคลื่อนเต็มที่<br>(On land - attach Wooden Wheels to drive)</span>";
+                  } else if (!activeRidingBoat.hasEngine) {
+                    extraStatus = "<br><span style='font-size: 9px; color: #ffaa44;'>เรือติดล้อ - ต้องติดเครื่องยนต์ไฟฟ้าเพื่อขับเคลื่อนบนบก<br>(Wheeled boat - attach Electric Engine to drive)</span>";
+                  }
+                } else if (!canRideBoat) {
+                  extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
                 }
-              } else if (!canRideBoat) {
-                extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
-              }
-              
-              const isEngineBoat_3 = !!(activeRidingBoat && activeRidingBoat.hasEngine);
-              let batteryPercent = 0;
-              if (isEngineBoat_3 && typeof window.BatterySystem !== "undefined") {
-                const stats = window.BatterySystem.getStats();
-                if (stats.readyCount > 0 && stats.activeBattery) {
-                  batteryPercent = Math.max(0, Math.min(100, (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100));
-                } else if (stats.rechargingCount > 0) {
-                  const firstRecharging = window.BatterySystem.batteries.find(b => b.isRecharging);
-                  batteryPercent = firstRecharging ? Math.max(0, Math.min(100, (firstRecharging.rechargeTime / window.BatterySystem.REGEN_TIME) * 100)) : 0;
+                
+                const isEngineBoat_3 = !!(activeRidingBoat && activeRidingBoat.hasEngine);
+                let batteryPercent = 0;
+                if (isEngineBoat_3 && typeof window.BatterySystem !== "undefined") {
+                  const stats = window.BatterySystem.getStats();
+                  if (stats.readyCount > 0 && stats.activeBattery) {
+                    batteryPercent = Math.max(0, Math.min(100, (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100));
+                  } else if (stats.rechargingCount > 0) {
+                    const firstRecharging = window.BatterySystem.batteries.find(b => b.isRecharging);
+                    batteryPercent = firstRecharging ? Math.max(0, Math.min(100, (firstRecharging.rechargeTime / window.BatterySystem.REGEN_TIME) * 100)) : 0;
+                  }
                 }
-              }
 
-              if (prompt && prompt.style.display !== "none") prompt.style.display = "none";
-              
-              if (activeRidingBoat && typeof World3DUI !== "undefined") {
-                World3DUI.updateBoatUI({
-                  boat: activeRidingBoat,
-                  isRiding: true,
-                  playerScale: playerScale,
-                  isEngineBoat: isEngineBoat_3,
-                  batteryPercent: batteryPercent,
-                  holdPercent: holdPercent
-                });
+                if (prompt && prompt.style.display !== "none") prompt.style.display = "none";
+                
+                if (typeof World3DUI !== "undefined") {
+                  World3DUI.updateBoatUI({
+                    boat: activeRidingBoat,
+                    isRiding: true,
+                    playerScale: playerScale,
+                    isEngineBoat: isEngineBoat_3,
+                    batteryPercent: batteryPercent,
+                    holdPercent: holdPercent
+                  });
+                }
               } else if (typeof World3DUI !== "undefined") {
                 World3DUI.hideBoatUI();
               }
@@ -8566,7 +8571,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 window.createChibiGlbTexture(gl);
               }
             }
-            if (window.characterModel === "chibi" && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture) {
+            const isDevColorOrBone = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
+            if (window.characterModel === "chibi" && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBone) {
               gl.activeTexture(gl.TEXTURE5);
               gl.bindTexture(gl.TEXTURE_2D, window.chibiGlbTexture);
               gl.uniform1i(charMainTexLoc, 5);
@@ -8830,7 +8836,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 window.createChibiGlbTexture(gl);
               }
             }
-            if (window.characterModel === "chibi" && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture) {
+            const isDevColorOrBoneRefl = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
+            if (window.characterModel === "chibi" && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBoneRefl) {
               gl.activeTexture(gl.TEXTURE5);
               gl.bindTexture(gl.TEXTURE_2D, window.chibiGlbTexture);
               gl.uniform1i(charMainTexLoc, 5);
@@ -9802,6 +9809,33 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
 
           gl.drawArrays(gl.POINTS, 0, dotPositions.length / 3);
+        }
+
+        // ============================================
+        // วาดโครงกระดูก 3D, ตาข่าย Wireframe และป้ายชื่อกระดูก (GLB Skeleton & Parts Inspector)
+        // ============================================
+        if (typeof window.renderDevSkeletonAndParts === "function") {
+          gl.useProgram(program);
+          if (useLightingLoc) gl.uniform1f(useLightingLoc, 0.0);
+          if (terrainRenderDistEnabledLoc) gl.uniform1f(terrainRenderDistEnabledLoc, 0.0);
+          if (terrainWaterRadiusLoc) gl.uniform1f(terrainWaterRadiusLoc, 0.0);
+          if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 0.0);
+          if (tunnelCountLoc) gl.uniform1i(tunnelCountLoc, 0);
+          if (terrainRadiusAttrLoc !== -1) gl.disableVertexAttribArray(terrainRadiusAttrLoc);
+          if (tunnelCenterAttrLoc !== -1) gl.disableVertexAttribArray(tunnelCenterAttrLoc);
+
+          setF32(f32_modelViewMatrix, viewMatrix);
+          gl.uniformMatrix4fv(modelViewLoc, false, f32_modelViewMatrix);
+          setF32(f32_projMatrix, projMatrix);
+          gl.uniformMatrix4fv(projectionLoc, false, f32_projMatrix);
+
+          window.renderDevSkeletonAndParts(gl, {
+            positionLoc,
+            colorLoc,
+            viewMatrix,
+            projMatrix,
+            charModelMatrix: (typeof getCharacterMatrix === "function") ? getCharacterMatrix() : null
+          });
         }
         
         // ============================================

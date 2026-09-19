@@ -296,6 +296,12 @@ window.GLBLoader = class GLBLoader {
 
         // Setup Virtual Bone for Ponytail Hair (แนวทางที่ 3: Virtual Bone Skinning)
         this._setupVirtualPonytailBone();
+
+        // Refine Hand & Finger Geometry: chubby 3D volume, natural relaxed resting curve, smooth normals
+        this._refineHandGeometry();
+
+        // Setup Virtual Finger Bones for Left & Right Hands
+        this._setupVirtualFingerBones();
     }
 
     _invertMat4(out, a) {
@@ -517,6 +523,717 @@ window.GLBLoader = class GLBLoader {
         this.virtualPonytailRotation = [0, 0, 0, 1];
     }
 
+    _refineHandGeometry() {
+        if (!this.basePositions || !this.indices || !this.skin || !this.skin.joints || !this.skin.inverseBindMatrices) return;
+
+        const findJoint = (name) => {
+            const nodeIdx = this.nodes.findIndex(n => n && n.name && n.name.toLowerCase() === name.toLowerCase());
+            return nodeIdx !== -1 ? this.skin.joints.indexOf(nodeIdx) : -1;
+        };
+
+        const rHandJoint = findJoint("RightHand");
+        const rEndJoint = findJoint("RightHand_End");
+        const lHandJoint = findJoint("LeftHand");
+        const lEndJoint = findJoint("LeftHand_End");
+
+        if (rHandJoint === -1 && lHandJoint === -1) return;
+
+        this.basePositions = new Float32Array(this.basePositions);
+        this.baseNormals = new Float32Array(this.baseNormals);
+        const pos = this.basePositions;
+        const bind = new Float32Array(16);
+
+        const getFingerCenter = (lz, isRight) => {
+            if (isRight) {
+                if (lz > 0.04) return 0.002;
+                return 0.35 * lz + 0.006;
+            } else {
+                if (lz > 0.04) return -0.002;
+                return -0.35 * lz - 0.006;
+            }
+        };
+
+        const refineOne = (handJointIdx, endJointIdx, isRight) => {
+            if (handJointIdx === -1) return;
+            const inv = this.skin.inverseBindMatrices.subarray(handJointIdx * 16, handJointIdx * 16 + 16);
+            this._invertMat4(bind, inv);
+            const palmDir = isRight ? -1.0 : 1.0;
+
+            for (let i = 0; i < this.vertexCount; i++) {
+                let w = 0;
+                const i4 = i * 4;
+                for (let j = 0; j < 4; j++) {
+                    const jt = this.joints[i4 + j];
+                    if (jt === handJointIdx || (endJointIdx !== -1 && jt === endJointIdx)) {
+                        w += this.weights[i4 + j];
+                    }
+                }
+                if (w < 0.2) continue;
+
+                const px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2];
+                let lx = inv[0]*px + inv[4]*py + inv[8]*pz + inv[12];
+                let ly = inv[1]*px + inv[5]*py + inv[9]*pz + inv[13];
+                let lz = inv[2]*px + inv[6]*py + inv[10]*pz + inv[14];
+
+                // Hand influence ramp (wrist ly ~ 0.02 to knuckles ly ~ 0.08 to fingertips ly ~ 0.15)
+                const handT = Math.min(1.0, Math.max(0.0, (ly - 0.02) / 0.05)) * Math.min(1.0, w * 1.25);
+                if (handT <= 0.0) continue;
+
+                const centerLx = getFingerCenter(lz, isRight);
+                let dLx = lx - centerLx;
+
+                const isFinger = ly > 0.075;
+                const isThumb = lz >= 0.040;
+
+                // 1. Give plump, rounded 3D volume to thin fingers
+                let plump = 1.0;
+                if (isFinger) {
+                    const fProg = Math.min(1.0, (ly - 0.075) / 0.045);
+                    if (isThumb) {
+                        plump = 1.0 + 0.35 * fProg;
+                    } else {
+                        // Increase thickness of fingers (especially pinky, ring, middle which were 0.010 - 0.018)
+                        plump = 1.0 + 0.85 * fProg;
+                    }
+                } else {
+                    // Palm gentle plumpness
+                    plump = 1.0 + 0.25 * Math.min(1.0, Math.max(0.0, (ly - 0.03) / 0.04));
+                }
+
+                let targetLx = centerLx + dLx * plump;
+                let targetLy = ly;
+                let targetLz = lz;
+
+                // 2. Relaxed Natural Finger Curling
+                if (isFinger) {
+                    if (isThumb) {
+                        if (ly > 0.072) {
+                            const tProg = Math.min(1.0, (ly - 0.072) / 0.055);
+                            // Thumb relaxes inwards towards palm and towards index finger
+                            targetLx += palmDir * 0.012 * (tProg * tProg);
+                            targetLz -= 0.007 * tProg;
+                            targetLy -= 0.003 * (tProg * tProg);
+                        }
+                    } else {
+                        const fProg = Math.min(1.0, (ly - 0.075) / 0.065);
+                        // Fingers curl progressively into gentle, natural resting curve
+                        const curl = 0.018 * (fProg * fProg + 0.2 * fProg);
+                        targetLx += palmDir * curl;
+                        targetLy -= 0.005 * (fProg * fProg);
+                        // Softly draw outer fingers slightly together
+                        if (lz < -0.02) targetLz += 0.004 * fProg;
+                        if (lz > 0.01 && lz < 0.035) targetLz -= 0.003 * fProg;
+                    }
+                }
+
+                // Smooth blend
+                const finalLx = lx + (targetLx - lx) * handT;
+                const finalLy = ly + (targetLy - ly) * handT;
+                const finalLz = lz + (targetLz - lz) * handT;
+
+                pos[i * 3] = bind[0]*finalLx + bind[4]*finalLy + bind[8]*finalLz + bind[12];
+                pos[i * 3 + 1] = bind[1]*finalLx + bind[5]*finalLy + bind[9]*finalLz + bind[13];
+                pos[i * 3 + 2] = bind[2]*finalLx + bind[6]*finalLy + bind[10]*finalLz + bind[14];
+            }
+        };
+
+        refineOne(rHandJoint, rEndJoint, true);
+        refineOne(lHandJoint, lEndJoint, false);
+
+        // Recompute smooth normals for hand vertices
+        const ind = this.indices;
+        const norms = new Float32Array(this.vertexCount * 3);
+        const handVertMask = new Uint8Array(this.vertexCount);
+
+        for (let i = 0; i < this.vertexCount; i++) {
+            let w = 0;
+            const i4 = i * 4;
+            for (let j = 0; j < 4; j++) {
+                const jt = this.joints[i4 + j];
+                if (jt === rHandJoint || jt === lHandJoint || jt === rEndJoint || jt === lEndJoint) {
+                    w += this.weights[i4 + j];
+                }
+            }
+            if (w > 0.15) handVertMask[i] = 1;
+        }
+
+        for (let t = 0; t < ind.length; t += 3) {
+            const i0 = ind[t], i1 = ind[t+1], i2 = ind[t+2];
+            if (!handVertMask[i0] && !handVertMask[i1] && !handVertMask[i2]) continue;
+
+            const p0x = pos[i0*3], p0y = pos[i0*3+1], p0z = pos[i0*3+2];
+            const p1x = pos[i1*3], p1y = pos[i1*3+1], p1z = pos[i1*3+2];
+            const p2x = pos[i2*3], p2y = pos[i2*3+1], p2z = pos[i2*3+2];
+
+            const e1x = p1x - p0x, e1y = p1y - p0y, e1z = p1z - p0z;
+            const e2x = p2x - p0x, e2y = p2y - p0y, e2z = p2z - p0z;
+            const fnx = e1y * e2z - e1z * e2y;
+            const fny = e1z * e2x - e1x * e2z;
+            const fnz = e1x * e2y - e1y * e2x;
+
+            if (handVertMask[i0]) { norms[i0*3] += fnx; norms[i0*3+1] += fny; norms[i0*3+2] += fnz; }
+            if (handVertMask[i1]) { norms[i1*3] += fnx; norms[i1*3+1] += fny; norms[i1*3+2] += fnz; }
+            if (handVertMask[i2]) { norms[i2*3] += fnx; norms[i2*3+1] += fny; norms[i2*3+2] += fnz; }
+        }
+
+        const baseN = this.baseNormals;
+        for (let i = 0; i < this.vertexCount; i++) {
+            if (handVertMask[i]) {
+                const nx = norms[i*3], ny = norms[i*3+1], nz = norms[i*3+2];
+                const len = Math.hypot(nx, ny, nz);
+                if (len > 1e-6) {
+                    baseN[i*3] = nx / len;
+                    baseN[i*3+1] = ny / len;
+                    baseN[i*3+2] = nz / len;
+                }
+            }
+        }
+    }
+
+    _setupVirtualFingerBones() {
+        if (!this.skin || !this.skin.joints || !this.skin.inverseBindMatrices) return;
+
+        const findNode = (name) => this.nodes.findIndex(n => n && n.name && n.name.toLowerCase() === name.toLowerCase());
+        const rHandNodeIdx = findNode("RightHand");
+        const lHandNodeIdx = findNode("LeftHand");
+        if (rHandNodeIdx === -1 || lHandNodeIdx === -1) return;
+
+        const rHandJoint = this.skin.joints.indexOf(rHandNodeIdx);
+        const lHandJoint = this.skin.joints.indexOf(lHandNodeIdx);
+        if (rHandJoint === -1 || lHandJoint === -1) return;
+
+        const rEndNodeIdx = findNode("RightHand_End");
+        const lEndNodeIdx = findNode("LeftHand_End");
+        const rEndJoint = rEndNodeIdx !== -1 ? this.skin.joints.indexOf(rEndNodeIdx) : -1;
+        const lEndJoint = lEndNodeIdx !== -1 ? this.skin.joints.indexOf(lEndNodeIdx) : -1;
+
+        // Helper to dynamically insert virtual bones into the armature and skinning pipeline
+        const addVirtualBone = (name, parentNodeIdx, parentJointIdx, localX, localY, localZ) => {
+            const parentInvBind = this.skin.inverseBindMatrices.subarray(parentJointIdx * 16, parentJointIdx * 16 + 16);
+            const parentBindWorld = new Float32Array(16);
+            this._invertMat4(parentBindWorld, parentInvBind);
+
+            const virtualNodeIdx = this.nodes.length;
+            const virtualNode = {
+                name: name,
+                translation: [localX, localY, localZ],
+                rotation: [0, 0, 0, 1],
+                scale: [1, 1, 1],
+                baseTranslation: [localX, localY, localZ],
+                baseRotation: [0, 0, 0, 1],
+                baseScale: [1, 1, 1],
+                children: [],
+                parent: parentNodeIdx,
+                matrix: new Float32Array(16),
+                localMatrix: new Float32Array(16)
+            };
+            this.nodes.push(virtualNode);
+            this.nodes[parentNodeIdx].children.push(virtualNodeIdx);
+
+            this.blendCacheState.push({ t: [0, 0, 0], r: [0, 0, 0, 1], s: [1, 1, 1] });
+            this.layerCacheState.push({ t: [0, 0, 0], r: [0, 0, 0, 1], s: [1, 1, 1] });
+            if (this.upperBodyNodes) {
+                const newUpper = new Uint8Array(this.nodes.length);
+                newUpper.set(this.upperBodyNodes);
+                newUpper[virtualNodeIdx] = 1;
+                this.upperBodyNodes = newUpper;
+            }
+            if (this.lowerBodyNodes) {
+                const newLower = new Uint8Array(this.nodes.length);
+                newLower.set(this.lowerBodyNodes);
+                this.lowerBodyNodes = newLower;
+            }
+
+            const virtualLocalBind = new Float32Array([
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                localX, localY, localZ, 1
+            ]);
+            const virtualWorldBind = new Float32Array(16);
+            this._multiplyMat4(virtualWorldBind, parentBindWorld, virtualLocalBind);
+            const virtualInvBind = new Float32Array(16);
+            this._invertMat4(virtualInvBind, virtualWorldBind);
+
+            const virtualJointIdx = this.skin.joints.length;
+            this.skin.joints = [...this.skin.joints, virtualNodeIdx];
+            const newInvBind = new Float32Array(this.skin.joints.length * 16);
+            newInvBind.set(this.skin.inverseBindMatrices);
+            newInvBind.set(virtualInvBind, virtualJointIdx * 16);
+            this.skin.inverseBindMatrices = newInvBind;
+            this.jointMatrices = new Float32Array(this.skin.joints.length * 16);
+
+            return { nodeIdx: virtualNodeIdx, jointIdx: virtualJointIdx };
+        };
+
+        // 1. Right Hand: 3-Joint Anatomical Chain (MCP Base -> PIP Mid -> DIP Tip)
+        const rBase = addVirtualBone("Virtual_RightFingers", rHandNodeIdx, rHandJoint, 0.0, 0.068, 0.0);
+        const rMid = addVirtualBone("Virtual_RightFingers_Mid", rBase.nodeIdx, rBase.jointIdx, 0.0, 0.030, 0.0);
+        const rTip = addVirtualBone("Virtual_RightFingers_Tip", rMid.nodeIdx, rMid.jointIdx, 0.0, 0.024, 0.0);
+
+        // 2. Left Hand: 3-Joint Anatomical Chain (MCP Base -> PIP Mid -> DIP Tip)
+        const lBase = addVirtualBone("Virtual_LeftFingers", lHandNodeIdx, lHandJoint, 0.0, 0.068, 0.0);
+        const lMid = addVirtualBone("Virtual_LeftFingers_Mid", lBase.nodeIdx, lBase.jointIdx, 0.0, 0.030, 0.0);
+        const lTip = addVirtualBone("Virtual_LeftFingers_Tip", lMid.nodeIdx, lMid.jointIdx, 0.0, 0.024, 0.0);
+
+        this.virtualRightFingersNodeIdx = rBase.nodeIdx;
+        this.virtualRightFingersJointIdx = rBase.jointIdx;
+        this.virtualRightFingersMidNodeIdx = rMid.nodeIdx;
+        this.virtualRightFingersMidJointIdx = rMid.jointIdx;
+        this.virtualRightFingersTipNodeIdx = rTip.nodeIdx;
+        this.virtualRightFingersTipJointIdx = rTip.jointIdx;
+
+        this.virtualLeftFingersNodeIdx = lBase.nodeIdx;
+        this.virtualLeftFingersJointIdx = lBase.jointIdx;
+        this.virtualLeftFingersMidNodeIdx = lMid.nodeIdx;
+        this.virtualLeftFingersMidJointIdx = lMid.jointIdx;
+        this.virtualLeftFingersTipNodeIdx = lTip.nodeIdx;
+        this.virtualLeftFingersTipJointIdx = lTip.jointIdx;
+
+        this.virtualRightFingersRotation = [0, 0, 0, 1];
+        this.virtualRightFingersMidRotation = [0, 0, 0, 1];
+        this.virtualRightFingersTipRotation = [0, 0, 0, 1];
+        this.virtualLeftFingersRotation = [0, 0, 0, 1];
+        this.virtualLeftFingersMidRotation = [0, 0, 0, 1];
+        this.virtualLeftFingersTipRotation = [0, 0, 0, 1];
+
+        this.joints = new Uint8Array(this.joints);
+        this.weights = new Float32Array(this.weights);
+
+        // Hierarchical Skinning Weight Distribution across Hand -> MCP Base -> PIP Mid -> DIP Tip
+        const assignHandWeights = (hJoint, endJoint, baseJoint, midJoint, tipJoint, baseNodeIdx, midNodeIdx, tipNodeIdx, hNodeIdx, isRight) => {
+            const invH = this.skin.inverseBindMatrices.subarray(hJoint * 16, hJoint * 16 + 16);
+            for (let i = 0; i < this.vertexCount; i++) {
+                let handSlot = -1;
+                let endSlot = -1;
+                let totalHandW = 0;
+                const i4 = i * 4;
+                for (let j = 0; j < 4; j++) {
+                    const jt = this.joints[i4 + j];
+                    const w = this.weights[i4 + j];
+                    if (jt === hJoint) {
+                        handSlot = j;
+                        totalHandW += w;
+                    } else if (endJoint !== -1 && jt === endJoint) {
+                        endSlot = j;
+                        totalHandW += w;
+                    }
+                }
+                if (totalHandW < 0.15) continue;
+
+                const px = this.basePositions[i*3], py = this.basePositions[i*3+1], pz = this.basePositions[i*3+2];
+                const lx = invH[0]*px + invH[4]*py + invH[8]*pz + invH[12];
+                const ly = invH[1]*px + invH[5]*py + invH[9]*pz + invH[13];
+                const lz = invH[2]*px + invH[6]*py + invH[10]*pz + invH[14];
+
+                // Detect finger type to apply anatomical knuckle thresholds
+                const isThumb = ly <= 0.098 && lz > 0.040 && (isRight ? lx < -0.005 : lx > 0.005);
+
+                let fHand = 0, fBase = 0, fMid = 0, fTip = 0;
+
+                if (isThumb) {
+                    const baseThresh = 0.052;
+                    const midThresh = 0.075;
+                    const tipThresh = 0.098;
+                    if (ly <= baseThresh) {
+                        fHand = 1.0;
+                    } else if (ly <= midThresh) {
+                        const t = (ly - baseThresh) / (midThresh - baseThresh);
+                        fBase = t;
+                        fHand = 1.0 - t;
+                    } else {
+                        const t = Math.min(1.0, (ly - midThresh) / (tipThresh - midThresh));
+                        fMid = t;
+                        fBase = 1.0 - t;
+                    }
+                } else {
+                    let baseThresh = 0.066;
+                    let midThresh = 0.096;
+                    let tipThresh = 0.122;
+                    let endThresh = 0.146;
+                    if (lz < -0.026) {
+                        // Pinky finger is shorter
+                        baseThresh = 0.058; midThresh = 0.086; tipThresh = 0.108; endThresh = 0.122;
+                    } else if (lz > 0.026) {
+                        // Index finger
+                        baseThresh = 0.064; midThresh = 0.094; tipThresh = 0.118; endThresh = 0.142;
+                    }
+
+                    // Continuous C1 Hermite smooth blending to ensure a curved, natural organic arch (ไม่หักมุมเป็นตัว L)
+                    if (ly <= baseThresh) {
+                        const t = Math.max(0.0, (ly - (baseThresh - 0.012)) / 0.012);
+                        const s = t * t * (3.0 - 2.0 * t);
+                        fHand = 1.0 - 0.25 * s;
+                        fBase = 0.25 * s;
+                        fMid = 0.0;
+                        fTip = 0.0;
+                    } else if (ly <= midThresh) {
+                        const t = (ly - baseThresh) / (midThresh - baseThresh);
+                        const s = t * t * (3.0 - 2.0 * t);
+                        fHand = (1.0 - s) * 0.75;
+                        fBase = (1.0 - s) * 0.25 + s * (1.0 - 0.5 * s);
+                        fMid = s * 0.5 * s;
+                        fTip = 0.0;
+                    } else if (ly <= tipThresh) {
+                        const t = (ly - midThresh) / (tipThresh - midThresh);
+                        const s = t * t * (3.0 - 2.0 * t);
+                        fHand = 0.0;
+                        fBase = (1.0 - s) * 0.35;
+                        fMid = (1.0 - s) * 0.65 + s * (1.0 - 0.7 * s);
+                        fTip = s * 0.7 * s;
+                    } else {
+                        const t = Math.min(1.0, (ly - tipThresh) / (endThresh - tipThresh));
+                        const s = t * t * (3.0 - 2.0 * t);
+                        fHand = 0.0;
+                        fBase = 0.0;
+                        fMid = (1.0 - s) * 0.30;
+                        fTip = 0.70 + 0.30 * s;
+                    }
+                }
+
+                const sumF = fHand + fBase + fMid + fTip;
+                if (sumF > 0.0001) {
+                    fHand /= sumF; fBase /= sumF; fMid /= sumF; fTip /= sumF;
+                }
+
+                if (fHand < 0.999) {
+                    const wBase = totalHandW * fBase;
+                    const wMid = totalHandW * fMid;
+                    const wTip = totalHandW * fTip;
+                    const wHand = totalHandW * fHand;
+
+                    if (handSlot !== -1) this.weights[i4 + handSlot] = 0;
+                    if (endSlot !== -1) this.weights[i4 + endSlot] = 0;
+
+                    const getFreeSlot = (avoid) => {
+                        for (let j = 0; j < 4; j++) {
+                            if (!avoid.includes(j) && this.weights[i4 + j] < 0.001) return j;
+                        }
+                        let minW = 999, s = -1;
+                        for (let j = 0; j < 4; j++) {
+                            if (!avoid.includes(j) && this.weights[i4 + j] < minW) { minW = this.weights[i4 + j]; s = j; }
+                        }
+                        return s;
+                    };
+
+                    const assigned = [];
+                    const assignJoint = (jIdx, weight) => {
+                        if (weight <= 0.005) return;
+                        const s = getFreeSlot(assigned);
+                        if (s !== -1) {
+                            assigned.push(s);
+                            this.joints[i4 + s] = jIdx;
+                            this.weights[i4 + s] = weight;
+                        }
+                    };
+
+                    if (wHand > 0.005) assignJoint(hJoint, wHand);
+                    if (wBase > 0.005) assignJoint(baseJoint, wBase);
+                    if (wMid > 0.005) assignJoint(midJoint, wMid);
+                    if (wTip > 0.005) assignJoint(tipJoint, wTip);
+
+                    let dominantIdx = hNodeIdx;
+                    let maxWeight = wHand;
+                    if (wBase > maxWeight) { maxWeight = wBase; dominantIdx = baseNodeIdx; }
+                    if (wMid > maxWeight) { maxWeight = wMid; dominantIdx = midNodeIdx; }
+                    if (wTip > maxWeight) { maxWeight = wTip; dominantIdx = tipNodeIdx; }
+
+                    if (this.vertexDominantBones) this.vertexDominantBones[i] = dominantIdx;
+                    this.dominantBoneVertexCounts[dominantIdx] = (this.dominantBoneVertexCounts[dominantIdx] || 0) + 1;
+                    if (this.dominantBoneVertexCounts[hNodeIdx]) this.dominantBoneVertexCounts[hNodeIdx]--;
+
+                    let totalW = 0;
+                    for (let j = 0; j < 4; j++) totalW += this.weights[i4 + j];
+                    if (totalW > 0.0001) {
+                        for (let j = 0; j < 4; j++) this.weights[i4 + j] /= totalW;
+                    }
+                }
+            }
+        };
+
+        assignHandWeights(rHandJoint, rEndJoint, rBase.jointIdx, rMid.jointIdx, rTip.jointIdx, rBase.nodeIdx, rMid.nodeIdx, rTip.nodeIdx, rHandNodeIdx, true);
+        assignHandWeights(lHandJoint, lEndJoint, lBase.jointIdx, lMid.jointIdx, lTip.jointIdx, lBase.nodeIdx, lMid.nodeIdx, lTip.nodeIdx, lHandNodeIdx, false);
+
+        // Precompute per-vertex finger spread mapping for both hands
+        this.fingerSpreadMap = [];
+        const findJoint = (name) => {
+            const nodeIdx = this.nodes.findIndex(n => n && n.name && n.name.toLowerCase() === name.toLowerCase());
+            return nodeIdx !== -1 ? this.skin.joints.indexOf(nodeIdx) : -1;
+        };
+        const rHandJ = findJoint("RightHand");
+        const rEndJ = findJoint("RightHand_End");
+        const lHandJ = findJoint("LeftHand");
+        const lEndJ = findJoint("LeftHand_End");
+        const invBind = this.skin.inverseBindMatrices;
+
+        const collectHandFingers = (handJoint, endJoint, virtJoint, virtMidJoint, virtTipJoint, isRight) => {
+            if (handJoint === -1) return;
+            const inv = invBind.subarray(handJoint * 16, handJoint * 16 + 16);
+            for (let i = 0; i < this.vertexCount; i++) {
+                let w = 0;
+                const i4 = i * 4;
+                for (let j = 0; j < 4; j++) {
+                    const jt = this.joints[i4 + j];
+                    if (jt === handJoint || jt === endJoint || 
+                        (virtJoint !== undefined && jt === virtJoint) || 
+                        (virtMidJoint !== undefined && jt === virtMidJoint) ||
+                        (virtTipJoint !== undefined && jt === virtTipJoint)) {
+                        w += this.weights[i4 + j];
+                    }
+                }
+                if (w < 0.20) continue;
+                const px = this.basePositions[i*3], py = this.basePositions[i*3+1], pz = this.basePositions[i*3+2];
+                const lx = inv[0]*px + inv[4]*py + inv[8]*pz + inv[12];
+                const ly = inv[1]*px + inv[5]*py + inv[9]*pz + inv[13];
+                const lz = inv[2]*px + inv[6]*py + inv[10]*pz + inv[14];
+
+                // Classify each of the 5 fingers accurately in hand-local space
+                // Thumb is distinctly shorter (ly <= 0.098m), at lateral side (lx < -0.005 on Right, lx > 0.005 on Left), with lz > 0.040m
+                const isThumb = ly <= 0.098 && lz > 0.040 && (isRight ? lx < -0.005 : lx > 0.005);
+
+                let fingerBaseLy = 0.070;
+                let fingerTipLy = 0.145;
+                let sDirZ = 0;
+                let sDirX = 0;
+
+                if (isThumb) {
+                    fingerBaseLy = 0.052;
+                    fingerTipLy = 0.095;
+                    // Thumb spreads forward (+Z) and outward in X
+                    sDirZ = 1.70;
+                    sDirX = isRight ? -0.85 : 0.85;
+                } else if (lz > 0.028) {
+                    fingerBaseLy = 0.068;
+                    fingerTipLy = 0.140;
+                    // Index finger: spreads outward towards +Z
+                    sDirZ = 0.95;
+                    sDirX = isRight ? 0.25 : -0.25;
+                } else if (lz > 0.000) {
+                    fingerBaseLy = 0.070;
+                    fingerTipLy = 0.147;
+                    // Middle finger: central anchor
+                    sDirZ = 0.0;
+                    sDirX = 0.0;
+                } else if (lz > -0.026) {
+                    fingerBaseLy = 0.068;
+                    fingerTipLy = 0.132;
+                    // Ring finger: spreads outward towards -Z
+                    sDirZ = -0.95;
+                    sDirX = isRight ? 0.05 : -0.05;
+                } else {
+                    fingerBaseLy = 0.058;
+                    fingerTipLy = 0.116;
+                    // Pinky finger: spreads strongly outward towards -Z
+                    sDirZ = -1.80;
+                    sDirX = isRight ? -0.20 : 0.20;
+                }
+
+                if (ly > fingerBaseLy) {
+                    const prog = Math.min(1.0, Math.max(0.0, (ly - fingerBaseLy) / (fingerTipLy - fingerBaseLy)));
+
+                    this.fingerSpreadMap.push({
+                        i,
+                        handJoint,
+                        isRight,
+                        isThumb,
+                        prog,
+                        sDirZ,
+                        sDirX,
+                        weight: Math.min(1.0, w)
+                    });
+                }
+            }
+        };
+
+        collectHandFingers(rHandJ, rEndJ, this.virtualRightFingersJointIdx, this.virtualRightFingersMidJointIdx, this.virtualRightFingersTipJointIdx, true);
+        collectHandFingers(lHandJ, lEndJ, this.virtualLeftFingersJointIdx, this.virtualLeftFingersMidJointIdx, this.virtualLeftFingersTipJointIdx, false);
+
+        this.handPose = {
+            rightCurl: 0.0,
+            leftCurl: 0.0,
+            rightSpread: 0.0,
+            leftSpread: 0.0
+        };
+    }
+
+    /**
+     * Set Hand Pose:
+     * - curl: 0.0 (open/flat palm) to 1.0 (closed fist กำมือ) or negative (bent back)
+     * - spread: 0.0 (natural) to 1.0 (wide spread finger fan แยกนิ้ว) or -1.0 (tightly grouped fingers หุบนิ้ว)
+     */
+    setHandPose(options = {}) {
+        if (!this.handPose) {
+            this.handPose = { rightCurl: 0.0, leftCurl: 0.0, rightSpread: 0.0, leftSpread: 0.0 };
+        }
+        if (options.curl !== undefined) {
+            this.handPose.rightCurl = options.curl;
+            this.handPose.leftCurl = options.curl;
+        }
+        if (options.rightCurl !== undefined) this.handPose.rightCurl = options.rightCurl;
+        if (options.leftCurl !== undefined) this.handPose.leftCurl = options.leftCurl;
+
+        if (options.spread !== undefined) {
+            this.handPose.rightSpread = options.spread;
+            this.handPose.leftSpread = options.spread;
+        }
+        if (options.rightSpread !== undefined) this.handPose.rightSpread = options.rightSpread;
+        if (options.leftSpread !== undefined) this.handPose.leftSpread = options.leftSpread;
+
+        // Apply to virtual finger bone rotations:
+        // In the chibi model's skeletal coordinate system:
+        // - Right Hand: positive Z rotation (+qz) rotates fingers (+ly) inward towards the body/palm.
+        // - Left Hand: negative Z rotation (-qz) rotates fingers (+ly) inward towards the body/palm.
+        //
+        // Anatomical 3-joint curling for natural human fist (โค้งมนเข้าอุ้งมือแบบคนปกติ ไม่พับเป็นตัว L):
+        // When curling into a fist, fingers must curl smoothly around ~245 deg total into a tight cylindrical fist,
+        // so fingertips tuck cleanly back against the palm rather than sticking out as a 90-degree L shelf.
+        const computeCurlAngles = (curl) => {
+            if (curl >= 0.0) {
+                // Non-linear anatomical progression:
+                // Base knuckle (MCP) flexes smoothly: ~74 deg (1.30 rad)
+                const baseRad = Math.pow(curl, 1.2) * 1.30;
+                // Mid knuckle (PIP) flexes the deepest: ~95 deg (1.65 rad)
+                const midRad = curl * 1.65;
+                // Tip knuckle (DIP) flexes to roll the pad into the palm: ~77 deg (1.35 rad)
+                const tipRad = Math.pow(curl, 0.85) * 1.35;
+                return { baseRad, midRad, tipRad };
+            } else {
+                // Negative curl: gentle natural open hand flattening
+                return {
+                    baseRad: curl * 0.35,
+                    midRad: curl * 0.20,
+                    tipRad: curl * 0.10
+                };
+            }
+        };
+
+        const rAngles = computeCurlAngles(this.handPose.rightCurl);
+        const lAngles = computeCurlAngles(this.handPose.leftCurl);
+
+        // 1. Base Knuckle Bone (MCP joint - โคนนิ้ว)
+        const sinR_base = Math.sin(rAngles.baseRad * 0.5), cosR_base = Math.cos(rAngles.baseRad * 0.5);
+        const sinL_base = Math.sin(-lAngles.baseRad * 0.5), cosL_base = Math.cos(-lAngles.baseRad * 0.5);
+        this.setRightFingersRotation(0, 0, sinR_base, cosR_base);
+        this.setLeftFingersRotation(0, 0, sinL_base, cosL_base);
+
+        // 2. Mid Knuckle Bone (PIP joint - ข้อพับกลางนิ้ว)
+        const sinR_mid = Math.sin(rAngles.midRad * 0.5), cosR_mid = Math.cos(rAngles.midRad * 0.5);
+        const sinL_mid = Math.sin(-lAngles.midRad * 0.5), cosL_mid = Math.cos(-lAngles.midRad * 0.5);
+        this.setRightFingersMidRotation(0, 0, sinR_mid, cosR_mid);
+        this.setLeftFingersMidRotation(0, 0, sinL_mid, cosL_mid);
+
+        // 3. Tip Knuckle Bone (DIP joint - ข้อพับปลายนิ้ว)
+        const sinR_tip = Math.sin(rAngles.tipRad * 0.5), cosR_tip = Math.cos(rAngles.tipRad * 0.5);
+        const sinL_tip = Math.sin(-lAngles.tipRad * 0.5), cosL_tip = Math.cos(-lAngles.tipRad * 0.5);
+        this.setRightFingersTipRotation(0, 0, sinR_tip, cosR_tip);
+        this.setLeftFingersTipRotation(0, 0, sinL_tip, cosL_tip);
+    }
+
+    setRightFingersRotation(qx, qy, qz, qw) {
+        if (!this.virtualRightFingersRotation) this.virtualRightFingersRotation = [0, 0, 0, 1];
+        if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
+            this.virtualRightFingersRotation[0] = qx[0];
+            this.virtualRightFingersRotation[1] = qx[1];
+            this.virtualRightFingersRotation[2] = qx[2];
+            this.virtualRightFingersRotation[3] = qx[3];
+        } else {
+            this.virtualRightFingersRotation[0] = qx || 0;
+            this.virtualRightFingersRotation[1] = qy || 0;
+            this.virtualRightFingersRotation[2] = qz || 0;
+            this.virtualRightFingersRotation[3] = (qw !== undefined) ? qw : 1;
+        }
+    }
+
+    setRightFingersMidRotation(qx, qy, qz, qw) {
+        if (!this.virtualRightFingersMidRotation) this.virtualRightFingersMidRotation = [0, 0, 0, 1];
+        if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
+            this.virtualRightFingersMidRotation[0] = qx[0];
+            this.virtualRightFingersMidRotation[1] = qx[1];
+            this.virtualRightFingersMidRotation[2] = qx[2];
+            this.virtualRightFingersMidRotation[3] = qx[3];
+        } else {
+            this.virtualRightFingersMidRotation[0] = qx || 0;
+            this.virtualRightFingersMidRotation[1] = qy || 0;
+            this.virtualRightFingersMidRotation[2] = qz || 0;
+            this.virtualRightFingersMidRotation[3] = (qw !== undefined) ? qw : 1;
+        }
+    }
+
+    setRightFingersTipRotation(qx, qy, qz, qw) {
+        if (!this.virtualRightFingersTipRotation) this.virtualRightFingersTipRotation = [0, 0, 0, 1];
+        if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
+            this.virtualRightFingersTipRotation[0] = qx[0];
+            this.virtualRightFingersTipRotation[1] = qx[1];
+            this.virtualRightFingersTipRotation[2] = qx[2];
+            this.virtualRightFingersTipRotation[3] = qx[3];
+        } else {
+            this.virtualRightFingersTipRotation[0] = qx || 0;
+            this.virtualRightFingersTipRotation[1] = qy || 0;
+            this.virtualRightFingersTipRotation[2] = qz || 0;
+            this.virtualRightFingersTipRotation[3] = (qw !== undefined) ? qw : 1;
+        }
+    }
+
+    setLeftFingersRotation(qx, qy, qz, qw) {
+        if (!this.virtualLeftFingersRotation) this.virtualLeftFingersRotation = [0, 0, 0, 1];
+        if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
+            this.virtualLeftFingersRotation[0] = qx[0];
+            this.virtualLeftFingersRotation[1] = qx[1];
+            this.virtualLeftFingersRotation[2] = qx[2];
+            this.virtualLeftFingersRotation[3] = qx[3];
+        } else {
+            this.virtualLeftFingersRotation[0] = qx || 0;
+            this.virtualLeftFingersRotation[1] = qy || 0;
+            this.virtualLeftFingersRotation[2] = qz || 0;
+            this.virtualLeftFingersRotation[3] = (qw !== undefined) ? qw : 1;
+        }
+    }
+
+    setLeftFingersMidRotation(qx, qy, qz, qw) {
+        if (!this.virtualLeftFingersMidRotation) this.virtualLeftFingersMidRotation = [0, 0, 0, 1];
+        if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
+            this.virtualLeftFingersMidRotation[0] = qx[0];
+            this.virtualLeftFingersMidRotation[1] = qx[1];
+            this.virtualLeftFingersMidRotation[2] = qx[2];
+            this.virtualLeftFingersMidRotation[3] = qx[3];
+        } else {
+            this.virtualLeftFingersMidRotation[0] = qx || 0;
+            this.virtualLeftFingersMidRotation[1] = qy || 0;
+            this.virtualLeftFingersMidRotation[2] = qz || 0;
+            this.virtualLeftFingersMidRotation[3] = (qw !== undefined) ? qw : 1;
+        }
+    }
+
+    setLeftFingersTipRotation(qx, qy, qz, qw) {
+        if (!this.virtualLeftFingersTipRotation) this.virtualLeftFingersTipRotation = [0, 0, 0, 1];
+        if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
+            this.virtualLeftFingersTipRotation[0] = qx[0];
+            this.virtualLeftFingersTipRotation[1] = qx[1];
+            this.virtualLeftFingersTipRotation[2] = qx[2];
+            this.virtualLeftFingersTipRotation[3] = qx[3];
+        } else {
+            this.virtualLeftFingersTipRotation[0] = qx || 0;
+            this.virtualLeftFingersTipRotation[1] = qy || 0;
+            this.virtualLeftFingersTipRotation[2] = qz || 0;
+            this.virtualLeftFingersTipRotation[3] = (qw !== undefined) ? qw : 1;
+        }
+    }
+
+    setFingersCurl(angleRad) {
+        const halfAngle1 = (angleRad || 0) * 0.30 * 0.5;
+        const halfAngle2 = (angleRad || 0) * 0.38 * 0.5;
+        const halfAngle3 = (angleRad || 0) * 0.32 * 0.5;
+        const sin1 = Math.sin(halfAngle1), cos1 = Math.cos(halfAngle1);
+        const sin2 = Math.sin(halfAngle2), cos2 = Math.cos(halfAngle2);
+        const sin3 = Math.sin(halfAngle3), cos3 = Math.cos(halfAngle3);
+        this.setRightFingersRotation(0, 0, sin1, cos1);
+        this.setLeftFingersRotation(0, 0, -sin1, cos1);
+        this.setRightFingersMidRotation(0, 0, sin2, cos2);
+        this.setLeftFingersMidRotation(0, 0, -sin2, cos2);
+        this.setRightFingersTipRotation(0, 0, sin3, cos3);
+        this.setLeftFingersTipRotation(0, 0, -sin3, cos3);
+    }
+
     setPonytailRotation(qx, qy, qz, qw) {
         if (Array.isArray(qx) || (qx && typeof qx[0] === "number")) {
             this.virtualPonytailRotation[0] = qx[0];
@@ -552,6 +1269,22 @@ window.GLBLoader = class GLBLoader {
                 part = "head";
                 partColor = "#ff6e40";
                 partTh = "ศีรษะ (Head)";
+            } else if (n.includes("virtual_rightfingers_mid") || (n.includes("right") && n.includes("mid") && n.includes("finger"))) {
+                part = "right_arm";
+                partColor = "#ffd54f";
+                partTh = "ข้อพับนิ้วมือขวา (Right Mid Knuckle)";
+            } else if (n.includes("virtual_rightfingers") || (n.includes("right") && n.includes("finger"))) {
+                part = "right_arm";
+                partColor = "#ffca28";
+                partTh = "โคนนิ้วมือขวา (Right Base Fingers)";
+            } else if (n.includes("virtual_leftfingers_mid") || (n.includes("left") && n.includes("mid") && n.includes("finger"))) {
+                part = "left_arm";
+                partColor = "#b9f6ca";
+                partTh = "ข้อพับนิ้วมือซ้าย (Left Mid Knuckle)";
+            } else if (n.includes("virtual_leftfingers") || (n.includes("left") && n.includes("finger"))) {
+                part = "left_arm";
+                partColor = "#69f0ae";
+                partTh = "โคนนิ้วมือซ้าย (Left Base Fingers)";
             } else if (n.includes("left") && (n.includes("shoulder") || n.includes("arm") || n.includes("hand"))) {
                 part = "left_arm";
                 partColor = "#00e676";
@@ -855,6 +1588,50 @@ window.GLBLoader = class GLBLoader {
             vn.rotation[3] = this.virtualPonytailRotation[3];
         }
 
+        // Apply Virtual Finger rotations before hierarchy update
+        if (this.virtualRightFingersNodeIdx !== undefined && this.nodes[this.virtualRightFingersNodeIdx]) {
+            const vn = this.nodes[this.virtualRightFingersNodeIdx];
+            vn.rotation[0] = this.virtualRightFingersRotation[0];
+            vn.rotation[1] = this.virtualRightFingersRotation[1];
+            vn.rotation[2] = this.virtualRightFingersRotation[2];
+            vn.rotation[3] = this.virtualRightFingersRotation[3];
+        }
+        if (this.virtualRightFingersMidNodeIdx !== undefined && this.nodes[this.virtualRightFingersMidNodeIdx]) {
+            const vn = this.nodes[this.virtualRightFingersMidNodeIdx];
+            vn.rotation[0] = this.virtualRightFingersMidRotation[0];
+            vn.rotation[1] = this.virtualRightFingersMidRotation[1];
+            vn.rotation[2] = this.virtualRightFingersMidRotation[2];
+            vn.rotation[3] = this.virtualRightFingersMidRotation[3];
+        }
+        if (this.virtualRightFingersTipNodeIdx !== undefined && this.nodes[this.virtualRightFingersTipNodeIdx]) {
+            const vn = this.nodes[this.virtualRightFingersTipNodeIdx];
+            vn.rotation[0] = this.virtualRightFingersTipRotation[0];
+            vn.rotation[1] = this.virtualRightFingersTipRotation[1];
+            vn.rotation[2] = this.virtualRightFingersTipRotation[2];
+            vn.rotation[3] = this.virtualRightFingersTipRotation[3];
+        }
+        if (this.virtualLeftFingersNodeIdx !== undefined && this.nodes[this.virtualLeftFingersNodeIdx]) {
+            const vn = this.nodes[this.virtualLeftFingersNodeIdx];
+            vn.rotation[0] = this.virtualLeftFingersRotation[0];
+            vn.rotation[1] = this.virtualLeftFingersRotation[1];
+            vn.rotation[2] = this.virtualLeftFingersRotation[2];
+            vn.rotation[3] = this.virtualLeftFingersRotation[3];
+        }
+        if (this.virtualLeftFingersMidNodeIdx !== undefined && this.nodes[this.virtualLeftFingersMidNodeIdx]) {
+            const vn = this.nodes[this.virtualLeftFingersMidNodeIdx];
+            vn.rotation[0] = this.virtualLeftFingersMidRotation[0];
+            vn.rotation[1] = this.virtualLeftFingersMidRotation[1];
+            vn.rotation[2] = this.virtualLeftFingersMidRotation[2];
+            vn.rotation[3] = this.virtualLeftFingersMidRotation[3];
+        }
+        if (this.virtualLeftFingersTipNodeIdx !== undefined && this.nodes[this.virtualLeftFingersTipNodeIdx]) {
+            const vn = this.nodes[this.virtualLeftFingersTipNodeIdx];
+            vn.rotation[0] = this.virtualLeftFingersTipRotation[0];
+            vn.rotation[1] = this.virtualLeftFingersTipRotation[1];
+            vn.rotation[2] = this.virtualLeftFingersTipRotation[2];
+            vn.rotation[3] = this.virtualLeftFingersTipRotation[3];
+        }
+
         // Update hierarchy
         const rootNodes = this.rootNodes;
         for (let i = 0; i < rootNodes.length; i++) {
@@ -924,6 +1701,72 @@ window.GLBLoader = class GLBLoader {
                 on[i3 + 2] = nz / nlen;
             } else {
                 on[i3] = bnx; on[i3 + 1] = bny; on[i3 + 2] = bnz;
+            }
+        }
+
+        // Apply Finger Spread (แยกนิ้ว/หุบนิ้ว) and Thumb Opposition (กำนิ้วโป้งทาบบนนิ้วกำ) in hand coordinate space
+        if (this.handPose && this.fingerSpreadMap) {
+            const spreadMap = this.fingerSpreadMap;
+            const rSpread = this.handPose.rightSpread || 0.0;
+            const lSpread = this.handPose.leftSpread || 0.0;
+            const rCurl = this.handPose.rightCurl || 0.0;
+            const lCurl = this.handPose.leftCurl || 0.0;
+            const hasSpread = Math.abs(rSpread) > 0.001 || Math.abs(lSpread) > 0.001;
+            const hasCurl = Math.abs(rCurl) > 0.001 || Math.abs(lCurl) > 0.001;
+
+            if (hasSpread || hasCurl) {
+                const jm = this.jointMatrices;
+
+                for (let k = 0; k < spreadMap.length; k++) {
+                    const item = spreadMap[k];
+                    const isRight = item.isRight;
+                    const spreadVal = isRight ? rSpread : lSpread;
+                    const curlVal = isRight ? rCurl : lCurl;
+
+                    let dlx = 0.0;
+                    let dly = 0.0;
+                    let dlz = 0.0;
+
+                    // 1. Finger spread displacement
+                    if (Math.abs(spreadVal) > 0.001) {
+                        const factor = spreadVal * item.prog * item.weight;
+                        dlz += item.sDirZ * factor * 0.024;
+                        dlx += item.sDirX * factor * 0.015;
+                    }
+
+                    // 2. Thumb opposition when curling into a fist (พับนิ้วโป้งแนบข้ามไปหานิ้วชี้ตามแกน Z และกระชับเข้าอุ้งมือ)
+                    if (item.isThumb && curlVal > 0.001) {
+                        // Smooth cubic weighting to prevent sharp shearing at joint boundary
+                        const p = item.prog;
+                        const smoothP = p * p * (3.0 - 2.0 * p);
+                        const thumbFactor = curlVal * smoothP * item.weight;
+                        // Z opposition towards index finger (~18mm)
+                        dlz += -0.018 * thumbFactor;
+                        // Inward X tuck towards palm
+                        dlx += (isRight ? -0.008 : 0.008) * thumbFactor;
+                    }
+
+                    if (Math.abs(dlx) > 0.0001 || Math.abs(dly) > 0.0001 || Math.abs(dlz) > 0.0001) {
+                        const handMatIdx = item.handJoint * 16;
+                        // Column 0 of hand joint matrix: transformed X axis
+                        const m00 = jm[handMatIdx];
+                        const m10 = jm[handMatIdx + 1];
+                        const m20 = jm[handMatIdx + 2];
+                        // Column 1 of hand joint matrix: transformed Y axis
+                        const m01 = jm[handMatIdx + 4];
+                        const m11 = jm[handMatIdx + 5];
+                        const m21 = jm[handMatIdx + 6];
+                        // Column 2 of hand joint matrix: transformed Z axis
+                        const m02 = jm[handMatIdx + 8];
+                        const m12 = jm[handMatIdx + 9];
+                        const m22 = jm[handMatIdx + 10];
+
+                        const i3 = item.i * 3;
+                        op[i3]     += dlx * m00 + dly * m01 + dlz * m02;
+                        op[i3 + 1] += dlx * m10 + dly * m11 + dlz * m12;
+                        op[i3 + 2] += dlx * m20 + dly * m21 + dlz * m22;
+                    }
+                }
             }
         }
 

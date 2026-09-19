@@ -2805,34 +2805,61 @@ function cancelFloorPlacement() {
         }
       }
 
+      let _activeNoticeToast = null;
+      let _activeNoticeTimer = null;
+      let _activeNoticeFadeTimer = null;
+      let _lastNoticeMsg = "";
+      let _lastNoticeTime = 0;
+
       function showNotice(msg) {
         if (!isDevMode) {
           return; // ซ่อนการแจ้งเตือนทั้งหมดในโหมดเซฟ
         }
-        const toast = document.createElement("div");
-        toast.style.position = "fixed";
-        toast.style.bottom = "100px";
-        toast.style.left = "50%";
-        toast.style.transform = "translateX(-50%)";
-        toast.style.background = "rgba(10, 10, 15, 0.9)";
-        toast.style.color = "#34d399";
-        toast.style.border = "1px solid rgba(52, 211, 153, 0.4)";
-        toast.style.padding = "10px 20px";
-        toast.style.borderRadius = "8px";
-        toast.style.fontFamily = "monospace";
-        toast.style.fontSize = "13px";
-        toast.style.zIndex = "999999";
-        toast.style.pointerEvents = "none";
-        toast.style.boxShadow = "0 8px 32px rgba(0,0,0,0.6)";
-        toast.style.transition = "opacity 0.3s, transform 0.3s";
-        toast.textContent = msg;
-        document.body.appendChild(toast);
-        setTimeout(() => {
-          toast.style.opacity = "0";
-          toast.style.transform = "translateX(-50%) translateY(10px)";
-          setTimeout(() => {
-            toast.remove();
-          }, 300);
+        const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+        if (msg === _lastNoticeMsg && now - _lastNoticeTime < 1500) {
+          return; // ป้องกันการเรียกซ้ำรัวๆ จาก game loop / render loop
+        }
+        _lastNoticeMsg = msg;
+        _lastNoticeTime = now;
+
+        if (!_activeNoticeToast) {
+          _activeNoticeToast = document.createElement("div");
+          _activeNoticeToast.style.position = "fixed";
+          _activeNoticeToast.style.bottom = "100px";
+          _activeNoticeToast.style.left = "50%";
+          _activeNoticeToast.style.transform = "translateX(-50%)";
+          _activeNoticeToast.style.background = "rgba(10, 10, 15, 0.9)";
+          _activeNoticeToast.style.color = "#34d399";
+          _activeNoticeToast.style.border = "1px solid rgba(52, 211, 153, 0.4)";
+          _activeNoticeToast.style.padding = "10px 20px";
+          _activeNoticeToast.style.borderRadius = "8px";
+          _activeNoticeToast.style.fontFamily = "monospace";
+          _activeNoticeToast.style.fontSize = "13px";
+          _activeNoticeToast.style.zIndex = "999999";
+          _activeNoticeToast.style.pointerEvents = "none";
+          _activeNoticeToast.style.boxShadow = "0 8px 32px rgba(0,0,0,0.6)";
+          _activeNoticeToast.style.transition = "opacity 0.25s, transform 0.25s";
+          document.body.appendChild(_activeNoticeToast);
+        }
+
+        if (_activeNoticeTimer) clearTimeout(_activeNoticeTimer);
+        if (_activeNoticeFadeTimer) clearTimeout(_activeNoticeFadeTimer);
+
+        _activeNoticeToast.textContent = msg;
+        _activeNoticeToast.style.opacity = "1";
+        _activeNoticeToast.style.transform = "translateX(-50%) translateY(0)";
+
+        _activeNoticeTimer = setTimeout(() => {
+          if (_activeNoticeToast) {
+            _activeNoticeToast.style.opacity = "0";
+            _activeNoticeToast.style.transform = "translateX(-50%) translateY(10px)";
+            _activeNoticeFadeTimer = setTimeout(() => {
+              if (_activeNoticeToast) {
+                _activeNoticeToast.remove();
+                _activeNoticeToast = null;
+              }
+            }, 300);
+          }
         }, 2500);
       }
 

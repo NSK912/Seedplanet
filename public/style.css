@@ -1133,6 +1133,7 @@
         transition: opacity 0.5s ease-in-out !important;
       }
       .game-ui.visible,
+      #gameplayFullscreenBtn,
       #gameStartOverlay .game-ui,
       .inventory-overlay.open .game-ui,
       #npcHpOverlay .game-ui {
@@ -1405,11 +1406,12 @@
         display: none !important;
       }
 
-      /* Hide gameplay fullscreen button on mobile/touch devices */
-      @media (max-width: 768px), (pointer: coarse), (hover: none) {
-        #gameplayFullscreenBtn {
-          display: none !important;
-        }
+      /* Gameplay fullscreen button on top-right: hidden in touch mode, visible in keyboard/mouse mode */
+      body.touch-mode #gameplayFullscreenBtn {
+        display: none !important;
+      }
+      body.keyboard-mode #gameplayFullscreenBtn {
+        display: flex !important;
       }
 
       /* Mech Stand 8-Slot UI System (Replaced by genuine 3D WebGL World UI Sign) */

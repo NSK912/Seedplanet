@@ -1822,6 +1822,61 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 </div>
               </div>
             </div>
+
+            <!-- Hand & Finger Pose Controls (กำมือ, แบมือ, แยกนิ้ว) -->
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.15);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 10px; color: #ffca28; font-weight: bold;">🖐️ ปรับมือนิ้ว (Hand & Finger Poses):</span>
+                <span id="devHandPoseTargetBadge" style="font-size: 9px; background: rgba(255,202,40,0.2); color: #ffca28; padding: 1px 4px; border-radius: 3px; border: 1px solid rgba(255,202,40,0.4);">สองข้าง (Both)</span>
+              </div>
+
+              <!-- Quick Presets -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 3px; margin-bottom: 6px;">
+                <button id="devHandPresetRelaxed" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #2e7d32; border: 1px solid #4caf50;" title="มือธรรมชาติ">
+                  🌿 ผ่อนคลาย
+                </button>
+                <button id="devHandPresetFist" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #c62828; border: 1px solid #ef5350;" title="กำมือแน่น">
+                  ✊ กำมือ
+                </button>
+                <button id="devHandPresetOpen" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #0277bd; border: 1px solid #29b6f6;" title="แบมือตรง">
+                  ✋ แบมือ
+                </button>
+                <button id="devHandPresetSpread" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #6a1b9a; border: 1px solid #ab47bc;" title="กางแยกนิ้วกว้าง">
+                  🖐️ กางแยก
+                </button>
+              </div>
+
+              <!-- Target Hand Selector Buttons -->
+              <div style="display: flex; gap: 3px; margin-bottom: 6px;">
+                <button id="devHandTargetBothBtn" style="flex: 1; padding: 2px 4px; font-size: 9px; border-radius: 3px; background: #ffb300; color: #000; font-weight: bold; border: 1px solid #ffca28; cursor: pointer;">
+                  👐 สองข้าง
+                </button>
+                <button id="devHandTargetRightBtn" style="flex: 1; padding: 2px 4px; font-size: 9px; border-radius: 3px; background: #333; color: #ccc; border: 1px solid #555; cursor: pointer;">
+                  🦾 มือขวา
+                </button>
+                <button id="devHandTargetLeftBtn" style="flex: 1; padding: 2px 4px; font-size: 9px; border-radius: 3px; background: #333; color: #ccc; border: 1px solid #555; cursor: pointer;">
+                  💪 มือซ้าย
+                </button>
+              </div>
+
+              <!-- Detailed Sliders -->
+              <div style="font-size: 9px; color: #ccc; display: flex; flex-direction: column; gap: 5px;">
+                <div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>✊ กำมือ ↔ ✋ แบมือ (Curl):</span>
+                    <span id="devHandCurlVal" style="color: #ffca28; font-weight: bold;">0% (ผ่อนคลาย)</span>
+                  </div>
+                  <input type="range" id="devHandCurlSlider" min="-50" max="100" value="0" style="width: 100%; height: 4px; accent-color: #ffca28;">
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>🤏 หุบนิ้ว ↔ 🖐️ แยกนิ้ว (Spread):</span>
+                    <span id="devHandSpreadVal" style="color: #4fc3f7; font-weight: bold;">0% (ปกติ)</span>
+                  </div>
+                  <input type="range" id="devHandSpreadSlider" min="-100" max="100" value="0" style="width: 100%; height: 4px; accent-color: #4fc3f7;">
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Selected Bone Inspector Card -->
@@ -2191,12 +2246,25 @@ window.addEventListener("keyup", (e) => {
 
       // Auto show/hide joystick based on input type (Touch vs Mouse/Keyboard)
       let lastTouchTime = 0;
+      let isTouchInputMode = false;
       const joystickContainer = document.getElementById("joystickContainer");
       let devInputMode = "auto"; // "auto", "touch", "keyboard"
       window.devInputMode = devInputMode;
 
+      function updateFullscreenBtnByInput(isTouch) {
+        const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
+        if (gameplayFullscreenBtn) {
+          if (isTouch) {
+            gameplayFullscreenBtn.style.setProperty("display", "none", "important");
+          } else {
+            gameplayFullscreenBtn.style.setProperty("display", "flex", "important");
+          }
+        }
+      }
+
       function showDpad() {
         if (devInputMode === "keyboard") return;
+        isTouchInputMode = true;
         if (joystickContainer && joystickContainer.style.display === "none") {
           joystickContainer.style.display = "block";
         }
@@ -2204,10 +2272,14 @@ window.addEventListener("keyup", (e) => {
         if (actionSlotsEl) actionSlotsEl.classList.remove("keyboard-mode");
         const invActionSlotsEl = document.getElementById("inventoryActionSlots");
         if (invActionSlotsEl) invActionSlotsEl.classList.remove("keyboard-mode");
+        document.body.classList.add("touch-mode");
+        document.body.classList.remove("keyboard-mode");
+        updateFullscreenBtnByInput(true);
       }
 
       function hideDpad() {
         if (devInputMode === "touch") return;
+        isTouchInputMode = false;
         if (joystickContainer && joystickContainer.style.display !== "none") {
           joystickContainer.style.display = "none";
         }
@@ -2215,6 +2287,16 @@ window.addEventListener("keyup", (e) => {
         if (actionSlotsEl) actionSlotsEl.classList.add("keyboard-mode");
         const invActionSlotsEl = document.getElementById("inventoryActionSlots");
         if (invActionSlotsEl) invActionSlotsEl.classList.add("keyboard-mode");
+        document.body.classList.add("keyboard-mode");
+        document.body.classList.remove("touch-mode");
+        updateFullscreenBtnByInput(false);
+      }
+
+      // Initial state based on input/device type
+      if (('ontouchstart' in window) && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        showDpad();
+      } else {
+        hideDpad();
       }
 
       // Touch events anywhere on window should restore the dpad
@@ -2882,10 +2964,7 @@ window.addEventListener("keyup", (e) => {
         });
 
       const isMobileOrTouchDevice = () => {
-        return ('ontouchstart' in window) ||
-               (navigator.maxTouchPoints > 0) ||
-               /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) ||
-               (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+        return isTouchInputMode;
       };
 
       window.syncScreenModeUI = async function() {
@@ -4318,6 +4397,7 @@ window.addEventListener("keyup", (e) => {
             if (isMobileOrTouchDevice()) {
               gameplayFullscreenBtn.style.setProperty("display", "none", "important");
             } else {
+              gameplayFullscreenBtn.style.setProperty("display", "flex", "important");
               gameplayFullscreenBtn.style.top = (margin + 10) + "px";
               gameplayFullscreenBtn.style.right = (margin + 10) + "px";
             }

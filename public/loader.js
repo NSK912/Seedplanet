@@ -82,5 +82,5 @@
     'gamefile/gameplay/Start.js'
   ];
 
-  scripts.forEach(src => document.write(`<script src="${src}?v=1789147797159"><\/script>`));
+  scripts.forEach(src => document.write(`<script src="${src}?v=1789147840000"><\/script>`));
 })();
