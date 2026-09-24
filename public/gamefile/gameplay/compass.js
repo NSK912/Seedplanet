@@ -281,6 +281,7 @@
           'wood_door': { icon: '🚪', label: 'Door', color: '#c29d62', priority: 50, itemType: 'WOOD_DOOR' },
           'wood_roof': { icon: '🏠', label: 'Roof', color: '#c29d62', priority: 50, itemType: 'WOOD_ROOF' },
           'wood_wheel': { icon: '⚙️', label: 'Wheel', color: '#c29d62', priority: 50, itemType: 'WOOD_WHEEL' },
+          'boat_wing': { icon: '🪽', label: 'Boat Wing', color: '#e2cfb0', priority: 55, itemType: 'BOAT_WING' },
           'electric_engine': { icon: '🔋', label: 'Engine', color: '#40c4ff', priority: 60, itemType: 'ELECTRIC_ENGINE' }
         };
 

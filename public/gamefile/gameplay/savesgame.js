@@ -148,7 +148,7 @@
             playerMaxHP,
             batteryStates: (typeof window.BatterySystem !== "undefined" && window.BatterySystem.exportState) ? window.BatterySystem.exportState() : null,
             collectiblesState: collectibles.filter(c => !c.isDynamic).map((c) => c.active),
-            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isDynamic && (c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_chest" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine")),
+            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isDynamic && (c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_roof" || c.type === "wood_chest" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine" || c.type === "boat_wing")),
             dynamicCollectibles: collectibles.filter(c => c.isDynamic),
             amphibiansState: amphibians.map((a) => ({
               theta: a.theta,

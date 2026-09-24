@@ -501,9 +501,11 @@ const World3DUI = {
       return;
     }
 
-    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 2.47) * playerScale;
-    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 0.43) * playerScale;
-    const rightOffset = (typeof window.boatUiRightOffset !== 'undefined' ? window.boatUiRightOffset : 0.0) * playerScale;
+    // Fixed base scale (0.1) so 3D UI offsets remain constant regardless of player character scale
+    const UI_BASE_SCALE = 0.1;
+    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 2.47) * UI_BASE_SCALE;
+    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 0.43) * UI_BASE_SCALE;
+    const rightOffset = (typeof window.boatUiRightOffset !== 'undefined' ? window.boatUiRightOffset : 0.0) * UI_BASE_SCALE;
     const yawOffsetDeg = (typeof window.boatUiYawOffset !== 'undefined' ? window.boatUiYawOffset : 0.0);
     const pitchOffsetDeg = (typeof window.boatUiPitchOffset !== 'undefined' ? window.boatUiPitchOffset : -22.0);
 
@@ -524,6 +526,23 @@ const World3DUI = {
         boat.R[1] * cosH - boat.F[1] * sinH,
         boat.R[2] * cosH - boat.F[2] * sinH
       ];
+    }
+
+    if (boat.bankAngle && Math.abs(boat.bankAngle) > 0.0001) {
+      const cosB = Math.cos(boat.bankAngle);
+      const sinB = Math.sin(boat.bankAngle);
+      const bR = [
+        br[0] * cosB - bn[0] * sinB,
+        br[1] * cosB - bn[1] * sinB,
+        br[2] * cosB - bn[2] * sinB
+      ];
+      const bN = [
+        bn[0] * cosB + br[0] * sinB,
+        bn[1] * cosB + br[1] * sinB,
+        bn[2] * cosB + br[2] * sinB
+      ];
+      br = bR;
+      bn = bN;
     }
 
     let targetWorldPos = [
@@ -569,8 +588,8 @@ const World3DUI = {
     const signNormal = [-bf[0], -bf[1], -bf[2]];
     const signUp = [bn[0], bn[1], bn[2]];
     const boatScale = (typeof window.boatUiScale === 'number' ? window.boatUiScale : 0.47);
-    const signW = 0.18 * boatScale * (playerScale / 0.1);
-    const signH = 0.18 * boatScale * (playerScale / 0.1);
+    const signW = 0.18 * boatScale;
+    const signH = 0.18 * boatScale;
     const boatSignId = "boat_world_sign";
 
     const drawBoatUI = (ctx, w, h) => {
@@ -723,9 +742,11 @@ const World3DUI = {
     const outYaw = (typeof window.devgame?.mechRideUiOutYawOffset !== 'undefined') ? window.devgame.mechRideUiOutYawOffset : -90;
     const outPitch = (typeof window.devgame?.mechRideUiOutPitchOffset !== 'undefined') ? window.devgame.mechRideUiOutPitchOffset : 0;
 
-    const forwardOffset = (!isRiding ? outForward : (isFps ? fpsForward : tpsForward)) * playerScale;
-    const upOffset = (!isRiding ? outUp : (isFps ? fpsUp : tpsUp)) * playerScale;
-    const rightOffset = (!isRiding ? outRight : (isFps ? fpsRight : tpsRight)) * playerScale;
+    // Fixed base scale (0.1) so 3D UI offsets remain constant regardless of player character scale
+    const UI_BASE_SCALE = 0.1;
+    const forwardOffset = (!isRiding ? outForward : (isFps ? fpsForward : tpsForward)) * UI_BASE_SCALE;
+    const upOffset = (!isRiding ? outUp : (isFps ? fpsUp : tpsUp)) * UI_BASE_SCALE;
+    const rightOffset = (!isRiding ? outRight : (isFps ? fpsRight : tpsRight)) * UI_BASE_SCALE;
     const yawOffsetDeg = (!isRiding ? outYaw : (isFps ? fpsYaw : tpsYaw));
     const pitchOffsetDeg = (!isRiding ? outPitch : (isFps ? fpsPitch : tpsPitch));
     const scale = (!isRiding ? outScale : (isFps ? fpsScale : tpsScale));
@@ -797,9 +818,9 @@ const World3DUI = {
     const signNormal = [-mf[0], -mf[1], -mf[2]];
     const signUp = [mn[0], mn[1], mn[2]];
     
-    // Use the viewport scale we calculated above
-    const signW = 0.18 * scale * (playerScale / 0.1);
-    const signH = 0.18 * scale * (playerScale / 0.1);
+    // Use the viewport scale we calculated above (independent of playerScale)
+    const signW = 0.18 * scale;
+    const signH = 0.18 * scale;
     const signId = "mech_ride_world_sign";
 
 
@@ -919,9 +940,10 @@ const World3DUI = {
     let sf = stand.F ? [...stand.F] : [0, 0, 1];
     let sr = stand.R ? [...stand.R] : [1, 0, 0];
 
-    const upOffset = (typeof window.mechStandUiUpOffset === "number" ? window.mechStandUiUpOffset : 0.16) * (playerScale / 0.1);
-    const rightOffset = (typeof window.mechStandUiRightOffset === "number" ? window.mechStandUiRightOffset : 0.0) * (playerScale / 0.1);
-    const forwardOffset = (typeof window.mechStandUiForwardOffset === "number" ? window.mechStandUiForwardOffset : 0.22) * (playerScale / 0.1);
+    // Fixed UI offsets independent of player character scale
+    const upOffset = (typeof window.mechStandUiUpOffset === "number" ? window.mechStandUiUpOffset : 0.16);
+    const rightOffset = (typeof window.mechStandUiRightOffset === "number" ? window.mechStandUiRightOffset : 0.0);
+    const forwardOffset = (typeof window.mechStandUiForwardOffset === "number" ? window.mechStandUiForwardOffset : 0.22);
     const yawOffsetDeg = (typeof window.mechStandUiYawOffset === "number" ? window.mechStandUiYawOffset : 180.0);
     const pitchOffsetDeg = (typeof window.mechStandUiPitchOffset === "number" ? window.mechStandUiPitchOffset : 0.0);
     const scaleVal = (typeof window.mechStandUiScale === "number" ? window.mechStandUiScale : 0.34);
@@ -969,8 +991,8 @@ const World3DUI = {
     // World3DUI sign faces -normal, so to face towards +sf:
     const signNormal = [-sf[0], -sf[1], -sf[2]];
     const signUp = [sn[0], sn[1], sn[2]];
-    const signW = 0.68 * scaleVal * (playerScale / 0.1);
-    const signH = 0.40 * scaleVal * (playerScale / 0.1);
+    const signW = 0.68 * scaleVal;
+    const signH = 0.40 * scaleVal;
     const standSignId = "mech_stand_world_sign";
 
     // Gather equipped parts

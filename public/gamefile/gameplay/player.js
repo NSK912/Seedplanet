@@ -4804,6 +4804,25 @@ window.characterVertexShaderSource = `
           finalN = [activeRidingBoat.normal[0], activeRidingBoat.normal[1], activeRidingBoat.normal[2]];
           finalF = [activeRidingBoat.F[0], activeRidingBoat.F[1], activeRidingBoat.F[2]];
           finalR = [activeRidingBoat.R[0], activeRidingBoat.R[1], activeRidingBoat.R[2]];
+
+          // Bank the player model with the boat hull in flight
+          if (activeRidingBoat.bankAngle && Math.abs(activeRidingBoat.bankAngle) > 0.0001) {
+            const cosB = Math.cos(activeRidingBoat.bankAngle);
+            const sinB = Math.sin(activeRidingBoat.bankAngle);
+            const bR = [
+              finalR[0] * cosB - finalN[0] * sinB,
+              finalR[1] * cosB - finalN[1] * sinB,
+              finalR[2] * cosB - finalN[2] * sinB
+            ];
+            const bN = [
+              finalN[0] * cosB + finalR[0] * sinB,
+              finalN[1] * cosB + finalR[1] * sinB,
+              finalN[2] * cosB + finalR[2] * sinB
+            ];
+            finalR = bR;
+            finalN = bN;
+          }
+
           if (activeRidingBoat.position) {
             px = activeRidingBoat.position[0] + finalN[0] * 0.46 * charScale;
             py = activeRidingBoat.position[1] + finalN[1] * 0.46 * charScale;
@@ -5128,6 +5147,8 @@ window.characterVertexShaderSource = `
               else if (item.type === "robot_left_leg") { icon = "🦿"; label = "ROBOT_LEFT_LEG"; }
               else if (item.type === "robot_right_leg") { icon = "🦿"; label = "ROBOT_RIGHT_LEG"; }
               else if (item.type === "wood_wheel") { icon = "🛞"; label = "WOOD_WHEEL"; }
+              else if (item.type === "electric_engine") { icon = "🔋"; label = "ELECTRIC_ENGINE"; }
+              else if (item.type === "boat_wing") { icon = "🪽"; label = "BOAT_WING"; }
               else if (item.type === "meganeura_item") { icon = "🦟"; label = "MEGANEURA"; }
               else if (item.type === "isopod_item") { icon = "🦐"; label = "ISOPOD"; }
               

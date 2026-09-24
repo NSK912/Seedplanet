@@ -1,5 +1,24 @@
 (function() {
-  document.write('<link rel="stylesheet" href="style.css">');
+  const basePath = (function() {
+    if (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) {
+      const src = document.currentScript.src.split('?')[0];
+      return src.substring(0, src.lastIndexOf('/') + 1);
+    }
+    return '';
+  })();
+
+  const version = '1789148320000';
+
+  if (!document.querySelector('link[href*="style.css"]')) {
+    if (document.readyState === 'loading') {
+      document.write(`<link rel="stylesheet" href="${basePath}style.css?v=${version}">`);
+    } else {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = `${basePath}style.css?v=${version}`;
+      document.head.appendChild(link);
+    }
+  }
 
   const scripts = [
     // --- UI Layout & Settings ---
@@ -55,6 +74,7 @@
     'gamefile/items/wood_boat.js',
     'gamefile/items/wood_wheel.js',
     'gamefile/items/electric_engine.js',
+    'gamefile/items/boat_wing.js',
     'gamefile/items/axe.js',
     'gamefile/items/pickaxe.js',
     'gamefile/items/shovel.js',
@@ -82,5 +102,14 @@
     'gamefile/gameplay/Start.js'
   ];
 
-  scripts.forEach(src => document.write(`<script src="${src}?v=1789148210000"><\/script>`));
+  if (document.readyState === 'loading') {
+    scripts.forEach(src => document.write(`<script src="${basePath}${src}?v=${version}"><\/script>`));
+  } else {
+    scripts.forEach(src => {
+      const script = document.createElement('script');
+      script.src = `${basePath}${src}?v=${version}`;
+      script.async = false;
+      document.body.appendChild(script);
+    });
+  }
 })();

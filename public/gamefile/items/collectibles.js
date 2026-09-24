@@ -1746,7 +1746,7 @@ function buildCollectibles(count, seed) {
         const isInventoryOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
         if (isPlacingFloor && !isInventoryOpen) {
           const placingItemName = floorPlacementInfo && floorPlacementInfo.item ? floorPlacementInfo.item.name : "";
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))))));
 
           if (!floorPreviewCollectible || floorPreviewCollectible.type !== typeToPlace) {
             // Remove mismatched preview if it exists
@@ -1770,7 +1770,7 @@ function buildCollectibles(count, seed) {
             };
             collectibles.push(floorPreviewCollectible);
             floorPreviewCollectible = collectibles[collectibles.length - 1];
-            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace.startsWith("robot_")) {
+            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -2490,7 +2490,7 @@ function buildCollectibles(count, seed) {
                    pnz * boatRad
                ];
              }
-          } else if (typeToPlace === "wood_wheel" || typeToPlace === "electric_engine") {
+          } else if (typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing") {
              let nearestBoat = null;
              let bestDist = Infinity;
              for (let other of collectibles) {
@@ -4749,6 +4749,18 @@ function buildCollectibles(count, seed) {
           usage_en: "Pre-place to attach motor engine to boat for high-speed propulsion.",
           maxStack: 99
         },
+        "BOAT_WING": {
+          id: "BOAT_WING",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "ปีกเรือ (Boat Wing)",
+          name_en: "Boat Wing",
+          icon: "🪽",
+          actionType: "PLACE_COMPONENT",
+          placeType: "boat_wing",
+          usage_th: "พรี-วางติดตั้งประกอบเข้ากับเรือไม้เพื่อปลดล็อกการบิน (ต้องมีเครื่องยนต์ไฟฟ้า, กด Shift เพื่อเปิดโหมดบิน)",
+          usage_en: "Attach biplane wings to boat to enable flight mode (Requires Electric Engine, press Shift to fly).",
+          maxStack: 99
+        },
         "MEGANEURA": {
           id: "MEGANEURA",
           category: ITEM_CATEGORIES.NONE,
@@ -5081,8 +5093,21 @@ function buildCollectibles(count, seed) {
       }
       window.isNoneItem = isNoneItem;
 
+      function getStoredLanguageFallback() {
+        try {
+          if (typeof window !== "undefined" && window.localStorage) {
+            const raw = window.localStorage.getItem("seedplanet_options_config");
+            if (raw) {
+              const obj = JSON.parse(raw);
+              if (obj && obj.language) return obj.language;
+            }
+          }
+        } catch (_) {}
+        return "en";
+      }
+
       function getItemDisplayName(itemOrName, lang) {
-        const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || (window.localStorage ? (JSON.parse(window.localStorage.getItem("seedplanet_options_config") || "{}").language || "en") : "en")));
+        const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || getStoredLanguageFallback()));
         const def = getItemDefinition(itemOrName);
         if (def) {
           return curLang === "th" ? (def.name_th || def.name_en) : (def.name_en || def.name_th);
@@ -5099,7 +5124,7 @@ function buildCollectibles(count, seed) {
       window.getItemDisplayName = getItemDisplayName;
 
       function getItemUsage(itemOrName, lang) {
-        const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || (window.localStorage ? (JSON.parse(window.localStorage.getItem("seedplanet_options_config") || "{}").language || "en") : "en")));
+        const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || getStoredLanguageFallback()));
         const def = getItemDefinition(itemOrName);
         if (def) {
           return curLang === "th" ? (def.usage_th || def.usage_en) : (def.usage_en || def.usage_th);

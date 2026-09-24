@@ -3671,16 +3671,19 @@ window.addEventListener("keyup", (e) => {
         btn?.addEventListener("mouseleave", handleUp);
       }
 
-      // 1. Q Button (Rotate / Swim Up in water)
+      // 1. Q Button (Rotate / Swim Up in water / Fly when riding winged boat)
       let activeCodeQ = null;
       setupTouchButton(
         "btnTouchQ",
         () => {
+          const isWingBoat = !!(typeof activeRidingBoat !== 'undefined' && activeRidingBoat && (activeRidingBoat.hasWing || activeRidingBoat.hasWings));
           const inWater = (typeof currentSwimFactor !== 'undefined' && currentSwimFactor > 0.0);
-          activeCodeQ = inWater ? "ShiftLeft" : "KeyQ";
+          activeCodeQ = (isWingBoat || inWater) ? "ShiftLeft" : "KeyQ";
+          if (isWingBoat) window.boatFlyButtonHeld = true;
           window.dispatchEvent(new KeyboardEvent("keydown", { code: activeCodeQ, bubbles: true }));
         },
         () => {
+          window.boatFlyButtonHeld = false;
           const codeToRelease = activeCodeQ || "KeyQ";
           window.dispatchEvent(new KeyboardEvent("keyup", { code: codeToRelease, bubbles: true }));
           activeCodeQ = null;
@@ -3702,10 +3705,13 @@ window.addEventListener("keyup", (e) => {
           );
 
           const inWater = (typeof currentSwimFactor !== 'undefined' && currentSwimFactor > 0.0);
-          activeCodeE = (inWater && !hasActionReach) ? "KeyZ" : "KeyE";
+          const isFlyingBoat = !!(typeof activeRidingBoat !== 'undefined' && activeRidingBoat && activeRidingBoat.isFlying);
+          activeCodeE = ((inWater || isFlyingBoat) && !hasActionReach) ? "KeyZ" : "KeyE";
+          if (isFlyingBoat) window.boatDiveButtonHeld = true;
           window.dispatchEvent(new KeyboardEvent("keydown", { code: activeCodeE, bubbles: true }));
         },
         () => {
+          window.boatDiveButtonHeld = false;
           const codeToRelease = activeCodeE || "KeyE";
           window.dispatchEvent(new KeyboardEvent("keyup", { code: codeToRelease, bubbles: true }));
           activeCodeE = null;
@@ -3762,9 +3768,12 @@ window.addEventListener("keyup", (e) => {
           (npcPrompt && npcPrompt.style.display === "block")
         );
 
-        if (inWater !== lastInWaterState || hasActionReach !== lastHasActionReach) {
+        const isWingBoat = !!(typeof activeRidingBoat !== 'undefined' && activeRidingBoat && (activeRidingBoat.hasWing || activeRidingBoat.hasWings));
+
+        if (inWater !== lastInWaterState || hasActionReach !== lastHasActionReach || isWingBoat !== window._lastIsWingBoatState) {
           lastInWaterState = inWater;
           lastHasActionReach = hasActionReach;
+          window._lastIsWingBoatState = isWingBoat;
           const btnQKey = document.querySelector("#btnTouchQ .touch-btn-key");
           const btnQLabel = document.querySelector("#btnTouchQ .touch-btn-label");
           const btnEKey = document.querySelector("#btnTouchE .touch-btn-key");
@@ -3772,7 +3781,13 @@ window.addEventListener("keyup", (e) => {
           const btnQIcon = document.getElementById("btnTouchQIcon");
           const btnEIcon = document.getElementById("btnTouchEIcon");
 
-          if (inWater) {
+          if (isWingBoat) {
+            if (btnQKey) btnQKey.textContent = "Shift";
+            if (btnQLabel) btnQLabel.textContent = "บิน/Fly";
+            if (btnQIcon) {
+              btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
+            }
+          } else if (inWater) {
             if (btnQKey) btnQKey.textContent = "Shift";
             if (btnQLabel) btnQLabel.textContent = "ว่ายขึ้น/Up";
             if (btnQIcon) {

@@ -4272,7 +4272,7 @@ window.cloud3DProgram = cloud3DProgram;
         
         let isPlacementItem = selectedItem && (
           (typeof isPlaceableItem === "function" ? isPlaceableItem(selectedItem.name) : (window.isPlaceableItem ? window.isPlaceableItem(selectedItem.name) : false)) ||
-          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name.startsWith("ROBOT_")
+          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name.startsWith("ROBOT_")
         );
         
         // บังคับไม่ให้เข้าโหมดวางไอเทม ถ้านั่งอยู่บนเรือหรือหุ่นยนต์
@@ -5056,11 +5056,13 @@ window.cloud3DProgram = cloud3DProgram;
         if (activeRidingBoat) {
           let boatDepth = waterRadius - terrainRadius;
           let isInWater = activeRidingBoat.isInWater !== undefined ? activeRidingBoat.isInWater : (waterEnabled && boatDepth > 0.35 * charScale);
-          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+          let hasWing = !!(activeRidingBoat.hasWing || activeRidingBoat.hasWings);
+          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0) || hasWing;
 
           if (isLandBoat) {
             // === GTA REALISTIC VEHICLE DRIVING PHYSICS (LIGHTWEIGHT & RESPONSIVE) ===
             const dt = timeScale;
+            const isShiftHeld = !!(typeof keysPressed !== "undefined" && (keysPressed["ShiftLeft"] || keysPressed["ShiftRight"] || keysPressed["Shift"])) || !!(typeof window.boatFlyButtonHeld !== "undefined" && window.boatFlyButtonHeld);
             
             // 1. Front Wheel Steering Angle (A / D keys)
             const maxSteerRad = 0.52; // ~30 degrees
@@ -5079,29 +5081,35 @@ window.cloud3DProgram = cloud3DProgram;
             let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (isInWater ? pSpeed * 0.8 : 0));
             let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
             let brakePower = pSpeed * 0.30 * dt;
-            let coastFriction = Math.pow(isInWater ? 0.96 : 0.985, dt);
+            let coastFriction = Math.pow(isInWater ? 0.96 : ((activeRidingBoat.isAirborne || activeRidingBoat.isFlying) && hasWing ? 0.995 : 0.985), dt);
             
+            if (hasWing && hasEngine && hasBattery && (activeRidingBoat.isFlying || isShiftHeld)) {
+              topFwdSpeed = Math.max(topFwdSpeed, pSpeed * 4.5);
+              accelPower = Math.max(accelPower, pSpeed * 0.16 * dt);
+            }
+
             let canAccelerate = (hasEngine && hasBattery) || (isInWater && !hasEngine);
 
-            if (!hasEngine && !isInWater && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
+            if (!hasEngine && !isInWater && (activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0)) && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
               const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
               if (typeof showNotice === "function" && (!activeRidingBoat._lastEngineNotice || nowTime - activeRidingBoat._lastEngineNotice > 3000)) {
                 activeRidingBoat._lastEngineNotice = nowTime;
                 showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
               }
-            } else if (hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
+            } else if (hasEngine && !hasBattery && (Math.abs(moveForwardInput) > 0.1 || (activeRidingBoat.isFlying && isShiftHeld))) {
               if (typeof window.BatterySystem !== "undefined") {
                 window.BatterySystem.showEmptyNotice();
               }
             }
 
-            if (hasEngine && hasBattery && Math.abs(moveForwardInput) > 0.1) {
+            const isUsingPower = Math.abs(moveForwardInput) > 0.1 || (activeRidingBoat.isFlying && isShiftHeld);
+            if (hasEngine && hasBattery && isUsingPower) {
               if (typeof window.BatterySystem !== "undefined") {
                 window.BatterySystem.consumePower(dt);
               }
             }
 
-            const isHandbrake = (typeof keys !== "undefined" && (keys["Space"] || keys[" "]));
+            const isHandbrake = !activeRidingBoat.isFlying && (typeof keys !== "undefined" && (keys["Space"] || keys[" "]));
             activeRidingBoat.isHandbraking = isHandbrake;
             
             // Add Gravity Roll when on land slope
@@ -5120,7 +5128,7 @@ window.cloud3DProgram = cloud3DProgram;
               } else {
                 vehSpeed = Math.min(topFwdSpeed, vehSpeed + accelPower);
               }
-            } else if (moveForwardInput < -0.1 && canAccelerate) {
+            } else if (!activeRidingBoat.isFlying && moveForwardInput < -0.1 && canAccelerate) {
               if (vehSpeed > 0.01) {
                 vehSpeed -= brakePower;
               } else {
@@ -5133,8 +5141,8 @@ window.cloud3DProgram = cloud3DProgram;
 
             activeRidingBoat.vehicleSpeed = vehSpeed;
 
-            // 3. Vehicle Turning / Steering Heading (GTA PS2 Car Physics)
-            // Turns proportionally to speed, plus smooth low-speed / floating rudder steering so it never feels heavy
+            // 3. Vehicle Turning / Steering Heading (GTA PS2 Car Physics & Aerodynamic Air Rudder)
+            // Turns proportionally to speed, plus smooth flight rudder steering in the air
             const refMaxSpeed = pSpeed * 5.0;
             if (Math.abs(vehSpeed) > 0.001) {
               const turnDir = vehSpeed >= 0 ? 1 : -1;
@@ -5142,7 +5150,10 @@ window.cloud3DProgram = cloud3DProgram;
               const turnRate = currentSteer * (Math.abs(vehSpeed) / refMaxSpeed) * 0.035 * turnDir * driftMultiplier;
               charHeading += turnRate * dt;
             }
-            if (Math.abs(moveSidewaysInput) > 0.05) {
+            if (activeRidingBoat.isFlying || activeRidingBoat.isAirborne) {
+              // Smooth responsive flight banking & turning when airborne
+              charHeading += -moveSidewaysInput * 0.030 * dt;
+            } else if (Math.abs(moveSidewaysInput) > 0.05) {
               // Smooth, lightweight steering give at low speeds or in water (GTA PS2 arcade feel)
               const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / refMaxSpeed);
               if (canAccelerate || Math.abs(vehSpeed) > 0.0005 || isInWater) {
@@ -5150,11 +5161,20 @@ window.cloud3DProgram = cloud3DProgram;
               }
             }
 
-            // 4. Wheel Spin Angle
-            const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
-            const wheelRadius = 0.16 * wheelScale;
-            const distTraveled = vehSpeed * dt;
-            activeRidingBoat.spinAngle = (activeRidingBoat.spinAngle || 0) + (distTraveled / wheelRadius);
+            // 4. Wheel Spin Angle (ตอนบิน ล้อไม่ต้องหมุน: only spins when rolling on ground / water surface)
+            const isFlyingInAir = !!(activeRidingBoat.isAirborne || activeRidingBoat.isFlying);
+            if (!isFlyingInAir) {
+              const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+              const wheelRadius = 0.16 * wheelScale;
+              const distTraveled = vehSpeed * dt;
+              activeRidingBoat.spinAngle = (activeRidingBoat.spinAngle || 0) + (distTraveled / wheelRadius);
+              activeRidingBoat.frozenSpinAngle = activeRidingBoat.spinAngle;
+            } else {
+              if (activeRidingBoat.frozenSpinAngle === undefined) {
+                activeRidingBoat.frozenSpinAngle = activeRidingBoat.spinAngle || 0;
+              }
+              activeRidingBoat.spinAngle = activeRidingBoat.frozenSpinAngle;
+            }
           } else {
             let canRow = isInWater || isLandBoat;
             if (canRow) {
@@ -5181,12 +5201,13 @@ window.cloud3DProgram = cloud3DProgram;
         if (activeRidingBoat) {
           let boatDepth = waterRadius - terrainRadius;
           let isInWater = activeRidingBoat.isInWater !== undefined ? activeRidingBoat.isInWater : (waterEnabled && boatDepth > 0.35 * charScale);
-          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+          let hasWing = !!(activeRidingBoat.hasWing || activeRidingBoat.hasWings);
+          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0) || hasWing;
 
           if (isLandBoat) {
             let speedRatio = (activeRidingBoat.vehicleSpeed || 0) / (typeof playerSpeed !== "undefined" ? playerSpeed : 0.005);
-            moveNorthFactor = Math.cos(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : 0);
-            moveEastFactor = Math.sin(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : 0);
+            moveNorthFactor = Math.cos(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : (moveForwardInput !== 0 ? moveForwardInput : 0));
+            moveEastFactor = Math.sin(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : (moveForwardInput !== 0 ? moveForwardInput : 0));
           } else if (isInWater || isLandBoat) {
             moveNorthFactor = Math.cos(charHeading) * moveForwardInput;
             moveEastFactor = Math.sin(charHeading) * moveForwardInput;
@@ -5958,7 +5979,20 @@ window.cloud3DProgram = cloud3DProgram;
                 baseRadius += wave * fade;
             }
             
-            let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+            let hasWing = !!(activeRidingBoat.hasWing || activeRidingBoat.hasWings);
+            let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0) || hasWing;
+            const isShiftHeld = !!(typeof keysPressed !== "undefined" && (keysPressed["ShiftLeft"] || keysPressed["ShiftRight"] || keysPressed["Shift"])) || (typeof keys !== "undefined" && (keys["ShiftLeft"] || keys["ShiftRight"] || keys["Shift"])) || !!(typeof window.boatFlyButtonHeld !== "undefined" && window.boatFlyButtonHeld);
+
+            if (hasWing && !activeRidingBoat._hasShownFlightNotice) {
+                activeRidingBoat._hasShownFlightNotice = true;
+                if (typeof showNotice === "function") {
+                    if (activeRidingBoat.hasEngine) {
+                        showNotice("🪽 เรือติดปีก: วิ่งเร่งความเร็ว [W] ~3 วิ หรือลอยตัวในอากาศ แล้วกด [Shift] เพื่อเปิดโหมดบิน | [Z] ดิ่งลง");
+                    } else {
+                        showNotice("🪽 เรือติดปีก: ต้องติดตั้งเครื่องยนต์ไฟฟ้าและใส่แบตเตอรี่ก่อนจึงจะบินได้!");
+                    }
+                }
+            }
 
             // Recalculate F_3d and R for the boat based on the updated charHeading and nx,ny,nz
             let cNorth = [-Math.cos(charTheta) * Math.cos(charPhi), Math.sin(charTheta), -Math.cos(charTheta) * Math.sin(charPhi)];
@@ -6044,14 +6078,184 @@ window.cloud3DProgram = cloud3DProgram;
                 const suspensionTravel = 0.16 * charScale;
                 const distAboveSupport = activeRidingBoat.currentRadius - targetSupportRadius;
 
-                if (activeRidingBoat.isAirborne) {
-                    // AIRBORNE FLIGHT STATE:
+                if (hasWing) {
+                    if (activeRidingBoat.isFlying) {
+                        // === IN FLIGHT MODE (โหมดบินเปิดอยู่: บินและร่อนบนฟ้าได้อย่างต่อเนื่องโดยไม่ต้องกด Shift ค้าง) ===
+                        activeRidingBoat.isAirborne = true;
+                        activeRidingBoat.airborneCooldown = 0;
+
+                        if (activeRidingBoat.takeoffGrace === undefined) {
+                            activeRidingBoat.takeoffGrace = 0;
+                        }
+                        if (activeRidingBoat.takeoffGrace > 0) {
+                            activeRidingBoat.takeoffGrace -= timeScale;
+                        }
+
+                        // คำนวณเพดานความสูงตามขอบเขตชั้นบรรยากาศของดวงดาว (Atmosphere Radius)
+                        const atmScale = typeof atmosphereScale !== "undefined" ? atmosphereScale : 2.5;
+                        const atmosphereCeiling = RADIUS + Math.max(RADIUS * (atmScale - 1.0), (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 2.0 : 1.2) + 2.0);
+                        const maxAltitude = atmosphereCeiling - 0.2;
+                        const canClimb = activeRidingBoat.currentRadius < maxAltitude;
+
+                        // Check dive key (Z key: กดปุ่ม Z เพื่อดิ่งลง)
+                        const isDiveInput = !!(
+                            (typeof keysPressed !== "undefined" && (keysPressed["KeyZ"] || keysPressed["Keyz"] || keysPressed["z"] || keysPressed["Z"])) || 
+                            (typeof keys !== "undefined" && (keys["KeyZ"] || keys["Keyz"] || keys["z"] || keys["Z"])) || 
+                            (typeof window.boatDiveButtonHeld !== "undefined" && window.boatDiveButtonHeld)
+                        );
+
+                        const hasFlightBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
+
+                        if (isDiveInput) {
+                            // Pitch down & dive down rapidly to land on ground or water (กดปุ่ม Z เพื่อดิ่งลง)
+                            activeRidingBoat.verticalVel = Math.max(-0.030, (activeRidingBoat.verticalVel || 0) - 0.0035 * timeScale);
+                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.92 - 0.16 * Math.min(1.0, 0.14 * timeScale);
+                        } else if (isShiftHeld && canClimb && hasFlightBattery) {
+                            // Hold Shift while flying to climb higher (กด Shift ขณะบินเพื่อไต่ระดับขึ้นสูง - ต้องมีแบตเตอรี่)
+                            const climbPower = 0.0035 * timeScale;
+                            const maxClimbVel = 0.035;
+                            activeRidingBoat.verticalVel = Math.min(maxClimbVel, Math.max(0.015, (activeRidingBoat.verticalVel || 0) + climbPower));
+                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.94 + 0.12 * Math.min(1.0, 0.12 * timeScale);
+                        } else if (moveForwardInput > 0.1 && hasFlightBattery) {
+                            // Pressing forward (W) with active battery: generates engine thrust & aerodynamic lift to maintain cruise altitude
+                            activeRidingBoat.verticalVel = (activeRidingBoat.verticalVel || 0) * Math.pow(0.85, timeScale);
+                            if (Math.abs(activeRidingBoat.verticalVel) < 0.0003) activeRidingBoat.verticalVel = 0;
+                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * Math.pow(0.90, timeScale);
+                        } else {
+                            // Not pressing forward OR battery empty (ไม่มีแบต/แบตหมด): engine cuts off, vehicle glides & gradually drops down on its own to land
+                            const glideSinkRate = -0.010;
+                            activeRidingBoat.verticalVel = Math.max(glideSinkRate, (activeRidingBoat.verticalVel || 0) - 0.0008 * timeScale);
+                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.95 - 0.04 * Math.min(1.0, 0.06 * timeScale);
+                        }
+
+                        activeRidingBoat.currentRadius += activeRidingBoat.verticalVel;
+                        if (activeRidingBoat.currentRadius > maxAltitude) {
+                            activeRidingBoat.currentRadius = maxAltitude;
+                            activeRidingBoat.verticalVel = 0;
+                        }
+
+                        // Bank angle into air turns (เอนเอียงทั้งเรือไม่ใช่แค่ปีก)
+                        const maxBankAngle = 0.65; // ~37 degrees visible bank
+                        const targetBank = moveSidewaysInput * maxBankAngle;
+                        activeRidingBoat.bankAngle = (activeRidingBoat.bankAngle || 0) + (targetBank - (activeRidingBoat.bankAngle || 0)) * Math.min(1.0, 0.18 * timeScale);
+
+                        // Aerodynamic attitude stabilization relative to sphere normal
+                        let currN = activeRidingBoat.normal || [nx, ny, nz];
+                        let airNx = currN[0] + (nx - currN[0]) * Math.min(1.0, 0.06 * timeScale);
+                        let airNy = currN[1] + (ny - currN[1]) * Math.min(1.0, 0.06 * timeScale);
+                        let airNz = currN[2] + (nz - currN[2]) * Math.min(1.0, 0.06 * timeScale);
+                        let airLen = Math.sqrt(airNx*airNx + airNy*airNy + airNz*airNz) || 1;
+                        activeRidingBoat.normal = [airNx / airLen, airNy / airLen, airNz / airLen];
+
+                        // Landing check (ถ้าตกลงพื้นและน้ำ ก็คือปิดแค่นั้น: เมื่อสัมผัสพื้นดินหรือน้ำ จะปิดโหมดบินทันที)
+                        if (activeRidingBoat.takeoffGrace <= 0 && activeRidingBoat.currentRadius <= targetSupportRadius + 0.015) {
+                            activeRidingBoat.currentRadius = targetSupportRadius;
+                            activeRidingBoat.verticalVel = 0;
+                            activeRidingBoat.isAirborne = false;
+                            activeRidingBoat.isFlying = false; // Closed when landing on ground or water!
+                            activeRidingBoat.bankAngle = 0;
+                            activeRidingBoat.pitchGrade = groundedTargetPitch;
+                            activeRidingBoat.airborneCooldown = 15;
+                        }
+                    } else {
+                        // === GROUNDED / FLOATING / NATURAL AIRBORNE (โหมดบินยังไม่เปิด) ===
+                        activeRidingBoat.isFlying = false;
+                        activeRidingBoat.bankAngle = 0;
+
+                        const hasEngineBoat = !!activeRidingBoat.hasEngine;
+                        const hasBatteryBoat = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
+
+                        // สถานะลอยตัวบนพื้นธรรมชาติ (เช่น วิ่งตกขอบเนิน/หน้าผา/คลื่นน้ำ)
+                        const isNaturallyAirborne = (distAboveSupport > suspensionTravel && buoyancyFactor < 0.5) || ((activeRidingBoat.verticalVel || 0) > 0.015 && buoyancyFactor < 0.5);
+
+                        // สะสมระยะเวลาวิ่งเดินหน้าเพื่อสร้างความเร็วเทคออฟ (วิ่งเร่งเครื่อง ~3 วินาที ถึงจะบินขึ้นจากพื้นได้)
+                        const isRollingForward = (moveForwardInput > 0.1) && hasEngineBoat && hasBatteryBoat;
+                        if (isRollingForward) {
+                            activeRidingBoat.takeoffRunProgress = (activeRidingBoat.takeoffRunProgress || 0) + (timeScale / 60);
+                        } else {
+                            activeRidingBoat.takeoffRunProgress = Math.max(0, (activeRidingBoat.takeoffRunProgress || 0) - (timeScale / 30));
+                        }
+
+                        const hasTakeoffSpeed = (activeRidingBoat.takeoffRunProgress || 0) >= 2.8; // ~3 seconds of forward roll
+                        // สามารถเปิดโหมดบินได้เมื่อ: วิ่งเดินหน้าครบ ~3 วินาที หรือ อยู่ในสถานะลอยตัวในอากาศ
+                        const canEngageFlight = (hasTakeoffSpeed || isNaturallyAirborne) && (activeRidingBoat.airborneCooldown || 0) <= 0;
+
+                        if (isShiftHeld && canEngageFlight) {
+                            if (!hasEngineBoat) {
+                                const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+                                if (typeof showNotice === "function" && (!activeRidingBoat._lastWingNotice || nowTime - activeRidingBoat._lastWingNotice > 2500)) {
+                                    activeRidingBoat._lastWingNotice = nowTime;
+                                    showNotice("เรือติดปีกต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะบินได้! (Must attach Electric Engine to fly)");
+                                }
+                            } else if (!hasBatteryBoat) {
+                                if (typeof window.BatterySystem !== "undefined") {
+                                    window.BatterySystem.showEmptyNotice();
+                                }
+                            } else {
+                                activeRidingBoat.isFlying = true;
+                                activeRidingBoat.isAirborne = true;
+                                activeRidingBoat.takeoffGrace = 25; // Grace period so it takes off smoothly before landing check
+                                activeRidingBoat.verticalVel = Math.max(activeRidingBoat.verticalVel || 0, 0.028);
+                                activeRidingBoat.airborneCooldown = 0;
+                                activeRidingBoat.takeoffRunProgress = 0;
+                            }
+                        } else {
+                            if (isShiftHeld && !canEngageFlight && hasEngineBoat && hasBatteryBoat && !isNaturallyAirborne && moveForwardInput <= 0.1) {
+                                const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+                                if (typeof showNotice === "function" && (!activeRidingBoat._lastTaxiNotice || nowTime - activeRidingBoat._lastTaxiNotice > 3000)) {
+                                    activeRidingBoat._lastTaxiNotice = nowTime;
+                                    showNotice("🪽 กดเดินหน้า [W] วิ่งเร่งความเร็ว ~3 วินาที เพื่อเทคออฟเปิดโหมดบิน!");
+                                }
+                            }
+
+                            if (isNaturallyAirborne) {
+                                // Airborne over a hill/ledge/jump before activating wings
+                                activeRidingBoat.isAirborne = true;
+                                activeRidingBoat.verticalVel = Physics.applyVerticalGravity(activeRidingBoat.verticalVel || 0, timeScale, Physics.gravityAccel);
+                                activeRidingBoat.currentRadius += activeRidingBoat.verticalVel;
+                                activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * Math.pow(0.96, timeScale);
+
+                                let currN = activeRidingBoat.normal || [nx, ny, nz];
+                                let airNx = currN[0] + (nx - currN[0]) * Math.min(1.0, 0.05 * timeScale);
+                                let airNy = currN[1] + (ny - currN[1]) * Math.min(1.0, 0.05 * timeScale);
+                                let airNz = currN[2] + (nz - currN[2]) * Math.min(1.0, 0.05 * timeScale);
+                                let airLen = Math.sqrt(airNx*airNx + airNy*airNy + airNz*airNz) || 1;
+                                activeRidingBoat.normal = [airNx / airLen, airNy / airLen, airNz / airLen];
+
+                                if (activeRidingBoat.currentRadius <= targetSupportRadius) {
+                                    activeRidingBoat.currentRadius = targetSupportRadius;
+                                    activeRidingBoat.verticalVel = 0;
+                                    activeRidingBoat.isAirborne = false;
+                                }
+                            } else {
+                                // Stay firmly grounded on land or floating on water!
+                                activeRidingBoat.isAirborne = false;
+                                activeRidingBoat.verticalVel = 0;
+
+                                const suspensionRate = (distAboveSupport < 0) ? 0.38 : 0.25;
+                                activeRidingBoat.currentRadius += (targetSupportRadius - activeRidingBoat.currentRadius) * Math.min(1.0, suspensionRate * timeScale);
+
+                                const orientLerp = Math.min(1.0, 0.22 * timeScale);
+                                activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) + (groundedTargetPitch - (activeRidingBoat.pitchGrade || 0)) * orientLerp;
+
+                                let currN = activeRidingBoat.normal || [nx, ny, nz];
+                                let blendNx = currN[0] + (groundedTargetNormal[0] - currN[0]) * orientLerp;
+                                let blendNy = currN[1] + (groundedTargetNormal[1] - currN[1]) * orientLerp;
+                                let blendNz = currN[2] + (groundedTargetNormal[2] - currN[2]) * orientLerp;
+                                let blendLen = Math.sqrt(blendNx*blendNx + blendNy*blendNy + blendNz*blendNz) || 1;
+                                activeRidingBoat.normal = [blendNx / blendLen, blendNy / blendLen, blendNz / blendLen];
+                            }
+                        }
+                    }
+                } else if (activeRidingBoat.isAirborne) {
+                    // Standard wheeled vehicle airborne (without wings)
+                    const isOverLedge = distAboveSupport > suspensionTravel && buoyancyFactor < 0.5;
+                    const isLaunchedUp = (activeRidingBoat.verticalVel || 0) > 0.02 && buoyancyFactor < 0.5;
+
                     activeRidingBoat.verticalVel = Physics.applyVerticalGravity(activeRidingBoat.verticalVel || 0, timeScale, Physics.gravityAccel);
                     activeRidingBoat.currentRadius += activeRidingBoat.verticalVel;
-
-                    // Gentle GTA aerodynamic attitude stabilization in air (NOT hard snapping to 0)
                     activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * Math.pow(0.96, timeScale);
-                    
+
                     let currN = activeRidingBoat.normal || [nx, ny, nz];
                     let airNx = currN[0] + (nx - currN[0]) * Math.min(1.0, 0.05 * timeScale);
                     let airNy = currN[1] + (ny - currN[1]) * Math.min(1.0, 0.05 * timeScale);
@@ -6059,32 +6263,29 @@ window.cloud3DProgram = cloud3DProgram;
                     let airLen = Math.sqrt(airNx*airNx + airNy*airNy + airNz*airNz) || 1;
                     activeRidingBoat.normal = [airNx / airLen, airNy / airLen, airNz / airLen];
 
-                    // Check Touchdown (Landing on ground or water)
                     if (activeRidingBoat.currentRadius <= targetSupportRadius) {
-                        // GTA Soft Landing: suspension absorbs the landing impact smoothly
                         activeRidingBoat.currentRadius = targetSupportRadius;
                         activeRidingBoat.verticalVel = 0;
                         activeRidingBoat.isAirborne = false;
-                        activeRidingBoat.airborneCooldown = 8; // Prevents oscillating back into airborne
+                        activeRidingBoat.airborneCooldown = 8;
+                        activeRidingBoat.bankAngle = 0;
                     }
                 } else {
-                    // GROUNDED / FLOATING STATE:
-                    // Only become airborne if vehicle launches off a ledge/cliff or has upward velocity
+                    // Standard wheeled vehicle grounded (without wings)
                     const isOverLedge = distAboveSupport > suspensionTravel && buoyancyFactor < 0.5;
                     const isLaunchedUp = (activeRidingBoat.verticalVel || 0) > 0.02 && buoyancyFactor < 0.5;
 
                     if ((isOverLedge || isLaunchedUp) && activeRidingBoat.airborneCooldown <= 0) {
                         activeRidingBoat.isAirborne = true;
                         activeRidingBoat.verticalVel = isLaunchedUp ? activeRidingBoat.verticalVel : 0;
+                        activeRidingBoat.airborneCooldown = 0;
                     } else {
-                        // Smooth GTA Suspension Spring-Damper ("เบาและเนียน" - lightweight, smooth suspension travel)
                         activeRidingBoat.isAirborne = false;
                         activeRidingBoat.verticalVel = 0;
 
                         const suspensionRate = (distAboveSupport < 0) ? 0.35 : 0.22;
                         activeRidingBoat.currentRadius += (targetSupportRadius - activeRidingBoat.currentRadius) * Math.min(1.0, suspensionRate * timeScale);
 
-                        // Smoothly interpolate pitch & normal towards target surface
                         const orientLerp = Math.min(1.0, 0.22 * timeScale);
                         activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) + (groundedTargetPitch - (activeRidingBoat.pitchGrade || 0)) * orientLerp;
 

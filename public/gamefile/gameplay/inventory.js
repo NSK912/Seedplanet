@@ -260,6 +260,7 @@
         { name: "CAMPFIRE", icon: "🔥" },
         { name: "WOOD_BOAT", icon: "🛶" },
         { name: "WOOD_WHEEL", icon: "🛞" },
+        { name: "BOAT_WING", icon: "🪽" },
         { name: "ELECTRIC_ENGINE", icon: "🔋" },
         { name: "WOOD_WALL", icon: "🧱" },
         { name: "WOOD_WINDOW", icon: "🪟" },
@@ -447,6 +448,8 @@
             scaleFactor = 1.05;
           } else if (name === "WOOD_WHEEL") {
             scaleFactor = 1.2;
+          } else if (name === "BOAT_WING") {
+            scaleFactor = 1.35;
           } else if (name === "MEGANEURA") {
             scaleFactor = 2.5;
             mockItem.seed = 1234;
@@ -727,6 +730,8 @@
             targetSize = 0.85;
           } else if (name === "WOOD_BOAT") {
             targetSize = 0.90; // Give the boat maximum visibility inside the slot
+          } else if (name === "BOAT_WING") {
+            targetSize = 0.85;
           }
           
           const scale = maxDim > 0.0001 ? (targetSize / maxDim) : 1.0;
@@ -2073,8 +2078,8 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.type = "wood_boat";
           floorPreviewCollectible.angle = placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
-        } else if (placingItemName === "ELECTRIC_ENGINE" || placingItemName === "WOOD_WHEEL") {
-          floorPreviewCollectible.type = placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : "wood_wheel";
+        } else if (placingItemName === "ELECTRIC_ENGINE" || placingItemName === "WOOD_WHEEL" || placingItemName === "BOAT_WING") {
+          floorPreviewCollectible.type = placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : "wood_wheel");
           floorPreviewCollectible.angle = placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
 
@@ -2105,6 +2110,17 @@ function cancelFloorPlacement() {
               floorPreviewCollectible.active = false;
               if (typeof showNotice === "function") {
                 showNotice("🔋 ติดตั้งเครื่องยนต์ไฟฟ้าเรียบร้อย! เรือมีความเร็วและแรงบิดสูงขึ้น (Electric Engine attached!)");
+              }
+            } else if (placingItemName === "BOAT_WING") {
+              nearestBoat.hasWing = true;
+              nearestBoat.hasWings = true;
+              floorPreviewCollectible.active = false;
+              if (typeof showNotice === "function") {
+                if (nearestBoat.hasEngine) {
+                  showNotice("🪽 ติดตั้งปีกกับเรือเรียบร้อย! กด Shift เพื่อเปิดโหมดบิน | กด W บินไปข้างหน้า | กด Z ดิ่งลง");
+                } else {
+                  showNotice("🪽 ติดตั้งปีกกับเรือเรียบร้อย! (ต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะบินได้)");
+                }
               }
             }
           }
@@ -2187,7 +2203,7 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))))));
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -2203,7 +2219,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -3161,6 +3177,14 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "boat_wing",
+            output: { name: "BOAT_WING", icon: "🪽", count: 1, label: "ปีกเรือ (BOAT WING) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 4, label: "ท่อนไม้ (LOG)" },
+              { name: "BRANCH", icon: "🌿", count: 6, label: "กิ่งไม้ (BRANCH)" }
+            ]
+          },
+          {
             id: "glow_battery",
             output: { name: "GLOW_BATTERY", icon: "🔋", count: 1, label: "หินเรืองแสงอัดแท่ง(แบต) (GLOWING BATTERY ROD) x1" },
             ingredients: [
@@ -3491,6 +3515,14 @@ function cancelFloorPlacement() {
             output: { name: "ELECTRIC_ENGINE", icon: "🔋", count: 1 },
             ingredients: [
               { name: "IRON_ORE", count: 10 }
+            ]
+          },
+          {
+            id: "boat_wing",
+            output: { name: "BOAT_WING", icon: "🪽", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 4 },
+              { name: "BRANCH", count: 6 }
             ]
           },
           {
@@ -4052,6 +4084,19 @@ function cancelFloorPlacement() {
         
         // 1. The structure itself
         flatItems.push({ name: structureItemData.name, icon: structureItemData.icon, label: structureItemData.label });
+
+        // If it's a boat with attached items, return those too!
+        if (closestDemolishItem.type === "wood_boat") {
+          if (closestDemolishItem.hasWheel || closestDemolishItem.hasWheels) {
+            flatItems.push({ name: "WOOD_WHEEL", icon: "🛞", label: "WOOD_WHEEL" });
+          }
+          if (closestDemolishItem.hasEngine) {
+            flatItems.push({ name: "ELECTRIC_ENGINE", icon: "🔋", label: "ELECTRIC_ENGINE" });
+          }
+          if (closestDemolishItem.hasWing || closestDemolishItem.hasWings) {
+            flatItems.push({ name: "BOAT_WING", icon: "🪽", label: "BOAT_WING" });
+          }
+        }
         
         // 2. If it's a chest, add all its stored items
         if (closestDemolishItem.type === "wood_chest" && closestDemolishItem.storage) {
@@ -4119,6 +4164,10 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_BOAT", icon: "🛶", label: "WOOD_BOAT" };
         } else if (closestDemolishItem.type === "wood_wheel") {
           itemData = { name: "WOOD_WHEEL", icon: "🛞", label: "WOOD_WHEEL" };
+        } else if (closestDemolishItem.type === "electric_engine") {
+          itemData = { name: "ELECTRIC_ENGINE", icon: "🔋", label: "ELECTRIC_ENGINE" };
+        } else if (closestDemolishItem.type === "boat_wing") {
+          itemData = { name: "BOAT_WING", icon: "🪽", label: "BOAT_WING" };
         } else if (closestDemolishItem.type === "wood_wall") {
           itemData = { name: "WOOD_WALL", icon: "🧱", label: "WOOD_WALL" };
         } else if (closestDemolishItem.type === "wood_window") {

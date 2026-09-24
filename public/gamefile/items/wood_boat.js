@@ -21,6 +21,25 @@ window.ItemRegistry["wood_boat"] = {
       f = [baseF[0] * cosH + baseR[0] * sinH, baseF[1] * cosH + baseR[1] * sinH, baseF[2] * cosH + baseR[2] * sinH];
     }
 
+    // Roll entire boat (hull, wheels, engine, wings) when banking in flight
+    const bankAngle = item.bankAngle || 0;
+    if (bankAngle && Math.abs(bankAngle) > 0.0001) {
+      const cosB = Math.cos(bankAngle);
+      const sinB = Math.sin(bankAngle);
+      const bankedR = [
+        r[0] * cosB - n[0] * sinB,
+        r[1] * cosB - n[1] * sinB,
+        r[2] * cosB - n[2] * sinB
+      ];
+      const bankedN = [
+        n[0] * cosB + r[0] * sinB,
+        n[1] * cosB + r[1] * sinB,
+        n[2] * cosB + r[2] * sinB
+      ];
+      r = bankedR;
+      n = bankedN;
+    }
+
     const rawHull = getOrCreateRawBoatHull();
     const baseIdx = vertices.length / 3;
     
@@ -132,7 +151,9 @@ window.ItemRegistry["wood_boat"] = {
       const darkWood = [0.4, 0.26, 0.14];
       const metalCol = [0.3, 0.3, 0.3];
 
-      let spinAngle = item.spinAngle || 0;
+      // ตอนบิน ล้อไม่ต้องหมุน (When flying, wheels do not rotate/spin)
+      const isFlying = !!(item.isFlying || item.isAirborne);
+      let spinAngle = isFlying ? (item.frozenSpinAngle !== undefined ? item.frozenSpinAngle : (item.spinAngle || 0)) : (item.spinAngle || 0);
       let steerAngle = item.steerAngle || 0;
 
       const fAxleLen = typeof window.wheelFrontAxleLength === "number" ? window.wheelFrontAxleLength : 0.36;
@@ -237,6 +258,25 @@ window.ItemRegistry["wood_boat"] = {
       const cAccent = [0.85, 0.85, 0.85];
       const gearColor = [0.4, 0.4, 0.4];
       window.drawElectricEngine(center, engWid, engHei, engLen, engR, engN, engF, cMain, cDark, cAccent, gearColor, vertices, colors, indices);
+    }
+
+    if (!isPreview && (item.hasWing || item.hasWings) && typeof window.drawBoatWings === "function") {
+      const wingCenter = [
+        px + ny0 * 0.05,
+        py + ny1 * 0.05,
+        pz + ny2 * 0.05
+      ];
+      window.drawBoatWings(
+        wingCenter,
+        1.55,
+        0.40,
+        r, n, f,
+        null,
+        vertices, colors, indices,
+        false,
+        null,
+        0
+      );
     }
   }
 };
