@@ -26,7 +26,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <div class="logo-container">
         <div class="main-screen-title-wrapper">
           ${(typeof getThaiTitleLogoSVG === 'function') ? getThaiTitleLogoSVG() : '<div class="main-screen-thai-title"><span style="color:#ffffff;">SEED</span><span class="thai-title-gold">PLANET</span></div>'}
-          <h1 class="main-screen-title" style="color: #ffffff;"><span>${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ดาวเคราะห์แห่งเ') : (typeof toSeedian === 'function') ? toSeedian('ดาวเคราะห์แห่งเ') : 'ดาวเคราะห์แห่งเ'}</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span style="color: #ffffff;">${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ล็ดพันธุ์') : (typeof toSeedian === 'function') ? toSeedian('ล็ดพันธุ์') : 'ล็ดพันธุ์'}</span></h1>
+          <h1 class="main-screen-title" style="color: #ffffff;"><span>${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('SEED') : (typeof toSeedian === 'function') ? toSeedian('SEED') : 'SEED'}</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span style="color: #ffffff;">${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('PLANET') : (typeof toSeedian === 'function') ? toSeedian('PLANET') : 'PLANET'}</span></h1>
         </div>
         <div id="startScreenSocialBar" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0px; transition: opacity 0.4s ease;">
           <!-- YouTube Icon Link -->

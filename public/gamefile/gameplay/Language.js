@@ -454,9 +454,18 @@
         return text;
       };
       DICTIONARY.seedian = {};
-      for (const [k, v] of Object.entries(DICTIONARY.th)) {
+      const sourceDict = DICTIONARY.en || DICTIONARY.th;
+      for (const [k, v] of Object.entries(sourceDict)) {
         if (typeof v === "string") {
           DICTIONARY.seedian[k] = toSeedianFn(v);
+        }
+      }
+      // Ensure keys from TH that might not be in EN are also translated
+      if (DICTIONARY.th) {
+        for (const [k, v] of Object.entries(DICTIONARY.th)) {
+          if (!DICTIONARY.seedian[k] && typeof v === "string") {
+            DICTIONARY.seedian[k] = toSeedianFn(v);
+          }
         }
       }
       DICTIONARY.seedian.lang_th = "ภาษาไทย";
@@ -512,11 +521,21 @@
       }
     }
 
+    // Clear cached seedian dictionary when language is updated
+    if (DICTIONARY) {
+      DICTIONARY.seedian = null;
+    }
+
     // Update all text nodes with data-i18n attribute
     document.querySelectorAll("[data-i18n]").forEach(el => {
       const key = el.getAttribute("data-i18n");
       if (key) {
-        el.textContent = t(key);
+        const val = t(key);
+        if (typeof val === "string" && (val.includes("<svg") || val.includes("<span") || currentLang === "seedian")) {
+          el.innerHTML = val;
+        } else {
+          el.textContent = val;
+        }
       }
     });
 
@@ -603,6 +622,16 @@
     }
   }
 
+  function setElementTextOrHTML(el, str) {
+    if (!el) return;
+    const val = String(str || "");
+    if (val.includes("<svg") || val.includes("<span") || currentLang === "seedian") {
+      el.innerHTML = val;
+    } else {
+      el.textContent = val;
+    }
+  }
+
   function setGameLanguage(lang, save = true) {
     if (lang !== "th" && lang !== "en" && lang !== "seedian") return;
     currentLang = lang;
@@ -626,6 +655,7 @@
   window.I18N_DICTIONARY = DICTIONARY;
   window.getGameLanguage = getGameLanguage;
   window.setGameLanguage = setGameLanguage;
+  window.setElementTextOrHTML = setElementTextOrHTML;
   window.t = t;
   window.getItemDisplayName = getItemDisplayName;
   window.updateUILanguage = updateUILanguage;

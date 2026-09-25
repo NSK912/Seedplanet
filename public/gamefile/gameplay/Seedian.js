@@ -1,152 +1,192 @@
 // =========================================================================
-// ภาษาซีเดียน (Seedian Script & Language System)
-// Complete Custom Pure Geometric Glyph System (เรขาคณิตแท้ 100% สร้างขึ้นเอง)
+// ภาษาซีเดียน (Seedian Vector SVG Script System)
+// Genshin Teyvat-Style Handwriteable Geometric Runes (เขียนด้วยมือได้จริง 100%)
 // =========================================================================
 
 (function(global) {
-  // 1. Complete Thai Consonant, Vowel, Tone Mark, Number, and Punctuation Mappings
-  // Purely geometric, faceted, angular glyphs with 100% equal cap-height & zero foreign alphabet references
-  const SEEDIAN_ALPHABET = {
-    // === พยัญชนะไทย 44 ตัว (Thai Consonants - Pure Geometric Custom Glyphs) ===
-    "ก": "⊓", // K - Square Arch / Portal
-    "ข": "⊐", // Kh - Open-Right Square Bracket
-    "ฃ": "⊏", // Kh (Rare) - Open-Left Square Bracket
-    "ค": "⊞", // Kh - Squared Orthogonal Cross Matrix
-    "ฅ": "⊠", // Kh (Rare) - Squared Diagonal X Matrix
-    "ฆ": "⌸", // Kh - Square Pedestal Matrix
-    "ง": "⟐", // Ng - Diamond Cross Matrix (◇ + + Overlaid Reticle)
-    "จ": "◇", // Ch - Faceted Diamond Core
-    "ฉ": "◈", // Ch - Concentric Faceted Inscribed Diamond
-    "ช": "⬖", // Ch - Split Geometric Prism (Left)
-    "ซ": "⬗", // S - Split Geometric Prism (Right)
-    "ฌ": "⧖", // Ch - Horizontal Geometric Hourglass
-    "ญ": "⊔", // Y - Square Deep Basin / Vessel
-    "ฎ": "◬", // D - Delta Triangle with Center Vertical Axis
-    "ฏ": "⧎", // T - Delta Triangle with Base Pillar Beam
-    "ฐ": "⌹", // Th - Multi-Grid Square Core
-    "ฑ": "◇◆", // Th - Connected Diamond Vector (Open Diamond, Solid Diamond)
-    "ฒ": "◆◇", // Th - Connected Diamond Vector (Solid Diamond, Open Diamond)
-    "ณ": "⍁", // N - Diamond-Inscribed Square Frame
-    "ด": "△", // D - Delta Peak Triangle
-    "ต": "▲", // T - Solid Apex Triangle
-    "ถ": "▽", // Th - Inverted Delta Triangle
-    "ท": "▼", // Th - Solid Inverted Apex Triangle
-    "ธ": "⧗", // Th - Vertical Faceted Hourglass Prism
-    "น": "⬡", // N - Hexagonal Cell Prism
-    "บ": "□", // B - Clean Square Frame
-    "ป": "■", // P - Solid Monolith Block
-    "ผ": "⋈", // Ph - Geometric Bowtie Core
-    "ฝ": "⋉", // F - Geometric Left Wing Nexus
-    "พ": "⋊", // Ph - Geometric Right Wing Nexus
-    "ฟ": "⋋", // F - Geometric Splay Matrix
-    "ภ": "▣", // Ph - Concentric Inscribed Square Box
-    "ม": "⬢", // M - Solid Hexagonal Prism
-    "ย": "⌑", // Y - Rotated Square Diamond Lozenge
-    "ร": "⊺", // R - Intercalate Pivot Vector
-    "ล": "⊻", // L - Angular Chevron Vertex
-    "ว": "⊽", // W - Inverted Angular Chevron Vertex
-    "ศ": "⊡", // S - Square with Centered Focus Dot
-    "ษ": "◧", // S - Bisected High-Contrast Square (Left Half Solid)
-    "ส": "◨", // S - Bisected High-Contrast Square (Right Half Solid)
-    "ห": "⍁", // H - Square with Clean Inscribed Diamond Core
-    "ฬ": "⊼", // L - Geometric Inverted Vertex Nexus (Angular NAND Bar)
-    "อ": "⬠", // O - Pure Geometric Polygon Core (Pentagon Prism)
-    "ฮ": "⌗", // H - Dual-Beam Matrix Grid
-
-    // === สระไทยและเครื่องหมาย (Vowels & Diacritics - Compact Single & Combining Glyphs) ===
-    "ะ": "∶", // Short a - Compact Single Two-Dot (U+2236)
-    "า": "∣", // Long aa - Compact Sleek Thin Pillar (U+2223)
-    "ำ": "⋄∣", // Am - Compact Faceted Diamond on Pillar (U+22C4 + U+2223)
-    "ิ": "\u0302", // i - Combining Sharp Apex
-    "ี": "\u0304", // ii - Combining Horizontal Beam
-    "ึ": "\u030A", // ue - Combining Orb Ring
-    "ื": "\u0308", // uee - Combining Dual Orb
-    "ุ": "\u032D", // u - Combining Lower Apex
-    "ู": "\u0333", // uu - Combining Lower Double Beam
-    "เ": "∣", // e - Compact Front Beam (U+2223)
-    "แ": "∥", // ae - Compact Parallel Double Beam (U+2225)
-    "โ": "┌", // o - Compact Top Corner Beam (U+250C)
-    "ใ": "⌜", // ai (Mai Muan) - Compact Quadrant Corner (U+231C)
-    "ไ": "⎾", // ai (Mai Malai) - Compact Stepped Angle (U+23BE)
-    "ฤ": "⊩", // Rue - Double Beam Pivot
-    "ฦ": "⊫", // Lue - Triple Beam Pivot
-    "็": "\u0307", // Mai Tai Khu - Combining Crown Dot
-    "ั": "\u0302", // Mai Han-Akat - Combining Apex
-    "์": "\u0301", // Thanthakhat / Garan - Combining Slash Ray
-    "ํ": "\u030A", // Nikhahit - Combining Apex Ring
-    "ฺ": "\u0323", // Phinthu - Combining Center Dot
-    "ฯ": "∣", // Paiyan Noi - Pillar Divider
-    "ๆ": "‖", // Mai Yamok - Twin Geometric Pillars
-    "฿": "⟡", // Baht Symbol - Astral Diamond Matrix
-    "๏": "⬪", // Fongman - Small Diamond Core
-    "๚": "⫽", // Angkhankhu - Twin Slashed Cosmic Pillars
-    "๛": "⧫", // Khomut - Angular Faceted Lozenge
-
-    // === วรรณยุกต์ (Tone Marks - Combining Diacritics for Zero Width Overhead Placement) ===
-    "่": "\u0300", // Mai Ek - Combining Sharp Grave Accent
-    "้": "\u0303", // Mai Tho - Combining Sharp Tilde Accent
-    "๊": "\u030C", // Mai Tri - Combining Sharp Caron Inverted Apex
-    "๋": "\u0311", // Mai Chattawa - Combining Inverted Breve Accent
-
-    // === ตัวเลขไทยและเลขอารบิก (Numbers) ===
-    "๐": "0", "0": "0",
-    "๑": "1", "1": "1",
-    "๒": "2", "2": "2",
-    "๓": "3", "3": "3",
-    "๔": "4", "4": "4",
-    "๕": "5", "5": "5",
-    "๖": "6", "6": "6",
-    "๗": "7", "7": "7",
-    "๘": "8", "8": "8",
-    "๙": "9", "9": "9"
+  // 1. Handcrafted Handwriteable Vector SVG Runes for A through Z (26 Seedian Runes)
+  // Simple 1-3 stroke geometric runes that humans can easily draw on paper!
+  // Zero Latin resemblance & zero stars!
+  const SEEDIAN_SVG_PATHS = {
+    // A: Triangle with horizontal crossbar
+    "A": `<path d="M16 4 L28 28 H4 Z M2 18 H30" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // B: Vertical line with right-facing diamond
+    "B": `<path d="M8 2 V30 M8 6 L24 16 L8 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // C: Sharp left bracket with center bar
+    "C": `<path d="M26 6 L6 16 L26 26 M6 16 H28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // D: Inverted triangle with center vertical axis
+    "D": `<path d="M4 6 H28 L16 28 Z M16 6 V28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // E: Square arch with inner vertical pillar
+    "E": `<path d="M6 6 V26 H26 V6 M16 12 V26" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // F: Vertical pillar with dual diagonal slashes
+    "F": `<path d="M10 2 V30 M10 8 L24 16 M10 18 L24 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    // G: Diamond with right horizontal tail
+    "G": `<path d="M16 2 L28 16 L16 30 L4 16 Z M16 16 H30" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // H: X-Cross with top and bottom cap bars
+    "H": `<path d="M6 4 H26 M6 28 H26 M6 6 L26 26 M26 6 L6 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    // I: Vertical line with top-right diagonal slash
+    "I": `<path d="M16 2 V30 M16 10 L28 2" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    // J: Hooked angle with floating dot
+    "J": `<path d="M6 6 H22 V22 L14 28" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="26" cy="14" r="2.5" fill="currentColor"/>`,
+    // K: Upward arrowhead with center vertical line
+    "K": `<path d="M4 18 L16 4 L28 18 M16 4 V30" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // L: Square corner bracket with vertex diagonal slash
+    "L": `<path d="M8 4 V24 H28 M2 28 L14 18" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    // M: Wide chevron with dual side vertical legs
+    "M": `<path d="M6 4 V28 L16 16 L26 28 V4" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // N: Vertical pillar with right-pointing chevron
+    "N": `<path d="M8 2 V30 M8 16 L24 6 M8 16 L24 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // O: Pure clean hexagon
+    "O": `<polygon points="16,2 27,8 27,24 16,30 5,24 5,8" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // P: Vertical pillar with left-pointing top triangle
+    "P": `<path d="M22 2 V30 M22 4 L6 14 H22" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // Q: Diamond with descending vertical tail
+    "Q": `<path d="M16 2 L26 14 L16 24 L6 14 Z M16 24 V31" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // R: Vertical pillar with right chevron & horizontal crossbar
+    "R": `<path d="M8 2 V30 M8 4 L24 14 L8 24 M2 14 H28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // S: Zigzag lightning angle bolt
+    "S": `<path d="M26 4 L8 12 L24 20 L6 28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // T: Top horizontal bar with twin vertical legs
+    "T": `<path d="M4 6 H28 M10 6 V28 M22 6 V28" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    // U: Basin arch with top horizontal closure bar
+    "U": `<path d="M6 6 H26 M6 6 V20 L16 28 L26 20 V6" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // V: V-chevron with top horizontal closure bar
+    "V": `<path d="M2 6 H30 M6 6 L16 28 L26 6" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // W: Inverted triangle with top antenna
+    "W": `<path d="M4 12 H28 L16 28 Z M16 2 V12" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // X: Plus cross with center square frame
+    "X": `<path d="M16 2 V30 M2 16 H30" stroke="currentColor" stroke-width="3"/><rect x="10" y="10" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"/>`,
+    // Y: Vertical pillar with top diamond loop
+    "Y": `<path d="M16 16 V30 M16 2 L26 10 L16 18 L6 10 Z" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    // Z: Square box frame with diagonal slash
+    "Z": `<rect x="4" y="4" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none"/><line x1="4" y1="28" x2="28" y2="4" stroke="currentColor" stroke-width="3"/>`
   };
 
-  // English letters mapped purely to geometric Seedian runes
-  const EN_SEEDIAN_MAP = {
-    "a": "△", "b": "⊐", "c": "⊏", "d": "◈", "e": "⊞",
-    "f": "⌸", "g": "⟐", "h": "▦", "i": "│", "j": "◇─◆",
-    "k": "⊓", "l": "⊻", "m": "⬢", "n": "⬡", "o": "⬠",
-    "p": "■", "q": "◇", "r": "⊺", "s": "▥", "t": "▲",
-    "u": "⊔", "v": "▽", "w": "⋈", "x": "⊠", "y": "⌑", "z": "⧗"
+  // Comprehensive Thai-to-English Mapping & Phonetic Romanization for auto-translating Thai text
+  const THAI_TO_EN_MAP = {
+    "ดาวเคราะห์แห่งเ": "SEED",
+    "ล็ดพันธุ์": "PLANET",
+    "ดาวเคราะห์แห่งเมล็ดพันธุ์": "SEEDPLANET",
+    "ดาวเคราะห์": "PLANET",
+    "เมล็ดพันธุ์": "SEEDS",
+    "ภาษาซีเดียน": "SEEDIAN SCRIPT",
+    "ซีเดียน": "SEEDIAN",
+    "ภาษา": "LANGUAGE",
+    "ตั้งค่า": "SETTINGS",
+    "เปิด": "ON",
+    "ปิด": "OFF",
+    "แสดงตัวนับ": "SHOW COUNTER",
+    "ความไวเมาส์": "MOUSE SENSITIVITY",
+    "สเกลความละเอียดเรนเดอร์": "RENDER SCALE",
+    "จำกัดเฟรมเรต": "FPS LIMIT",
+    "ระดับเสียงรวม": "MASTER VOLUME",
+    "คุณภาพเงา": "SHADOW QUALITY",
+    "ลดรอยหยัก": "ANTI ALIASING",
+    "ลดรอยหยักขอบภาพ": "ANTI ALIASING",
+    "ปิดหน้าต่าง": "CLOSE",
+    "ทดลองพิมพ์ข้อความ": "TRY TYPING",
+    "เกม": "GAME",
+    "เริ่ม": "START",
+    "เล่นต่อ": "RESUME",
+    "ออกจากเกม": "QUIT GAME",
+    "กระเป๋า": "INVENTORY",
+    "คราฟต์": "CRAFTING",
+    "ทำอาหาร": "COOKING",
+    "บันทึก": "SAVE",
+    "ตั้งค่าปุ่มควบคุม": "KEY BINDINGS",
+    "คืนค่าเริ่มต้น": "RESTORE DEFAULTS"
   };
 
-  // Transliterate standard text to Seedian script
-  function toSeedian(text) {
+  function convertThaiToPhoneticEnglish(text) {
     if (!text || typeof text !== "string") return "";
-    let out = "";
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      if (SEEDIAN_ALPHABET[ch]) {
-        out += SEEDIAN_ALPHABET[ch];
-      } else {
-        const lower = ch.toLowerCase();
-        if (EN_SEEDIAN_MAP[lower]) {
-          out += EN_SEEDIAN_MAP[lower];
-        } else {
-          out += ch;
-        }
+    let str = text.trim();
+    for (const [th, en] of Object.entries(THAI_TO_EN_MAP)) {
+      if (str.includes(th)) {
+        str = str.replace(new RegExp(th, "g"), en);
       }
+    }
+    const thConsonantMap = {
+      "ก": "K", "ข": "KH", "ฃ": "KH", "ค": "KH", "ฅ": "KH", "ฆ": "KH", "ง": "NG",
+      "จ": "CH", "ฉ": "CH", "ช": "CH", "ซ": "S", "ฌ": "CH", "ญ": "Y",
+      "ฎ": "D", "ฏ": "T", "ฐ": "TH", "ฑ": "TH", "ฒ": "TH", "ณ": "N",
+      "ด": "D", "ต": "T", "ถ": "TH", "ท": "TH", "ธ": "TH", "น": "N",
+      "บ": "B", "ป": "P", "ผ": "PH", "ฝ": "F", "พ": "PH", "ฟ": "F", "ภ": "PH",
+      "ม": "M", "ย": "Y", "ร": "R", "ล": "L", "ว": "W",
+      "ศ": "S", "ษ": "S", "ส": "S", "ห": "H", "ฬ": "L", "อ": "O", "ฮ": "H"
+    };
+    const thVowelMap = {
+      "ะ": "A", "า": "A", "ำ": "AM", "ิ": "I", "ี": "I", "ึ": "U", "ื": "U",
+      "ุ": "U", "ู": "U", "เ": "E", "แ": "AE", "โ": "O", "ใ": "AI", "ไ": "AI",
+      "ฤ": "RU", "ฦ": "LU", "็": "A", "ั": "A", "์": "", "ํ": "N", "ฺ": ""
+    };
+    let out = "";
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (thConsonantMap[ch]) out += thConsonantMap[ch];
+      else if (thVowelMap[ch] !== undefined) out += thVowelMap[ch];
+      else out += ch;
     }
     return out;
   }
 
-  // Special Title Formatter for Game Title: All characters white except 'ด' (△) in red
+  // Helper to generate a single inline SVG string for an English letter
+  function getSingleLetterSVG(char, size = "1em", color = "currentColor") {
+    const uppercaseChar = String(char || "").toUpperCase();
+    const pathData = SEEDIAN_SVG_PATHS[uppercaseChar];
+    if (!pathData) {
+      if (char === " ") return `<span style="display:inline-block; width:0.4em;"></span>`;
+      return String(char);
+    }
+    return `<svg class="seedian-svg-glyph" viewBox="0 0 32 32" style="display:inline-block; width:${size}; height:${size}; vertical-align:-0.15em; color:${color}; overflow:visible;" aria-label="${uppercaseChar}">${pathData}</svg>`;
+  }
+
+  // Convert any string (English or Thai) to a sequence of Seedian SVG Glyphs
+  function toSeedian(text) {
+    if (!text || typeof text !== "string") return "";
+    
+    let inputStr = convertThaiToPhoneticEnglish(text);
+
+    let result = "";
+    for (let i = 0; i < inputStr.length; i++) {
+      const ch = inputStr[i];
+      if (/[a-zA-Z]/.test(ch)) {
+        result += getSingleLetterSVG(ch);
+      } else if (ch === " ") {
+        result += `<span style="display:inline-block; width:0.4em;"></span>`;
+      } else {
+        result += ch;
+      }
+    }
+    return result;
+  }
+
+  // Special Title Formatter for Game Title with Red Accent on 'A' or 'S'
   function getSeedianTitleHTML(text) {
     if (!text || typeof text !== "string") return "";
-    let raw = toSeedian(text);
+    let englishText = text;
+    if (THAI_TO_EN_MAP[text]) {
+      englishText = THAI_TO_EN_MAP[text];
+    } else if (text.includes("ดาวเคราะห์") || text.includes("SEED")) {
+      englishText = "SEED";
+    } else if (text.includes("พันธุ์") || text.includes("ล็ด") || text.includes("PLANET")) {
+      englishText = "PLANET";
+    } else {
+      englishText = convertThaiToPhoneticEnglish(text);
+    }
+
     let html = "";
-    for (let i = 0; i < raw.length; i++) {
-      const ch = raw[i];
-      if (ch === "△") {
-        html += `<span class="title-accent-red">△</span>`;
+    for (let i = 0; i < englishText.length; i++) {
+      const ch = englishText[i];
+      if (ch.toUpperCase() === "E") {
+        html += getSingleLetterSVG(ch, "1em", "#ff3b47");
       } else {
-        html += ch;
+        html += getSingleLetterSVG(ch, "1em", "#ffffff");
       }
     }
     return html;
   }
 
-  // 2. High-Resolution Vector Title SVG Subtitle Renderer (SEEDPLANET Subtitle)
+  // Vector Title SVG Subtitle Renderer (SEEDPLANET Subtitle)
   function getThaiTitleLogoSVG() {
     return `<svg class="main-screen-thai-svg" viewBox="0 0 320 28" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMid meet" aria-label="SEEDPLANET">
       <defs>
@@ -170,7 +210,7 @@
     </svg>`;
   }
 
-  // 3. Complete Lexicon & Character Chart Modal Component (Game UI Cut-Corner Style)
+  // Complete Lexicon Chart Modal Component (Genshin Impact Teyvat Chart Style)
   function createSeedianModalDOM() {
     let existing = document.getElementById("seedianLexiconModal");
     if (existing) {
@@ -181,49 +221,18 @@
     overlay.id = "seedianLexiconModal";
     overlay.className = "seedian-modal-overlay";
 
-    // Thai Consonants Organized by 7 Geometric Archetype Families
-    const consonantGroups = [
-      { name: "กลุ่มสี่เหลี่ยม (Square Archetypes)", glyphs: "□ ■ ▣ ⊡ ◧ ◨ ⍁ ⊞ ⊠ ⌗", items: ["บ","ป","ภ","ศ","ษ","ส","ห","ค","ฅ","ฐ","ฮ","ฆ"] },
-      { name: "กลุ่มเพชร (Diamond Archetypes)", glyphs: "◇ ◈ ⬖ ⬗ ⟐", items: ["จ","ฉ","ช","ซ","ง","ย","ณ","ฑ","ฒ"] },
-      { name: "กลุ่มสามเหลี่ยม (Triangle Archetypes)", glyphs: "△ ▲ ▽ ▼ ◬ ⧎", items: ["ด","ต","ถ","ท","ฎ","ฏ"] },
-      { name: "กลุ่มหกเหลี่ยม / พหุเหลี่ยม (Hexagon / Polygon)", glyphs: "⬡ ⬢ ⬠", items: ["น","ม","อ"] },
-      { name: "กลุ่ม Bowtie (Bowtie Family)", glyphs: "⋈ ⋉ ⋊ ⋋", items: ["ผ","ฝ","พ","ฟ"] },
-      { name: "กลุ่ม Hourglass (Hourglass Family)", glyphs: "⧖ ⧗", items: ["ฌ","ธ"] },
-      { name: "กลุ่มรูปเฉพาะทาง / เวกเตอร์ (Specialized Brackets)", glyphs: "⊓ ⊐ ⊏ ⊔", items: ["ก","ข","ฃ","ญ","ร","ล","ฬ","ว"] }
-    ];
+    const alphabetList = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"];
 
-    // Vowels & Special Marks
-    const vowels = ["ะ","า","ำ","ิ","ี","ึ","ื","ุ","ู","เ","แ","โ","ใ","ไ","ฤ","ฦ","็","ั","์","ฯ","ๆ","฿","๏","๚","๛"];
-    // Tone Marks
-    const tones = ["่","้","๊","๋"];
-    // Digits
-    const numbers = ["0","1","2","3","4","5","6","7","8","9"];
-
-    const renderCards = (list) => {
-      return list.map(ch => {
-        let sd = toSeedian(ch);
-        // If the Seedian character is a combining diacritic mark, render it over a dotted circle placeholder
-        if (/^[\u0300-\u036f]/.test(sd)) {
-          sd = "◌" + sd;
-        }
-        let displayTh = ch;
-        if (/^[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]/.test(ch)) {
-          displayTh = "◌" + ch;
-        }
-        return `<div class="seedian-card"><span class="th-char">${displayTh}</span><span style="color: rgba(223,183,108,0.4); font-size: 11px;">➔</span><span class="sd-char">${sd}</span></div>`;
-      }).join("");
-    };
-
-    const renderConsonantGroups = () => {
-      return consonantGroups.map(grp => {
+    const renderAlphabetCards = () => {
+      return alphabetList.map(letter => {
+        const svgIcon = getSingleLetterSVG(letter, "30px", "#dfb76c");
         return `
-          <div style="margin-top: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(223,183,108,0.15); border-left: 3px solid #dfb76c; padding: 10px 12px; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));">
-            <div style="font-size: 12px; font-weight: 700; color: #dfb76c; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-              <span>✦ ${grp.name}</span>
-              <span style="color: rgba(255,255,255,0.4); font-size: 11px; font-family: monospace;">[ ${grp.glyphs} ]</span>
+          <div class="seedian-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(223,183,108,0.25); padding: 12px 8px; gap: 8px; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); transition: transform 0.2s, border-color 0.2s;">
+            <div style="width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 6px rgba(223,183,108,0.4));">
+              ${svgIcon}
             </div>
-            <div class="seedian-grid">
-              ${renderCards(grp.items)}
+            <div style="font-size: 14px; font-weight: 700; color: #ffffff; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.05em;">
+              ${letter}
             </div>
           </div>
         `;
@@ -231,73 +240,45 @@
     };
 
     overlay.innerHTML = `
-      <div class="seedian-modal-box" style="position: relative;">
+      <div class="seedian-modal-box" style="position: relative; max-width: 680px; width: 92vw;">
         <!-- Scrollable Body -->
         <div class="seedian-modal-body" style="padding-top: 20px;">
           <!-- Live Interactive Translator -->
-          <div style="background: rgba(223,183,108,0.05); border: 1px solid rgba(223,183,108,0.25); --cut: 10px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); padding: 14px;">
+          <div style="background: rgba(223,183,108,0.05); border: 1px solid rgba(223,183,108,0.25); --cut: 10px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); padding: 14px; margin-bottom: 16px;">
             <div style="font-size: 13px; font-weight: 700; color: #dfb76c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
-              <span>✦</span> ${toSeedian("ทดลองพิมพ์ข้อความ")}
+              <span>✦</span> ${toSeedian("TRY TYPING")} (พิมพ์ข้อความ A-Z)
             </div>
             <div style="display: flex; gap: 10px; flex-direction: column;">
               <input
                 id="seedianLiveInput"
                 type="text"
-                placeholder="พิมพ์ข้อความที่นี่..."
-                value="ดาวเคราะห์แห่งเมล็ดพันธุ์"
-                style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; color: #ffffff; font-size: 13px; font-family: 'Google Sans', sans-serif; outline: none; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));"
+                placeholder="พิมพ์ข้อความภาษาอังกฤษ เช่น SEEDPLANET / HELLO..."
+                value="SEEDPLANET"
+                style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; color: #ffffff; font-size: 14px; font-family: 'Playfair Display', 'Google Sans', sans-serif; outline: none; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));"
               />
-              <div style="background: rgba(0,0,0,0.7); border: 1px solid #dfb76c; padding: 12px 14px; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 10px; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));">
-                <div id="seedianLiveOutput" style="font-size: 18px; font-weight: 700; color: #dfb76c; font-family: 'Playfair Display', 'Google Sans', Georgia, serif; letter-spacing: 0.1em; word-break: break-all; text-shadow: 0 0 8px rgba(223,183,108,0.4);">
-                  ${toSeedian("ดาวเคราะห์แห่งเมล็ดพันธุ์")}
+              <div style="background: rgba(0,0,0,0.7); border: 1px solid #dfb76c; padding: 12px 14px; min-height: 48px; display: flex; align-items: center; gap: 10px; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));">
+                <div id="seedianLiveOutput" style="font-size: 24px; color: #dfb76c; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; word-break: break-all; filter: drop-shadow(0 0 8px rgba(223,183,108,0.5));">
+                  ${toSeedian("SEEDPLANET")}
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Section 1: Thai Consonants Organized by 7 Geometric Families -->
+          <!-- Section: Genshin Teyvat-Style Alphabet Chart (A - Z) -->
           <div>
-            <div style="font-size: 14px; font-weight: 700; color: #dfb76c; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
-              <span>✦</span> ${toSeedian("พยัญชนะไทย 44 ตัว (7 กลุ่มเรขาคณิต)")}
+            <div style="font-size: 14px; font-weight: 700; color: #dfb76c; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
+              <span>✦</span> ตารางเทียบอักษรซีเดียน Vector Script (A - Z)
             </div>
-            ${renderConsonantGroups()}
-          </div>
-
-          <!-- Section 2: Vowels & Symbols -->
-          <div>
-            <div style="font-size: 14px; font-weight: 700; color: #dfb76c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
-              <span>✦</span> ${toSeedian("สระและเครื่องหมาย")}
-            </div>
-            <div class="seedian-grid">
-              ${renderCards(vowels)}
-            </div>
-          </div>
-
-          <!-- Section 3: Tone Marks & Numbers -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div>
-              <div style="font-size: 14px; font-weight: 700; color: #dfb76c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
-                <span>✦</span> ${toSeedian("วรรณยุกต์")}
-              </div>
-              <div class="seedian-grid" style="grid-template-columns: repeat(2, 1fr);">
-                ${renderCards(tones)}
-              </div>
-            </div>
-            <div>
-              <div style="font-size: 14px; font-weight: 700; color: #dfb76c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-family: 'Playfair Display', Georgia, serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
-                <span>✦</span> ${toSeedian("ตัวเลข")}
-              </div>
-              <div class="seedian-grid" style="grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));">
-                ${renderCards(numbers)}
-              </div>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+              ${renderAlphabetCards()}
             </div>
           </div>
         </div>
 
         <!-- Footer with Game-Style Cut-Corner Close Button -->
-        <div class="seedian-modal-footer">
+        <div class="seedian-modal-footer" style="margin-top: 16px;">
           <button id="bottomCloseSeedianBtn" class="seedian-footer-btn" style="letter-spacing: 0.12em; font-family: 'Playfair Display', Georgia, serif;">
-            ${toSeedian("ปิดหน้าต่าง")}
+            CLOSE
           </button>
         </div>
       </div>
@@ -311,12 +292,11 @@
       bottomCloseBtn.addEventListener("click", closeSeedianModal);
     }
 
-    // Do NOT close on background click per user request
     const input = overlay.querySelector("#seedianLiveInput");
     const output = overlay.querySelector("#seedianLiveOutput");
     if (input && output) {
       input.addEventListener("input", () => {
-        output.textContent = toSeedian(input.value) || "(พิมพ์ข้อความเพื่อแปล)";
+        output.innerHTML = toSeedian(input.value) || `<span style="color: rgba(255,255,255,0.4); font-size:14px;">(พิมพ์ข้อความ A-Z เพื่อแปล)</span>`;
       });
     }
 
@@ -337,7 +317,7 @@
     }
   }
 
-  // 4. Dynamic UI Bumper & Auto-Fit Scaling System
+  // Dynamic UI Bumper & Auto-Fit Scaling System
   function autoFitMainScreenTitle() {
     const wrappers = document.querySelectorAll(".main-screen-title-wrapper");
     wrappers.forEach(wrapper => {
@@ -364,7 +344,6 @@
       setTimeout(autoFitMainScreenTitle, 100);
       setTimeout(autoFitMainScreenTitle, 500);
     });
-    // Periodic check during initialization
     let fitAttempts = 0;
     const fitInterval = setInterval(() => {
       autoFitMainScreenTitle();
@@ -384,8 +363,10 @@
 
   // Export module
   global.Seedian = {
-    ALPHABET: SEEDIAN_ALPHABET,
+    SVG_PATHS: SEEDIAN_SVG_PATHS,
+    getSingleLetterSVG: getSingleLetterSVG,
     toSeedian: toSeedian,
+    toSeedianSVG: toSeedian,
     getSeedianTitleHTML: getSeedianTitleHTML,
     transliterate: toSeedian,
     getThaiTitleLogoSVG: getThaiTitleLogoSVG,
@@ -395,7 +376,9 @@
   };
 
   global.getThaiTitleLogoSVG = getThaiTitleLogoSVG;
+  global.getSingleLetterSVG = getSingleLetterSVG;
   global.toSeedian = toSeedian;
+  global.toSeedianSVG = toSeedian;
   global.getSeedianTitleHTML = getSeedianTitleHTML;
   global.openSeedianModal = openSeedianModal;
   global.closeSeedianModal = closeSeedianModal;

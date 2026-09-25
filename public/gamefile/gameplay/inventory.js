@@ -1173,7 +1173,13 @@
           }
           const rawName = item.name || item.label || "ITEM";
           const displayName = typeof getItemDisplayName === "function" ? getItemDisplayName(rawName) : rawName;
-          label.textContent = displayName;
+          if (typeof window.setElementTextOrHTML === "function") {
+            window.setElementTextOrHTML(label, displayName);
+          } else if (typeof displayName === "string" && (displayName.includes("<svg") || displayName.includes("<span"))) {
+            label.innerHTML = displayName;
+          } else {
+            label.textContent = displayName;
+          }
           slotEl.appendChild(label);
 
           if (item.count > 1) {
@@ -2986,7 +2992,12 @@ function cancelFloorPlacement() {
           itemName.style.fontSize = "14px";
           itemName.style.color = "#df6c6c";
           const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
-          itemName.textContent = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
+          const outNameStr = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
+          if (typeof window.setElementTextOrHTML === "function") {
+            window.setElementTextOrHTML(itemName, outNameStr);
+          } else {
+            itemName.textContent = outNameStr;
+          }
 
           itemInfo.appendChild(itemIcon);
           itemInfo.appendChild(itemName);
@@ -3032,7 +3043,12 @@ function cancelFloorPlacement() {
             }
             
             const ingLabelSpan = document.createElement("span");
-            ingLabelSpan.textContent = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
+            const ingDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
+            if (typeof window.setElementTextOrHTML === "function") {
+              window.setElementTextOrHTML(ingLabelSpan, ingDispName);
+            } else {
+              ingLabelSpan.textContent = ingDispName;
+            }
             
             ingLeft.appendChild(ingIconSpan);
             ingLeft.appendChild(ingLabelSpan);
@@ -3101,7 +3117,13 @@ function cancelFloorPlacement() {
             btn.style.background = "rgba(255, 255, 255, 0.05)";
             btn.style.border = "1px solid rgba(255, 255, 255, 0.1)";
             btn.style.color = "rgba(255, 255, 255, 0.3)";
-            btn.textContent = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
+            const insufficientLabel = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
+            if (typeof window.setElementTextOrHTML === "function") {
+              window.setElementTextOrHTML(btn, insufficientLabel);
+            } else {
+              btn.textContent = insufficientLabel;
+            }
+            btn.disabled = true;
           }
 
           card.appendChild(btn);
@@ -3341,7 +3363,12 @@ function cancelFloorPlacement() {
           itemName.style.fontSize = "14px";
           itemName.style.color = "#dfb76c";
           const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
-          itemName.textContent = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
+          const outNameStr = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
+          if (typeof window.setElementTextOrHTML === "function") {
+            window.setElementTextOrHTML(itemName, outNameStr);
+          } else {
+            itemName.textContent = outNameStr;
+          }
 
           itemInfo.appendChild(itemIcon);
           itemInfo.appendChild(itemName);
@@ -3389,7 +3416,12 @@ function cancelFloorPlacement() {
             }
             
             const ingLabelSpan = document.createElement("span");
-            ingLabelSpan.textContent = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
+            const ingDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
+            if (typeof window.setElementTextOrHTML === "function") {
+              window.setElementTextOrHTML(ingLabelSpan, ingDispName);
+            } else {
+              ingLabelSpan.textContent = ingDispName;
+            }
             
             ingLeft.innerHTML = "";
             ingLeft.appendChild(ingIconSpan);
@@ -3453,7 +3485,12 @@ function cancelFloorPlacement() {
             btn.style.border = "1px solid rgba(255, 255, 255, 0.15)";
             btn.style.color = "rgba(255, 255, 255, 0.3)";
             btn.style.textShadow = "none";
-            btn.textContent = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
+            const insufficientLabel = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
+            if (typeof window.setElementTextOrHTML === "function") {
+              window.setElementTextOrHTML(btn, insufficientLabel);
+            } else {
+              btn.textContent = insufficientLabel;
+            }
             btn.disabled = true;
           }
 
