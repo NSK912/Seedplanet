@@ -140,10 +140,9 @@
     return `<svg class="seedian-svg-glyph" viewBox="0 0 32 32" style="display:inline-block; width:${size}; height:${size}; vertical-align:-0.15em; color:${color}; overflow:visible;" aria-label="${uppercaseChar}">${pathData}</svg>`;
   }
 
-  // Convert any string (English or Thai) to a sequence of Seedian SVG Glyphs
-  function toSeedian(text) {
+  // Convert plain text string (English or Thai) to a sequence of Seedian SVG Glyphs
+  function convertPlainTextToSeedian(text) {
     if (!text || typeof text !== "string") return "";
-    
     let inputStr = convertThaiToPhoneticEnglish(text);
 
     let result = "";
@@ -158,6 +157,26 @@
       }
     }
     return result;
+  }
+
+  // Convert any string to Seedian SVG Glyphs while safely preserving HTML tags
+  function toSeedian(text) {
+    if (!text || typeof text !== "string") return "";
+
+    if (text.includes("<") && text.includes(">")) {
+      const parts = text.split(/(<[^>]+>)/g);
+      let htmlResult = "";
+      for (let part of parts) {
+        if (part.startsWith("<") && part.endsWith(">")) {
+          htmlResult += part;
+        } else if (part) {
+          htmlResult += convertPlainTextToSeedian(part);
+        }
+      }
+      return htmlResult;
+    }
+
+    return convertPlainTextToSeedian(text);
   }
 
   // Special Title Formatter for Game Title with Red Accent on 'A' or 'S'

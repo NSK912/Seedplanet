@@ -2838,7 +2838,20 @@ function cancelFloorPlacement() {
         if (_activeNoticeTimer) clearTimeout(_activeNoticeTimer);
         if (_activeNoticeFadeTimer) clearTimeout(_activeNoticeFadeTimer);
 
-        _activeNoticeToast.textContent = msg;
+        let finalMsg = msg;
+        const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : (window.gameLanguage || "en");
+        if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
+          finalMsg = window.Seedian.toSeedian(msg);
+        }
+
+        if (typeof window.setElementTextOrHTML === "function") {
+          window.setElementTextOrHTML(_activeNoticeToast, finalMsg);
+        } else if (typeof finalMsg === "string" && (finalMsg.includes("<svg") || finalMsg.includes("<span"))) {
+          _activeNoticeToast.innerHTML = finalMsg;
+        } else {
+          _activeNoticeToast.textContent = finalMsg;
+        }
+
         _activeNoticeToast.style.opacity = "1";
         _activeNoticeToast.style.transform = "translateX(-50%) translateY(0)";
 
