@@ -52,6 +52,7 @@
       language_label: "ภาษา (Language)",
       lang_th: "ภาษาไทย",
       lang_en: "English",
+      lang_sd: "ภาษาซีเดียน (Seedian)",
       sfx_volume: "ระดับเสียงรวม",
       render_scale: "สเกลความละเอียดเรนเดอร์",
       fps_limit: "จำกัดเฟรมเรต",
@@ -248,6 +249,7 @@
       language_label: "Language",
       lang_th: "Thai",
       lang_en: "English",
+      lang_sd: "Seedian",
       sfx_volume: "Master SFX Volume",
       render_scale: "Render Scale",
       fps_limit: "FPS Limit",
@@ -396,6 +398,25 @@
     }
   };
 
+  // Build Seedian dictionary based on Thai text translated via Seedian Script
+  DICTIONARY.seedian = {};
+  if (typeof window !== "undefined") {
+    const toSeedianFn = (text) => {
+      if (window.Seedian && typeof window.Seedian.toSeedian === "function") {
+        return window.Seedian.toSeedian(text);
+      }
+      return text;
+    };
+    for (const [k, v] of Object.entries(DICTIONARY.th)) {
+      if (typeof v === "string") {
+        DICTIONARY.seedian[k] = toSeedianFn(v);
+      }
+    }
+    DICTIONARY.seedian.lang_th = "ภาษาไทย";
+    DICTIONARY.seedian.lang_en = "English";
+    DICTIONARY.seedian.lang_sd = toSeedianFn("ภาษาซีเดียน") + " (Seedian)";
+  }
+
   let currentLang = "en";
 
   // Pre-load language from storage
@@ -403,14 +424,14 @@
     const savedOpts = localStorage.getItem("seedplanet_options_config");
     if (savedOpts) {
       const parsed = JSON.parse(savedOpts);
-      if (parsed && (parsed.language === "th" || parsed.language === "en")) {
+      if (parsed && (parsed.language === "th" || parsed.language === "en" || parsed.language === "seedian")) {
         currentLang = parsed.language;
       }
     } else {
       const savedSettings = localStorage.getItem("seedplanet_settings");
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        if (parsed && (parsed.language === "th" || parsed.language === "en")) {
+        if (parsed && (parsed.language === "th" || parsed.language === "en" || parsed.language === "seedian")) {
           currentLang = parsed.language;
         }
       }
@@ -424,6 +445,25 @@
   }
 
   function t(key, params) {
+    // Lazy populate seedian if needed
+    if (currentLang === "seedian" && (!DICTIONARY.seedian || Object.keys(DICTIONARY.seedian).length === 0)) {
+      const toSeedianFn = (text) => {
+        if (window.Seedian && typeof window.Seedian.toSeedian === "function") {
+          return window.Seedian.toSeedian(text);
+        }
+        return text;
+      };
+      DICTIONARY.seedian = {};
+      for (const [k, v] of Object.entries(DICTIONARY.th)) {
+        if (typeof v === "string") {
+          DICTIONARY.seedian[k] = toSeedianFn(v);
+        }
+      }
+      DICTIONARY.seedian.lang_th = "ภาษาไทย";
+      DICTIONARY.seedian.lang_en = "English";
+      DICTIONARY.seedian.lang_sd = toSeedianFn("ภาษาซีเดียน") + " (Seedian)";
+    }
+
     const dict = DICTIONARY[currentLang] || DICTIONARY.en;
     let text = dict[key] || (DICTIONARY.en && DICTIONARY.en[key]) || (DICTIONARY.th && DICTIONARY.th[key]) || key;
     if (params && typeof params === "object") {
@@ -440,7 +480,14 @@
     if (typeof window.getItemDefinition === "function") {
       const def = window.getItemDefinition(itemName);
       if (def) {
-        return curLang === "th" ? (def.name_th || def.name_en) : (def.name_en || def.name_th);
+        if (curLang === "th") return def.name_th || def.name_en;
+        if (curLang === "seedian") {
+          const baseName = def.name_th || def.name_en;
+          return (window.Seedian && typeof window.Seedian.toSeedian === "function")
+            ? window.Seedian.toSeedian(baseName)
+            : baseName;
+        }
+        return def.name_en || def.name_th;
       }
     }
     const rawName = typeof itemName === "string" ? itemName : (itemName.name || itemName.type || "");
@@ -449,10 +496,22 @@
     if (translated && translated !== cleanKey) {
       return translated;
     }
-    return typeof itemName === "string" ? itemName : (itemName.label || itemName.name || "");
+    const fallbackName = typeof itemName === "string" ? itemName : (itemName.label || itemName.name || "");
+    if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
+      return window.Seedian.toSeedian(fallbackName);
+    }
+    return fallbackName;
   }
 
   function updateUILanguage() {
+    if (typeof document !== "undefined" && document.body) {
+      if (currentLang === "seedian") {
+        document.body.classList.add("lang-seedian");
+      } else {
+        document.body.classList.remove("lang-seedian");
+      }
+    }
+
     // Update all text nodes with data-i18n attribute
     document.querySelectorAll("[data-i18n]").forEach(el => {
       const key = el.getAttribute("data-i18n");
@@ -480,29 +539,33 @@
     // Update Language Buttons styling in Settings
     const langThBtn = document.getElementById("langThBtn");
     const langEnBtn = document.getElementById("langEnBtn");
-    if (langThBtn && langEnBtn) {
-      if (currentLang === "th") {
-        langThBtn.style.background = "rgba(223, 183, 108, 0.15)";
-        langThBtn.style.borderColor = "#dfb76c";
-        langThBtn.style.color = "#dfb76c";
-        langThBtn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+    const langSdBtn = document.getElementById("langSdBtn");
 
-        langEnBtn.style.background = "rgba(255, 255, 255, 0.05)";
-        langEnBtn.style.borderColor = "rgba(255, 255, 255, 0.2)";
-        langEnBtn.style.color = "rgba(255, 255, 255, 0.6)";
-        langEnBtn.style.textShadow = "none";
-      } else {
-        langEnBtn.style.background = "rgba(223, 183, 108, 0.15)";
-        langEnBtn.style.borderColor = "#dfb76c";
-        langEnBtn.style.color = "#dfb76c";
-        langEnBtn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+    const activeStyle = {
+      background: "rgba(223, 183, 108, 0.15)",
+      borderColor: "#dfb76c",
+      color: "#dfb76c",
+      textShadow: "0 0 6px rgba(223, 183, 108, 0.4)"
+    };
+    const inactiveStyle = {
+      background: "rgba(255, 255, 255, 0.05)",
+      borderColor: "rgba(255, 255, 255, 0.2)",
+      color: "rgba(255, 255, 255, 0.6)",
+      textShadow: "none"
+    };
 
-        langThBtn.style.background = "rgba(255, 255, 255, 0.05)";
-        langThBtn.style.borderColor = "rgba(255, 255, 255, 0.2)";
-        langThBtn.style.color = "rgba(255, 255, 255, 0.6)";
-        langThBtn.style.textShadow = "none";
-      }
-    }
+    const applyStyle = (btn, isActive) => {
+      if (!btn) return;
+      const st = isActive ? activeStyle : inactiveStyle;
+      btn.style.background = st.background;
+      btn.style.borderColor = st.borderColor;
+      btn.style.color = st.color;
+      btn.style.textShadow = st.textShadow;
+    };
+
+    applyStyle(langThBtn, currentLang === "th");
+    applyStyle(langEnBtn, currentLang === "en");
+    applyStyle(langSdBtn, currentLang === "seedian");
 
     // Re-render dynamic components if functions exist
     if (typeof window.updateSettingsTogglesUI === "function") {
@@ -541,7 +604,7 @@
   }
 
   function setGameLanguage(lang, save = true) {
-    if (lang !== "th" && lang !== "en") return;
+    if (lang !== "th" && lang !== "en" && lang !== "seedian") return;
     currentLang = lang;
     window.gameLanguage = currentLang;
 
@@ -574,11 +637,53 @@
     // Hook up language buttons
     const langThBtn = document.getElementById("langThBtn");
     const langEnBtn = document.getElementById("langEnBtn");
+    const langSdBtn = document.getElementById("langSdBtn");
     if (langThBtn) {
       langThBtn.addEventListener("click", () => setGameLanguage("th", true));
     }
     if (langEnBtn) {
       langEnBtn.addEventListener("click", () => setGameLanguage("en", true));
+    }
+    if (langSdBtn) {
+      langSdBtn.removeAttribute("title");
+      let pressTimer = null;
+      let isLongPress = false;
+
+      const startPress = (e) => {
+        isLongPress = false;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => {
+          isLongPress = true;
+          if (navigator.vibrate) {
+            try { navigator.vibrate(35); } catch(_) {}
+          }
+          if (window.Seedian && typeof window.Seedian.openModal === "function") {
+            window.Seedian.openModal();
+          }
+        }, 420);
+      };
+
+      const cancelPress = () => {
+        clearTimeout(pressTimer);
+      };
+
+      const endPress = (e) => {
+        clearTimeout(pressTimer);
+        if (!isLongPress) {
+          setGameLanguage("seedian", true);
+        }
+      };
+
+      langSdBtn.addEventListener("pointerdown", startPress);
+      langSdBtn.addEventListener("pointerup", endPress);
+      langSdBtn.addEventListener("pointerleave", cancelPress);
+      langSdBtn.addEventListener("pointercancel", cancelPress);
+      langSdBtn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (window.Seedian && typeof window.Seedian.openModal === "function") {
+          window.Seedian.openModal();
+        }
+      });
     }
   });
 })();

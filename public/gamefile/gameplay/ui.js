@@ -25,8 +25,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <div class="game-start-overlay" id="gameStartOverlay">
       <div class="logo-container">
         <div class="main-screen-title-wrapper">
-          <div class="main-screen-thai-title"><span>ดาวเคราะห์แห่ง</span><span class="thai-title-gold">เมล็ดพันธุ์</span></div>
-          <h1 class="main-screen-title"><span>S<span class="title-accent-red">EE</span>D</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span>PLAN<span class="title-accent-red">E</span>T</span></h1>
+          ${(typeof getThaiTitleLogoSVG === 'function') ? getThaiTitleLogoSVG() : '<div class="main-screen-thai-title"><span style="color:#ffffff;">SEED</span><span class="thai-title-gold">PLANET</span></div>'}
+          <h1 class="main-screen-title" style="color: #ffffff;"><span>${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ดาวเคราะห์แห่งเ') : (typeof toSeedian === 'function') ? toSeedian('ดาวเคราะห์แห่งเ') : 'ดาวเคราะห์แห่งเ'}</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span style="color: #ffffff;">${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ล็ดพันธุ์') : (typeof toSeedian === 'function') ? toSeedian('ล็ดพันธุ์') : 'ล็ดพันธุ์'}</span></h1>
         </div>
         <div id="startScreenSocialBar" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0px; transition: opacity 0.4s ease;">
           <!-- YouTube Icon Link -->
@@ -630,13 +630,14 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               style="
                 display: flex;
                 justify-content: space-between;
+                align-items: center;
                 font-size: 13px;
                 font-family: 'Google Sans', sans-serif;
               "
             >
               <span data-i18n="language_label">ภาษา (Language)</span>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 6px; align-items: center; height: 32px;">
               <button
                 id="langThBtn"
                 class="game-ui"
@@ -650,6 +651,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 style="flex: 1; padding: 6px 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);"
               >
                 English
+              </button>
+              <button
+                id="langSdBtn"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+              >
+                Seedian
               </button>
             </div>
           </div>
@@ -2168,7 +2176,24 @@ window.addEventListener("keyup", (e) => {
         }
       }
 
-      // Touch events
+      // Touch events (Joystick + Camera Touch Drag Rotation)
+      let joystickTouchId = null;
+      let cameraTouchId = null;
+      let cameraTouchPrevX = 0;
+      let cameraTouchPrevY = 0;
+
+      function isInteractiveTouchTarget(target) {
+        if (typeof isUIOpen === "function" && isUIOpen()) return true;
+        if (!target) return false;
+        if (target.closest("#joystickContainer, #joystickBase, .start-btn, .game-ui-button, .action-slot, .inventory-slot, .inventory-panel, .confirm-overlay, .modal, button, input, select, textarea, a, #invToggleBtn, #settingsBtn, #cameraToggleBtn, #devInputModeToggle, .compass-container, .dictionary-overlay, .settings-overlay, .game-ui")) {
+          return true;
+        }
+        if (typeof getInteractiveTarget === "function" && getInteractiveTarget(target)) {
+          return true;
+        }
+        return false;
+      }
+
       if (joystickBase) {
         joystickBase?.addEventListener(
           "touchstart",
@@ -2176,49 +2201,127 @@ window.addEventListener("keyup", (e) => {
             if (window.isConfirmOverlayOpen) return;
             initAudio();
             e.preventDefault();
-            const touch = e.touches[0];
-            if (touch) {
-              joystickActive = true;
-              updateJoystick(touch.clientX, touch.clientY);
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const touch = e.changedTouches[i];
+              if (joystickTouchId === null) {
+                joystickTouchId = touch.identifier;
+                joystickActive = true;
+                updateJoystick(touch.clientX, touch.clientY);
+                break;
+              }
             }
           },
           { passive: false },
         );
       }
 
+      window.addEventListener(
+        "touchstart",
+        (e) => {
+          lastTouchTime = Date.now();
+          showDpad();
+          if (window.isConfirmOverlayOpen) return;
+
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            const touch = e.changedTouches[i];
+            if (touch.identifier === joystickTouchId) continue;
+            if (isInteractiveTouchTarget(touch.target)) continue;
+
+            if (cameraTouchId === null) {
+              cameraTouchId = touch.identifier;
+              cameraTouchPrevX = touch.clientX;
+              cameraTouchPrevY = touch.clientY;
+              window.isCameraDragging = true;
+            }
+          }
+        },
+        { passive: true },
+      );
+
       document.addEventListener(
         "touchmove",
         (e) => {
-          if (window.isConfirmOverlayOpen) { resetJoystick(); return; }
-          if (!joystickActive) return;
-          e.preventDefault();
-          const touch = e.touches[0];
-          if (touch) {
-            updateJoystick(touch.clientX, touch.clientY);
+          lastTouchTime = Date.now();
+          showDpad();
+
+          if (window.isConfirmOverlayOpen) {
+            if (joystickActive) resetJoystick();
+            joystickTouchId = null;
+            cameraTouchId = null;
+            window.isCameraDragging = false;
+            return;
+          }
+
+          // 1. Update Joystick
+          if (joystickActive && joystickTouchId !== null) {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const touch = e.changedTouches[i];
+              if (touch.identifier === joystickTouchId) {
+                updateJoystick(touch.clientX, touch.clientY);
+                break;
+              }
+            }
+          }
+
+          // 2. Touch Drag Camera Rotation
+          if (cameraTouchId !== null) {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              const touch = e.changedTouches[i];
+              if (touch.identifier === cameraTouchId) {
+                if (e.cancelable) e.preventDefault();
+                const dx = touch.clientX - cameraTouchPrevX;
+                const dy = touch.clientY - cameraTouchPrevY;
+                cameraTouchPrevX = touch.clientX;
+                cameraTouchPrevY = touch.clientY;
+
+                const touchSens = 0.006 * (typeof mouseSensitivity === "number" ? mouseSensitivity : 1.0);
+
+                if (window.cameraMode === "freecam" || (typeof cameraSpringArm !== "undefined" && cameraSpringArm && cameraSpringArm.mode === "freecam")) {
+                  if (typeof window.freeCamYaw !== "number") window.freeCamYaw = 0.0;
+                  if (typeof window.freeCamPitch !== "number") window.freeCamPitch = 0.0;
+                  window.freeCamYaw -= dx * touchSens;
+                  window.freeCamPitch += dy * touchSens;
+                  window.freeCamPitch = Math.max(-1.52, Math.min(1.52, window.freeCamPitch));
+                } else {
+                  if (typeof isUIOpen === "function" && isUIOpen()) return;
+                  const isAimingLockedBow = (typeof isUsingItem !== "undefined" && isUsingItem) && (typeof activeItem !== "undefined" && activeItem) && activeItem.name === "BOW" && (typeof activeTargetNPC !== "undefined" && activeTargetNPC);
+                  if (!isAimingLockedBow) {
+                    rotationY -= dx * touchSens;
+                    rotationX += dy * touchSens;
+                    const maxPitch = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "freecam")) ? 1.45 : 1.2;
+                    const minPitch = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "freecam")) ? -0.55 : -0.55;
+                    rotationX = Math.max(minPitch, Math.min(maxPitch, rotationX));
+
+                    window.rotationY = rotationY;
+                    window.rotationX = rotationX;
+                  }
+                }
+                break;
+              }
+            }
           }
         },
         { passive: false },
       );
 
-      document.addEventListener(
-        "touchend",
-        (e) => {
-          if (joystickActive) {
+      const handleTouchEndOrCancel = (e) => {
+        lastTouchTime = Date.now();
+        showDpad();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === joystickTouchId) {
+            joystickTouchId = null;
             resetJoystick();
           }
-        },
-        { passive: false },
-      );
+          if (touch.identifier === cameraTouchId) {
+            cameraTouchId = null;
+            window.isCameraDragging = false;
+          }
+        }
+      };
 
-      document.addEventListener(
-        "touchcancel",
-        (e) => {
-          if (joystickActive) {
-            resetJoystick();
-          }
-        },
-        { passive: false },
-      );
+      document.addEventListener("touchend", handleTouchEndOrCancel, { passive: false });
+      document.addEventListener("touchcancel", handleTouchEndOrCancel, { passive: false });
 
       // Mouse events
       let mouseDown = false;
@@ -3552,7 +3655,9 @@ window.addEventListener("keyup", (e) => {
           }
         }
         isDragging = true;
-        if (typeof getInteractiveTarget === "function" && getInteractiveTarget(e.target)) {
+        if (typeof isInteractiveTouchTarget === "function" && isInteractiveTouchTarget(e.target)) {
+          window.isCameraDragging = false;
+        } else if (typeof getInteractiveTarget === "function" && getInteractiveTarget(e.target)) {
           window.isCameraDragging = false;
         } else {
           window.isCameraDragging = true;
@@ -3581,8 +3686,12 @@ window.addEventListener("keyup", (e) => {
           prevY = e.clientY;
         }
 
+        const isDev = (typeof isDevMode !== "undefined" && isDevMode) || (typeof window.isDevMode !== "undefined" && window.isDevMode);
+        const isDevTouchTest = isDev && (window.devInputMode === "touch");
+
         if (window.cameraMode === "freecam" || (typeof cameraSpringArm !== "undefined" && cameraSpringArm && cameraSpringArm.mode === "freecam")) {
-          if (isDragging || isPointerLocked || isCursorHidden) {
+          if (isDragging || isPointerLocked || isCursorHidden || isDevTouchTest) {
+            if (isDevTouchTest && !window.isCameraDragging) return;
             if (typeof window.freeCamYaw !== "number") window.freeCamYaw = 0.0;
             if (typeof window.freeCamPitch !== "number") window.freeCamPitch = 0.0;
             window.freeCamYaw -= dx * 0.005 * mouseSensitivity;
@@ -3592,8 +3701,12 @@ window.addEventListener("keyup", (e) => {
           return;
         }
 
-        // Only rotate camera when mouse cursor is hidden (Alt toggle)
-        if (!isCursorHidden) return;
+        if (isDevTouchTest) {
+          if (!isDragging || !window.isCameraDragging) return;
+        } else {
+          // Only rotate camera when mouse cursor is hidden (Alt toggle)
+          if (!isCursorHidden) return;
+        }
 
         if (typeof isUIOpen === "function" && isUIOpen()) return;
 
@@ -3602,8 +3715,11 @@ window.addEventListener("keyup", (e) => {
           rotationY -= dx * 0.007 * mouseSensitivity;
           rotationX += dy * 0.007 * mouseSensitivity;
           const maxPitch = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "freecam")) ? 1.45 : 1.2;
-          const minPitch = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "freecam")) ? -1.45 : -0.55;
+          const minPitch = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "freecam")) ? -0.55 : -0.55;
           rotationX = Math.max(minPitch, Math.min(maxPitch, rotationX));
+
+          window.rotationY = rotationY;
+          window.rotationX = rotationX;
         }
       });
 

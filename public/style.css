@@ -1,6 +1,7 @@
 /* ============================================
            CSS เดิมทั้งหมด - คงไว้เหมือนเดิม
            ============================================ */
+      @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Chonburi&display=swap');
       @font-face {
         font-family: 'Playfair Display';
         src: url('assets/PlayfairDisplay-VariableFont_wght.ttf') format('truetype'),
@@ -431,28 +432,24 @@
       .joystick-base {
         width: 130px;
         height: 130px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.12);
         position: relative;
-        backdrop-filter: blur(8px);
-        box-shadow:
-          0 8px 32px rgba(0, 0, 0, 0.4),
-          inset 0 0 40px rgba(255, 255, 255, 0.02);
+        background: linear-gradient(135deg, rgba(223, 183, 108, 0.55), rgba(223, 183, 108, 0.25));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        backdrop-filter: blur(10px);
         touch-action: none;
         user-select: none;
         -webkit-user-select: none;
+        filter: drop-shadow(0 0 12px rgba(223, 183, 108, 0.25)) drop-shadow(0 8px 24px rgba(0, 0, 0, 0.7));
       }
       .joystick-base::before {
         content: "";
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        top: 2px;
+        left: 2px;
+        right: 2px;
+        bottom: 2px;
+        background: radial-gradient(circle at 50% 50%, rgba(18, 18, 26, 0.88), rgba(8, 8, 12, 0.96));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
         pointer-events: none;
       }
       .joystick-base::after {
@@ -463,49 +460,57 @@
         transform: translate(-50%, -50%);
         width: 60px;
         height: 60px;
-        border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.03);
+        background: rgba(223, 183, 108, 0.08);
+        border: 1px solid rgba(223, 183, 108, 0.25);
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
         pointer-events: none;
       }
       .joystick-thumb {
         width: 50px;
         height: 50px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle at 40% 35%,
-          rgba(100, 200, 255, 0.15),
-          rgba(100, 200, 255, 0.05)
-        );
-        border: 1px solid rgba(100, 200, 255, 0.2);
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, rgba(223, 183, 108, 0.75), rgba(223, 183, 108, 0.35));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        filter: drop-shadow(0 0 10px rgba(223, 183, 108, 0.3));
         cursor: grab;
         touch-action: none;
         user-select: none;
         -webkit-user-select: none;
-        transition: box-shadow 0.2s;
-        box-shadow: 0 0 30px rgba(100, 200, 255, 0.05);
+        transition: filter 0.2s;
+      }
+      .joystick-thumb::before {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        right: 2px;
+        bottom: 2px;
+        background: linear-gradient(135deg, rgba(32, 28, 22, 0.95), rgba(12, 12, 18, 0.95));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        pointer-events: none;
       }
       .joystick-thumb:active {
         cursor: grabbing;
       }
       .joystick-thumb.active {
-        background: radial-gradient(
-          circle at 40% 35%,
-          rgba(100, 200, 255, 0.25),
-          rgba(100, 200, 255, 0.08)
-        );
-        border-color: rgba(100, 200, 255, 0.4);
-        box-shadow: 0 0 40px rgba(100, 200, 255, 0.15);
+        background: linear-gradient(135deg, #dfb76c, rgba(223, 183, 108, 0.85));
+        filter: drop-shadow(0 0 20px rgba(223, 183, 108, 0.65));
+      }
+      .joystick-thumb.active::before {
+        background: linear-gradient(135deg, rgba(55, 45, 30, 0.95), rgba(24, 20, 15, 0.95));
       }
       .joystick-dir {
         position: absolute;
-        color: rgba(255, 255, 255, 0.08);
-        font-size: 12px;
+        color: #dfb76c;
+        opacity: 0.65;
+        font-size: 11px;
+        font-weight: 700;
         pointer-events: none;
         font-family: 'Google Sans', sans-serif;
+        text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);
       }
       .joystick-dir.up {
         top: 6px;
@@ -541,10 +546,6 @@
         .joystick-thumb {
           width: 42px;
           height: 42px;
-        }
-        .joystick-base::before {
-          width: 16px;
-          height: 16px;
         }
         .joystick-base::after {
           width: 50px;
@@ -1076,7 +1077,11 @@
         flex-direction: column;
         align-items: center;
         width: 100%;
+        max-width: 100vw;
+        padding: 0 16px;
+        box-sizing: border-box;
         flex-shrink: 0;
+        overflow: hidden;
       }
 
       .main-screen-title-wrapper {
@@ -1086,42 +1091,190 @@
         align-items: flex-end;
         justify-content: center;
         margin: 0 auto 12px auto;
-        max-width: 100%;
+        max-width: min(92vw, 1100px);
+        width: max-content;
+        box-sizing: border-box;
+        transform-origin: center center;
       }
 
-      .main-screen-thai-title {
-        font-family: 'Charm', cursive, sans-serif !important;
-        font-size: clamp(12px, 1.45vw, 19px);
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        color: #ffffff;
-        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+      .main-screen-thai-svg {
+        height: clamp(10px, 1.4vw, 18px);
+        width: auto;
+        max-width: 100%;
+        display: block;
         user-select: none;
         pointer-events: none;
-        margin-bottom: -4px;
-        padding-right: clamp(6px, 1vw, 16px);
-        line-height: 1.15;
-        text-align: right;
+        margin-bottom: -2px;
+        padding-right: clamp(2px, 0.5vw, 8px);
         z-index: 2;
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.9));
       }
 
-      .main-screen-thai-title span {
-        font-family: 'Charm', cursive, sans-serif !important;
-        font-weight: inherit;
-        font-size: inherit;
-        letter-spacing: inherit;
+      /* Seedian Astral Language Font & Visuals */
+      body.lang-seedian,
+      body.lang-seedian button,
+      body.lang-seedian [data-i18n],
+      body.lang-seedian .game-ui,
+      .seedian-font {
+        font-family: 'Playfair Display', 'Google Sans', Georgia, sans-serif !important;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        vertical-align: middle;
+      }
+      body.lang-seedian button.game-ui {
+        font-family: 'Playfair Display', 'Google Sans', Georgia, sans-serif !important;
+        letter-spacing: 0.1em;
+        font-weight: 700;
       }
 
-      .thai-title-gold {
+      /* Seedian Lexicon Modal Styles (Game Chamfered Cut-Corner UI) */
+      .seedian-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20000;
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease-out;
+      }
+      .seedian-modal-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .seedian-modal-box {
+        width: 100%;
+        max-width: 820px;
+        max-height: 88vh;
+        background: rgba(10, 12, 18, 0.98);
+        border: 1px solid rgba(223, 183, 108, 0.55);
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), 0 0 30px rgba(223, 183, 108, 0.25);
+        --cut: 16px;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transform: scale(0.95);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .seedian-modal-overlay.active .seedian-modal-box {
+        transform: scale(1);
+      }
+      .seedian-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 20px;
+        background: rgba(223, 183, 108, 0.08);
+        border-bottom: 1px solid rgba(223, 183, 108, 0.25);
+      }
+      .seedian-modal-body {
+        padding: 18px 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        flex: 1;
+        min-height: 0;
+      }
+      .seedian-modal-body::-webkit-scrollbar {
+        width: 5px;
+      }
+      .seedian-modal-body::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .seedian-modal-body::-webkit-scrollbar-thumb {
+        background: rgba(223, 183, 108, 0.3);
+        border-radius: 2px;
+      }
+      .seedian-modal-footer {
+        flex-shrink: 0;
+        z-index: 15;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 14px 20px;
+        background: rgba(8, 10, 15, 0.98);
+        border-top: 1px solid rgba(223, 183, 108, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .seedian-close-btn,
+      .seedian-footer-btn {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .seedian-footer-btn {
+        padding: 10px 40px;
+        background: rgba(223, 183, 108, 0.2) !important;
+        border: 1px solid #dfb76c !important;
+        color: #dfb76c !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        font-family: 'Google Sans', sans-serif !important;
+        --cut: 8px;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))) !important;
+        text-shadow: 0 0 8px rgba(223, 183, 108, 0.5);
+        box-shadow: 0 0 16px rgba(223, 183, 108, 0.2);
+        transition: all 0.2s ease;
+      }
+      .seedian-footer-btn:hover {
+        background: rgba(223, 183, 108, 0.38) !important;
+        box-shadow: 0 0 24px rgba(223, 183, 108, 0.5) !important;
+        transform: translateY(-1px);
+      }
+      .seedian-cut-box {
+        --cut: 10px;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+      }
+      .seedian-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+        gap: 8px;
+      }
+      .seedian-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        --card-cut: 6px;
+        clip-path: polygon(0 0, calc(100% - var(--card-cut)) 0, 100% var(--card-cut), 100% 100%, var(--card-cut) 100%, 0 calc(100% - var(--card-cut)));
+        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.15s ease;
+      }
+      .seedian-card:hover {
+        background: rgba(223, 183, 108, 0.15);
+        border-color: #dfb76c;
+        transform: translateY(-1px);
+        box-shadow: 0 0 10px rgba(223, 183, 108, 0.2);
+      }
+      .seedian-card .th-char {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.7);
+        font-family: 'Google Sans', sans-serif;
+      }
+      .seedian-card .sd-char {
+        font-size: 17px;
+        font-weight: 700;
         color: #dfb76c;
-        text-shadow: 0 0 8px rgba(223, 183, 108, 0.4), 0 1px 4px rgba(0, 0, 0, 0.95);
+        font-family: 'Playfair Display', Georgia, serif;
+        text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);
       }
 
       .main-screen-title {
         font-family: 'Playfair Display', Georgia, serif;
-        font-size: clamp(38px, 8.2vw, 98px);
+        font-size: clamp(14px, 3.8vw, 54px);
         font-weight: 900;
-        letter-spacing: 0.12em;
+        letter-spacing: clamp(0.03em, 0.08vw, 0.08em);
         text-transform: uppercase;
         color: #ffffff;
         background: transparent;
@@ -1129,14 +1282,16 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: clamp(10px, 1.8vw, 24px);
+        gap: clamp(4px, 1.2vw, 16px);
         text-align: center;
         user-select: none;
         pointer-events: auto;
-        line-height: 1.05;
+        line-height: 1.1;
         text-shadow: none;
         filter: none;
         flex-shrink: 0;
+        white-space: nowrap;
+        max-width: 100%;
       }
 
       .main-screen-title span {
@@ -1144,10 +1299,11 @@
         font-size: inherit;
         font-weight: inherit;
         letter-spacing: inherit;
+        white-space: nowrap;
       }
 
       .main-screen-title-icon {
-        height: clamp(38px, 8.2vw, 96px);
+        height: clamp(16px, 4.0vw, 56px);
         width: auto;
         object-fit: contain;
         display: inline-block;
@@ -1164,6 +1320,19 @@
         font-size: inherit;
         letter-spacing: inherit;
         text-shadow: none;
+      }
+
+      .thai-title-gold,
+      .title-accent-gold {
+        color: #dfb76c;
+        background: linear-gradient(135deg, #fff5db 0%, #dfb76c 50%, #a87d30 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        display: inline-block;
+        font-family: inherit;
+        font-weight: inherit;
+        font-size: inherit;
+        letter-spacing: inherit;
       }
 
       .main-screen-logo {
@@ -1257,6 +1426,8 @@
       #gameplayFullscreenBtn,
       #gameStartOverlay .game-ui,
       .inventory-overlay.open .game-ui,
+      .seedian-modal-overlay .game-ui,
+      .seedian-modal-box .game-ui,
       #npcHpOverlay .game-ui {
         opacity: 1 !important;
         pointer-events: auto !important;

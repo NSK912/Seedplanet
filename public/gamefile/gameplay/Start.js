@@ -14,8 +14,8 @@
     <div class="aaa-loading-container">
       <div class="logo-container">
         <div class="main-screen-title-wrapper">
-          <div class="main-screen-thai-title"><span>ดาวเคราะห์แห่ง</span><span class="thai-title-gold">เมล็ดพันธุ์</span></div>
-          <h1 class="main-screen-title"><span>S<span class="title-accent-red">EE</span>D</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span>PLAN<span class="title-accent-red">E</span>T</span></h1>
+          ${(typeof getThaiTitleLogoSVG === 'function') ? getThaiTitleLogoSVG() : '<div class="main-screen-thai-title"><span style="color:#ffffff;">SEED</span><span class="thai-title-gold">PLANET</span></div>'}
+          <h1 class="main-screen-title" style="color: #ffffff;"><span>${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ดาวเคราะห์แห่งเ') : (typeof toSeedian === 'function') ? toSeedian('ดาวเคราะห์แห่งเ') : 'ดาวเคราะห์แห่งเ'}</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span style="color: #ffffff;">${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ล็ดพันธุ์') : (typeof toSeedian === 'function') ? toSeedian('ล็ดพันธุ์') : 'ล็ดพันธุ์'}</span></h1>
         </div>
         <div style="height: 36px; margin-top: 0px;"></div>
       </div>
@@ -93,6 +93,7 @@ function startGameWithSlot(loadedData, devMode = false) {
   if (gameStarted) return;
   gameStarted = true;
   isDevMode = devMode;
+  window.isDevMode = devMode;
 
   const toggleBtn = document.getElementById("toggleControlsBtn");
   const mainCtrls = document.getElementById("mainControls");

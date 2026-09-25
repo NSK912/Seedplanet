@@ -21,7 +21,8 @@
   }
 
   const scripts = [
-    // --- UI Layout & Settings ---
+    // --- Seedian System & Localization ---
+    'gamefile/gameplay/Seedian.js',
     'gamefile/gameplay/Language.js',
     'gamefile/gameplay/settings.js',
 

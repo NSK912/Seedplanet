@@ -5110,7 +5110,12 @@ function buildCollectibles(count, seed) {
         const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || getStoredLanguageFallback()));
         const def = getItemDefinition(itemOrName);
         if (def) {
-          return curLang === "th" ? (def.name_th || def.name_en) : (def.name_en || def.name_th);
+          if (curLang === "th") return def.name_th || def.name_en;
+          if (curLang === "seedian") {
+            const raw = def.name_th || def.name_en;
+            return (window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(raw) : raw;
+          }
+          return def.name_en || def.name_th;
         }
         if (typeof window.t === "function") {
           const rawName = typeof itemOrName === "string" ? itemOrName : (itemOrName?.name || itemOrName?.type || "");
@@ -5118,8 +5123,11 @@ function buildCollectibles(count, seed) {
           const translated = window.t(cleanKey);
           if (translated && translated !== cleanKey) return translated;
         }
-        if (typeof itemOrName === "string") return itemOrName;
-        return itemOrName?.label || itemOrName?.name || "ITEM";
+        if (typeof itemOrName === "string") {
+          return (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(itemOrName) : itemOrName;
+        }
+        const fallback = itemOrName?.label || itemOrName?.name || "ITEM";
+        return (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(fallback) : fallback;
       }
       window.getItemDisplayName = getItemDisplayName;
 
@@ -5127,7 +5135,12 @@ function buildCollectibles(count, seed) {
         const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || getStoredLanguageFallback()));
         const def = getItemDefinition(itemOrName);
         if (def) {
-          return curLang === "th" ? (def.usage_th || def.usage_en) : (def.usage_en || def.usage_th);
+          if (curLang === "th") return def.usage_th || def.usage_en;
+          if (curLang === "seedian") {
+            const raw = def.usage_th || def.usage_en;
+            return (window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(raw) : raw;
+          }
+          return def.usage_en || def.usage_th;
         }
         return "";
       }

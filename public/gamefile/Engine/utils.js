@@ -384,10 +384,11 @@ function updateVirtualCursorVisibility() {
 
   const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
   
+  const isDev = (typeof isDevMode !== "undefined" && isDevMode) || (typeof window.isDevMode !== "undefined" && window.isDevMode);
   const isTouch = window.devInputMode === "touch" || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || 
                   (window.devInputMode === "auto" && typeof isAndroidProfile !== "undefined" && isAndroidProfile);
 
-  if (isTouch) {
+  if (isTouch && !isDev) {
     cursor.style.opacity = "0";
     cursor.style.display = "none";
     return;
@@ -567,9 +568,10 @@ function runHoverUpdate() {
 function handleVirtualMouseMove(e) {
   if (isSyntheticEvent) return;
 
+  const isDev = (typeof isDevMode !== "undefined" && isDevMode) || (typeof window.isDevMode !== "undefined" && window.isDevMode);
   const isTouch = window.devInputMode === "touch" || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || 
                   (window.devInputMode === "auto" && typeof isAndroidProfile !== "undefined" && isAndroidProfile);
-  if (isTouch) return;
+  if (isTouch && !isDev) return;
 
   // De-duplicate: If pointermove was just handled, ignore duplicate mousemove event fired by the browser
   const now = performance.now();
@@ -702,9 +704,10 @@ if (document.readyState === "loading") {
 function redirectMouseEventToVirtualCursor(e) {
   if (isSyntheticEvent) return;
 
+  const isDev = (typeof isDevMode !== "undefined" && isDevMode) || (typeof window.isDevMode !== "undefined" && window.isDevMode);
   const isTouch = window.devInputMode === "touch" || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || 
                   (window.devInputMode === "auto" && typeof isAndroidProfile !== "undefined" && isAndroidProfile);
-  if (isTouch) return;
+  if (isTouch && !isDev) return;
 
   // Ensure toggleControlsBtn listener is active
   setupToggleControlsBtnListener();
