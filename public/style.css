@@ -1279,17 +1279,26 @@
         font-weight: inherit;
         letter-spacing: inherit;
         white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
       }
 
       .main-screen-title-icon {
-        height: clamp(16px, 4.0vw, 56px);
-        width: auto;
+        height: 1em;
+        width: 1em;
         object-fit: contain;
         display: inline-block;
         vertical-align: middle;
         flex-shrink: 0;
         pointer-events: none;
         user-select: none;
+      }
+
+      .seedian-svg-glyph {
+        display: inline-block;
+        vertical-align: middle;
+        flex-shrink: 0;
       }
 
       .title-accent-red {

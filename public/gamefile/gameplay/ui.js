@@ -78,7 +78,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- Version Info -->
           <div style="color: #64748b; font-size: 12px; font-weight: 500; font-family: 'Google Sans', sans-serif; margin-left: 8px;">
             <span style="font-weight: 700; margin-right: 4px;">NSK App</span>
-            ver 2.0.0.7
+            ver 2.0.0.8
           </div>
         </div>
       </div>
@@ -5104,8 +5104,107 @@ window.addEventListener("keyup", (e) => {
       }
 
       // ============================================
-      // ระบบควบคุมการว่ายน้ำและดำน้ำ
+      // ระบบควบคุมการว่ายน้ำและดำน้ำ (Shared with Player & PlayerClones)
       // ============================================
+      window.updateEntitySwimmingAndDiving = function(
+        state, // { currentSwimFactor, lastSwimFactor, swimMovementFactor, diveDepth, isDivingMode, centerRadius }
+        currentFeetRadius,
+        wRadiusLocal,
+        waterRadius,
+        terrainRadius,
+        charScale,
+        rotationX = 0,
+        moveForwardInput = 0,
+        isRiding = false,
+        dt = 1 / 60
+      ) {
+        if (!state) return;
+        if (isRiding) {
+          state.currentSwimFactor = 0.0;
+        } else if (typeof waterEnabled !== "undefined" && waterEnabled && currentFeetRadius < wRadiusLocal) {
+          const depth = wRadiusLocal - currentFeetRadius;
+          // Use hysteresis: if we were already swimming (lastSwimFactor > 0.01), we use a much lower threshold
+          // (0.2 * charScale instead of 0.48 * charScale) to prevent oscillation when moving or bobbing.
+          const swimThreshold = ((state.lastSwimFactor || 0) > 0.01) ? 0.2 * charScale : 0.48 * charScale;
+          if (depth > swimThreshold) {
+            state.currentSwimFactor = Math.min(
+              1.0,
+              (depth - swimThreshold) / (0.15 * charScale),
+            );
+          } else {
+            state.currentSwimFactor = 0.0;
+          }
+        } else {
+          state.currentSwimFactor = 0.0;
+        }
+
+        // Initialize diveDepth if transitioning to swimming to prevent sudden yanking/springing
+        if (state.currentSwimFactor > 0.0 && (state.lastSwimFactor || 0) === 0.0 && state.centerRadius) {
+          const targetSwimRadius = waterRadius + (-0.22 + (state.swimMovementFactor || 0) * 0.27) * charScale;
+          const bottomRadius = terrainRadius + 0.46 * charScale;
+          const maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
+          state.diveDepth = Math.max(0.0, Math.min(maxDiveDepth, targetSwimRadius - state.centerRadius));
+          state.isDivingMode = state.diveDepth > 0.015 * charScale;
+        }
+        state.lastSwimFactor = state.currentSwimFactor;
+
+        // Smooth swimMovementFactor based on movement state
+        const isMoving = Math.abs(moveForwardInput) > 0.05;
+        const rateFactor = dt ? dt * 60 : 1.0;
+        if (state.currentSwimFactor > 0.0) {
+          if (isMoving) {
+            state.swimMovementFactor = (state.swimMovementFactor || 0) + (1.0 - (state.swimMovementFactor || 0)) * 0.08 * rateFactor;
+          } else {
+            state.swimMovementFactor = (state.swimMovementFactor || 0) + (0.0 - (state.swimMovementFactor || 0)) * 0.08 * rateFactor;
+          }
+        } else {
+          state.swimMovementFactor = (state.swimMovementFactor || 0) + (0.0 - (state.swimMovementFactor || 0)) * 0.12 * rateFactor;
+        }
+
+        // Calculate and clamp diving depth
+        if (state.currentSwimFactor > 0.0) {
+          const targetSwimRadius = waterRadius + (-0.22 + (state.swimMovementFactor || 0) * 0.27) * charScale;
+          const bottomRadius = terrainRadius + 0.46 * charScale;
+          const maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
+
+          let targetDiveDepthChange = 0.0;
+          const diveSpeed = 0.012 * charScale;
+
+          if (state.isDivingMode && moveForwardInput !== 0) {
+            if (Math.abs(rotationX) > 0.05) {
+              targetDiveDepthChange += moveForwardInput * rotationX * diveSpeed * 1.5;
+            }
+          }
+
+          if (state.isPlayer && typeof keysPressed !== "undefined" && typeof currentKeyBindings !== "undefined") {
+            if (keysPressed[currentKeyBindings.diveDown]) {
+              targetDiveDepthChange += diveSpeed;
+            } else if (
+              keysPressed["Space"] ||
+              keysPressed["ShiftRight"] ||
+              keysPressed[currentKeyBindings.diveUp]
+            ) {
+              targetDiveDepthChange -= diveSpeed;
+            }
+          }
+
+          state.diveDepth = Math.max(
+            0.0,
+            Math.min(maxDiveDepth, (state.diveDepth || 0.0) + targetDiveDepthChange),
+          );
+
+          if (state.diveDepth > 0.015 * charScale) {
+            state.isDivingMode = true;
+          } else if (state.diveDepth <= 0.005 * charScale) {
+            state.diveDepth = 0.0;
+            state.isDivingMode = false;
+          }
+        } else {
+          state.diveDepth = 0.0;
+          state.isDivingMode = false;
+        }
+      };
+
       function updatePlayerSwimmingAndDiving(
         currentFeetRadius,
         wRadiusLocal,
@@ -5115,34 +5214,35 @@ window.addEventListener("keyup", (e) => {
         rotationX,
         moveForwardInput
       ) {
-        if (activeRidingBoat || activeRidingMech) {
-          currentSwimFactor = 0.0;
-        } else if (waterEnabled && currentFeetRadius < wRadiusLocal) {
-          const depth = wRadiusLocal - currentFeetRadius;
-          // Use hysteresis: if we were already swimming (lastSwimFactor > 0.01), we use a much lower threshold
-          // (0.2 * charScale instead of 0.48 * charScale) to prevent oscillation when moving or bobbing.
-          const swimThreshold = (lastSwimFactor > 0.01) ? 0.2 * charScale : 0.48 * charScale;
-          if (depth > swimThreshold) {
-            currentSwimFactor = Math.min(
-              1.0,
-              (depth - swimThreshold) / (0.15 * charScale),
-            );
-          } else {
-            currentSwimFactor = 0.0;
-          }
-        } else {
-          currentSwimFactor = 0.0;
-        }
+        const pState = {
+          currentSwimFactor: typeof currentSwimFactor !== "undefined" ? currentSwimFactor : 0.0,
+          lastSwimFactor: typeof lastSwimFactor !== "undefined" ? lastSwimFactor : 0.0,
+          swimMovementFactor: typeof swimMovementFactor !== "undefined" ? swimMovementFactor : 0.0,
+          diveDepth: typeof playerDiveDepth !== "undefined" ? playerDiveDepth : 0.0,
+          isDivingMode: typeof isDivingMode !== "undefined" ? isDivingMode : false,
+          centerRadius: typeof playerCenterRadius !== "undefined" ? playerCenterRadius : null,
+          isPlayer: true
+        };
+        const isRiding = !!((typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof activeRidingMech !== "undefined" && activeRidingMech));
 
-        // Initialize playerDiveDepth if transitioning to swimming to prevent sudden yanking/springing
-        if (currentSwimFactor > 0.0 && lastSwimFactor === 0.0 && playerCenterRadius !== null) {
-          const targetSwimRadius = waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
-          const bottomRadius = terrainRadius + 0.46 * charScale;
-          const maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
-          playerDiveDepth = Math.max(0.0, Math.min(maxDiveDepth, targetSwimRadius - playerCenterRadius));
-          isDivingMode = playerDiveDepth > 0.015 * charScale;
-        }
-        lastSwimFactor = currentSwimFactor;
+        window.updateEntitySwimmingAndDiving(
+          pState,
+          currentFeetRadius,
+          wRadiusLocal,
+          waterRadius,
+          terrainRadius,
+          charScale,
+          rotationX,
+          moveForwardInput,
+          isRiding,
+          typeof timeScale !== "undefined" ? (timeScale / 60) : (1 / 60)
+        );
+
+        currentSwimFactor = pState.currentSwimFactor;
+        lastSwimFactor = pState.lastSwimFactor;
+        swimMovementFactor = pState.swimMovementFactor;
+        playerDiveDepth = pState.diveDepth;
+        isDivingMode = pState.isDivingMode;
 
         // Cancel BOW immediately if the player is swimming (with no auto-resume)
         if (currentSwimFactor > 0.0) {
@@ -5151,60 +5251,6 @@ window.addEventListener("keyup", (e) => {
             isUsingItem = false;
             activeItem = null;
           }
-        }
-
-        // Calculate diving depth
-        let maxDiveDepth = 0;
-        if (currentSwimFactor > 0.0) {
-          const targetSwimRadius =
-            waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
-          const bottomRadius = terrainRadius + 0.46 * charScale;
-          maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
-        }
-
-        // Update diving depth based on inputs (Camera pitch direction when moving, or manual Ctrl/Shift keys)
-        if (currentSwimFactor > 0.0) {
-          let targetDiveDepthChange = 0.0;
-          const diveSpeed = 0.012 * charScale;
-
-          // Dive or rise based on camera pitch (rotationX) and forward/backward movement
-          // We separate surface swimming clearly from underwater diving.
-          // Camera controls are ONLY active when already diving (isDivingMode is true).
-          // On the surface, camera pitch is ignored, and diving can only be initiated manually.
-          if (isDivingMode && moveForwardInput !== 0) {
-            // Already diving / underwater: allow fully free, responsive camera-directed diving and rising.
-            // Apply a tiny deadzone of 0.05 to avoid drifting when looking straight forward.
-            if (Math.abs(rotationX) > 0.05) {
-              targetDiveDepthChange += moveForwardInput * rotationX * diveSpeed * 1.5;
-            }
-          }
-
-          // Keep manual keys as alternative/additional control
-          if (keysPressed[currentKeyBindings.diveDown]) {
-            targetDiveDepthChange += diveSpeed;
-          } else if (
-            keysPressed["Space"] ||
-            keysPressed["ShiftRight"] ||
-            keysPressed[currentKeyBindings.diveUp]
-          ) {
-            targetDiveDepthChange -= diveSpeed;
-          }
-
-          playerDiveDepth = Math.max(
-            0.0,
-            Math.min(maxDiveDepth, playerDiveDepth + targetDiveDepthChange),
-          );
-          
-          // Separate states clearly
-          if (playerDiveDepth > 0.015 * charScale) {
-            isDivingMode = true;
-          } else if (playerDiveDepth <= 0.005 * charScale) {
-            playerDiveDepth = 0.0;
-            isDivingMode = false;
-          }
-        } else {
-          playerDiveDepth = 0.0;
-          isDivingMode = false;
         }
       }
 

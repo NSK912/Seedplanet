@@ -59,8 +59,10 @@
     const cHeight = (typeof getVisualHeightOnSphere === "function")
       ? getVisualHeightOnSphere(cState.theta, cState.phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0))
       : 0;
-    const cGroundRad = planetRadius + cHeight * heightScale + 0.46 * charScale;
-    const cPos = [cGroundRad * cNx, cGroundRad * cNy, cGroundRad * cNz];
+    const terrainRad = planetRadius + cHeight * heightScale;
+    const baseGroundRad = terrainRad + 0.46 * charScale;
+    let finalGroundRad = baseGroundRad;
+    const isSwimming = (cState.currentSwimFactor || 0) > 0.0;
 
     const cEast = [-cSinP, 0, cCosP];
     const cNorth = [-cCosT * cCosP, cSinT, -cCosT * cSinP];
@@ -78,9 +80,33 @@
       cNorth[1] * cCosH + cEast[1] * cSinH,
       cNorth[2] * cCosH + cEast[2] * cSinH
     ];
-    const cN = [cNx, cNy, cNz];
+    let cN = [cNx, cNy, cNz];
+    let finalR = [cR[0], cR[1], cR[2]];
+    let finalF = [cF[0], cF[1], cF[2]];
 
-    let finalCPos = cPos;
+    if (isSwimming && typeof window.computeSwimmingTransform === "function") {
+      const waterRadius = planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * 0.15;
+      const swimRes = window.computeSwimmingTransform({
+        swimFactor: cState.currentSwimFactor,
+        swimMovementFactor: cState.swimMovementFactor || 0.0,
+        diveDepth: cState.diveDepth || 0.0,
+        waterRadius,
+        terrainRadius: terrainRad,
+        charScale,
+        isWalking: !cState.isIdle,
+        waterTime: typeof waterAnimTime !== "undefined" ? waterAnimTime : (window.performance.now() * 0.001),
+        N: cN,
+        F: finalF,
+        R: finalR,
+        baseGroundRadius: baseGroundRad
+      });
+      finalGroundRad = swimRes.groundRadius;
+      cN = swimRes.finalN;
+      finalF = swimRes.finalF;
+      finalR = swimRes.finalR;
+    }
+
+    let finalCPos = [finalGroundRad * cNx, finalGroundRad * cNy, finalGroundRad * cNz];
     if (cState.ridingBoat && cState.ridingBoat.position && cState.ridingBoat.active) {
       const bp = cState.ridingBoat.position;
       const bn = cState.ridingBoat.normal || cN;
@@ -91,7 +117,7 @@
       ];
     }
 
-    return { cPos: finalCPos, cR, cF, cN };
+    return { cPos: finalCPos, cR: finalR, cF: finalF, cN };
   }
 
   function clearOldCloneFaceSigns() {
@@ -1143,7 +1169,8 @@
         heading: heading,
         timer: 1.0 + (i % 4) * 0.4,
         isIdle: true,
-        moveSpeed: 0.65 + (i % 3) * 0.15,
+        moveSpeed: 0.24 + (i % 3) * 0.03,
+        speedInitialized: true,
         animPhase: i * 1.3,
         walkBlend: 0.0,
         faceText: face,
@@ -1204,6 +1231,12 @@
     for (let i = 0; i < window.playerClonesState.length; i++) {
       const cState = window.playerClonesState[i];
 
+      // Normalize speed if clone was initialized with legacy high speed (> 0.35)
+      if (!cState.speedInitialized || cState.moveSpeed > 0.35) {
+        cState.moveSpeed = 0.24 + (i % 3) * 0.03;
+        cState.speedInitialized = true;
+      }
+
       // Update action swing animation timer
       if (cState.actionAnim > 0) {
         cState.actionAnim = Math.max(0, cState.actionAnim - dtClamped * 2.5);
@@ -1219,6 +1252,55 @@
 
       // Check Crafting automatically whenever clone has farmed materials
       tryCloneCrafting(cState, planetRadius);
+
+      // =========================================================================
+      // SWIMMING & WATER PHYSICS (EXACT SAME SHARED CODE AS PLAYER)
+      // =========================================================================
+      const charScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
+      const cSinT = Math.sin(cState.theta);
+      const cCosT = Math.cos(cState.theta);
+      const cSinP = Math.sin(cState.phi);
+      const cCosP = Math.cos(cState.phi);
+      const cNx = cSinT * cCosP;
+      const cNy = cCosT;
+      const cNz = cSinT * cSinP;
+
+      const cHeight = (typeof getVisualHeightOnSphere === "function")
+        ? getVisualHeightOnSphere(cState.theta, cState.phi, seed)
+        : 0;
+      const terrainRad = planetRadius + cHeight * heightScale;
+      const cWaterRad = planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * 0.15;
+      const cFeetRad = terrainRad;
+      const wRadiusLocal = (typeof getWaterRadiusAt === "function")
+        ? getWaterRadiusAt(cNx * cFeetRad, cNy * cFeetRad, cNz * cFeetRad)
+        : cWaterRad;
+
+      const isRiding = !!(cState.ridingBoat && cState.ridingBoat.active);
+      const isMovingInput = !cState.isIdle ? 1.0 : 0.0;
+
+      if (typeof window.updateEntitySwimmingAndDiving === "function") {
+        window.updateEntitySwimmingAndDiving(
+          cState,
+          cFeetRad,
+          wRadiusLocal,
+          cWaterRad,
+          terrainRad,
+          charScale,
+          0.0,
+          isMovingInput,
+          isRiding,
+          dtClamped
+        );
+      }
+
+      // If swimming, cancel airborne jump velocity
+      if ((cState.currentSwimFactor || 0) > 0.1) {
+        cState.jumpY = 0;
+        cState.jumpVy = 0;
+        if (cState.currentActivity !== "DRIVE_BOAT") {
+          cState.faceText = cState.isIdle ? "(~˘▾˘)~" : "(o˘◡˘o)";
+        }
+      }
 
       // =========================================================================
       // STATE 1: DRIVING / RIDING A BOAT (PLAIN OR WHEELED)
@@ -1625,7 +1707,7 @@
       } else {
         // Walking towards current waypoint / target
         cState.walkBlend = Math.min(1.0, cState.walkBlend + dtClamped * 4.0);
-        cState.animPhase += dtClamped * 7.5;
+        cState.animPhase += dtClamped * 5.0;
 
         const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
         const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -1638,8 +1720,8 @@
         if (distToTarget > 0.04) {
           cState.heading = Math.atan2(dEast, dNorth);
 
-          // เมื่อเดินติดขอบ (เช่น ขอบพื้นไม้ หรือเนินต่างระดับข้างหน้า) และจำเป็นต้องเดินไป -> กระโดดข้ามขอบ
-          if ((cState.jumpY || 0) <= 0.001) {
+          // เมื่อเดินติดขอบ (เช่น ขอบพื้นไม้ หรือเนินต่างระดับข้างหน้า) และจำเป็นต้องเดินไป -> กระโดดข้ามขอบ (ยกเว้นกำลังว่ายน้ำ)
+          if ((cState.jumpY || 0) <= 0.001 && (cState.currentSwimFactor || 0) <= 0.1) {
             const probeDist = 0.20;
             const probeT = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * probeDist) / planetRadius));
             const sinTprobe = Math.max(0.05, Math.sin(cState.theta));
@@ -1653,7 +1735,8 @@
             }
           }
 
-          const step = Math.min(cState.moveSpeed * dtClamped, distToTarget);
+          const speedMultiplier = (cState.currentSwimFactor > 0.4) ? 0.65 : 1.0;
+          const step = Math.min(cState.moveSpeed * speedMultiplier * dtClamped, distToTarget);
           cState.theta = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * step) / planetRadius));
           cState.phi += (Math.sin(cState.heading) * step) / (planetRadius * sinT);
         }

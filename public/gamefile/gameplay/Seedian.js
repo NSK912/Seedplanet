@@ -9,57 +9,57 @@
   // Zero Latin resemblance & zero stars!
   const SEEDIAN_SVG_PATHS = {
     // A: Triangle with horizontal crossbar
-    "A": `<path d="M16 4 L28 28 H4 Z M2 18 H30" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "A": `<path d="M16 2.5 L28 29.5 H4 Z M2 17.5 H30" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // B: Vertical line with right-facing diamond
-    "B": `<path d="M8 2 V30 M8 6 L24 16 L8 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "B": `<path d="M8 2.5 V29.5 M8 6.5 L24 16 L8 25.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // C: Sharp left bracket with center bar
-    "C": `<path d="M26 6 L6 16 L26 26 M6 16 H28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "C": `<path d="M26 2.5 L6 16 L26 29.5 M6 16 H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // D: Inverted triangle with center vertical axis
-    "D": `<path d="M4 6 H28 L16 28 Z M16 6 V28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "D": `<path d="M4 2.5 H28 L16 29.5 Z M16 2.5 V29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // E: Square arch with inner vertical pillar
-    "E": `<path d="M6 6 V26 H26 V6 M16 12 V26" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "E": `<path d="M6 2.5 V29.5 H26 V2.5 M16 12 V29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // F: Vertical pillar with dual diagonal slashes
-    "F": `<path d="M10 2 V30 M10 8 L24 16 M10 18 L24 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    "F": `<path d="M10 2.5 V29.5 M10 8.5 L24 16 M10 18.5 L24 25.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // G: Diamond with right horizontal tail
-    "G": `<path d="M16 2 L28 16 L16 30 L4 16 Z M16 16 H30" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "G": `<path d="M16 2.5 L28 16 L16 29.5 L4 16 Z M16 16 H30" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // H: X-Cross with top and bottom cap bars
-    "H": `<path d="M6 4 H26 M6 28 H26 M6 6 L26 26 M26 6 L6 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    "H": `<path d="M6 2.5 H26 M6 29.5 H26 M6 4.5 L26 27.5 M26 4.5 L6 27.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // I: Vertical line with top-right diagonal slash
-    "I": `<path d="M16 2 V30 M16 10 L28 2" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    "I": `<path d="M16 2.5 V29.5 M16 10 L28 2.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // J: Hooked angle with floating dot
-    "J": `<path d="M6 6 H22 V22 L14 28" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="26" cy="14" r="2.5" fill="currentColor"/>`,
+    "J": `<path d="M6 2.5 H22 V23.5 L14 29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="26" cy="14" r="2.5" fill="currentColor"/>`,
     // K: Upward arrowhead with center vertical line
-    "K": `<path d="M4 18 L16 4 L28 18 M16 4 V30" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "K": `<path d="M4 16 L16 2.5 L28 16 M16 2.5 V29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // L: Square corner bracket with vertex diagonal slash
-    "L": `<path d="M8 4 V24 H28 M2 28 L14 18" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    "L": `<path d="M8 2.5 V29.5 H28 M2 29.5 L14 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // M: Wide chevron with dual side vertical legs
-    "M": `<path d="M6 4 V28 L16 16 L26 28 V4" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "M": `<path d="M6 2.5 V29.5 L16 16 L26 29.5 V2.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // N: Vertical pillar with right-pointing chevron
-    "N": `<path d="M8 2 V30 M8 16 L24 6 M8 16 L24 26" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "N": `<path d="M8 2.5 V29.5 M8 16 L24 6.5 M8 16 L24 25.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // O: Pure clean hexagon
-    "O": `<polygon points="16,2 27,8 27,24 16,30 5,24 5,8" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "O": `<polygon points="16,2.5 27,8.5 27,23.5 16,29.5 5,23.5 5,8.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // P: Vertical pillar with left-pointing top triangle
-    "P": `<path d="M22 2 V30 M22 4 L6 14 H22" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "P": `<path d="M22 2.5 V29.5 M22 4.5 L6 14.5 H22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // Q: Diamond with descending vertical tail
-    "Q": `<path d="M16 2 L26 14 L16 24 L6 14 Z M16 24 V31" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "Q": `<path d="M16 2.5 L26 14 L16 23.5 L6 14 Z M16 23.5 V29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // R: Vertical pillar with right chevron & horizontal crossbar
-    "R": `<path d="M8 2 V30 M8 4 L24 14 L8 24 M2 14 H28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "R": `<path d="M8 2.5 V29.5 M8 4.5 L24 14 L8 23.5 M2 14 H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // S: Zigzag lightning angle bolt
-    "S": `<path d="M26 4 L8 12 L24 20 L6 28" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "S": `<path d="M26 2.5 L8 11.5 L24 20.5 L6 29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // T: Top horizontal bar with twin vertical legs
-    "T": `<path d="M4 6 H28 M10 6 V28 M22 6 V28" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="square"/>`,
+    "T": `<path d="M4 2.5 H28 M10 2.5 V29.5 M22 2.5 V29.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // U: Basin arch with top horizontal closure bar
-    "U": `<path d="M6 6 H26 M6 6 V20 L16 28 L26 20 V6" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "U": `<path d="M6 2.5 H26 M6 2.5 V21.5 L16 29.5 L26 21.5 V2.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // V: V-chevron with top horizontal closure bar
-    "V": `<path d="M2 6 H30 M6 6 L16 28 L26 6" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "V": `<path d="M2 2.5 H30 M6 2.5 L16 29.5 L26 2.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // W: Inverted triangle with top antenna
-    "W": `<path d="M4 12 H28 L16 28 Z M16 2 V12" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "W": `<path d="M4 12 H28 L16 29.5 Z M16 2.5 V12" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // X: Plus cross with center square frame
-    "X": `<path d="M16 2 V30 M2 16 H30" stroke="currentColor" stroke-width="3"/><rect x="10" y="10" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"/>`,
+    "X": `<path d="M16 2.5 V29.5 M2 16 H30" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="10" y="10" width="12" height="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // Y: Vertical pillar with top diamond loop
-    "Y": `<path d="M16 16 V30 M16 2 L26 10 L16 18 L6 10 Z" stroke="currentColor" stroke-width="3" fill="none" stroke-linejoin="miter"/>`,
+    "Y": `<path d="M16 15.5 V29.5 M16 2.5 L26 9.5 L16 16.5 L6 9.5 Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
     // Z: Square box frame with diagonal slash
-    "Z": `<rect x="4" y="4" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none"/><line x1="4" y1="28" x2="28" y2="4" stroke="currentColor" stroke-width="3"/>`
+    "Z": `<rect x="4" y="2.5" width="24" height="27" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="4" y1="29.5" x2="28" y2="2.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`
   };
 
   // Comprehensive Thai-to-English Mapping & Phonetic Romanization for auto-translating Thai text
@@ -137,7 +137,7 @@
       if (char === " ") return `<span style="display:inline-block; width:0.4em;"></span>`;
       return String(char);
     }
-    return `<svg class="seedian-svg-glyph" viewBox="0 0 32 32" style="display:inline-block; width:${size}; height:${size}; vertical-align:-0.15em; color:${color}; overflow:visible;" aria-label="${uppercaseChar}">${pathData}</svg>`;
+    return `<svg class="seedian-svg-glyph" viewBox="0 0 32 32" style="display:inline-block; width:${size}; height:${size}; vertical-align:middle; color:${color}; overflow:hidden;" aria-label="${uppercaseChar}">${pathData}</svg>`;
   }
 
   // Convert plain text string (English or Thai) to a sequence of Seedian SVG Glyphs

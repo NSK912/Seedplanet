@@ -2834,7 +2834,7 @@ window.characterVertexShaderSource = `
         }
       }
 
-      function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0) {
+      function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0, cloneSwimFactor = 0.0, cloneSwimMove = 0.0) {
         if (typeof window !== "undefined" && window.characterModel === "chibi" && !isClone) {
           if (!window.chibiGlbTexture && typeof window.createChibiGlbTexture === "function") {
             window.createChibiGlbTexture(gl);
@@ -2974,90 +2974,99 @@ window.characterVertexShaderSource = `
           leftKneeFlex = ragdollLimbs.kL;
           rightLegAngle = ragdollLimbs.lR;
           rightKneeFlex = ragdollLimbs.kR;
-        } else if (!isClone && typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.0) {
-          // --- LEFT ARM ---
-          const treadLeftArm = 0.45 + Math.sin(waterAnimTime * 3.5) * 0.15;
-          const treadLeftElbow = 0.55 + Math.cos(waterAnimTime * 3.5) * 0.1;
+        } else {
+          const effectiveSwimFactor = isClone
+            ? (typeof cloneSwimFactor !== "undefined" ? cloneSwimFactor : (window.clonesGlobalSwimFactor || 0.0))
+            : (typeof currentSwimFactor !== "undefined" ? currentSwimFactor : 0.0);
+          const effectiveSwimMovement = isClone
+            ? (typeof cloneSwimMove !== "undefined" ? cloneSwimMove : (window.clonesGlobalSwimMove || 0.0))
+            : (typeof swimMovementFactor !== "undefined" ? swimMovementFactor : 0.0);
 
-          const swimArm = Math.sin(phase * 1.5) * 1.0 + 1.2;
-          const swimElbow = 0.2 + Math.cos(phase * 1.5) * 0.2;
+          if (effectiveSwimFactor > 0.0) {
+            // --- LEFT ARM ---
+            const treadLeftArm = 0.45 + Math.sin(waterAnimTime * 3.5) * 0.15;
+            const treadLeftElbow = 0.55 + Math.cos(waterAnimTime * 3.5) * 0.1;
 
-          const combinedArm =
-            treadLeftArm * (1.0 - swimMovementFactor) +
-            swimArm * swimMovementFactor;
-          const combinedElbow =
-            treadLeftElbow * (1.0 - swimMovementFactor) +
-            swimElbow * swimMovementFactor;
+            const swimArm = Math.sin(phase * 1.5) * 1.0 + 1.2;
+            const swimElbow = 0.2 + Math.cos(phase * 1.5) * 0.2;
 
-          armAngle =
-            armAngle * (1.0 - currentSwimFactor) +
-            combinedArm * currentSwimFactor;
-          leftElbowFlex =
-            leftElbowFlex * (1.0 - currentSwimFactor) +
-            combinedElbow * currentSwimFactor;
+            const combinedArm =
+              treadLeftArm * (1.0 - effectiveSwimMovement) +
+              swimArm * effectiveSwimMovement;
+            const combinedElbow =
+              treadLeftElbow * (1.0 - effectiveSwimMovement) +
+              swimElbow * effectiveSwimMovement;
 
-          // --- RIGHT ARM ---
-          const treadRightArm = 0.45 + Math.cos(waterAnimTime * 3.5) * 0.15;
-          const treadRightElbow = 0.55 + Math.sin(waterAnimTime * 3.5) * 0.1;
+            armAngle =
+              armAngle * (1.0 - effectiveSwimFactor) +
+              combinedArm * effectiveSwimFactor;
+            leftElbowFlex =
+              leftElbowFlex * (1.0 - effectiveSwimFactor) +
+              combinedElbow * effectiveSwimFactor;
 
-          const swimRightArm = Math.sin(phase * 1.5 + Math.PI) * 1.0 + 1.2;
-          const swimRightElbow = 0.2 + Math.cos(phase * 1.5 + Math.PI) * 0.2;
+            // --- RIGHT ARM ---
+            const treadRightArm = 0.45 + Math.cos(waterAnimTime * 3.5) * 0.15;
+            const treadRightElbow = 0.55 + Math.sin(waterAnimTime * 3.5) * 0.1;
 
-          const combinedRightArm =
-            treadRightArm * (1.0 - swimMovementFactor) +
-            swimRightArm * swimMovementFactor;
-          const combinedRightElbow =
-            treadRightElbow * (1.0 - swimMovementFactor) +
-            swimRightElbow * swimMovementFactor;
+            const swimRightArm = Math.sin(phase * 1.5 + Math.PI) * 1.0 + 1.2;
+            const swimRightElbow = 0.2 + Math.cos(phase * 1.5 + Math.PI) * 0.2;
 
-          rightArmAngle =
-            rightArmAngle * (1.0 - currentSwimFactor) +
-            combinedRightArm * currentSwimFactor;
-          rightElbowFlex =
-            rightElbowFlex * (1.0 - currentSwimFactor) +
-            combinedRightElbow * currentSwimFactor;
+            const combinedRightArm =
+              treadRightArm * (1.0 - effectiveSwimMovement) +
+              swimRightArm * effectiveSwimMovement;
+            const combinedRightElbow =
+              treadRightElbow * (1.0 - effectiveSwimMovement) +
+              swimRightElbow * effectiveSwimMovement;
 
-          // --- LEFT LEG ---
-          const treadLeftLeg = 0.3 + Math.sin(waterAnimTime * 3.5) * 0.25;
-          const treadLeftKnee = 0.5 + Math.cos(waterAnimTime * 3.5) * 0.2;
+            rightArmAngle =
+              rightArmAngle * (1.0 - effectiveSwimFactor) +
+              combinedRightArm * effectiveSwimFactor;
+            rightElbowFlex =
+              rightElbowFlex * (1.0 - effectiveSwimFactor) +
+              combinedRightElbow * effectiveSwimFactor;
 
-          const swimLeg = Math.sin(phase * 2.5) * 0.4;
-          const swimKnee = 0.1 + Math.max(0, -swimLeg * 0.3);
+            // --- LEFT LEG ---
+            const treadLeftLeg = 0.3 + Math.sin(waterAnimTime * 3.5) * 0.25;
+            const treadLeftKnee = 0.5 + Math.cos(waterAnimTime * 3.5) * 0.2;
 
-          const combinedLeftLeg =
-            treadLeftLeg * (1.0 - swimMovementFactor) +
-            swimLeg * swimMovementFactor;
-          const combinedLeftKnee =
-            treadLeftKnee * (1.0 - swimMovementFactor) +
-            swimKnee * swimMovementFactor;
+            const swimLeg = Math.sin(phase * 2.5) * 0.4;
+            const swimKnee = 0.1 + Math.max(0, -swimLeg * 0.3);
 
-          legAngle =
-            legAngle * (1.0 - currentSwimFactor) +
-            combinedLeftLeg * currentSwimFactor;
-          leftKneeFlex =
-            leftKneeFlex * (1.0 - currentSwimFactor) +
-            combinedLeftKnee * currentSwimFactor;
+            const combinedLeftLeg =
+              treadLeftLeg * (1.0 - effectiveSwimMovement) +
+              swimLeg * effectiveSwimMovement;
+            const combinedLeftKnee =
+              treadLeftKnee * (1.0 - effectiveSwimMovement) +
+              swimKnee * effectiveSwimMovement;
 
-          // --- RIGHT LEG ---
-          const treadRightLeg = 0.3 - Math.sin(waterAnimTime * 3.5) * 0.25;
-          const treadRightKnee = 0.5 - Math.cos(waterAnimTime * 3.5) * 0.2;
+            legAngle =
+              legAngle * (1.0 - effectiveSwimFactor) +
+              combinedLeftLeg * effectiveSwimFactor;
+            leftKneeFlex =
+              leftKneeFlex * (1.0 - effectiveSwimFactor) +
+              combinedLeftKnee * effectiveSwimFactor;
 
-          const swimRightLeg = Math.sin(phase * 2.5 + Math.PI) * 0.4;
-          const swimRightKnee = 0.1 + Math.max(0, -swimRightLeg * 0.3);
+            // --- RIGHT LEG ---
+            const treadRightLeg = 0.3 - Math.sin(waterAnimTime * 3.5) * 0.25;
+            const treadRightKnee = 0.5 - Math.cos(waterAnimTime * 3.5) * 0.2;
 
-          const combinedRightLeg =
-            treadRightLeg * (1.0 - swimMovementFactor) +
-            swimRightLeg * swimMovementFactor;
-          const combinedRightKnee =
-            treadRightKnee * (1.0 - swimMovementFactor) +
-            swimRightKnee * swimMovementFactor;
+            const swimRightLeg = Math.sin(phase * 2.5 + Math.PI) * 0.4;
+            const swimRightKnee = 0.1 + Math.max(0, -swimRightLeg * 0.3);
 
-          rightLegAngle =
-            rightLegAngle * (1.0 - currentSwimFactor) +
-            combinedRightLeg * currentSwimFactor;
-          rightKneeFlex =
-            rightKneeFlex * (1.0 - currentSwimFactor) +
-            combinedRightKnee * currentSwimFactor;
+            const combinedRightLeg =
+              treadRightLeg * (1.0 - effectiveSwimMovement) +
+              swimRightLeg * effectiveSwimMovement;
+            const combinedRightKnee =
+              treadRightKnee * (1.0 - effectiveSwimMovement) +
+              swimRightKnee * effectiveSwimMovement;
+
+            rightLegAngle =
+              rightLegAngle * (1.0 - effectiveSwimFactor) +
+              combinedRightLeg * effectiveSwimFactor;
+            rightKneeFlex =
+              rightKneeFlex * (1.0 - effectiveSwimFactor) +
+              combinedRightKnee * effectiveSwimFactor;
+          }
         }
         
         if (!isClone && typeof jumpBlend !== "undefined" && jumpBlend > 0.0) {
@@ -4899,9 +4908,64 @@ window.characterVertexShaderSource = `
           1,
         ];
       }
+      // Central shared swimming transform computation (Used by Player and PlayerClones)
+      window.computeSwimmingTransform = function(opts) {
+        const {
+          swimFactor = 0.0,
+          swimMovementFactor = 0.0,
+          diveDepth = 0.0,
+          waterRadius = 20.0,
+          terrainRadius = 20.0,
+          charScale = 0.1,
+          isWalking = false,
+          waterTime = 0,
+          N = [0, 1, 0],
+          F = [0, 0, 1],
+          R = [1, 0, 0],
+          baseGroundRadius = 20.0
+        } = opts;
+
+        let groundRadius = baseGroundRadius;
+        let finalN = [N[0], N[1], N[2]];
+        let finalF = [F[0], F[1], F[2]];
+        let finalR = [R[0], R[1], R[2]];
+
+        if (swimFactor > 0.0) {
+          const targetSwimRadius = waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
+          const subSwimRadius = targetSwimRadius - diveDepth;
+          groundRadius = groundRadius * (1.0 - swimFactor) + subSwimRadius * swimFactor;
+
+          // Gentle water bobbing
+          const bobSpeed = isWalking ? 4.0 : 2.0;
+          const bobAmp = isWalking ? 0.02 : 0.04;
+          const bobFactor = Math.max(0, 1.0 - diveDepth / (0.1 * charScale));
+          const bobbing = Math.sin(waterTime * bobSpeed) * bobAmp * charScale * bobFactor;
+          groundRadius += bobbing;
+
+          // Forward swimming horizontal tilt
+          const tiltAngle = swimFactor * (Math.PI * 0.03 + swimMovementFactor * (Math.PI * 0.39));
+          const cosT = Math.cos(tiltAngle);
+          const sinT = Math.sin(tiltAngle);
+
+          finalN = [
+            N[0] * cosT + F[0] * sinT,
+            N[1] * cosT + F[1] * sinT,
+            N[2] * cosT + F[2] * sinT,
+          ];
+          finalF = [
+            -N[0] * sinT + F[0] * cosT,
+            -N[1] * sinT + F[1] * cosT,
+            -N[2] * sinT + F[2] * cosT,
+          ];
+        }
+
+        return { groundRadius, finalN, finalF, finalR };
+      };
+
       if (typeof window !== "undefined") {
         window.getCharacterMatrix = getCharacterMatrix;
         window.updateCharacterMesh = updateCharacterMesh;
+        window.computeSwimmingTransform = computeSwimmingTransform;
       }
 
       let reusableWaterFloat32Array = null;

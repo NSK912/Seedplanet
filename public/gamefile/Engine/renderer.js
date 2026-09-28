@@ -56,9 +56,9 @@
                     }
                     treeSwayWeight = max(0.0, rawSway / 100.0);
                 }
-                bool isLeaf = isGrass || isTreeLeaf || ((actualColor.g > 0.32) && (abs(actualColor.r - actualColor.g) > 0.05));
+                bool isLeaf = isGrass || isTreeLeaf;
                 float distToCenter = length(pos);
-                bool isSeaweed = (distToCenter < uWaterRadius) && (actualColor.g > 0.35 && actualColor.r < 0.45 && actualColor.b < 0.5);
+                bool isSeaweed = !isTree && !isGrass && (distToCenter < uWaterRadius) && (actualColor.g > 0.38 && actualColor.g > actualColor.r * 1.35 && actualColor.g > actualColor.b * 1.15);
                 
                 vec4 baseMvPos = uModelViewMatrix * vec4(pos, 1.0);
                 float vertexCamDist = length(baseMvPos.xyz);
@@ -101,7 +101,7 @@
                             }
                         } else {
                             // Grass sway
-                            float swayAmount = isGrass ? (vertexType * 0.15 * uSwayFactor) : (h > 0.2 ? (h - 0.2) * 0.1 * uSwayFactor : 0.0);
+                            float swayAmount = isGrass ? (vertexType * 0.15 * uSwayFactor) : 0.0;
 
                             float windX = sin(uTime * 1.5 + pos.y * 5.0 + pos.x * 2.0);
                             float windZ = cos(uTime * 1.5 + pos.y * 5.0 + pos.z * 2.0);
@@ -400,9 +400,9 @@
                     }
                     treeSwayWeight = max(0.0, rawSway / 100.0);
                 }
-                bool isLeaf = isGrass || isTreeLeaf || ((actualColor.g > 0.32) && (abs(actualColor.r - actualColor.g) > 0.05));
+                bool isLeaf = isGrass || isTreeLeaf;
                 float distToCenter = length(pos);
-                bool isSeaweed = (distToCenter < uWaterRadius) && (actualColor.g > 0.35 && actualColor.r < 0.45 && actualColor.b < 0.5);
+                bool isSeaweed = !isTree && !isGrass && (distToCenter < uWaterRadius) && (actualColor.g > 0.38 && actualColor.g > actualColor.r * 1.35 && actualColor.g > actualColor.b * 1.15);
                 
                 if ((isLeaf || isTree) && uSwayFactor > 0.0) {
                     float h = distToCenter - uPlanetRadius;
@@ -441,7 +441,7 @@
                             }
                         } else {
                             // Grass sway
-                            float swayAmount = isGrass ? (vertexType * 0.15 * uSwayFactor) : (h > 0.2 ? (h - 0.2) * 0.1 * uSwayFactor : 0.0);
+                            float swayAmount = isGrass ? (vertexType * 0.15 * uSwayFactor) : 0.0;
 
                             float windX = sin(uTime * 1.5 + pos.y * 5.0 + pos.x * 2.0);
                             float windZ = cos(uTime * 1.5 + pos.y * 5.0 + pos.z * 2.0);
@@ -1065,9 +1065,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         treeSwayWeight = max(0.0, rawSway / 100.0);
     }
     
-    let isLeaf = (isGrass > 0.5) || isTreeLeaf || ((actualColor.g > 0.32) && (abs(actualColor.r - actualColor.g) > 0.05));
+    let isLeaf = (isGrass > 0.5) || isTreeLeaf;
     let distToCenter = length(pos);
-    let isSeaweed = (distToCenter < uniforms.params2.y) && (actualColor.g > 0.35 && actualColor.r < 0.45 && actualColor.b < 0.5);
+    let isSeaweed = (isTree == false) && (isGrass < 0.5) && (distToCenter < uniforms.params2.y) && (actualColor.g > 0.38 && actualColor.g > actualColor.r * 1.35 && actualColor.g > actualColor.b * 1.15);
     
     if ((isLeaf || isTree) && uniforms.params.y > 0.0) {
         let h = distToCenter - uniforms.params2.x;
@@ -1096,8 +1096,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
                 var swayAmount = 0.0;
                 if (isGrass > 0.5) {
                     swayAmount = vertexType * 0.15 * uniforms.params.y;
-                } else if (h > 0.2) {
-                    swayAmount = (h - 0.2) * 0.1 * uniforms.params.y;
                 }
                 let windX = sin(uniforms.params.x * 1.5 + pos.y * 5.0 + pos.x * 2.0);
                 let windZ = cos(uniforms.params.x * 1.5 + pos.y * 5.0 + pos.z * 2.0);
@@ -1520,7 +1518,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
             }
             treeSwayWeight = max(0.0, rawSway / 100.0);
         }
-        let isLeaf = (isGrass > 0.5) || isTreeLeaf || ((actualColor.g > 0.32) && (abs(actualColor.r - actualColor.g) > 0.05));
+        let isLeaf = (isGrass > 0.5) || isTreeLeaf;
         let distToCenter = length(pos);
         if (isLeaf || isTree) {
             let up = normalize(pos);
@@ -6605,7 +6603,16 @@ window.cloud3DProgram = cloud3DProgram;
           updateCharacterMesh(walkPhase);
           if (typeof window.playerClonesState !== "undefined" && window.playerClonesState && window.playerClonesState.length > 0) {
               const clonePhase = window.performance.now() * 0.005;
-              updateCharacterMesh(clonePhase, true, 1.0);
+              let anyCloneSwim = 0.0;
+              let anyCloneSwimMove = 0.0;
+              for (let ci = 0; ci < window.playerClonesState.length; ci++) {
+                const cs = window.playerClonesState[ci];
+                if (cs && (cs.currentSwimFactor || 0) > anyCloneSwim) {
+                  anyCloneSwim = cs.currentSwimFactor || 0.0;
+                  anyCloneSwimMove = cs.swimMovementFactor || 0.0;
+                }
+              }
+              updateCharacterMesh(clonePhase, true, 1.0, anyCloneSwim, anyCloneSwimMove);
           }
           if (!needsEveryFrame) {
             lastCharAnimTime =
