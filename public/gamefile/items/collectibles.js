@@ -2522,7 +2522,7 @@ function buildCollectibles(count, seed) {
                floorPreviewCollectible.targetBoat = nearestBoat;
                floorPreviewCollectible.size = 0.25;
              } else {
-               floorPreviewCollectible.isValidPlacement = !isUnderWater;
+               floorPreviewCollectible.isValidPlacement = false;
                floorPreviewCollectible.isBoatSnapped = false;
                floorPreviewCollectible.size = 0.25;
                pN = [pnx, pny, pnz];

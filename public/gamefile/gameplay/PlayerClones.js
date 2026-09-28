@@ -413,8 +413,10 @@
     return boat;
   }
 
-  // STRICT CRAFTING SYSTEM: Clones can ONLY craft AXE, PICKAXE, or plain WOOD_BOAT!
-  // No other recipes are allowed under any circumstances.
+  // =========================================================================
+  // AUTONOMOUS CRAFTING SYSTEM:
+  // Clones craft tools, boats, wheels, electric engines, and batteries!
+  // =========================================================================
   function tryCloneCrafting(cState, planetRadius) {
     if (!cState) return null;
 
@@ -450,7 +452,18 @@
       }
     }
 
-    // 3. Plain Boat (เรือเปล่าๆ): 3 Log
+    // 3. Glow Battery (หินเรืองแสงอัดแท่ง/แบตเตอรี่): 1 Glow Ore
+    const glowOreCount = getCloneItemCount(cState, "GLOW_ORE");
+    const batteryCount = getCloneItemCount(cState, "GLOW_BATTERY");
+    if (glowOreCount >= 1 && batteryCount < 3) {
+      if (removeCloneItem(cState, "GLOW_ORE", 1)) {
+        addCloneItem(cState, "GLOW_BATTERY", "🔋", 1);
+        cState.faceText = "(✨‿✨)";
+        return "glow_battery";
+      }
+    }
+
+    // 4. Plain Boat (เรือไม้): 3 Log
     const logCount = getCloneItemCount(cState, "LOG");
     if (logCount >= 3 && (!cState.ownedBoat || !cState.ownedBoat.active)) {
       if (removeCloneItem(cState, "LOG", 3)) {
@@ -463,17 +476,64 @@
       }
     }
 
-    // STRICT RULE: CANNOT CRAFT ANYTHING ELSE!
+    // 5. Wood Wheels (ล้อไม้ติดเรือ): 4 Log + 5 Iron Ore
+    const ironCount = getCloneItemCount(cState, "IRON_ORE");
+    if (cState.ownedBoat && cState.ownedBoat.active && !cState.ownedBoat.hasWheel && !cState.ownedBoat.hasWheels) {
+      if (logCount >= 4 && ironCount >= 5) {
+        if (removeCloneItem(cState, "LOG", 4) && removeCloneItem(cState, "IRON_ORE", 5)) {
+          cState.ownedBoat.hasWheel = true;
+          cState.ownedBoat.hasWheels = true;
+          cState.ownedBoat.wheelCount = 4;
+          cState.faceText = "(🛞‿🛞)";
+          if (typeof window !== "undefined") {
+            window.pendingDynamicCollectibleRefresh = true;
+          }
+          return "wood_wheel";
+        }
+      }
+    }
+
+    // 6. Electric Engine (เครื่องยนต์ไฟฟ้าติดเรือ): 10 Iron Ore
+    if (cState.ownedBoat && cState.ownedBoat.active && !cState.ownedBoat.hasEngine) {
+      if (ironCount >= 10) {
+        if (removeCloneItem(cState, "IRON_ORE", 10)) {
+          cState.ownedBoat.hasEngine = true;
+          cState.faceText = "(⚙️‿⚙️)";
+          if (typeof window !== "undefined") {
+            window.pendingDynamicCollectibleRefresh = true;
+          }
+          return "electric_engine";
+        }
+      }
+    }
+
     return null;
   }
 
-  // BOAT USABILITY & STEALING RULES:
-  // - Plain boat: YES
-  // - Wheeled boat: YES ("ต่อให้จะเป็นเรือติดล้อมันก็ใช้ได้")
-  // - Winged boat: NO! ("ยกเว้นเรือติดปีมันจะไม่ใช้")
-  function isBoatUsableByClone(b) {
+  // =========================================================================
+  // SHARED BOAT USABILITY & DRIVEABILITY RULES (100% Shared with Player Rules)
+  // - Wheeled boat: MUST have Engine to drive
+  // - Plain boat: MUST be in Water to drive
+  // - Winged boat: Prohibited for clones (Clone-specific AI restriction)
+  // =========================================================================
+  function checkCloneBoatWaterContact(theta, phi, planetRadius) {
+    if (typeof waterEnabled !== "undefined" && !waterEnabled) return false;
+    const wl = (typeof waterLevel !== "undefined") ? waterLevel : 0.0;
+    const waterRad = (typeof minDryRadius !== "undefined") ? minDryRadius : (planetRadius + wl * 0.15);
+    const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+    const hs = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
+    const bHeight = (typeof getVisualHeightOnSphere === "function")
+      ? getVisualHeightOnSphere(theta, phi, seed)
+      : 0;
+    const terrainRad = planetRadius + bHeight * hs;
+    const depth = waterRad - terrainRad;
+    const pScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
+    return depth > 0.35 * pScale;
+  }
+
+  function isBoatUsableByClone(b, planetRadius, cState) {
     if (!b || !b.active || b.isPreview || b.type !== "wood_boat") return false;
-    // Strict prohibition on winged / flying boats
+    // Strict prohibition on winged / flying boats for clones
     if (b.hasWing || b.hasWings || (b.wingCount && b.wingCount > 0)) {
       return false;
     }
@@ -482,10 +542,28 @@
       return false;
     }
     // Another clone currently driving?
-    if (window.playerClonesState && window.playerClonesState.some(cl => cl.ridingBoat === b)) {
+    if (window.playerClonesState && window.playerClonesState.some(cl => cl !== cState && cl.ridingBoat === b)) {
       return false;
     }
-    return true;
+
+    const pRad = planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 20.0);
+    let inWater = false;
+    if (b.position) {
+      const rLen = Math.sqrt(b.position[0]**2 + b.position[1]**2 + b.position[2]**2) || 1;
+      const bTheta = Math.acos(Math.max(-1, Math.min(1, b.position[1] / rLen)));
+      const bPhi = Math.atan2(b.position[2], b.position[0]);
+      inWater = checkCloneBoatWaterContact(bTheta, bPhi, pRad);
+    }
+
+    const hasWheels = !!(b.hasWheel || b.hasWheels || (b.wheelCount && b.wheelCount > 0));
+    const hasBattery = cState ? (getCloneItemCount(cState, "GLOW_BATTERY") > 0) : true;
+
+    // Call Central Shared Vehicle Rule
+    if (typeof window !== "undefined" && typeof window.isVehicleDriveable === "function") {
+      return window.isVehicleDriveable(b, inWater, hasBattery);
+    }
+
+    return hasWheels ? (!!b.hasEngine && hasBattery) : inWater;
   }
 
   // Deposits farmed items into the clone's house chest
@@ -582,7 +660,7 @@
     return bestTree;
   }
 
-  function findTargetOre(cState, planetRadius) {
+  function findTargetOre(cState, planetRadius, preferredType = null) {
     const natureObs = (typeof natureObstacles !== "undefined" && Array.isArray(natureObstacles))
       ? natureObstacles
       : ((typeof window !== "undefined" && window.natureObstacles) ? window.natureObstacles : []);
@@ -607,8 +685,12 @@
       const dz = obs.position[2] - cPos[2];
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-      // Prioritize valuable ores
-      const score = d - (isOre ? 3.5 : 0);
+      // Prioritize preferred ore type if requested by quantum goal evaluation
+      let prefBonus = 0;
+      if (preferredType && obs.type === preferredType) prefBonus = 4.5;
+      else if (isOre) prefBonus = 2.5;
+
+      const score = d - prefBonus;
       if (score < minD) {
         minD = score;
         bestOre = obs;
@@ -690,12 +772,17 @@
     const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
     const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
 
+    // If clone already owns a boat and it's usable, prioritize their own boat!
+    if (cState.ownedBoat && cState.ownedBoat.active && isBoatUsableByClone(cState.ownedBoat, planetRadius, cState)) {
+      return cState.ownedBoat;
+    }
+
     let bestBoat = null;
     let minD = 18.0;
 
     for (let i = 0; i < colList.length; i++) {
       const b = colList[i];
-      if (!isBoatUsableByClone(b) || !b.position) continue;
+      if (!isBoatUsableByClone(b, planetRadius, cState) || !b.position) continue;
       const dx = b.position[0] - cPos[0];
       const dy = b.position[1] - cPos[1];
       const dz = b.position[2] - cPos[2];
@@ -710,15 +797,38 @@
 
   // =========================================================================
   // ON-SIGHT QUANTUM SUPERPOSITION DECISION ENGINE ("เห็นค่อยคิด ค่อยทำ")
-  // Zero lookahead, ultra-low resource consumption, purely reactive on-demand
+  // Using TheCube to evaluate needs and collapse wavefunction dynamically
   // =========================================================================
   function decideCloneActionOnSight(cState, planetRadius, houses) {
     const candidates = [];
 
+    // Analyze current goal & missing parts:
+    const hasAxe = getCloneItemCount(cState, "AXE") > 0 || cState.equippedTool === "AXE";
+    const hasPick = getCloneItemCount(cState, "PICKAXE") > 0 || cState.equippedTool === "PICKAXE";
+    const rockCount = getCloneItemCount(cState, "ROCK") + getCloneItemCount(cState, "BIG_ROCK");
+    const branchCount = getCloneItemCount(cState, "BRANCH");
+    const logCount = getCloneItemCount(cState, "LOG");
+    const ironCount = getCloneItemCount(cState, "IRON_ORE");
+    const glowCount = getCloneItemCount(cState, "GLOW_ORE");
+    const batteryCount = getCloneItemCount(cState, "GLOW_BATTERY");
+
+    const hasOwnedBoat = !!(cState.ownedBoat && cState.ownedBoat.active);
+    const boatHasWheels = hasOwnedBoat && !!(cState.ownedBoat.hasWheel || cState.ownedBoat.hasWheels);
+    const boatHasEngine = hasOwnedBoat && !!cState.ownedBoat.hasEngine;
+    const hasBattery = batteryCount > 0;
+
+    // Missing needs:
+    const needsAxe = !hasAxe;
+    const needsPick = !hasPick;
+    const needsBoat = !hasOwnedBoat;
+    const needsWheels = hasOwnedBoat && !boatHasWheels;
+    const needsEngine = hasOwnedBoat && !boatHasEngine;
+    const needsBattery = !hasBattery;
+
     // 1. เห็นหีบของบ้านตัวเอง (House Chest) เมื่อมีไอเทมจากการทำงาน
     const house = (houses && houses[cState.houseIndex]) ? houses[cState.houseIndex] : null;
     const chest = (house && house.chest && house.chest.active) ? house.chest : null;
-    const hasFarmedLoot = cState.inventory && cState.inventory.some(it => it && it.name !== "AXE" && it.name !== "PICKAXE");
+    const hasFarmedLoot = cState.inventory && cState.inventory.some(it => it && it.name !== "AXE" && it.name !== "PICKAXE" && it.name !== "GLOW_BATTERY");
     if (hasFarmedLoot && chest && chest.position) {
       const invCount = cState.inventory.length;
       const workCycles = cState.workCycles || 0;
@@ -747,43 +857,63 @@
       });
     }
 
-    // 3. เห็นเรือเปล่า/เรือติดล้อที่ขับได้ (Stealable Boat)
+    // 3. เห็นเรือเปล่า/เรือติดล้อที่ขับได้ (Driveable Boat)
+    const isFullyUpgraded = hasOwnedBoat && boatHasWheels && boatHasEngine && hasBattery;
+    let driveWeight = 0.38;
+    if (isFullyUpgraded) {
+      driveWeight = 1.6; // High urge to enjoy driving fully completed motorized vehicle!
+    } else if (hasOwnedBoat && isBoatUsableByClone(cState.ownedBoat, planetRadius, cState)) {
+      driveWeight = 0.85;
+    }
+
     const boat = findStealableBoat(cState, planetRadius);
     if (boat && boat.position) {
       candidates.push({
         action: "STEAL_BOAT",
         target: boat,
-        weight: 0.38
+        weight: driveWeight
       });
     }
 
     // 4. เห็นต้นไม้สำหรับตัดไม้ (Tree)
+    let chopWeight = hasAxe ? 0.78 : 0.38;
+    if (needsBoat && logCount < 3) chopWeight += 0.85;
+    if (needsWheels && logCount < 4) chopWeight += 0.65;
+    if (needsAxe && branchCount < 3) chopWeight += 0.50;
+
     const tree = findTargetTree(cState, planetRadius);
     if (tree && tree.position) {
-      const hasAxe = getCloneItemCount(cState, "AXE") > 0 || cState.equippedTool === "AXE";
       candidates.push({
         action: "CHOP_WOOD",
         target: tree,
-        weight: hasAxe ? 0.78 : 0.42
+        weight: chopWeight
       });
     }
 
     // 5. เห็นแร่หรือก้อนหินสำหรับขุด (Ore / Rock)
-    const ore = findTargetOre(cState, planetRadius);
+    let preferredOre = null;
+    if (needsBattery && glowCount < 1) preferredOre = "glow_ore";
+    else if ((needsEngine || needsWheels) && ironCount < 10) preferredOre = "iron_ore";
+
+    let mineWeight = hasPick ? 0.70 : 0.30;
+    if (needsBattery && glowCount < 1) mineWeight += 1.15;
+    if (needsEngine && ironCount < 10) mineWeight += 0.95;
+    if (needsWheels && ironCount < 5) mineWeight += 0.75;
+    if (needsPick && rockCount < 2) mineWeight += 0.55;
+
+    const ore = findTargetOre(cState, planetRadius, preferredOre);
     if (ore && ore.position) {
-      const hasPick = getCloneItemCount(cState, "PICKAXE") > 0 || cState.equippedTool === "PICKAXE";
       const isRare = (ore.type === "iron_ore" || ore.type === "gold_ore" || ore.type === "glow_ore");
       candidates.push({
         action: "MINE_ORE",
         target: ore,
-        weight: hasPick ? (isRare ? 0.95 : 0.65) : 0.35
+        weight: hasPick ? (isRare ? (mineWeight + 0.2) : mineWeight) : (mineWeight * 0.5)
       });
     }
 
     // 6. เห็นสัตว์มีชีวิต (Animal hunting)
     const animal = findTargetAnimal(cState, planetRadius);
     if (animal) {
-      const hasAxe = getCloneItemCount(cState, "AXE") > 0 || cState.equippedTool === "AXE";
       candidates.push({
         action: "HUNT_ANIMAL",
         target: animal,
@@ -795,7 +925,7 @@
     candidates.push({
       action: "WANDER",
       target: null,
-      weight: 0.35
+      weight: 0.30
     });
 
     // ค่อยคิด: ประมวลผล Qubit Wavefunction Collapse (Born Rule) จาก TheCube.js
@@ -1095,10 +1225,22 @@
       // =========================================================================
       if (cState.currentActivity === "DRIVE_BOAT" && cState.ridingBoat && cState.ridingBoat.active) {
         const boat = cState.ridingBoat;
+
+        // Shared Vehicle Driveability Check (Identical to player rules)
+        const canDrive = isBoatUsableByClone(boat, planetRadius, cState);
+        if (!canDrive) {
+          cState.ridingBoat = null;
+          cState.currentActivity = "WANDER";
+          cState.timer = 1.0;
+          cState.thinkTimer = 0.0;
+          cState.faceText = cState.baseFaceText || "(^_-)";
+          continue;
+        }
+
         cState.boatDriveTimer -= dtClamped;
 
         // Clone drives the boat forward smoothly
-        const boatSpeed = 0.95;
+        const boatSpeed = boat.hasEngine ? 1.4 : 0.95;
         cState.walkBlend = 0.0;
         cState.isIdle = false;
         cState.faceText = "(¬‿¬)"; // Cheeky grin while joyriding!
@@ -1111,12 +1253,41 @@
         cState.theta = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * step) / planetRadius));
         cState.phi += (Math.sin(cState.heading) * step) / (planetRadius * sinT);
 
-        // Update boat transformation
-        const { cPos, cR, cF, cN } = getCloneVectors(cState, (typeof playerScale !== "undefined" ? playerScale : 0.1), planetRadius);
-        boat.position = [cPos[0], cPos[1], cPos[2]];
-        boat.normal = [cN[0], cN[1], cN[2]];
-        boat.R = [cR[0], cR[1], cR[2]];
-        boat.F = [cF[0], cF[1], cF[2]];
+        // Update boat transformation directly on water/terrain surface (same as player)
+        const nSinT = Math.sin(cState.theta);
+        const nCosT = Math.cos(cState.theta);
+        const nSinP = Math.sin(cState.phi);
+        const nCosP = Math.cos(cState.phi);
+
+        const bNx = nSinT * nCosP;
+        const bNy = nCosT;
+        const bNz = nSinT * nSinP;
+
+        const bHeight = (typeof getVisualHeightOnSphere === "function")
+          ? getVisualHeightOnSphere(cState.theta, cState.phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0))
+          : 0;
+        const hs = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
+        const minWaterRad = (typeof minDryRadius !== "undefined") ? minDryRadius : planetRadius;
+        const isWheeled = !!(boat.hasWheel || boat.hasWheels);
+        const bRadius = isWheeled ? (planetRadius + bHeight * hs) : Math.max(minWaterRad, planetRadius + bHeight * hs);
+
+        const bEast = [-nSinP, 0, nCosP];
+        const bNorth = [-nCosT * nCosP, nSinT, -nCosT * nSinP];
+        const cosH = Math.cos(cState.heading);
+        const sinH = Math.sin(cState.heading);
+
+        boat.position = [bRadius * bNx, bRadius * bNy, bRadius * bNz];
+        boat.normal = [bNx, bNy, bNz];
+        boat.R = [
+          bEast[0] * cosH - bNorth[0] * sinH,
+          bEast[1] * cosH - bNorth[1] * sinH,
+          bEast[2] * cosH - bNorth[2] * sinH
+        ];
+        boat.F = [
+          bNorth[0] * cosH + bEast[0] * sinH,
+          bNorth[1] * cosH + bEast[1] * sinH,
+          bNorth[2] * cosH + bEast[2] * sinH
+        ];
         boat.isDynamic = true;
 
         if (boat.hasWheel || boat.hasWheels) {
@@ -1142,7 +1313,7 @@
       // =========================================================================
       if (cState.currentActivity === "STEAL_BOAT") {
         const targetBoat = cState.targetBoat;
-        if (!isBoatUsableByClone(targetBoat)) {
+        if (!isBoatUsableByClone(targetBoat, planetRadius, cState)) {
           cState.targetBoat = null;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
@@ -1160,9 +1331,11 @@
 
           if (distToTarget <= 0.7) {
             // Successfully board and steal the boat!
-            cState.ridingBoat = targetBoat;
-            cState.currentActivity = "DRIVE_BOAT";
-            cState.boatDriveTimer = 16.0 + Math.random() * 8.0;
+            if (isBoatUsableByClone(targetBoat, planetRadius, cState)) {
+              cState.ridingBoat = targetBoat;
+              cState.currentActivity = "DRIVE_BOAT";
+              cState.boatDriveTimer = 16.0 + Math.random() * 8.0;
+            }
             cState.targetBoat = null;
             continue;
           }
@@ -1175,7 +1348,8 @@
       if (cState.currentActivity === "CHOP_WOOD") {
         const tree = cState.targetObstacle;
         const natureObs = (typeof natureObstacles !== "undefined") ? natureObstacles : (window.natureObstacles || []);
-        if (!tree || !natureObs.includes(tree)) {
+        const isValidTree = tree && natureObs.includes(tree) && (typeof window.checkToolTargetValid !== "function" || window.checkToolTargetValid("AXE", tree.type));
+        if (!isValidTree) {
           cState.targetObstacle = null;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
@@ -1239,7 +1413,8 @@
       if (cState.currentActivity === "MINE_ORE") {
         const ore = cState.targetObstacle;
         const natureObs = (typeof natureObstacles !== "undefined") ? natureObstacles : (window.natureObstacles || []);
-        if (!ore || !natureObs.includes(ore)) {
+        const isValidOre = ore && natureObs.includes(ore) && (typeof window.checkToolTargetValid !== "function" || window.checkToolTargetValid("PICKAXE", ore.type));
+        if (!isValidOre) {
           cState.targetObstacle = null;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {

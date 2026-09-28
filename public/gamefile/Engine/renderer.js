@@ -5056,6 +5056,18 @@ window.cloud3DProgram = cloud3DProgram;
         let North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
         let East = [-sinPhi, 0, cosPhi];
 
+        if (typeof window !== "undefined") {
+          window.isVehicleDriveable = function(vehicle, inWater = false, hasBattery = true) {
+            if (!vehicle || !vehicle.active || vehicle.isPreview) return false;
+            const hasWheels = !!(vehicle.hasWheel || vehicle.hasWheels || (vehicle.wheelCount && vehicle.wheelCount > 0));
+            const hasEngine = !!vehicle.hasEngine;
+            if (hasWheels) {
+              return hasEngine && hasBattery;
+            }
+            return !!inWater;
+          };
+        }
+
         if (activeRidingBoat) {
           let boatDepth = waterRadius - terrainRadius;
           let isInWater = activeRidingBoat.isInWater !== undefined ? activeRidingBoat.isInWater : (waterEnabled && boatDepth > 0.35 * charScale);
@@ -5079,10 +5091,11 @@ window.cloud3DProgram = cloud3DProgram;
             const pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
             const hasEngine = !!activeRidingBoat.hasEngine;
             const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
+            const hasWheels = !!(activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0));
             
-            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : (isInWater ? pSpeed * 1.5 : 0));
-            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (isInWater ? pSpeed * 0.8 : 0));
-            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
+            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : (!hasWheels && isInWater ? pSpeed * 1.5 : 0));
+            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (!hasWheels && isInWater ? pSpeed * 0.8 : 0));
+            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (!hasWheels && isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
             let brakePower = pSpeed * 0.30 * dt;
             let coastFriction = Math.pow(isInWater ? 0.96 : ((activeRidingBoat.isAirborne || activeRidingBoat.isFlying) && hasWing ? 0.995 : 0.985), dt);
             
@@ -5091,9 +5104,9 @@ window.cloud3DProgram = cloud3DProgram;
               accelPower = Math.max(accelPower, pSpeed * 0.16 * dt);
             }
 
-            let canAccelerate = (hasEngine && hasBattery) || (isInWater && !hasEngine);
+            let canAccelerate = (hasEngine && hasBattery) || (!hasWheels && isInWater && !hasEngine);
 
-            if (!hasEngine && !isInWater && (activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0)) && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
+            if (!hasEngine && hasWheels && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
               const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
               if (typeof showNotice === "function" && (!activeRidingBoat._lastEngineNotice || nowTime - activeRidingBoat._lastEngineNotice > 3000)) {
                 activeRidingBoat._lastEngineNotice = nowTime;

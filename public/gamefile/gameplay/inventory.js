@@ -1672,6 +1672,33 @@
       }
       window.checkNpcMeleeHit = checkNpcMeleeHit;
 
+      // Shared Tool Target Validation rule (Used by both player checkMeleeHit and PlayerClones)
+      window.checkToolTargetValid = function(toolType, targetType) {
+        if (!toolType || !targetType) return false;
+        const normTool = String(toolType).toUpperCase();
+        if (normTool === "AXE") {
+          return targetType === "tree";
+        }
+        if (normTool === "PICKAXE") {
+          return targetType === "rock" || targetType === "iron_ore" || targetType === "gold_ore" || targetType === "glow_ore";
+        }
+        if (normTool === "HAND") {
+          return true;
+        }
+        return false;
+      };
+
+      // Shared Food Healing Rules
+      window.getFoodItemHealAmount = function(itemName) {
+        if (!itemName) return 0;
+        const norm = String(itemName).toUpperCase();
+        if (norm === "FRIED_BUG") return 5;
+        if (norm === "BREAD") return 10;
+        if (norm === "MEAT" || norm === "COOKED_MEAT") return 15;
+        if (norm === "APPLE") return 4;
+        return 0;
+      };
+
       function checkMeleeHit(toolType) {
     const sinTheta = Math.sin(charTheta);
     const cosTheta = Math.cos(charTheta);
