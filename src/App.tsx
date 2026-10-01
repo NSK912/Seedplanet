@@ -11,11 +11,11 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#09090b] text-slate-200 font-sans overflow-hidden select-none">
-      {/* Mock Title Bar (Tauri style custom titlebar) */}
-      <div data-tauri-drag-region className="h-10 bg-[#09090b] flex items-center justify-between px-4 border-b border-white/5 flex-shrink-0">
+      {/* Title Bar */}
+      <div className="h-10 bg-[#09090b] flex items-center justify-between px-4 border-b border-white/5 flex-shrink-0 select-none">
         <div className="flex items-center gap-2 pointer-events-none">
           <Activity size={16} className="text-indigo-500" />
-          <span className="text-xs font-medium text-slate-400 tracking-wide">Tauri App Template</span>
+          <span className="text-xs font-medium text-slate-400 tracking-wide">SeedPlanet</span>
         </div>
         {/* Window controls mock */}
         <div className="flex items-center gap-3">
@@ -78,15 +78,15 @@ export default function App() {
                 <StatCard title="Network" value="128 KB/s" trend="Stable" />
               </div>
               <div className="mt-8 p-6 bg-[#121215] border border-white/5 rounded-xl shadow-sm">
-                <h3 className="text-sm font-medium text-white mb-2">Tauri Integration Ready</h3>
+                <h3 className="text-sm font-medium text-white mb-2">Desktop App Ready (Electron)</h3>
                 <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                  This is a web frontend template designed specifically to look and feel like a native desktop app. 
-                  Because this is a cloud environment, we can't compile Rust directly here, but you can copy this React UI into your local Tauri project!
+                  Full hardware acceleration enabled with native Wayland/X11 and unlocked 120 FPS+ refresh rate.
                 </p>
                 <div className="bg-zinc-900/50 p-4 rounded-lg font-mono text-xs text-indigo-300 overflow-x-auto border border-white/5">
-                  <span className="text-slate-500"># In your local machine:</span><br />
-                  npm create tauri-app@latest<br />
-                  <span className="text-slate-500"># Then simply drop these React components into your src folder.</span>
+                  <span className="text-slate-500"># Run desktop app locally:</span><br />
+                  npm run dev:electron<br />
+                  <span className="text-slate-500"># Build Linux AppImage:</span><br />
+                  npm run build:electron
                 </div>
               </div>
             </div>
