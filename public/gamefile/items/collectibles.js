@@ -4170,6 +4170,8 @@ function buildCollectibles(count, seed) {
             c.position[0] ** 2 + c.position[1] ** 2 + c.position[2] ** 2,
           );
           
+          let isAirborneWingedBoat = false;
+          
           if (r > 0.001) {
             const nx = c.position[0] / r;
             const ny = c.position[1] / r;
@@ -4197,6 +4199,11 @@ function buildCollectibles(count, seed) {
             }
             
             let isLogFloat = ((c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "wood_boat") && inWater && r <= waterRadius + 0.1);
+
+            const hasWingBoat = (c.type === "wood_boat") && !!(c.hasWing || c.hasWings);
+            const isWheeledBoat = (c.type === "wood_boat") && !!(c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
+            const groundRadCheck = inWater ? (waterRadius - 0.04) : terrainRadius;
+            isAirborneWingedBoat = hasWingBoat && !inWater && (c.isFlying || c.isGliding || (r - groundRadCheck > 0.15));
 
             if (isLogFloat) {
                 // Buoyant force counters gravity and pushes it up to the surface
@@ -4244,14 +4251,54 @@ function buildCollectibles(count, seed) {
                   c.R[2]*c.normal[0] - c.R[0]*c.normal[2],
                   c.R[0]*c.normal[1] - c.R[1]*c.normal[0]
                 ];
+            } else if (isAirborneWingedBoat) {
+                // === Realistically glide & sink down just like the condition when not pressing W ===
+                const dt = typeof window.timeScale !== "undefined" ? window.timeScale : 1.0;
+                const glideSinkRate = -0.010;
+                c.verticalVel = Math.max(glideSinkRate, (c.verticalVel || -0.002) - 0.0008 * dt);
+                c.pitchGrade = (c.pitchGrade || 0) * 0.95 - 0.04 * Math.min(1.0, 0.06 * dt);
+                const coastFriction = Math.pow(0.995, dt);
+                c.vehicleSpeed = (typeof c.vehicleSpeed === "number" ? c.vehicleSpeed : 0) * coastFriction;
+                if (Math.abs(c.vehicleSpeed) < 0.00001) c.vehicleSpeed = 0;
+
+                // Gradually level bank angle back to 0
+                if (c.bankAngle) {
+                    c.bankAngle *= Math.pow(0.92, dt);
+                    if (Math.abs(c.bankAngle) < 0.001) c.bankAngle = 0;
+                }
+
+                // Aerodynamic attitude stabilization relative to sphere normal
+                let currN = c.normal || [nx, ny, nz];
+                let airNx = currN[0] + (nx - currN[0]) * Math.min(1.0, 0.06 * dt);
+                let airNy = currN[1] + (ny - currN[1]) * Math.min(1.0, 0.06 * dt);
+                let airNz = currN[2] + (nz - currN[2]) * Math.min(1.0, 0.06 * dt);
+                let airLen = Math.sqrt(airNx*airNx + airNy*airNy + airNz*airNz) || 1;
+                c.normal = [airNx / airLen, airNy / airLen, airNz / airLen];
+
+                // Ensure F and R remain strictly orthonormal
+                if (!c.F) c.F = [1, 0, 0];
+                let fDot = c.F[0]*c.normal[0] + c.F[1]*c.normal[1] + c.F[2]*c.normal[2];
+                let newF = [c.F[0] - fDot*c.normal[0], c.F[1] - fDot*c.normal[1], c.F[2] - fDot*c.normal[2]];
+                let lenF = Math.sqrt(newF[0]**2 + newF[1]**2 + newF[2]**2);
+                if (lenF > 0.001) { c.F = [newF[0]/lenF, newF[1]/lenF, newF[2]/lenF]; }
+                if (!c.R) c.R = [0, 1, 0];
+                c.R = [c.normal[1]*c.F[2] - c.normal[2]*c.F[1], c.normal[2]*c.F[0] - c.normal[0]*c.F[2], c.normal[0]*c.F[1] - c.normal[1]*c.F[0]];
+                let lenR = Math.sqrt(c.R[0]**2 + c.R[1]**2 + c.R[2]**2);
+                if (lenR > 0.001) { c.R = [c.R[0]/lenR, c.R[1]/lenR, c.R[2]/lenR]; }
+
+                // Velocity vector: forward along F + sinking along normal (towards core)
+                c.vel[0] = c.F[0] * c.vehicleSpeed + nx * c.verticalVel;
+                c.vel[1] = c.F[1] * c.vehicleSpeed + ny * c.verticalVel;
+                c.vel[2] = c.F[2] * c.vehicleSpeed + nz * c.verticalVel;
+
+                c.spinSpeed = 0;
             } else {
                 // Air friction (dampen quickly to land smoothly)
                 Physics.applyFriction(c.vel, 0.82);
+                c.vel[0] -= nx * force;
+                c.vel[1] -= ny * force;
+                c.vel[2] -= nz * force;
             }
-
-            c.vel[0] -= nx * force;
-            c.vel[1] -= ny * force;
-            c.vel[2] -= nz * force;
           }
 
           c.position[0] += c.vel[0];
@@ -4349,11 +4396,13 @@ function buildCollectibles(count, seed) {
 
                   collisionRadius = vehicleTransform.targetGroundRadius;
                   c._cachedCollisionRadius = collisionRadius;
-                  pitchGrade = vehicleTransform.pitchGrade;
-                  rollGrade = vehicleTransform.rollGrade;
-                  c.normal = vehicleTransform.normal;
-                  c.F = vehicleTransform.F;
-                  c.R = vehicleTransform.R;
+                  if (!isAirborneWingedBoat) {
+                      pitchGrade = vehicleTransform.pitchGrade;
+                      rollGrade = vehicleTransform.rollGrade;
+                      c.normal = vehicleTransform.normal;
+                      c.F = vehicleTransform.F;
+                      c.R = vehicleTransform.R;
+                  }
               }
           } else if (isInWater) {
               // Wood boat keeps exact original water depth (-0.04), item drops settle at ground/water
@@ -4369,6 +4418,9 @@ function buildCollectibles(count, seed) {
             c.position[0] = nx * collisionRadius;
             c.position[1] = ny * collisionRadius;
             c.position[2] = nz * collisionRadius;
+            c.isFlying = false;
+            c.isGliding = false;
+            c.verticalVel = 0;
             
             // bounce and friction
             const dot = c.vel[0] * nx + c.vel[1] * ny + c.vel[2] * nz;

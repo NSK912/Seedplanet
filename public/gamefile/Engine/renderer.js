@@ -4185,6 +4185,19 @@ window.cloud3DProgram = cloud3DProgram;
       let _cachedNpcPrompt = null;
       let _cachedTargetCircle = null;
 
+      let _displayInterval = 0;
+      let _cadenceAccumulator = 0;
+      let _lastRafTimestamp = 0;
+
+      // In Electron desktop app, query primary display hardware refresh rate directly
+      if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.getDisplayHz === 'function') {
+        window.electronAPI.getDisplayHz().then(hz => {
+          if (hz && hz >= 30) {
+            _displayInterval = 1000.0 / hz;
+          }
+        }).catch(() => {});
+      }
+
       function render(timestamp, forceDraw = false) {
         if (lastFrameTime === 0) {
           lastFrameTime = timestamp;
@@ -4193,28 +4206,50 @@ window.cloud3DProgram = cloud3DProgram;
           lastCloudAnimTime = timestamp;
           lastCharAnimTime = timestamp;
           lastFpsUpdate = timestamp;
+          _lastRafTimestamp = timestamp;
+        }
+
+        const rafDelta = _lastRafTimestamp > 0 ? (timestamp - _lastRafTimestamp) : 16.666;
+        _lastRafTimestamp = timestamp;
+
+        // Continuously calibrate actual display VSync interval dynamically (no hardcoded Hz list)
+        if (rafDelta > 0.5 && rafDelta < 200) {
+          if (_displayInterval === 0) {
+            _displayInterval = rafDelta;
+          } else {
+            // Smooth running average to absorb any micro-jitter from OS compositor
+            _displayInterval = _displayInterval * 0.9 + rafDelta * 0.1;
+          }
+        }
+
+        // Universal cadence-based frame limiter for high-refresh monitors (e.g. 144Hz, 240Hz, 250Hz, 360Hz, 500Hz+)
+        if (targetFps > 0 && !forceDraw && _displayInterval > 0) {
+          const targetInterval = 1000.0 / targetFps;
+          // If display refresh rate is faster than target FPS:
+          if (targetInterval > _displayInterval * 1.05) {
+            _cadenceAccumulator += rafDelta;
+            // Half-VSync window tolerance ensures every frame aligns precisely with display VSync without tearing or dropped frame aliasing
+            if (_cadenceAccumulator < targetInterval - (_displayInterval * 0.45)) {
+              if (Graphics.mode === 'hybrid' && Graphics.webgpu.currentPassEncoder) {
+                Graphics.webgpu.currentPassEncoder.end();
+                Graphics.webgpu.device.queue.submit([Graphics.webgpu.currentCommandEncoder.finish()]);
+                Graphics.webgpu.currentPassEncoder = null;
+                Graphics.webgpu.currentCommandEncoder = null;
+              }
+              requestAnimationFrame(render);
+              return;
+            }
+            _cadenceAccumulator -= targetInterval;
+            if (_cadenceAccumulator > targetInterval) _cadenceAccumulator = 0;
+          } else {
+            _cadenceAccumulator = 0;
+          }
         }
 
         const delta = timestamp - lastFrameTime;
-        // Apply a 1.5ms tolerance to prevent minor browser rAF scheduling fluctuations from skipping frames,
-        // which would drop the FPS on 120Hz or 60Hz displays.
-        const tolerance = 1.5;
-        // Bypassing the limiter for 120+ FPS settings allows the game to utilize the monitor's max refresh rate uncapped
-        if (targetFps < 120 && delta < frameTime - tolerance && !forceDraw) {
-  
-        if (Graphics.mode === 'hybrid' && Graphics.webgpu.currentPassEncoder) {
-            Graphics.webgpu.currentPassEncoder.end();
-            Graphics.webgpu.device.queue.submit([Graphics.webgpu.currentCommandEncoder.finish()]);
-            Graphics.webgpu.currentPassEncoder = null;
-            Graphics.webgpu.currentCommandEncoder = null;
-        }
-        requestAnimationFrame(render);
-
-          return;
-        }
-
-        const frameDelta = delta;
-        const dt = Math.max(0.001, Math.min(0.1, frameDelta / 1000.0));
+        lastFrameTime = timestamp;
+        const frameDelta = (targetFps > 0) ? (1000.0 / targetFps) : delta;
+        const dt = Math.max(0.001, Math.min(0.05, frameDelta / 1000.0));
         const timeScale = dt / 0.016666;
 
         // FPS Counter
@@ -4227,21 +4262,6 @@ window.cloud3DProgram = cloud3DProgram;
             if (fpsDisplay) {
               fpsDisplay.textContent = currentFps;
             }
-          }
-        }
-
-        if (!forceDraw) {
-          if (targetFps >= 120) {
-             // For uncapped / max-hz displays, we just step exactly with timestamp
-             lastFrameTime = timestamp;
-          } else {
-             let remainder = 0;
-             if (delta >= frameTime) {
-               remainder = delta % frameTime;
-             } else if (delta >= frameTime - tolerance) {
-               remainder = delta - frameTime;
-             }
-             lastFrameTime = timestamp - remainder;
           }
         }
         // Throttled Auto-Save (Every 20 seconds, if game started)
@@ -4918,7 +4938,11 @@ window.cloud3DProgram = cloud3DProgram;
           playerVerticalVel = 0.0;
         }
 
-        let standGroundRadius = terrainRadius + (activeRidingMech ? mechOffset : 0.46 * charScale);
+        let floorTerrainRad = terrainRadius;
+        if (typeof getFloorTopRadiusAt === "function") {
+          floorTerrainRad = getFloorTopRadiusAt(nx, ny, nz, terrainRadius);
+        }
+        let standGroundRadius = floorTerrainRad + (activeRidingMech ? mechOffset : 0.46 * charScale);
         if (activeRidingBoat) {
           const tRadius = terrainRadius;
           const baseRadius = (waterEnabled && tRadius < waterRadius) ? waterRadius : tRadius;
@@ -4985,26 +5009,77 @@ window.cloud3DProgram = cloud3DProgram;
               ? (caveData.ground + 0.46 * charScale)
               : standGroundRadius;
 
-            if (isPlayerGrounded && playerVerticalVel <= 0.0 && Math.abs(playerCenterRadius - minGroundRadius) < 0.02) {
+            // Ground snapping: allow smooth steps on slopes/stairs (up to 0.15 * charScale, ~3.3cm)
+            const groundSnapThreshold = 0.15 * charScale;
+            const diffFromGround = playerCenterRadius - minGroundRadius;
+            if (isPlayerGrounded && playerVerticalVel <= 0.0 && diffFromGround >= -0.02 && diffFromGround <= groundSnapThreshold) {
               playerCenterRadius = minGroundRadius;
               playerVerticalVel = 0.0;
+              window._playerHighestAirRadius = null;
             } else {
+              // Track highest point during airborne phase
+              if (window._playerHighestAirRadius === null || typeof window._playerHighestAirRadius === "undefined") {
+                window._playerHighestAirRadius = playerCenterRadius;
+              } else if (playerCenterRadius > window._playerHighestAirRadius) {
+                window._playerHighestAirRadius = playerCenterRadius;
+              }
+
               // Air physics - apply gravity
               playerVerticalVel = Physics.applyVerticalGravity(playerVerticalVel, 1.0, Physics.gravityAccel);
               playerCenterRadius += playerVerticalVel;
 
               if (playerCenterRadius <= minGroundRadius) {
                 const impactVelocity = -playerVerticalVel;
+                const fallDistance = (window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
+                  ? Math.max(0, window._playerHighestAirRadius - minGroundRadius)
+                  : 0;
+                window._playerHighestAirRadius = null;
+
                 playerCenterRadius = minGroundRadius;
                 playerVerticalVel = 0.0;
                 isPlayerGrounded = true;
 
-                if (impactVelocity > 0.025) {
-                  if (typeof triggerFallRagdoll === "function") {
-                    triggerFallRagdoll(1500);
-                  } else {
-                    setRagdoll(true);
+                // High fall check & Fall Damage:
+                // Only trigger Fall Damage and Ragdoll if the character genuinely fell from a significant height:
+                // at least 1.8 units (~8-9 times the player's height) AND impactVelocity >= 0.030.
+                // Low drops (< 1.8 units, like jumping off a rock or running down a slope) will NEVER trigger Ragdoll or Damage!
+                const minFallHeightForRagdoll = 1.8 * (charScale / 0.22);
+                if (fallDistance >= minFallHeightForRagdoll && impactVelocity >= 0.030) {
+                  const isInWater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.3);
+                  if (!isInWater) {
+                    // Fall Damage scaling based on height fallen:
+                    // 1.8 - 3.0 units: 1 DMG (ตกจากที่สูงเล็กน้อย)
+                    // 3.0 - 5.0 units: 2 DMG (ตกจากที่สูงปานกลาง)
+                    // 5.0 - 7.5 units: 3 DMG (ตกจากหน้าผา/ยอดไม้สูง)
+                    // >= 7.5 units: 5 DMG (ตกจากที่สูงมาก/ยานบินบนฟ้าจนหมดสติ)
+                    let fallDamage = 1;
+                    const scaleRatio = (charScale / 0.22);
+                    if (fallDistance >= 7.5 * scaleRatio) {
+                      fallDamage = 5;
+                    } else if (fallDistance >= 5.0 * scaleRatio) {
+                      fallDamage = 3;
+                    } else if (fallDistance >= 3.0 * scaleRatio) {
+                      fallDamage = 2;
+                    }
+
+                    if (typeof applyPlayerFallDamage === "function") {
+                      applyPlayerFallDamage(fallDamage, fallDistance);
+                    } else if (typeof window.applyPlayerFallDamage === "function") {
+                      window.applyPlayerFallDamage(fallDamage, fallDistance);
+                    } else if (typeof damagePlayer === "function") {
+                      damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
+                    } else if (typeof window.damagePlayer === "function") {
+                      window.damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
+                    }
+
+                    const ragDuration = fallDamage >= 3 ? 2200 : 1500;
+                    if (typeof triggerFallRagdoll === "function") {
+                      triggerFallRagdoll(ragDuration);
+                    } else {
+                      setRagdoll(true);
+                    }
                   }
+
                   if (typeof playSplashSound === "function") {
                     playSplashSound(0.5);
                   }
@@ -5156,23 +5231,32 @@ window.cloud3DProgram = cloud3DProgram;
             activeRidingBoat.vehicleSpeed = vehSpeed;
 
             // 3. Vehicle Turning / Steering Heading (GTA PS2 Car Physics & Aerodynamic Air Rudder)
-            // Turns proportionally to speed, plus smooth flight rudder steering in the air
+            // Ground wheels steer when on ground or water; airborne wheeled vehicles cannot steer without active flight wings
             const refMaxSpeed = pSpeed * 5.0;
-            if (Math.abs(vehSpeed) > 0.001) {
-              const turnDir = vehSpeed >= 0 ? 1 : -1;
-              const driftMultiplier = isHandbrake ? 2.4 : 1.0;
-              const turnRate = currentSteer * (Math.abs(vehSpeed) / refMaxSpeed) * 0.035 * turnDir * driftMultiplier;
-              charHeading += turnRate * dt;
-            }
-            if (activeRidingBoat.isFlying || activeRidingBoat.isAirborne) {
-              // Smooth responsive flight banking & turning when airborne
-              charHeading += -moveSidewaysInput * 0.030 * dt;
-            } else if (Math.abs(moveSidewaysInput) > 0.05) {
-              // Smooth, lightweight steering give at low speeds or in water (GTA PS2 arcade feel)
-              const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / refMaxSpeed);
-              if (canAccelerate || Math.abs(vehSpeed) > 0.0005 || isInWater) {
-                charHeading += -moveSidewaysInput * 0.018 * dt * lowSpeedTurning;
+            const isAirborne = !!(activeRidingBoat.isAirborne && !isInWater);
+            const isControlledFlight = !!(activeRidingBoat.isFlying && hasWing);
+
+            if (!isAirborne && !activeRidingBoat.isFlying) {
+              // Ground & Water Steering: Only turns when wheels touch the ground or hull touches water
+              if (Math.abs(vehSpeed) > 0.001) {
+                const turnDir = vehSpeed >= 0 ? 1 : -1;
+                const driftMultiplier = isHandbrake ? 2.4 : 1.0;
+                const turnRate = currentSteer * (Math.abs(vehSpeed) / refMaxSpeed) * 0.035 * turnDir * driftMultiplier;
+                charHeading += turnRate * dt;
               }
+              if (Math.abs(moveSidewaysInput) > 0.05) {
+                // Smooth, lightweight steering give at low speeds or in water (GTA PS2 arcade feel)
+                const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / refMaxSpeed);
+                if (canAccelerate || Math.abs(vehSpeed) > 0.0005 || isInWater) {
+                  charHeading += -moveSidewaysInput * 0.018 * dt * lowSpeedTurning;
+                }
+              }
+            } else if (isControlledFlight) {
+              // Smooth responsive flight banking & turning ONLY in active controlled flight mode with wings
+              charHeading += -moveSidewaysInput * 0.030 * dt;
+            } else {
+              // Airborne / floating off ground (เรือติดล้อที่ลอย หรือเรือติดล้อมีปีกที่แค่วิ่งเร็วจนลอยตัว):
+              // ล้อไม่สัมผัสพื้น ไม่สามารถเลี้ยวได้ (Zero steering in mid-air without ground contact)
             }
 
             // 4. Wheel Spin Angle (ตอนบิน ล้อไม่ต้องหมุน: only spins when rolling on ground / water surface)
@@ -6923,31 +7007,81 @@ if (prompt._lastHTML !== _newHtml_2) {
                      const currentWaterRad = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (effectiveHScale * 0.25);
                      const isWaterSurface = (typeof waterEnabled === "undefined" || waterEnabled) && currentWaterRad > (pGroundRad + 0.1) && (!pCaveData || !pCaveData.insideTunnel);
 
-                     if (isWaterSurface) {
-                       playerCenterRadius = currentWaterRad - 0.10 * playerScale;
+                     const surfaceRad = isWaterSurface ? currentWaterRad : pGroundRad;
+                     const normalLandRad = isWaterSurface ? (currentWaterRad - 0.10 * playerScale) : (pGroundRad + 0.46 * playerScale);
+
+                     // Check if the boat is dismounting in mid-air (winged boat flight or airborne)
+                     const boatAltitude = (boatToDismount.currentRadius !== undefined && boatToDismount.currentRadius > 0) ? boatToDismount.currentRadius : pLen;
+                     const isMidAir = (boatAltitude - surfaceRad) > (0.45 * playerScale);
+
+                     if (isMidAir) {
+                       // Remain at high altitude alongside the boat to free-fall from the sky
+                       playerCenterRadius = boatAltitude + 0.46 * playerScale;
+                       isPlayerGrounded = false;
+                       playerVerticalVel = (typeof boatToDismount.verticalVel === "number") ? boatToDismount.verticalVel : 0.0;
+                       jumpBlend = 1.0;
+                     } else if (isWaterSurface) {
+                       playerCenterRadius = normalLandRad;
                        isPlayerGrounded = false;
                        playerVerticalVel = 0.0;
                      } else {
-                       playerCenterRadius = pGroundRad + 0.46 * playerScale;
+                       playerCenterRadius = normalLandRad;
                        isPlayerGrounded = true;
                        playerVerticalVel = 0.0;
+                     }
+
+                     if (typeof planetCore !== "undefined") {
+                       const curNx = Math.sin(charTheta) * Math.cos(charPhi);
+                       const curNy = Math.cos(charTheta);
+                       const curNz = Math.sin(charTheta) * Math.sin(charPhi);
+                       px = planetCore[0] + playerCenterRadius * curNx;
+                       py = planetCore[1] + playerCenterRadius * curNy;
+                       pz = planetCore[2] + playerCenterRadius * curNz;
+                       if (typeof window !== "undefined") window.player3DPos = [px, py, pz];
                      }
                   }
                   boatToDismount.isDynamic = true;
                   boatToDismount._isSleeping = false;
                   boatToDismount._cachedCollisionRadius = null;
+                  const hasWingDismount = !!(boatToDismount.hasWing || boatToDismount.hasWings);
+                  const wasFlyingDismount = !!(boatToDismount.isFlying || isMidAir);
                   const currentVehSpeed = boatToDismount.vehicleSpeed || 0;
-                  boatToDismount.vehicleSpeed = currentVehSpeed * 0.35;
-                  if (boatToDismount.F) {
-                    boatToDismount.vel = [
-                      boatToDismount.F[0] * boatToDismount.vehicleSpeed,
-                      boatToDismount.F[1] * boatToDismount.vehicleSpeed,
-                      boatToDismount.F[2] * boatToDismount.vehicleSpeed
-                    ];
+
+                  if (hasWingDismount && wasFlyingDismount) {
+                    // Winged boat dismounting in flight mode / mid-air:
+                    // Keep gliding forward and sinking down realistically (matching the condition when not pressing W)
+                    boatToDismount.isFlying = true;
+                    boatToDismount.isGliding = true;
+                    boatToDismount.isAirborne = true;
+                    boatToDismount.vehicleSpeed = currentVehSpeed; // Preserve forward cruising speed
+                    boatToDismount.verticalVel = (typeof boatToDismount.verticalVel === "number" && boatToDismount.verticalVel < 0)
+                      ? boatToDismount.verticalVel
+                      : -0.002;
+                    boatToDismount.pitchGrade = (typeof boatToDismount.pitchGrade === "number") ? boatToDismount.pitchGrade : 0;
+                    if (boatToDismount.F) {
+                      boatToDismount.vel = [
+                        boatToDismount.F[0] * boatToDismount.vehicleSpeed,
+                        boatToDismount.F[1] * boatToDismount.vehicleSpeed,
+                        boatToDismount.F[2] * boatToDismount.vehicleSpeed
+                      ];
+                    } else {
+                      boatToDismount.vel = [0, 0, 0];
+                    }
                   } else {
-                    boatToDismount.vel = [0, 0, 0];
+                    boatToDismount.isFlying = false;
+                    boatToDismount.isGliding = false;
+                    boatToDismount.vehicleSpeed = currentVehSpeed * 0.35;
+                    if (boatToDismount.F) {
+                      boatToDismount.vel = [
+                        boatToDismount.F[0] * boatToDismount.vehicleSpeed,
+                        boatToDismount.F[1] * boatToDismount.vehicleSpeed,
+                        boatToDismount.F[2] * boatToDismount.vehicleSpeed
+                      ];
+                    } else {
+                      boatToDismount.vel = [0, 0, 0];
+                    }
+                    boatToDismount.verticalVel = 0;
                   }
-                  boatToDismount.verticalVel = 0;
                   boatToDismount.spinSpeed = 0;
                   boatToDismount.spinAxis = [0, 1, 0];
                   activeRidingBoat = null;
@@ -7063,12 +7197,21 @@ if (prompt._lastHTML !== _newHtml_2) {
                        const currentWaterRad = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (effectiveHScale * 0.25);
                        const isWaterSurface = (typeof waterEnabled === "undefined" || waterEnabled) && currentWaterRad > (pGroundRad + 0.1) && (!pCaveData || !pCaveData.insideTunnel);
 
-                       if (isWaterSurface) {
-                         playerCenterRadius = currentWaterRad - 0.10 * playerScale;
+                       const surfaceRad = isWaterSurface ? currentWaterRad : pGroundRad;
+                       const normalLandRad = isWaterSurface ? (currentWaterRad - 0.10 * playerScale) : (pGroundRad + 0.46 * playerScale);
+                       const isMidAir = (pLen - surfaceRad) > (0.45 * playerScale);
+
+                       if (isMidAir) {
+                         playerCenterRadius = pLen + 0.46 * playerScale;
+                         isPlayerGrounded = false;
+                         playerVerticalVel = 0.0;
+                         jumpBlend = 1.0;
+                       } else if (isWaterSurface) {
+                         playerCenterRadius = normalLandRad;
                          isPlayerGrounded = false;
                          playerVerticalVel = 0.0;
                        } else {
-                         playerCenterRadius = pGroundRad + 0.46 * playerScale;
+                         playerCenterRadius = normalLandRad;
                          isPlayerGrounded = true;
                          playerVerticalVel = 0.0;
                        }
@@ -8448,7 +8591,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         if (equipVertexBuffer && equipIndexBuffer && equipIndicesLength > 0) {
           gl.uniform1f(depthSwayFactorLoc, 0.0);
           gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
-          const equipCharModelMatrix = (ragdollEnabled && ragdollInitialized) ? createIdentity() : getCharacterMatrix();
+          const isClassicRag = (ragdollEnabled && ragdollInitialized && (typeof window === "undefined" || window.characterModel !== "chibi"));
+          const equipCharModelMatrix = isClassicRag ? createIdentity() : getCharacterMatrix();
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
@@ -9735,7 +9879,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         ) {
           gl.useProgram(modelProgram);
 
-          const isRag = (ragdollEnabled && ragdollInitialized);
+          const isRag = (ragdollEnabled && ragdollInitialized && (typeof window === "undefined" || window.characterModel !== "chibi"));
           const equipCharModelMatrix = isRag ? createIdentity() : getCharacterMatrix();
           const equipModelViewMatrix = multiplyMatrices(viewMatrix, equipCharModelMatrix);
 

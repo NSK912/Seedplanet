@@ -594,7 +594,7 @@ window.characterVertexShaderSource = `
         }
       }
 
-      function damagePlayer(amount = 1) {
+      function damagePlayer(amount = 1, customNotice = null) {
         if (playerHP <= 0 || playerDamageCooldown > 0) return;
         
         playerHP = Math.max(0, playerHP - amount);
@@ -623,11 +623,24 @@ window.characterVertexShaderSource = `
         
         if (playerHP <= 0) {
           triggerUnconscious();
+          if (customNotice) {
+            showNotice(`💀 ${customNotice}`);
+          }
         } else {
           playerDamageCooldown = 1.5; // 1.5 seconds invincibility
-          showNotice(`⚠️ คุณถูกทำร้าย! HP: ${playerHP}/${playerMaxHP}`);
+          showNotice(customNotice || `⚠️ คุณถูกทำร้าย! HP: ${playerHP}/${playerMaxHP}`);
         }
       }
+      window.damagePlayer = damagePlayer;
+
+      function applyPlayerFallDamage(amount = 1, height = 0) {
+        if (playerHP <= 0) return;
+        const msg = (playerHP - amount <= 0)
+          ? `ตกจากที่สูงจนหมดสติ! (-${amount} HP)`
+          : `⚠️ ตกจากที่สูง! (-${amount} HP) เหลือ ${Math.max(0, playerHP - amount)}/${playerMaxHP}`;
+        damagePlayer(amount, msg);
+      }
+      window.applyPlayerFallDamage = applyPlayerFallDamage;
 
       function triggerUnconscious() {
         playerControlsLocked = true;
@@ -1220,7 +1233,13 @@ window.characterVertexShaderSource = `
 
         const r_len = Math.sqrt(
           rx_scaled[0] ** 2 + rx_scaled[1] ** 2 + rx_scaled[2] ** 2,
-        );
+        ) || 1.0;
+        const ry_len = Math.sqrt(
+          ry_scaled[0] ** 2 + ry_scaled[1] ** 2 + ry_scaled[2] ** 2,
+        ) || 1.0;
+        const rz_len = Math.sqrt(
+          rz_scaled[0] ** 2 + rz_scaled[1] ** 2 + rz_scaled[2] ** 2,
+        ) || 1.0;
 
         // Check if underwater to avoid huge pushes
         const dist = Math.sqrt(px * px + py * py + pz * pz);
@@ -1244,14 +1263,14 @@ window.characterVertexShaderSource = `
           rx_scaled[2] / r_len,
         ];
         const ry = [
-          ry_scaled[0] / r_len,
-          ry_scaled[1] / r_len,
-          ry_scaled[2] / r_len,
+          ry_scaled[0] / ry_len,
+          ry_scaled[1] / ry_len,
+          ry_scaled[2] / ry_len,
         ];
         const rz = [
-          rz_scaled[0] / r_len,
-          rz_scaled[1] / r_len,
-          rz_scaled[2] / r_len,
+          rz_scaled[0] / rz_len,
+          rz_scaled[1] / rz_len,
+          rz_scaled[2] / rz_len,
         ];
 
         ragdollAxis = [rx[0], rx[1], rx[2]];
@@ -1468,6 +1487,10 @@ window.characterVertexShaderSource = `
         ragdollPos[2] += ragdollVel[2] * dtScale;
 
         ragdollAngle += ragdollAngularSpeed * dtScale;
+        if (Math.abs(ragdollAngle) > Math.PI * 0.5) {
+          ragdollAngle = Math.PI * 0.5 * Math.sign(ragdollAngle);
+          ragdollAngularSpeed *= 0.5;
+        }
 
         const distToCenter = Math.sqrt(
           ragdollPos[0] ** 2 + ragdollPos[1] ** 2 + ragdollPos[2] ** 2,
@@ -1516,17 +1539,13 @@ window.characterVertexShaderSource = `
             }
           } else {
             if (distToCenter < surfaceRadius + colRadius) {
-              if (distToCenter > surfaceRadius - 0.5) {
-                target = surfaceRadius + colRadius;
-                hitSolid = true;
-                const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
-                if (v_radial < 0) {
-                    ragdollVel[0] -= ux * v_radial;
-                    ragdollVel[1] -= uy * v_radial;
-                    ragdollVel[2] -= uz * v_radial;
-                }
-              } else {
-                Physics.applyFriction(ragdollVel, 0.5, dtScale);
+              target = surfaceRadius + colRadius;
+              hitSolid = true;
+              const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
+              if (v_radial < 0) {
+                  ragdollVel[0] -= ux * v_radial;
+                  ragdollVel[1] -= uy * v_radial;
+                  ragdollVel[2] -= uz * v_radial;
               }
             }
           }
@@ -2470,12 +2489,19 @@ window.characterVertexShaderSource = `
         const isDevMixMode = !isClone && typeof window.devMixMode !== "undefined" && window.devMixMode;
         const isDevOverride = !isClone && !isDevMixMode && typeof window.devForceAnimation === "string" && window.devForceAnimation !== "Auto" && window.devForceAnimation !== "";
 
+        const isRagdoll = !isClone && typeof ragdollEnabled !== "undefined" && ragdollEnabled && typeof ragdollInitialized !== "undefined" && ragdollInitialized;
+        if (!isRagdoll && typeof window.charRagdollTime !== "undefined") {
+          window.charRagdollTime = 0;
+        }
+
         // 1. Determine Lower Body / Locomotion Animation
         let lowerAnimName = "01a090e9-3d6d-7643-a07b-75e0e18cdc29"; // Default idle
         if (isDevOverride) {
           lowerAnimName = window.devForceAnimation;
         } else if (isDevMixMode && window.devMixLowerAnim) {
           lowerAnimName = window.devMixLowerAnim;
+        } else if (isRagdoll) {
+          lowerAnimName = model.getAnimation("01a09186-787b-771f-b4ee-5b234572bcef") ? "01a09186-787b-771f-b4ee-5b234572bcef" : "Jump_with_Arms_Open";
         } else if (isRiding) {
           lowerAnimName = "01a090f9-e47a-7144-abc9-bc9fcc7af00e";
         } else if (inWater) {
@@ -2500,6 +2526,11 @@ window.characterVertexShaderSource = `
         } else if (isItemAction) {
           upperAnimName = "01a090f8-8c8f-75dc-8693-155f9574dac7";
           targetUpperWeight = 1.0;
+        }
+
+        if (isRagdoll) {
+          upperAnimName = null;
+          targetUpperWeight = 0.0;
         }
 
         // 3. Smooth blend weight for upper body (immediate attack, 150ms decay)
@@ -2568,6 +2599,10 @@ window.characterVertexShaderSource = `
             // Forward swim stroke speed
             lowerAnimTime = ((phase / (Math.PI * 2)) * lowerAnim.duration) % lowerAnim.duration;
             if (lowerAnimTime < 0) lowerAnimTime += lowerAnim.duration;
+          } else if (lowerAnimName === "01a09186-787b-771f-b4ee-5b234572bcef") {
+            if (typeof window.charRagdollTime === "undefined") window.charRagdollTime = 0;
+            window.charRagdollTime = Math.min(lowerAnim.duration - 0.05, window.charRagdollTime + dt * 1.5);
+            lowerAnimTime = window.charRagdollTime;
           } else if (lowerAnimName === "Jump_with_Arms_Open") {
             lowerAnimTime = Math.min(lowerAnim.duration, window.charJumpAnimTime || 1.35);
           } else if (lowerAnimName === "01a090e9-3d6d-7643-a07b-75e0e18cdc29" || lowerAnimName === "restpose" || lowerAnimName === "01a090f9-e47a-7144-abc9-bc9fcc7af00e") {
@@ -4652,6 +4687,56 @@ window.characterVertexShaderSource = `
 
       function getCharacterMatrix() {
         if (ragdollEnabled && ragdollInitialized) {
+          if (typeof window !== "undefined" && window.characterModel === "chibi") {
+            const rx = (typeof ragdollAxis !== "undefined" && ragdollAxis && !isNaN(ragdollAxis[0])) ? ragdollAxis[0] : 1;
+            const ry = (typeof ragdollAxis !== "undefined" && ragdollAxis && !isNaN(ragdollAxis[1])) ? ragdollAxis[1] : 0;
+            const rz = (typeof ragdollAxis !== "undefined" && ragdollAxis && !isNaN(ragdollAxis[2])) ? ragdollAxis[2] : 0;
+            const angle = (typeof ragdollAngle === "number" && !isNaN(ragdollAngle)) ? ragdollAngle : 0;
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            const t = 1 - c;
+
+            const m00 = t * rx * rx + c;
+            const m01 = t * rx * ry - s * rz;
+            const m02 = t * rx * rz + s * ry;
+
+            const m10 = t * rx * ry + s * rz;
+            const m11 = t * ry * ry + c;
+            const m12 = t * ry * rz - s * rx;
+
+            const m20 = t * rx * rz - s * ry;
+            const m21 = t * ry * rz + s * rx;
+            const m22 = t * rz * rz + c;
+
+            const b = (typeof ragdollBaseMatrix !== "undefined" && ragdollBaseMatrix && ragdollBaseMatrix.length >= 16 && !isNaN(ragdollBaseMatrix[0]))
+              ? ragdollBaseMatrix
+              : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+            const R_rot = [
+              m00 * b[0] + m01 * b[1] + m02 * b[2],
+              m10 * b[0] + m11 * b[1] + m12 * b[2],
+              m20 * b[0] + m21 * b[1] + m22 * b[2],
+            ];
+            const N_rot = [
+              m00 * b[4] + m01 * b[5] + m02 * b[6],
+              m10 * b[4] + m11 * b[5] + m12 * b[6],
+              m20 * b[4] + m21 * b[5] + m22 * b[6],
+            ];
+            const F_rot = [
+              m00 * b[8] + m01 * b[9] + m02 * b[10],
+              m10 * b[8] + m11 * b[9] + m12 * b[10],
+              m20 * b[8] + m21 * b[9] + m22 * b[10],
+            ];
+
+            const rp = (typeof ragdollPos !== "undefined" && ragdollPos && !isNaN(ragdollPos[0])) ? ragdollPos : [0, 0, 0];
+            const scale = (typeof playerScale === "number") ? playerScale : 1.0;
+            return [
+              R_rot[0] * scale, R_rot[1] * scale, R_rot[2] * scale, 0,
+              N_rot[0] * scale, N_rot[1] * scale, N_rot[2] * scale, 0,
+              F_rot[0] * scale, F_rot[1] * scale, F_rot[2] * scale, 0,
+              rp[0], rp[1], rp[2], 1
+            ];
+          }
           return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
         }
         const sinTheta = Math.sin(charTheta);
