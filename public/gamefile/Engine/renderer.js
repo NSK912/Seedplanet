@@ -6985,6 +6985,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                 if (chestHoldTimer >= 0.8) {
                   chestHoldTimer = 0.0;
                   const boatToDismount = activeRidingBoat;
+                  let isMidAir = false;
                   // Dismounting - place player slightly to the right side of the boat to prevent collision trapping
                   if (boatToDismount.R) {
                      const sideOffset = 0.65;
@@ -7012,7 +7013,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
                      // Check if the boat is dismounting in mid-air (winged boat flight or airborne)
                      const boatAltitude = (boatToDismount.currentRadius !== undefined && boatToDismount.currentRadius > 0) ? boatToDismount.currentRadius : pLen;
-                     const isMidAir = (boatAltitude - surfaceRad) > (0.45 * playerScale);
+                     isMidAir = (boatAltitude - surfaceRad) > (0.45 * playerScale);
 
                      if (isMidAir) {
                        // Remain at high altitude alongside the boat to free-fall from the sky
