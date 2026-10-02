@@ -28,7 +28,58 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           ${(typeof getThaiTitleLogoSVG === 'function') ? getThaiTitleLogoSVG() : '<div class="main-screen-thai-title"><span style="color:#ffffff;">SEED</span><span class="thai-title-gold">PLANET</span></div>'}
           <h1 class="main-screen-title" style="color: #ffffff;"><span>${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('SEED') : (typeof toSeedian === 'function') ? toSeedian('SEED') : 'SEED'}</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span style="color: #ffffff;">${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('PLANET') : (typeof toSeedian === 'function') ? toSeedian('PLANET') : 'PLANET'}</span></h1>
         </div>
-        <div id="startScreenSocialBar" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0px; transition: opacity 0.4s ease;">
+      </div>
+      <div class="start-menu-controls" id="startMenuControls">
+        <div
+          id="startMenuButtonsContainer"
+          style="
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            z-index: 2;
+            transition: opacity 0.5s ease-in-out;
+            width: 100%;
+          "
+        >
+          <button class="start-btn game-ui" id="gameStartBtn" data-i18n="start_game">
+            เริ่มเล่น
+          </button>
+          <button
+            class="start-btn game-ui"
+            id="gameSettingsBtn"
+            data-i18n="settings"
+            style="
+              font-size: 16px;
+              padding: 14px 40px;
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid rgba(255, 255, 255, 0.25);
+              color: rgba(255, 255, 255, 0.85);
+              box-shadow: none;
+            "
+          >
+            ตั้งค่า
+          </button>
+          <button
+            class="start-btn game-ui"
+            id="gameDevBtn"
+            data-i18n="dev_mode"
+            style="
+              display: none;
+              font-size: 16px;
+              padding: 14px 40px;
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid rgba(255, 255, 255, 0.25);
+              color: rgba(255, 255, 255, 0.85);
+              box-shadow: none;
+            "
+          >
+            โหมดผู้พัฒนา
+          </button>
+        </div>
+        <div id="startScreenSocialBar" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0; transition: opacity 0.4s ease; flex-wrap: wrap;">
           <!-- YouTube Icon Link -->
           <a
             href="https://www.youtube.com/@Nat_suki452"
@@ -82,53 +133,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
         </div>
       </div>
-      <div
-        id="startMenuButtonsContainer"
-        style="
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-          align-items: center;
-          z-index: 2;
-          transition: opacity 0.5s ease-in-out;
-        "
-      >
-        <button class="start-btn game-ui" id="gameStartBtn" data-i18n="start_game">
-          เริ่มเล่น
-        </button>
-        <button
-          class="start-btn game-ui"
-          id="gameSettingsBtn"
-          data-i18n="settings"
-          style="
-            font-size: 15px;
-            padding: 12px 40px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            color: rgba(255, 255, 255, 0.8);
-            box-shadow: none;
-          "
-        >
-          ตั้งค่า
-        </button>
-        <button
-          class="start-btn game-ui"
-          id="gameDevBtn"
-          data-i18n="dev_mode"
-          style="
-            display: none;
-            font-size: 15px;
-            padding: 12px 40px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            color: rgba(255, 255, 255, 0.8);
-            box-shadow: none;
-          "
-        >
-          โหมดผู้พัฒนา
-        </button>
-      </div>
-    </div>
+  </div>
 
     <!-- หน้าต่างเลือกเซฟ (Save Slots Selection) -->
     <div
@@ -2080,6 +2085,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <!-- 8 Slots generated dynamically -->
       </div>
     </div>`);
+
+if (typeof autoFitMainScreenTitle === "function") {
+  autoFitMainScreenTitle();
+  requestAnimationFrame(autoFitMainScreenTitle);
+  setTimeout(autoFitMainScreenTitle, 50);
+  setTimeout(autoFitMainScreenTitle, 200);
+}
 
 var canvas = document.getElementById("mapCanvas");
 window.canvas = canvas;

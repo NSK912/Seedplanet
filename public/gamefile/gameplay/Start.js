@@ -17,20 +17,19 @@
           ${(typeof getThaiTitleLogoSVG === 'function') ? getThaiTitleLogoSVG() : '<div class="main-screen-thai-title"><span style="color:#ffffff;">SEED</span><span class="thai-title-gold">PLANET</span></div>'}
           <h1 class="main-screen-title" style="color: #ffffff;"><span>${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ดาวเคราะห์แห่งเ') : (typeof toSeedian === 'function') ? toSeedian('ดาวเคราะห์แห่งเ') : 'ดาวเคราะห์แห่งเ'}</span><img src="assets/Flower Spiral Fibonacci.png" class="main-screen-title-icon" alt="Planet" referrerpolicy="no-referrer" /><span style="color: #ffffff;">${(typeof getSeedianTitleHTML === 'function') ? getSeedianTitleHTML('ล็ดพันธุ์') : (typeof toSeedian === 'function') ? toSeedian('ล็ดพันธุ์') : 'ล็ดพันธุ์'}</span></h1>
         </div>
-        <div style="height: 36px; margin-top: 0px;"></div>
       </div>
-      <h2 class="aaa-loading-title">INITIALIZING PLANETARY ENGINE</h2>
-      <div class="aaa-loading-status" id="aaaLoadingStatus">Allocating seed threads...</div>
-      <div class="aaa-loading-bar-bg">
-        <div class="aaa-loading-bar-fill" id="aaaLoadingBarFill"></div>
-      </div>
-      <div class="aaa-loading-percentage" id="aaaLoadingPercentage">0%</div>
-      <div class="aaa-loading-tech-logs" id="aaaLoadingTechLogs">
-        [SYS_OK] Planetary Threads Initialized<br>
-        [SYS_OK] WebGL2 Pipeline Context Bound<br>
-        [SYS_OK] Terrain Compute Shaders Ready<br>
-        [SYS_OK] VBO Buffers Allocated<br>
-        [SYS_OK] Seed Planet Core Loaded
+      <div class="aaa-loading-content">
+        <div class="aaa-loading-bar-bg">
+          <div class="aaa-loading-bar-fill" id="aaaLoadingBarFill"></div>
+        </div>
+        <div class="aaa-loading-percentage" id="aaaLoadingPercentage">0%</div>
+        <div class="aaa-loading-tech-logs" id="aaaLoadingTechLogs">
+          [SYS_OK] Planetary Threads Initialized<br>
+          [SYS_OK] WebGL2 Pipeline Context Bound<br>
+          [SYS_OK] Terrain Compute Shaders Ready<br>
+          [SYS_OK] VBO Buffers Allocated<br>
+          [SYS_OK] Seed Planet Core Loaded
+        </div>
       </div>
     </div>
   `;
@@ -50,6 +49,9 @@ function showAaaLoading(show) {
       overlay.style.display = "flex";
       void overlay.offsetWidth;
       overlay.classList.add("active");
+      if (typeof autoFitMainScreenTitle === "function") {
+        autoFitMainScreenTitle();
+      }
     }
   } else {
     if (overlay) {
@@ -64,12 +66,10 @@ function showAaaLoading(show) {
 
 function updateAaaLoading(percent, statusText, logLine) {
   const bar = document.getElementById("aaaLoadingBarFill");
-  const status = document.getElementById("aaaLoadingStatus");
   const percentage = document.getElementById("aaaLoadingPercentage");
   const logs = document.getElementById("aaaLoadingTechLogs");
 
   if (bar) bar.style.width = percent + "%";
-  if (status) status.textContent = statusText;
   if (percentage) percentage.textContent = percent + "%";
 
   if (logLine && logs) {

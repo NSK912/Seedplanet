@@ -336,7 +336,27 @@
     }
   }
 
-  // Dynamic UI Bumper & Auto-Fit Scaling System
+  // Dynamic UI Bumper & Auto-Fit Scaling System (Only scales down when strictly exceeding screen)
+  function updateStartControlsPosition() {
+    const titleEl = document.querySelector(".game-start-overlay .main-screen-title");
+    const controls = document.getElementById("startMenuControls");
+    if (titleEl && controls) {
+      const rect = titleEl.getBoundingClientRect();
+      if (rect.height > 0 && rect.bottom > 0) {
+        controls.style.top = Math.round(rect.bottom + 8) + "px";
+      }
+    }
+
+    const loadTitleEl = document.querySelector(".aaa-loading-overlay .main-screen-title");
+    const loadContent = document.querySelector(".aaa-loading-content");
+    if (loadTitleEl && loadContent) {
+      const rect = loadTitleEl.getBoundingClientRect();
+      if (rect.height > 0 && rect.bottom > 0) {
+        loadContent.style.top = Math.round(rect.bottom + 8) + "px";
+      }
+    }
+  }
+
   function autoFitMainScreenTitle() {
     const wrappers = document.querySelectorAll(".main-screen-title-wrapper");
     wrappers.forEach(wrapper => {
@@ -344,31 +364,38 @@
       if (!parent) return;
       
       wrapper.style.transform = "none";
-      const availableWidth = Math.min(window.innerWidth - 32, (parent.clientWidth || window.innerWidth) - 24);
-      const titleWidth = wrapper.scrollWidth;
+      const title = wrapper.querySelector(".main-screen-title") || wrapper;
+      const screenMax = window.innerWidth * 0.94;
+      const parentMax = (parent.clientWidth > 0 ? parent.clientWidth * 0.98 : screenMax);
+      const availableWidth = Math.min(screenMax, parentMax);
+      const titleWidth = title.scrollWidth;
       
       if (titleWidth > availableWidth && availableWidth > 0) {
-        const scale = Math.max(0.35, Math.min(1.0, (availableWidth / titleWidth) * 0.96));
+        const scale = Math.max(0.2, (availableWidth / titleWidth) * 0.98);
         wrapper.style.transform = `scale(${scale.toFixed(4)})`;
         wrapper.style.transformOrigin = "center center";
       } else {
         wrapper.style.transform = "none";
       }
     });
+
+    updateStartControlsPosition();
   }
 
   if (typeof window !== "undefined") {
-    window.addEventListener("resize", autoFitMainScreenTitle);
+    window.autoFitMainScreenTitle = autoFitMainScreenTitle;
+    window.updateStartControlsPosition = updateStartControlsPosition;
+    window.addEventListener("resize", autoFitMainScreenTitle, { passive: true });
+    window.addEventListener("orientationchange", autoFitMainScreenTitle, { passive: true });
     window.addEventListener("DOMContentLoaded", () => {
-      setTimeout(autoFitMainScreenTitle, 100);
-      setTimeout(autoFitMainScreenTitle, 500);
+      [50, 150, 300, 600, 1200].forEach(delay => setTimeout(autoFitMainScreenTitle, delay));
     });
     let fitAttempts = 0;
     const fitInterval = setInterval(() => {
       autoFitMainScreenTitle();
       fitAttempts++;
       if (fitAttempts > 15) clearInterval(fitInterval);
-    }, 400);
+    }, 300);
   }
 
   // Handle ESC key to close modal
