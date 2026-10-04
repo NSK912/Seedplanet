@@ -4090,6 +4090,63 @@ window.cloud3DProgram = cloud3DProgram;
         return false;
       }
 
+      function getNPCTargetPoint(npc) {
+        if (!npc) return null;
+        const basePos = (npc.ragdollEnabled && npc.ragdollPos) ? npc.ragdollPos : (npc.position || [0, 0, 0]);
+        const npcLen = Math.hypot(basePos[0], basePos[1], basePos[2]);
+        const n_up = npcLen > 0.1 ? [basePos[0]/npcLen, basePos[1]/npcLen, basePos[2]/npcLen] : [0, 1, 0];
+        const N = (npc.N && Array.isArray(npc.N) && npc.N.length >= 3) ? npc.N : n_up;
+
+        let F = npc.F;
+        if (!F || !Array.isArray(F) || F.length < 3) {
+          const theta = (typeof npc.theta === "number") ? npc.theta : 0;
+          const phi = (typeof npc.phi === "number") ? npc.phi : 0;
+          const heading = (typeof npc.heading === "number") ? npc.heading : 0;
+          const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);
+          const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+          const cosH = Math.cos(heading), sinH = Math.sin(heading);
+          const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+          const East = [-sinPhi, 0, cosPhi];
+          F = [
+            North[0] * cosH + East[0] * sinH,
+            North[1] * cosH + East[1] * sinH,
+            North[2] * cosH + East[2] * sinH
+          ];
+        }
+
+        let upH = 0.0;
+        let fwdH = 0.0;
+
+        if (npc.ragdollEnabled) {
+          upH = (npc.type === "human") ? 0.02 : 0.01;
+        } else if (npc.type === "human") {
+          // Standing human: center of body (mid-torso/waist, halfway between feet and head)
+          upH = -0.045;
+        } else if (npc.type === "placoderm") {
+          // Placoderm fish: center of body (halfway between snout and tail)
+          upH = 0.025;
+          fwdH = -0.25;
+        } else if (npc.type === "meganeura") {
+          // Dragonfly: center of thorax/body
+          upH = 0.003;
+          fwdH = -0.06;
+        } else if (npc.type === "isopod") {
+          // Giant isopod: center of carapace shell
+          upH = 0.028;
+          fwdH = 0.007;
+        } else if (npc.type === "georgiacetus") {
+          // Prehistoric whale: center of body
+          upH = 0.0;
+          fwdH = -0.10;
+        }
+
+        return [
+          basePos[0] + N[0] * upH + F[0] * fwdH,
+          basePos[1] + N[1] * upH + F[1] * fwdH,
+          basePos[2] + N[2] * upH + F[2] * fwdH
+        ];
+      }
+
 
       // ============================================
       // Frustum Culling Functions (Separated to /public/js/frustumCulling.js)
@@ -4310,9 +4367,9 @@ window.cloud3DProgram = cloud3DProgram;
           }
         }
 
-        // Cancel BOW if the selected item is NOT a bow, or if the slot is empty / selection is toggled off
-        if (!selectedItem || selectedItem.name !== "BOW") {
-          if (activeItem && activeItem.name === "BOW") {
+        // Cancel BOW / ARM_CANNON if the selected item is NOT a ranged weapon, or if the slot is empty / selection is toggled off
+        if (!selectedItem || (selectedItem.name !== "BOW" && selectedItem.name !== "WOODEN_ARM_CANNON" && selectedItem.name !== "ARM_CANNON")) {
+          if (activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON")) {
             useAnimTimer = 0;
             isUsingItem = false;
             activeItem = null;
@@ -4320,19 +4377,29 @@ window.cloud3DProgram = cloud3DProgram;
         }
         
         if (useAnimTimer > 0) {
-            if (activeItem && activeItem.name === "BOW" && !arrowShotInCurrentAnim) {
-                let drawPower = Math.min(1.0, Math.max(0.0, (1.4 - useAnimTimer) / 1.1));
-                if (bowComboActive) {
-                    drawPower = Math.min(1.0, Math.max(0.0, (1.2 - useAnimTimer) / 0.9));
+            const isRangedWeapon = activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+            if (isRangedWeapon && !arrowShotInCurrentAnim) {
+                const isCannon = (activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+                let drawPower = 1.0;
+                if (!isCannon) {
+                    drawPower = Math.min(1.0, Math.max(0.0, (1.4 - useAnimTimer) / 1.1));
+                    if (bowComboActive) {
+                        drawPower = Math.min(1.0, Math.max(0.0, (1.2 - useAnimTimer) / 0.9));
+                    }
+                } else {
+                    // Arm cannon animation: 1.40s to 2.47s (duration 1.07s)
+                    drawPower = Math.min(1.0, Math.max(0.3, (1.07 - useAnimTimer) / 0.45));
                 }
                 const isClicking = isActionDown && (document.pointerLockElement === canvas || window.simulatedPointerLock);
-                if (isClicking || drawPower < 0.15) {
-                    useAnimTimer = Math.max(0.3, useAnimTimer - delta / 1000);
+                const holdThreshold = isCannon ? 0.35 : 0.15;
+                if (isClicking || drawPower < holdThreshold) {
+                    const minHold = isCannon ? 0.45 : 0.3;
+                    useAnimTimer = Math.max(minHold, useAnimTimer - delta / 1000);
                 } else {
                     const arrRef = findArrowInInventory();
                     if (arrRef) {
                         consumeArrow(arrRef);
-                        shootArrowProjectile(drawPower);
+                        shootArrowProjectile(isCannon ? drawPower * 1.3 : drawPower);
                         if (typeof playBowShootSound === "function") {
                             playBowShootSound();
                         }
@@ -4341,9 +4408,9 @@ window.cloud3DProgram = cloud3DProgram;
                     lastBowShootTime = Date.now();
                     lastBowDrawPower = drawPower;
                     bowComboActive = false;
-                    useAnimTimer = bowHoldArmTimer;
-            }
-          } else {
+                    useAnimTimer = isCannon ? 0.32 : bowHoldArmTimer;
+                }
+            } else {
                 useAnimTimer -= delta / 1000;
             }
 
@@ -4352,11 +4419,11 @@ window.cloud3DProgram = cloud3DProgram;
                 isUsingItem = false;
                 activeItem = null;
                 
-                // If action button is still held down, trigger again (but not for BOW to prevent auto-fire)
+                // If action button is still held down, trigger again (but not for BOW or ARM_CANNON to prevent auto-fire)
                 if (isActionDown && (document.pointerLockElement === canvas || window.simulatedPointerLock)) {
                     if (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex]) {
                         const slotItem = actionSlotsItems[selectedActionSlotIndex];
-                        if (slotItem && slotItem.name !== "BOW") {
+                        if (slotItem && slotItem.name !== "BOW" && slotItem.name !== "WOODEN_ARM_CANNON" && slotItem.name !== "ARM_CANNON") {
                             useItem(slotItem, selectedActionSlotIndex, "action");
                         }
                     }
@@ -4661,19 +4728,31 @@ window.cloud3DProgram = cloud3DProgram;
             const pZ = Math.sin(charTheta) * Math.sin(charPhi) * (playerCenterRadius || RADIUS);
 
             let hasNearDynamicItem = false;
-            if (typeof SpatialGrid !== "undefined") {
-              const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window"));
-              hasNearDynamicItem = nearDyn.length > 0;
-            } else if (typeof collectibles !== "undefined" && collectibles) {
+            // Always refresh dynamic VBO if any arrow is active or attached to an NPC
+            if (typeof collectibles !== "undefined" && collectibles) {
               for (let i = 0; i < collectibles.length; i++) {
                 const c = collectibles[i];
-                if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c.position) {
-                  const dx = c.position[0] - pX;
-                  const dy = c.position[1] - pY;
-                  const dz = c.position[2] - pZ;
-                  if (dx * dx + dy * dy + dz * dz <= maxDistSq) {
-                    hasNearDynamicItem = true;
-                    break;
+                if (c.active && (c.type === "arrow" || c.attachedToNPC)) {
+                  hasNearDynamicItem = true;
+                  break;
+                }
+              }
+            }
+            if (!hasNearDynamicItem) {
+              if (typeof SpatialGrid !== "undefined") {
+                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window"));
+                hasNearDynamicItem = nearDyn.length > 0;
+              } else if (typeof collectibles !== "undefined" && collectibles) {
+                for (let i = 0; i < collectibles.length; i++) {
+                  const c = collectibles[i];
+                  if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c.position) {
+                    const dx = c.position[0] - pX;
+                    const dy = c.position[1] - pY;
+                    const dz = c.position[2] - pZ;
+                    if (dx * dx + dy * dy + dz * dz <= maxDistSq) {
+                      hasNearDynamicItem = true;
+                      break;
+                    }
                   }
                 }
               }
@@ -5828,7 +5907,8 @@ window.cloud3DProgram = cloud3DProgram;
             while (diffHeading < -Math.PI) diffHeading += Math.PI * 2;
             while (diffHeading > Math.PI) diffHeading -= Math.PI * 2;
             
-            let isAimingBow = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && activeItem.name === "BOW";
+            let isAimingBow = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+            if (typeof window !== "undefined") window.isAimingBow = isAimingBow;
             
             if (!activeRidingBoat && !isAimingBow) {
               charHeading += diffHeading * 0.22 * timeScale;
@@ -6003,50 +6083,34 @@ window.cloud3DProgram = cloud3DProgram;
           }
         }
         
-        if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && activeItem.name === "BOW") {
+        if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON")) {
           let targetHeading = rotationY;
-          if (activeTargetNPC && activeTargetNPC.position) {
-              const npc = activeTargetNPC;
-              const npc_pos = npc.position;
-              const npcLen = Math.sqrt(npc_pos[0]**2 + npc_pos[1]**2 + npc_pos[2]**2);
-              const n_npc = npcLen > 0.1 ? [npc_pos[0]/npcLen, npc_pos[1]/npcLen, npc_pos[2]/npcLen] : [nx, ny, nz];
-              const N = npc.N || n_npc;
-              const F = npc.F || [0, 0, 0];
-              let upOffset = 0.0;
-              let forwardOffset = 0.0;
-              if (npc.type === "meganeura") {
-                  upOffset = 0.0;
-                  forwardOffset = -0.06;
-              } else {
-                  upOffset = -0.02;
-                  forwardOffset = -0.12;
-              }
-              const target_world_x = npc_pos[0] + N[0] * upOffset + F[0] * forwardOffset;
-              const target_world_y = npc_pos[1] + N[1] * upOffset + F[1] * forwardOffset;
-              const target_world_z = npc_pos[2] + N[2] * upOffset + F[2] * forwardOffset;
-
-              const dx = target_world_x - px;
-              const dy = target_world_y - py;
-              const dz = target_world_z - pz;
-              
-              // Project relative vector to target onto North/East tangent plane
-              const t_proj_North = dx * North[0] + dy * North[1] + dz * North[2];
-              const t_proj_East = dx * East[0] + dy * East[1] + dz * East[2];
-              targetHeading = Math.atan2(t_proj_East, t_proj_North);
-
-              // Smoothly auto-rotate camera (both rotationY and rotationX) to track the target NPC!
-              const d_up = dx * nx + dy * ny + dz * nz;
-              const d_dist_planar = Math.sqrt(dx**2 + dy**2 + dz**2 - d_up**2);
-              if (d_dist_planar > 0.05) {
-                  const targetCamX = -Math.atan2(d_up, d_dist_planar);
-                  let diffCamY = targetHeading - rotationY;
-                  while (diffCamY < -Math.PI) diffCamY += Math.PI * 2;
-                  while (diffCamY > Math.PI) diffCamY -= Math.PI * 2;
+          if (activeTargetNPC) {
+              const target_world = window.currentAimTargetPos || getNPCTargetPoint(activeTargetNPC);
+              if (target_world) {
+                  const dx = target_world[0] - px;
+                  const dy = target_world[1] - py;
+                  const dz = target_world[2] - pz;
                   
-                  // Smoothly guide camera to face the target
-                  rotationY += diffCamY * 0.35 * timeScale;
-                  rotationX += (targetCamX - rotationX) * 0.35 * timeScale;
-                  rotationX = Math.max(-0.55, Math.min(1.2, rotationX));
+                  // Project relative vector to target onto North/East tangent plane
+                  const t_proj_North = dx * North[0] + dy * North[1] + dz * North[2];
+                  const t_proj_East = dx * East[0] + dy * East[1] + dz * East[2];
+                  targetHeading = Math.atan2(t_proj_East, t_proj_North);
+
+                  // Smoothly auto-rotate camera (both rotationY and rotationX) to track the target NPC!
+                  const d_up = dx * nx + dy * ny + dz * nz;
+                  const d_dist_planar = Math.sqrt(dx**2 + dy**2 + dz**2 - d_up**2);
+                  if (d_dist_planar > 0.05) {
+                      const targetCamX = -Math.atan2(d_up, d_dist_planar);
+                      let diffCamY = targetHeading - rotationY;
+                      while (diffCamY < -Math.PI) diffCamY += Math.PI * 2;
+                      while (diffCamY > Math.PI) diffCamY -= Math.PI * 2;
+                      
+                      // Smoothly guide camera to face the target
+                      rotationY += diffCamY * 0.35 * timeScale;
+                      rotationX += (targetCamX - rotationX) * 0.35 * timeScale;
+                      rotationX = Math.max(-0.55, Math.min(1.2, rotationX));
+                  }
               }
           }
           
@@ -8089,28 +8153,31 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
         }
 
-        // Update Bow Auto-Lock Target NPC first using screen space projection
-        if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && activeItem.name === "BOW") {
+        // Update Bow / Arm Cannon 3D Aiming & Target Lock via World3DUI
+        const isAimingRanged = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") &&
+          isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+
+        if (isAimingRanged) {
             const p_x = playerCenterRadius * nx;
             const p_y = playerCenterRadius * ny;
             const p_z = playerCenterRadius * nz;
 
             let currentTargetStillValid = false;
 
-            // 1. If we already have a locked target, check if it's still valid (not dead, and within range)
+            // 1. If we already have a locked target, check if it's still valid
             if (activeTargetNPC) {
                 const npc = activeTargetNPC;
                 const exists = typeof amphibians !== 'undefined' && amphibians.includes(npc);
                 if (exists && !npc.ragdollEnabled && npc.position) {
-                    const dx = p_x - npc.position[0];
-                    const dy = p_y - npc.position[1];
-                    const dz = p_z - npc.position[2];
+                    const tPos = getNPCTargetPoint(npc);
+                    const dx = p_x - tPos[0];
+                    const dy = p_y - tPos[1];
+                    const dz = p_z - tPos[2];
                     const distSq = dx * dx + dy * dy + dz * dz;
 
-                    // Allow a tiny hysteresis (e.g. 5% extra distance) to prevent lock breaking right at the boundary
-                    const maxBreakDist = bowLockDistance * 1.05;
+                    const maxBreakDist = bowLockDistance * 1.15;
                     const isWithinRange = distSq < maxBreakDist * maxBreakDist;
-                    const isOccluded = typeof checkPlanetOcclusion === "function" && checkPlanetOcclusion(eyePos, npc.position, RADIUS);
+                    const isOccluded = typeof checkPlanetOcclusion === "function" && checkPlanetOcclusion(eyePos, tPos, RADIUS);
 
                     if (isWithinRange && !isOccluded) {
                         currentTargetStillValid = true;
@@ -8118,102 +8185,134 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 }
             }
 
-            // 2. If current target is no longer valid, clear it
             if (!currentTargetStillValid) {
                 activeTargetNPC = null;
             }
 
-            // 3. If we don't have a valid target, look for the closest to the screen center
-            if (!activeTargetNPC) {
+            // 2. Look for closest target to screen center using true 3D chest position
+            if (!activeTargetNPC && typeof amphibians !== 'undefined' && amphibians.length > 0) {
                 let minScreenDistSq = Infinity;
                 let closest = null;
-                if (typeof amphibians !== 'undefined' && amphibians.length > 0) {
-                    const halfW = window.innerWidth / 2;
-                    const halfH = window.innerHeight / 2;
+                const halfW = window.innerWidth / 2;
+                const halfH = window.innerHeight / 2;
+                const maxScreenRadius = Math.min(window.innerWidth, window.innerHeight) * 0.45;
 
-                    for (let npc of amphibians) {
-                        if (npc.ragdollEnabled) continue;
-                        if (!npc.position) continue;
+                for (let npc of amphibians) {
+                    if (npc.ragdollEnabled || !npc.position) continue;
 
-                        const dx = p_x - npc.position[0];
-                        const dy = p_y - npc.position[1];
-                        const dz = p_z - npc.position[2];
-                        const distSq = dx * dx + dy * dy + dz * dz;
+                    const tPos = getNPCTargetPoint(npc);
+                    const dx = p_x - tPos[0];
+                    const dy = p_y - tPos[1];
+                    const dz = p_z - tPos[2];
+                    const distSq = dx * dx + dy * dy + dz * dz;
 
-                        if (distSq < bowLockDistance * bowLockDistance) { // Dynamic lock distance limit
-                            if (typeof checkPlanetOcclusion === "function" && checkPlanetOcclusion(eyePos, npc.position, RADIUS)) {
-                                continue;
-                            }
-                            const screenPos = projectWorldToScreen(
-                                npc.position,
-                                viewMatrix,
-                                projMatrix,
-                                window.innerWidth,
-                                window.innerHeight
-                            );
-                            if (screenPos) {
-                                const sdx = screenPos.x - halfW;
-                                const sdy = screenPos.y - halfH;
-                                const sDistSq = sdx * sdx + sdy * sdy;
-                                if (sDistSq < minScreenDistSq) {
-                                    minScreenDistSq = sDistSq;
-                                    closest = npc;
-                                }
+                    if (distSq < bowLockDistance * bowLockDistance) {
+                        if (typeof checkPlanetOcclusion === "function" && checkPlanetOcclusion(eyePos, tPos, RADIUS)) {
+                            continue;
+                        }
+                        const screenPos = projectWorldToScreen(
+                            tPos,
+                            viewMatrix,
+                            projMatrix,
+                            window.innerWidth,
+                            window.innerHeight
+                        );
+                        if (screenPos) {
+                            const sdx = screenPos.x - halfW;
+                            const sdy = screenPos.y - halfH;
+                            const sDistSq = sdx * sdx + sdy * sdy;
+                            if (sDistSq < maxScreenRadius * maxScreenRadius && sDistSq < minScreenDistSq) {
+                                minScreenDistSq = sDistSq;
+                                closest = npc;
                             }
                         }
                     }
                 }
                 activeTargetNPC = closest;
             }
-          } else {
-            activeTargetNPC = null;
-        }
 
-        // Update Bow Auto-Lock Target Circle overlay
-        if (!_cachedTargetCircle) _cachedTargetCircle = document.getElementById("targetCircle");
-        const targetCircleEl = _cachedTargetCircle;
-        if (targetCircleEl) {
-          if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && activeItem.name === "BOW" && activeTargetNPC && activeTargetNPC.position) {
-            const npc = activeTargetNPC;
-            const npc_pos = npc.position;
-            const npcLen = Math.sqrt(npc_pos[0]**2 + npc_pos[1]**2 + npc_pos[2]**2);
-            const n_npc = npcLen > 0.1 ? [npc_pos[0]/npcLen, npc_pos[1]/npcLen, npc_pos[2]/npcLen] : [0, 1, 0];
-            const N = npc.N || n_npc;
-            const F = npc.F || [0, 0, 0];
-            let upOffset = 0.0;
-            let forwardOffset = 0.0;
-            if (npc.type === "meganeura") {
-                upOffset = 0.0;
-                forwardOffset = -0.06;
+            // 3. Compute 3D target point in world space
+            let aimTargetWorld = null;
+            let isLocked = false;
+
+            if (activeTargetNPC) {
+                aimTargetWorld = getNPCTargetPoint(activeTargetNPC);
+                isLocked = true;
             } else {
-                upOffset = -0.02;
-                forwardOffset = -0.12;
+                // Free aim: raymarch forward along camera look vector to find terrain hit point
+                const camLookDir = [-viewMatrix[2], -viewMatrix[6], -viewMatrix[10]];
+                let curD = 0.5;
+                const maxD = 40.0;
+                const step = 0.4;
+                while (curD < maxD) {
+                    const testP = [
+                        eyePos[0] + camLookDir[0] * curD,
+                        eyePos[1] + camLookDir[1] * curD,
+                        eyePos[2] + camLookDir[2] * curD
+                    ];
+                    const dC = Math.hypot(testP[0], testP[1], testP[2]);
+                    if (dC > 0.01) {
+                        const ux = testP[0] / dC, uy = testP[1] / dC, uz = testP[2] / dC;
+                        const theta = Math.acos(Math.max(-1.0, Math.min(1.0, uy)));
+                        const phi = Math.atan2(uz, ux);
+                        const h = getHeightOnSphere(theta, phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+                        const tRad = RADIUS + h * HEIGHT_SCALE;
+                        const wRad = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel * 0.15 : 0);
+                        const checkR = (typeof waterEnabled !== "undefined" && waterEnabled) ? Math.max(tRad, wRad) : tRad;
+                        if (dC <= checkR + 0.08) {
+                            aimTargetWorld = testP;
+                            break;
+                        }
+                    }
+                    curD += step;
+                }
+                if (!aimTargetWorld) {
+                    aimTargetWorld = [
+                        eyePos[0] + camLookDir[0] * 25.0,
+                        eyePos[1] + camLookDir[1] * 25.0,
+                        eyePos[2] + camLookDir[2] * 25.0
+                    ];
+                }
+                isLocked = false;
             }
-            const centerPos = [
-              npc_pos[0] + N[0] * upOffset + F[0] * forwardOffset,
-              npc_pos[1] + N[1] * upOffset + F[1] * forwardOffset,
-              npc_pos[2] + N[2] * upOffset + F[2] * forwardOffset
-            ];
-            const screenPos = projectWorldToScreen(
-              centerPos,
-              viewMatrix,
-              projMatrix,
-              window.innerWidth,
-              window.innerHeight,
-            );
-            if (screenPos) {
-              if (targetCircleEl.style.display !== "block") targetCircleEl.style.display = "block";
-              const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y)}px) translate(-50%, -50%)`;
-              if (targetCircleEl._lastT !== newT) {
-                  targetCircleEl.style.transform = newT;
-                  targetCircleEl._lastT = newT;
-              }
-            } else {
-              if (targetCircleEl.style.display !== "none") targetCircleEl.style.display = "none";
+
+            window.currentAimTargetPos = aimTargetWorld;
+            window.isAimTargetLocked = isLocked;
+
+            // Update Genuine 3D Target Reticle in World3DUI (3d_ui.js)
+            if (typeof World3DUI !== "undefined") {
+                World3DUI.updateAimReticle({
+                    targetPos: aimTargetWorld,
+                    isLocked: isLocked,
+                    cameraPos: eyePos,
+                    cameraUp: [viewMatrix[1], viewMatrix[5], viewMatrix[9]]
+                });
             }
-          } else {
-            if (targetCircleEl.style.display !== "none") targetCircleEl.style.display = "none";
-          }
+
+            // Hide legacy 2D HTML target elements
+            if (!_cachedTargetCircle) _cachedTargetCircle = document.getElementById("targetCircle");
+            if (_cachedTargetCircle && _cachedTargetCircle.style.display !== "none") {
+                _cachedTargetCircle.style.display = "none";
+            }
+            if (!_cachedBowCrosshair) _cachedBowCrosshair = document.getElementById("bowCrosshair");
+            if (_cachedBowCrosshair && _cachedBowCrosshair.style.display !== "none") {
+                _cachedBowCrosshair.style.display = "none";
+            }
+        } else {
+            activeTargetNPC = null;
+            window.currentAimTargetPos = null;
+            window.isAimTargetLocked = false;
+            if (typeof World3DUI !== "undefined") {
+                World3DUI.hideAimReticle();
+            }
+            if (!_cachedTargetCircle) _cachedTargetCircle = document.getElementById("targetCircle");
+            if (_cachedTargetCircle && _cachedTargetCircle.style.display !== "none") {
+                _cachedTargetCircle.style.display = "none";
+            }
+            if (!_cachedBowCrosshair) _cachedBowCrosshair = document.getElementById("bowCrosshair");
+            if (_cachedBowCrosshair && _cachedBowCrosshair.style.display !== "none") {
+                _cachedBowCrosshair.style.display = "none";
+            }
         }
 
         // ==========================================
@@ -10236,6 +10335,36 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
             
             gl.drawArrays(gl.LINES, 0, arVerts.length / 3);
+        }
+
+        // Red Laser Guide Beam for Bow and Wooden Arm Cannon (Direct 3D Line from Weapon to Target)
+        const isLaserGuideActive = (typeof window !== "undefined") && (
+          window.isDevMode || window.devLaserGuideEnabled || (window.devgame && window.devgame.laserGuideEnabled)
+        );
+        const isAimingRangedForLaser = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") &&
+          isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+
+        if (isLaserGuideActive && isAimingRangedForLaser && window.lastBowGripPos && window.currentAimTargetPos) {
+            const startP = window.lastBowGripPos;
+            const endP = window.currentAimTargetPos;
+            const laserVerts = [startP[0], startP[1], startP[2], endP[0], endP[1], endP[2]];
+            // Bright neon red glowing laser beam
+            const laserCols = [1.0, 0.12, 0.18, 1.0, 0.05, 0.08];
+
+            if (!window.laserLineBuffer) window.laserLineBuffer = gl.createBuffer();
+            if (!window.laserColorBuffer) window.laserColorBuffer = gl.createBuffer();
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.laserLineBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(laserVerts), gl.DYNAMIC_DRAW);
+            gl.enableVertexAttribArray(positionLoc);
+            gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.laserColorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(laserCols), gl.DYNAMIC_DRAW);
+            gl.enableVertexAttribArray(colorLoc);
+            gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+            gl.drawArrays(gl.LINES, 0, 2);
         }
 
         // วาดจุดดาวเล็กๆ (Dots/Stars) - ไม่รับแสงเงา (Unlit)

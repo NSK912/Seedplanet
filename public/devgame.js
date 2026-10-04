@@ -745,7 +745,7 @@ if (toggleControlsBtn && mainControls) {
       btn.style.textAlign = "left";
       btn.style.display = "block";
       
-      const icon = npc.type === 'human' ? '👨' : (npc.type === 'meganeura' ? '🪰' : '🦎');
+      const icon = npc.type === 'human' ? '👨' : (npc.type === 'meganeura' ? '🪰' : (npc.type === 'obsidian_cube' ? '🔶' : '🦎'));
       btn.innerHTML = `${icon} ${npc.type} #${index} 🚀`;
       
       btn.addEventListener("click", () => {
@@ -1976,6 +1976,86 @@ if (toggleControlsBtn && mainControls) {
     }, 500);
   }
 })();
+
+// --- ระบบเส้นแสงเลเซอร์สีแดงเล็งเป้า (Bow & Cannon Red Laser Beam Guide) ---
+(function initDevLaserGuideControl() {
+  if (typeof window.devLaserGuideEnabled === "undefined") {
+    // Default ON for devmode as requested by user
+    window.devLaserGuideEnabled = (typeof window.isDevMode !== "undefined") ? window.isDevMode : true;
+  }
+
+  function mountGroup() {
+    const mainControls = document.getElementById("mainControls");
+    if (!mainControls) return false;
+    if (document.getElementById("devLaserGuideControlGroup")) return true;
+
+    const group = document.createElement("div");
+    group.className = "control-group";
+    group.id = "devLaserGuideControlGroup";
+    group.style.border = "1.5px solid #ff1744";
+    group.style.borderRadius = "8px";
+    group.style.background = "rgba(35, 10, 15, 0.95)";
+    group.style.boxShadow = "0 4px 12px rgba(255,23,68,0.25)";
+    group.style.padding = "10px";
+
+    group.innerHTML = `
+      <div style="font-weight: bold; color: #ff5252; font-size: 13px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <span>🎯 เส้นเลเซอร์เล็งเป้า 3D (Laser Aim Guide)</span>
+        <span id="devLaserGuideStatusBadge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,23,68,0.25); color: #ff8a80; font-weight: normal;">เปิด (ON)</span>
+      </div>
+      
+      <div style="font-size: 11px; color: #ffcdd2; margin-bottom: 8px; line-height: 1.4;">
+        เส้นแสงสีแดง 3D ลากจากปากกระบอกปืนไม้ / คันธนู พุ่งตรงไปหาเป้าหมาย NPC ในโลก 3D ช่วยตรวจสอบแนวการเล็งและการยิง (เปิดอัตโนมัติใน Dev Mode)
+      </div>
+
+      <button id="devToggleLaserGuideBtn" class="btn-random" style="width: 100%; margin: 0; padding: 9px 8px; font-size: 12px; font-weight: bold; color: #fff; background-image: linear-gradient(135deg, #d50000, #ff1744); border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s ease;">
+        🔴 เส้นเลเซอร์เล็ง: เปิด (ON)
+      </button>
+    `;
+
+    mainControls.appendChild(group);
+
+    const toggleBtn = document.getElementById("devToggleLaserGuideBtn");
+    const statusBadge = document.getElementById("devLaserGuideStatusBadge");
+
+    function updateUI() {
+      if (!toggleBtn || !statusBadge) return;
+      if (window.devLaserGuideEnabled) {
+        toggleBtn.style.backgroundImage = "linear-gradient(135deg, #b71c1c, #f44336)";
+        toggleBtn.innerHTML = "🔴 เส้นเลเซอร์เล็ง: เปิด (ON)";
+        statusBadge.textContent = "เปิด (ON)";
+        statusBadge.style.background = "rgba(255,23,68,0.35)";
+        statusBadge.style.color = "#ff8a80";
+      } else {
+        toggleBtn.style.backgroundImage = "linear-gradient(135deg, #424242, #616161)";
+        toggleBtn.innerHTML = "⚪ เส้นเลเซอร์เล็ง: ปิด (OFF)";
+        statusBadge.textContent = "ปิด (OFF)";
+        statusBadge.style.background = "rgba(255,255,255,0.1)";
+        statusBadge.style.color = "#aaa";
+      }
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        window.devLaserGuideEnabled = !window.devLaserGuideEnabled;
+        updateUI();
+        if (typeof showNotice === "function") {
+          showNotice(window.devLaserGuideEnabled ? "เปิดเส้นเลเซอร์เล็งเป้า 3D แล้ว" : "ปิดเส้นเลเซอร์เล็งเป้า 3D แล้ว");
+        }
+      });
+    }
+
+    updateUI();
+    return true;
+  }
+
+  if (!mountGroup()) {
+    const timer = setInterval(() => {
+      if (mountGroup()) clearInterval(timer);
+    }, 500);
+  }
+})();
+
 
 // Helper function to test spawning in-world 3D signs (non-screen-aligned)
 if (typeof window !== "undefined") {

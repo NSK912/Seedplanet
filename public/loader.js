@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789149020000';
+  const version = '1789149200000';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -61,6 +61,7 @@
     'gamefile/items/rock.js',
     'gamefile/items/branch.js',
     'gamefile/items/arrow.js',
+    'gamefile/items/wooden_arm_cannon.js',
     'gamefile/items/stone_floor.js',
     'gamefile/items/wood_floor.js',
     'gamefile/items/wood_stairs.js',
@@ -88,6 +89,7 @@
     'gamefile/npcs/placoderm.js',
     'gamefile/npcs/isopod.js',
     'gamefile/npcs/human.js',
+    'gamefile/npcs/obsidian_cube.js',
     'gamefile/npcs/npc.js',
 
     // --- Gameplay Core & System ---

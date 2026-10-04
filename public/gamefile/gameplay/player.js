@@ -462,7 +462,7 @@ window.characterVertexShaderSource = `
         }
 
         // Specific whitelist for holdable tools/weapons
-        const holdableNames = ["AXE", "PICKAXE", "SHOVEL", "BOW", "BRANCH", "branch", "FRIED_BUG", "GLOW_BATTERY"];
+        const holdableNames = ["AXE", "PICKAXE", "SHOVEL", "BOW", "WOODEN_ARM_CANNON", "ARM_CANNON", "BRANCH", "branch", "FRIED_BUG", "GLOW_BATTERY"];
         if (holdableNames.includes(itemName)) {
           return item;
         }
@@ -2524,7 +2524,11 @@ window.characterVertexShaderSource = `
           upperAnimName = window.devMixUpperAnim || "01a090f8-8c8f-75dc-8693-155f9574dac7";
           targetUpperWeight = typeof window.devMixUpperWeight === "number" ? window.devMixUpperWeight : 1.0;
         } else if (isItemAction) {
-          upperAnimName = "01a090f8-8c8f-75dc-8693-155f9574dac7";
+          if (heldItem && (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON")) {
+            upperAnimName = "01a09186-787b-771f-b4ee-5b234572bcef";
+          } else {
+            upperAnimName = "01a090f8-8c8f-75dc-8693-155f9574dac7";
+          }
           targetUpperWeight = 1.0;
         }
 
@@ -2643,8 +2647,15 @@ window.characterVertexShaderSource = `
                 upperAnimTime = ((performance.now() * 0.001) % uAnim.duration);
               }
             } else if (isItemAction) {
-              const toolDur = Math.min(2.98, uAnim.duration);
-              upperAnimTime = Math.max(0.0, Math.min(1.0, 1.0 - useAnimTimer)) * toolDur;
+              if (heldItem && (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON")) {
+                // Animation 01a09186-787b-771f-b4ee-5b234572bcef trimmed Start: 1.40s, End: 2.47s (duration 1.07s)
+                const animDuration = 2.47 - 1.40;
+                const p = Math.max(0.0, Math.min(1.0, 1.0 - (useAnimTimer / animDuration)));
+                upperAnimTime = 1.40 + p * (2.47 - 1.40);
+              } else {
+                const toolDur = Math.min(2.98, uAnim.duration);
+                upperAnimTime = Math.max(0.0, Math.min(1.0, 1.0 - useAnimTimer)) * toolDur;
+              }
               window.chibiLastUpperAnimTime = upperAnimTime;
             } else if (upperAnimName === "Jump_with_Arms_Open") {
               upperAnimTime = Math.min(uAnim.duration, window.charJumpAnimTime || 1.35);
@@ -2869,6 +2880,162 @@ window.characterVertexShaderSource = `
         }
       }
 
+      function buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale = 1.0) {
+        const dir = [pHand[0] - pElbow[0], pHand[1] - pElbow[1], pHand[2] - pElbow[2]];
+        const armLen = Math.hypot(dir[0], dir[1], dir[2]) || 0.1;
+        dir[0] /= armLen; dir[1] /= armLen; dir[2] /= armLen;
+
+        const pRear = [pElbow[0] + dir[0] * 0.015, pElbow[1] + dir[1] * 0.015, pElbow[2] + dir[2] * 0.015];
+        const pMid = [pElbow[0] + dir[0] * (armLen * 0.75), pElbow[1] + dir[1] * (armLen * 0.75), pElbow[2] + dir[2] * (armLen * 0.75)];
+        const pMuzzle = [pHand[0] + dir[0] * 0.065, pHand[1] + dir[1] * 0.065, pHand[2] + dir[2] * 0.065];
+        const pBoreIn = [pMuzzle[0] - dir[0] * 0.035, pMuzzle[1] - dir[1] * 0.035, pMuzzle[2] - dir[2] * 0.035];
+
+        const woodColorMain = [0.55, 0.38, 0.22];
+        const woodColorDark = [0.42, 0.28, 0.15];
+        const ironColor = [0.28, 0.28, 0.30];
+        const darkMuzzleColor = [0.22, 0.22, 0.24];
+        const innerBoreColor = [0.10, 0.10, 0.10];
+
+        // 1. Main wooden forearm sleeve and barrel body (faceted 6-sided low-poly cylinder)
+        buildTaperedSegment(pRear, pMid, 0.037 * itemScale, 0.033 * itemScale, 6, woodColorMain, rawV, rawC, rawI);
+        buildTaperedSegment(pMid, pMuzzle, 0.033 * itemScale, 0.036 * itemScale, 6, woodColorDark, rawV, rawC, rawI);
+
+        // 2. Rear reinforcement iron ring
+        const pRearBand = [pRear[0] + dir[0] * 0.015, pRear[1] + dir[1] * 0.015, pRear[2] + dir[2] * 0.015];
+        buildTaperedSegment(pRear, pRearBand, 0.040 * itemScale, 0.039 * itemScale, 6, ironColor, rawV, rawC, rawI);
+
+        // 3. Mid reinforcement iron ring clamp
+        const pMidBand1 = [pMid[0] - dir[0] * 0.008, pMid[1] - dir[1] * 0.008, pMid[2] - dir[2] * 0.008];
+        const pMidBand2 = [pMid[0] + dir[0] * 0.008, pMid[1] + dir[1] * 0.008, pMid[2] + dir[2] * 0.008];
+        buildTaperedSegment(pMidBand1, pMidBand2, 0.036 * itemScale, 0.036 * itemScale, 6, ironColor, rawV, rawC, rawI);
+
+        // 4. Front iron muzzle collar
+        const pMuzzleRing = [pMuzzle[0] - dir[0] * 0.012, pMuzzle[1] - dir[1] * 0.012, pMuzzle[2] - dir[2] * 0.012];
+        buildTaperedSegment(pMuzzleRing, pMuzzle, 0.039 * itemScale, 0.039 * itemScale, 6, darkMuzzleColor, rawV, rawC, rawI);
+
+        // 5. Inner dark hollow cannon bore
+        buildTaperedSegment(pBoreIn, pMuzzle, 0.022 * itemScale, 0.024 * itemScale, 6, innerBoreColor, rawV, rawC, rawI);
+
+        // 6. Arrow in barrel when aiming/ready
+        if (!arrowShotInCurrentAnim && useAnimTimer > 0) {
+          const arrowTip = [pMuzzle[0] + dir[0] * 0.04 * itemScale, pMuzzle[1] + dir[1] * 0.04 * itemScale, pMuzzle[2] + dir[2] * 0.04 * itemScale];
+          const arrowShaftEnd = [pMuzzle[0] - dir[0] * 0.06 * itemScale, pMuzzle[1] - dir[1] * 0.06 * itemScale, pMuzzle[2] - dir[2] * 0.06 * itemScale];
+          buildTaperedSegment(arrowShaftEnd, arrowTip, 0.005 * itemScale, 0.005 * itemScale, 4, [0.55, 0.4, 0.25], rawV, rawC, rawI);
+
+          const arrowHeadTip = [arrowTip[0] + dir[0] * 0.025 * itemScale, arrowTip[1] + dir[1] * 0.025 * itemScale, arrowTip[2] + dir[2] * 0.025 * itemScale];
+          buildTaperedSegment(arrowTip, arrowHeadTip, 0.012 * itemScale, 0.001 * itemScale, 4, [0.35, 0.35, 0.35], rawV, rawC, rawI);
+        }
+
+        // Set firing origin and direction in world space
+        if (typeof getCharacterMatrix === "function") {
+          const charMat = getCharacterMatrix();
+          window.lastBowGripPos = [
+            charMat[0] * pMuzzle[0] + charMat[4] * pMuzzle[1] + charMat[8] * pMuzzle[2] + charMat[12],
+            charMat[1] * pMuzzle[0] + charMat[5] * pMuzzle[1] + charMat[9] * pMuzzle[2] + charMat[13],
+            charMat[2] * pMuzzle[0] + charMat[6] * pMuzzle[1] + charMat[10] * pMuzzle[2] + charMat[14]
+          ];
+          const aimX = charMat[0] * dir[0] + charMat[4] * dir[1] + charMat[8] * dir[2];
+          const aimY = charMat[1] * dir[0] + charMat[5] * dir[1] + charMat[9] * dir[2];
+          const aimZ = charMat[2] * dir[0] + charMat[6] * dir[1] + charMat[10] * dir[2];
+          const aLen = Math.hypot(aimX, aimY, aimZ);
+          if (aLen > 1e-4) {
+            window.lastBowAimDir = [aimX / aLen, aimY / aLen, aimZ / aLen];
+          } else {
+            window.lastBowAimDir = [aimX, aimY, aimZ];
+          }
+        }
+      }
+
+      function updateChibiEquipMesh() {
+        const heldItem = (typeof window.getHeldItem === "function" ? window.getHeldItem() : (typeof getHeldItem === "function" ? getHeldItem() : null));
+        if (!heldItem || !window.chibiGlbModel || !window.chibiGlbModel.nodes) {
+          equipIndicesLength = 0;
+          return;
+        }
+        const model = window.chibiGlbModel;
+        const rawV = [], rawC = [], rawI = [];
+        const itemScale = (typeof playerScale !== 'undefined' ? playerScale : 0.1) / 0.1;
+        const scale = 0.59;
+        let yOffset = -0.46;
+        if (typeof activeRidingBoat !== "undefined" && activeRidingBoat) yOffset = -0.15;
+        else if (typeof activeRidingMech !== "undefined" && activeRidingMech) yOffset = -0.15;
+        else if (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0) yOffset = -0.46 - currentSwimFactor * 0.12;
+
+        if (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON") {
+          const rFA = model.nodes.find(n => n && n.name === "RightForeArm");
+          const rH = model.nodes.find(n => n && n.name === "RightHand");
+          if (rFA && rH && rFA.matrix && rH.matrix) {
+            const pElbow = [ rFA.matrix[12] * scale, rFA.matrix[13] * scale + yOffset, rFA.matrix[14] * scale ];
+            let pHand  = [ rH.matrix[12] * scale,  rH.matrix[13] * scale + yOffset,  rH.matrix[14] * scale ];
+
+            // When aiming, align arm cannon direction precisely towards window.currentAimTargetPos
+            const isAimingRanged = (typeof isUsingItem !== "undefined" && isUsingItem) && (typeof window.isAimingBow !== "undefined" && window.isAimingBow);
+            if (isAimingRanged && window.currentAimTargetPos && typeof getCharacterMatrix === "function") {
+              const charMat = getCharacterMatrix();
+              const pElbowWorld = [
+                charMat[0] * pElbow[0] + charMat[4] * pElbow[1] + charMat[8] * pElbow[2] + charMat[12],
+                charMat[1] * pElbow[0] + charMat[5] * pElbow[1] + charMat[9] * pElbow[2] + charMat[13],
+                charMat[2] * pElbow[0] + charMat[6] * pElbow[1] + charMat[10] * pElbow[2] + charMat[14]
+              ];
+              const tPos = window.currentAimTargetPos;
+              const dW = [tPos[0] - pElbowWorld[0], tPos[1] - pElbowWorld[1], tPos[2] - pElbowWorld[2]];
+              const dDist = Math.hypot(dW[0], dW[1], dW[2]);
+              if (dDist > 0.01) {
+                const normW = [dW[0] / dDist, dW[1] / dDist, dW[2] / dDist];
+                const cScale = (typeof playerScale === "number") ? playerScale : 0.1;
+                const cR = [charMat[0] / cScale, charMat[1] / cScale, charMat[2] / cScale];
+                const cUp = [charMat[4] / cScale, charMat[5] / cScale, charMat[6] / cScale];
+                const cFwd = [charMat[8] / cScale, charMat[9] / cScale, charMat[10] / cScale];
+
+                const aimLocal = [
+                  normW[0] * cR[0] + normW[1] * cR[1] + normW[2] * cR[2],
+                  normW[0] * cUp[0] + normW[1] * cUp[1] + normW[2] * cUp[2],
+                  normW[0] * cFwd[0] + normW[1] * cFwd[1] + normW[2] * cFwd[2]
+                ];
+                const aL = Math.hypot(aimLocal[0], aimLocal[1], aimLocal[2]);
+                if (aL > 0.001) {
+                  aimLocal[0] /= aL; aimLocal[1] /= aL; aimLocal[2] /= aL;
+                  const armLen = Math.hypot(rH.matrix[12] * scale - rFA.matrix[12] * scale, rH.matrix[13] * scale - rFA.matrix[13] * scale, rH.matrix[14] * scale - rFA.matrix[14] * scale) || (0.13 * scale);
+                  pHand = [
+                    pElbow[0] + aimLocal[0] * armLen,
+                    pElbow[1] + aimLocal[1] * armLen,
+                    pElbow[2] + aimLocal[2] * armLen
+                  ];
+                }
+              }
+            }
+
+            buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale);
+          }
+        }
+
+        if (rawI.length > 0) {
+          const flatEquip = makeFlatShadedGeometry(rawV, rawC, rawI);
+          equipIndicesLength = flatEquip.indices.length;
+
+          if (!equipVertexBuffer) equipVertexBuffer = gl.createBuffer();
+          uploadDynamicBuffer(gl, equipVertexBuffer, gl.ARRAY_BUFFER, flatEquip.vertices instanceof Float32Array ? flatEquip.vertices : new Float32Array(flatEquip.vertices));
+
+          if (!equipColorBuffer) equipColorBuffer = gl.createBuffer();
+          uploadDynamicBuffer(gl, equipColorBuffer, gl.ARRAY_BUFFER, flatEquip.colors instanceof Float32Array ? flatEquip.colors : new Float32Array(flatEquip.colors));
+
+          if (!equipNormalBuffer) equipNormalBuffer = gl.createBuffer();
+          uploadDynamicBuffer(gl, equipNormalBuffer, gl.ARRAY_BUFFER, flatEquip.normals instanceof Float32Array ? flatEquip.normals : new Float32Array(flatEquip.normals));
+
+          if (!equipIndexBuffer) equipIndexBuffer = gl.createBuffer();
+          if (equipIndexBuffer._uploadedCount !== equipIndicesLength) {
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
+            const idxData = (supportUint32 && equipIndicesLength > 65535)
+              ? (flatEquip.indices instanceof Uint32Array ? flatEquip.indices : new Uint32Array(flatEquip.indices))
+              : (flatEquip.indices instanceof Uint16Array ? flatEquip.indices : new Uint16Array(flatEquip.indices));
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
+            equipIndexBuffer._uploadedCount = equipIndicesLength;
+          }
+        } else {
+          equipIndicesLength = 0;
+        }
+      }
+
       function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0, cloneSwimFactor = 0.0, cloneSwimMove = 0.0) {
         if (typeof window !== "undefined" && window.characterModel === "chibi" && !isClone) {
           if (!window.chibiGlbTexture && typeof window.createChibiGlbTexture === "function") {
@@ -2920,6 +3087,7 @@ window.characterVertexShaderSource = `
               charIndexBuffer._uploadedCount = charIndicesLength;
               charIndexBuffer._sourceType = "chibi";
             }
+            updateChibiEquipMesh();
             return;
           }
         }
@@ -3255,7 +3423,7 @@ window.characterVertexShaderSource = `
         let legAngleSide = 0;
         let rightLegAngleSide = 0;
         
-        let isAimingBow = false;
+        let isAimingBow = (typeof window !== "undefined" && !!window.isAimingBow);
         
         if (!isClone && isAimingBow && typeof keysPressed !== 'undefined') {
             let moveF = 0, moveS = 0;
@@ -3615,6 +3783,103 @@ window.characterVertexShaderSource = `
                       bowUpperTipRot = applyPitch(bowUpperTipRot);
                       bowLowerTipRot = applyPitch(bowLowerTipRot);
             }
+          } else if (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON") {
+                 // Classic humanoid model: Raise the right arm horizontally forward and hold it in place continuously
+                 const l_upper = 0.155;
+                 const l_lower = 0.145;
+
+                 // Calculate vertical aim pitch (from TPS camera rotationX or locked target NPC)
+                 let currentPitch = 0.0;
+                 if (typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && typeof rotationX !== "undefined") {
+                     currentPitch = rotationX;
+                     if (activeTargetNPC && activeTargetNPC.position) {
+                         const sinT_g = Math.sin(charTheta);
+                         const cosT_g = Math.cos(charTheta);
+                         const sinP_g = Math.sin(charPhi);
+                         const cosP_g = Math.cos(charPhi);
+                         const nx_g = sinT_g * cosP_g;
+                         const ny_g = cosT_g;
+                         const nz_g = sinT_g * sinP_g;
+                         const h_g = getVisualHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+                         const r_terrain_g = RADIUS + h_g * HEIGHT_SCALE;
+                         let r_g = r_terrain_g + 0.46 * playerScale;
+                         if (typeof playerCenterRadius !== "undefined" && playerCenterRadius !== null) {
+                             r_g = playerCenterRadius;
+                         }
+                         const player_world_x = r_g * nx_g;
+                         const player_world_y = r_g * ny_g;
+                         const player_world_z = r_g * nz_g;
+
+                         const East_g = [-sinP_g, 0, cosP_g];
+                         const North_g = [-cosT_g * cosP_g, sinT_g, -cosT_g * sinP_g];
+                         const cosH_g = Math.cos(charHeading);
+                         const sinH_g = Math.sin(charHeading);
+                         const F_g = [
+                             North_g[0] * cosH_g + East_g[0] * sinH_g,
+                             North_g[1] * cosH_g + East_g[1] * sinH_g,
+                             North_g[2] * cosH_g + East_g[2] * sinH_g,
+                         ];
+
+                         const npc = activeTargetNPC;
+                         const npc_pos = npc.position;
+                         const npcLen = Math.sqrt(npc_pos[0]**2 + npc_pos[1]**2 + npc_pos[2]**2);
+                         const n_npc = npcLen > 0.1 ? [npc_pos[0]/npcLen, npc_pos[1]/npcLen, npc_pos[2]/npcLen] : [nx_g, ny_g, nz_g];
+                         const N = npc.N || n_npc;
+                         const F = npc.F || [0, 0, 0];
+                         let upOffset = (npc.type === "meganeura") ? 0.0 : -0.02;
+                         let forwardOffset = (npc.type === "meganeura") ? -0.06 : -0.12;
+                         const target_g = [
+                             npc_pos[0] + N[0] * upOffset + F[0] * forwardOffset,
+                             npc_pos[1] + N[1] * upOffset + F[1] * forwardOffset,
+                             npc_pos[2] + N[2] * upOffset + F[2] * forwardOffset
+                         ];
+
+                         const dVec = [
+                             target_g[0] - player_world_x,
+                             target_g[1] - player_world_y,
+                             target_g[2] - player_world_z
+                         ];
+                         const d_up = dVec[0] * nx_g + dVec[1] * ny_g + dVec[2] * nz_g;
+                         const d_dist_planar = Math.sqrt(dVec[0]**2 + dVec[1]**2 + dVec[2]**2 - d_up**2);
+                         if (d_dist_planar > 0.05) {
+                             currentPitch = -Math.atan2(d_up, d_dist_planar);
+                         }
+                     }
+                 }
+
+                 // Recoil kickback during firing recovery
+                 let recoilZ = 0.0;
+                 if (arrowShotInCurrentAnim && useAnimTimer > 0) {
+                     const rP = Math.max(0.0, Math.min(1.0, useAnimTimer / 0.32));
+                     recoilZ = Math.sin(rP * Math.PI) * 0.035;
+                 }
+
+                 // Right arm raised horizontally forward along +Z with slight inward convergence towards centerline
+                 const targetRightElbow = [
+                     rightArmPivot[0] - 0.015,
+                     rightArmPivot[1],
+                     rightArmPivot[2] + l_upper - recoilZ * 0.4
+                 ];
+                 const targetRightHand = [
+                     targetRightElbow[0] - 0.015,
+                     targetRightElbow[1],
+                     targetRightElbow[2] + l_lower - recoilZ * 0.6
+                 ];
+
+                 // Apply vertical pitch tilt so cannon aims up/down with camera
+                 rightElbowRot = rotatePointX(rightArmPivot, targetRightElbow, currentPitch);
+                 rightHandRot = rotatePointX(rightArmPivot, targetRightHand, currentPitch);
+
+                 // Apply slight upper body tilt if looking up/down
+                 const applyCannonPitch = (pt) => rotatePointX(chestP1, pt, currentPitch * 0.35);
+                 neckP1 = applyCannonPitch(neckP1);
+                 neckP2 = applyCannonPitch(neckP2);
+                 headP1 = applyCannonPitch(headP1);
+                 headP2 = applyCannonPitch(headP2);
+                 leftEarP1 = applyCannonPitch(leftEarP1);
+                 leftEarP2 = applyCannonPitch(leftEarP2);
+                 rightEarP1 = applyCannonPitch(rightEarP1);
+                 rightEarP2 = applyCannonPitch(rightEarP2);
           } else {
                  // Hand is at [0.18, -0.09 + bOffset, 0.04]
                  // Handle goes forward (along Z axis) so it's perpendicular to the arm
@@ -4321,7 +4586,11 @@ window.characterVertexShaderSource = `
                 }
             };
 
-            if (heldItem && heldItem.name === "BOW") {
+            if (heldItem && (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON")) {
+                const pElbow = isRag ? rightElbowRot : transformPt(rightElbowRot);
+                const pHand = isRag ? rightHandRot : transformPt(rightHandRot);
+                buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale);
+            } else if (heldItem && heldItem.name === "BOW") {
                 const wGrip = isRag ? bowGripRot : transformPt(bowGripRot);
                 const wUpperTip = isRag ? bowUpperTipRot : transformPt(bowUpperTipRot);
                 const wLowerTip = isRag ? bowLowerTipRot : transformPt(bowLowerTipRot);
@@ -5300,6 +5569,7 @@ window.characterVertexShaderSource = `
               else if (item.type === "boat_wing") { icon = "🪽"; label = "BOAT_WING"; }
               else if (item.type === "meganeura_item") { icon = "🦟"; label = "MEGANEURA"; }
               else if (item.type === "isopod_item") { icon = "🦐"; label = "ISOPOD"; }
+              else if (item.type === "wooden_arm_cannon") { icon = "🪵🦾"; label = "WOODEN_ARM_CANNON"; }
               
               const itemData = {
                 icon: icon,

@@ -533,6 +533,35 @@
       }
     }
 
+    // 7. Wooden Arm Cannon (ปืนไม้ติดแขน): 2 Log + 1 Rock/Big Rock
+    const hasCannon = getCloneItemCount(cState, "WOODEN_ARM_CANNON") > 0 || getCloneItemCount(cState, "ARM_CANNON") > 0 || cState.equippedTool === "WOODEN_ARM_CANNON";
+    const cannonRockCount = getCloneItemCount(cState, "BIG_ROCK") + getCloneItemCount(cState, "ROCK");
+    if (!hasCannon && logCount >= 2 && cannonRockCount >= 1) {
+      if (removeCloneItem(cState, "LOG", 2)) {
+        if (removeCloneItem(cState, "BIG_ROCK", 1) || removeCloneItem(cState, "ROCK", 1)) {
+          addCloneItem(cState, "WOODEN_ARM_CANNON", "🪵🦾", 1);
+          cState.faceText = "(🪵🦾‿🦾)";
+          return "wooden_arm_cannon";
+        } else {
+          addCloneItem(cState, "LOG", "🪵", 2);
+        }
+      }
+    }
+
+    // 8. Arrows (ลูกศรสำหรับปืนไม้): 1 Log + 1 Rock/Big Rock -> 30 Arrows
+    const curArrows = getCloneItemCount(cState, "ARROW");
+    if (curArrows < 30 && logCount >= 1 && cannonRockCount >= 1) {
+      if (removeCloneItem(cState, "LOG", 1)) {
+        if (removeCloneItem(cState, "BIG_ROCK", 1) || removeCloneItem(cState, "ROCK", 1)) {
+          addCloneItem(cState, "ARROW", "🏹", 30);
+          cState.faceText = "(🏹‿🏹)";
+          return "arrow";
+        } else {
+          addCloneItem(cState, "LOG", "🪵", 1);
+        }
+      }
+    }
+
     return null;
   }
 
@@ -604,8 +633,8 @@
     for (let i = 0; i < cState.inventory.length; i++) {
       const it = cState.inventory[i];
       if (!it) continue;
-      // Keep working tools (AXE, PICKAXE) equipped for daily work
-      if (it.name === "AXE" || it.name === "PICKAXE") continue;
+      // Keep working tools (AXE, PICKAXE) and weapons/ammo (WOODEN_ARM_CANNON, ARROW) equipped
+      if (it.name === "AXE" || it.name === "PICKAXE" || it.name === "WOODEN_ARM_CANNON" || it.name === "ARM_CANNON" || it.name === "ARROW") continue;
 
       const itemName = it.name;
       const count = it.count || 1;
@@ -940,10 +969,12 @@
     // 6. เห็นสัตว์มีชีวิต (Animal hunting)
     const animal = findTargetAnimal(cState, planetRadius);
     if (animal) {
+      const hasCannon = getCloneItemCount(cState, "WOODEN_ARM_CANNON") > 0 || getCloneItemCount(cState, "ARM_CANNON") > 0;
+      const arrowCount = getCloneItemCount(cState, "ARROW");
       candidates.push({
         action: "HUNT_ANIMAL",
         target: animal,
-        weight: hasAxe ? 0.6 : 0.3
+        weight: (hasCannon && arrowCount > 0) ? 0.9 : (hasAxe ? 0.6 : 0.3)
       });
     }
 
@@ -1579,8 +1610,16 @@
           if (aPos) {
             setCloneTargetPos(cState, aPos[0], aPos[1], aPos[2], planetRadius);
           }
-          cState.equippedTool = "AXE";
-          cState.faceText = "(•̀ᴗ•́)";
+          
+          const hasCannon = getCloneItemCount(cState, "WOODEN_ARM_CANNON") > 0 || getCloneItemCount(cState, "ARM_CANNON") > 0;
+          const arrowCount = getCloneItemCount(cState, "ARROW");
+          if (hasCannon && arrowCount > 0) {
+            cState.equippedTool = "WOODEN_ARM_CANNON";
+            cState.faceText = "(🪵🦾‿🦾)";
+          } else {
+            cState.equippedTool = "AXE";
+            cState.faceText = "(•̀ᴗ•́)";
+          }
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
           const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -1590,7 +1629,69 @@
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
-          if (distToTarget <= 0.8) {
+          // Ranged cannon attack from distance (<= 3.2m) or melee attack (<= 0.8m)
+          if (cState.equippedTool === "WOODEN_ARM_CANNON" && distToTarget <= 3.2 && arrowCount > 0) {
+            cState.actionAnim = 0.6;
+            cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
+
+            if (cState.actionSwingTimer >= 0.75) {
+              cState.actionSwingTimer = 0.0;
+              removeCloneItem(cState, "ARROW", 1);
+              if (typeof playPlaceSound === "function") playPlaceSound();
+
+              // Spawn arrow projectile from clone towards animal
+              const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
+              const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
+              const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+              if (aPos) {
+                const aDir = [aPos[0] - cPos[0], aPos[1] - cPos[1], aPos[2] - cPos[2]];
+                const aDist = Math.hypot(aDir[0], aDir[1], aDir[2]) || 1;
+                aDir[0] /= aDist; aDir[1] /= aDist; aDir[2] /= aDist;
+                const spd = 1.15 * (typeof playerScale !== "undefined" ? playerScale : 0.1);
+                const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : [];
+                colList.push({
+                  type: "arrow",
+                  position: [cPos[0] + aDir[0] * 0.1, cPos[1] + aDir[1] * 0.1, cPos[2] + aDir[2] * 0.1],
+                  vel: [aDir[0] * spd, aDir[1] * spd, aDir[2] * spd],
+                  F: aDir,
+                  R: [1, 0, 0],
+                  normal: [0, 1, 0],
+                  color: [0.62, 0.44, 0.26],
+                  size: 0.1,
+                  active: true,
+                  isDynamic: true,
+                  sourceWeapon: "WOODEN_ARM_CANNON",
+                  isCannonShot: true,
+                  animPhaseActive: true,
+                  animElapsed: 0,
+                  animMaxTime: 0.25,
+                  animOrigin: [cPos[0] + aDir[0] * 0.1, cPos[1] + aDir[1] * 0.1, cPos[2] + aDir[2] * 0.1],
+                  animDir: aDir,
+                  animSpeed: spd,
+                  ignorePlayer: true
+                });
+                if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
+              }
+
+              const dmg = 1;
+              if (animal.hp === undefined) {
+                const regHp = (window.NpcRegistry && window.NpcRegistry[animal.type]) ? window.NpcRegistry[animal.type].maxHp : 2;
+                animal.hp = regHp;
+              }
+              animal.hp -= dmg;
+              if (animal.hp <= 0) {
+                animal.hp = 0;
+                animal.ragdollEnabled = true;
+                if (animal.type === "isopod") addCloneItem(cState, "ISOPOD", "🦐", 1);
+                else if (animal.type === "meganeura") addCloneItem(cState, "MEGANEURA", "🦟", 1);
+                else addCloneItem(cState, "ISOPOD", "🦐", 1);
+                cState.faceText = "(^o^)";
+                cState.targetAnimal = null;
+                cState.workCycles = (cState.workCycles || 0) + 1;
+                executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+              }
+            }
+          } else if (distToTarget <= 0.8) {
             // Attack animal!
             cState.actionAnim = 0.6;
             cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;

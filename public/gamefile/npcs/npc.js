@@ -366,6 +366,11 @@ function initAmphibians(count, seed) {
           spawnR = RADIUS + coord.height * HEIGHT_SCALE + 0.05;
           swimming = false;
         }
+      } else if (type === 'obsidian_cube') {
+        // Floating gilded obsidian diamond cube hovering gracefully above land or water
+        const surfaceR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH);
+        spawnR = surfaceR + 1.25 + Math.random() * 0.35;
+        swimming = false;
       } else {
         spawnR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH) + 0.05;
         swimming = !coord.isLand;
@@ -399,7 +404,7 @@ function initAmphibians(count, seed) {
   }
 
   // 1. GUARANTEED PHASE: Ensure every single known NPC type is guaranteed to spawn!
-  const knownTypes = ['human', 'georgiacetus', 'placoderm', 'meganeura', 'isopod'];
+  const knownTypes = ['human', 'georgiacetus', 'placoderm', 'meganeura', 'isopod', 'obsidian_cube'];
   if (window.NpcRegistry) {
     for (const k in window.NpcRegistry) {
       if (!knownTypes.includes(k)) knownTypes.push(k);
@@ -543,6 +548,68 @@ function updateNpcLifeCycle(c, deltaTime, seed) {
   }
 }
 
+window.getNPCTransform = function(npc) {
+  if (!npc) return null;
+  const sinTheta = Math.sin(npc.theta || 0);
+  const cosTheta = Math.cos(npc.theta || 0);
+  const sinPhi = Math.sin(npc.phi || 0);
+  const cosPhi = Math.cos(npc.phi || 0);
+  const r = npc.r || (typeof RADIUS !== "undefined" ? RADIUS : 8.0);
+
+  const naturalPos = [r * sinTheta * cosPhi, r * cosTheta, r * sinTheta * sinPhi];
+  const pos = (npc.ragdollEnabled && npc.ragdollPos && Array.isArray(npc.ragdollPos) && npc.ragdollPos.length >= 3)
+    ? npc.ragdollPos
+    : (npc.position || naturalPos);
+
+  let N = [sinTheta * cosPhi, cosTheta, sinTheta * sinPhi];
+  const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+  const East = [-sinPhi, 0, cosPhi];
+
+  const h_rad = (npc.heading !== undefined) ? npc.heading : 0;
+  const sinH = Math.sin(h_rad);
+  const cosH = Math.cos(h_rad);
+
+  let F = [
+    North[0] * cosH + East[0] * sinH,
+    North[1] * cosH + East[1] * sinH,
+    North[2] * cosH + East[2] * sinH,
+  ];
+  let R = [
+    -North[0] * sinH + East[0] * cosH,
+    -North[1] * sinH + East[1] * cosH,
+    -North[2] * sinH + East[2] * cosH,
+  ];
+
+  if (npc.ragdollEnabled && npc.ragdollAxis && Array.isArray(npc.ragdollAxis) && npc.ragdollAxis.length >= 3) {
+    const q = npc.ragdollAngle || 0;
+    const cosQ = Math.cos(q);
+    const sinQ = Math.sin(q);
+    const ax = npc.ragdollAxis[0];
+    const ay = npc.ragdollAxis[1];
+    const az = npc.ragdollAxis[2];
+
+    const rotateVector = (v) => {
+      const dot = v[0] * ax + v[1] * ay + v[2] * az;
+      const cross = [
+        ay * v[2] - az * v[1],
+        az * v[0] - ax * v[2],
+        ax * v[1] - ay * v[0],
+      ];
+      return [
+        v[0] * cosQ + cross[0] * sinQ + ax * dot * (1.0 - cosQ),
+        v[1] * cosQ + cross[1] * sinQ + ay * dot * (1.0 - cosQ),
+        v[2] * cosQ + cross[2] * sinQ + az * dot * (1.0 - cosQ),
+      ];
+    };
+
+    N = rotateVector(N);
+    F = rotateVector(F);
+    R = rotateVector(R);
+  }
+
+  return { pos, N, F, R };
+};
+
 function updateAmphibians(deltaTime, seed) {
   if (!amphibians || amphibians.length === 0) return;
 
@@ -584,19 +651,15 @@ function updateAmphibians(deltaTime, seed) {
   _allNpcIndices.length = 0;
 
   for (let c of amphibians) {
-    // Remove the forced sync with the global ragdollEnabled
-    // NPCs will only ragdoll if their own c.ragdollEnabled is set (which is currently never, unless we add a specific feature for it)
-
-    // On-the-fly NPC position calculation for distance checks
-    const sinT_npc = Math.sin(c.theta);
-    const cosT_npc = Math.cos(c.theta);
-    const sinP_npc = Math.sin(c.phi);
-    const cosP_npc = Math.cos(c.phi);
-    const npc_pos = [
-      c.r * sinT_npc * cosP_npc,
-      c.r * cosT_npc,
-      c.r * sinT_npc * sinP_npc
-    ];
+    // Synchronize NPC 3D orientation basis every frame
+    const tf = window.getNPCTransform(c);
+    if (tf) {
+      c.position = tf.pos;
+      c.N = tf.N;
+      c.F = tf.F;
+      c.R = tf.R;
+    }
+    const npc_pos = c.position;
 
     const effPos = (c.ragdollEnabled && c.ragdollPos) ? c.ragdollPos : npc_pos;
 
@@ -701,6 +764,8 @@ function updateAmphibians(deltaTime, seed) {
           let newR = gRadius + 0.05;
           if (isMeganeura) {
             newR = Math.max(gRadius, wRadius) + 0.35 + Math.random() * 0.1;
+          } else if (c.type === 'obsidian_cube') {
+            newR = Math.max(gRadius, wRadius) + 1.25 + Math.random() * 0.3;
           } else if (isIsopod) {
             newR = gRadius + 0.02;
           } else if (isGeorgiacetus || isPlacoderm) {
@@ -1380,6 +1445,10 @@ function updateAmphibians(deltaTime, seed) {
         R = rotateVector(R);
       }
 
+      c.N = N;
+      c.F = F;
+      c.R = R;
+
       const pos = (c.ragdollEnabled && c.ragdollPos && Array.isArray(c.ragdollPos) && c.ragdollPos.length >= 3)
         ? c.ragdollPos
         : (c.position || npc_pos || [0, 0, 0]);
@@ -1473,7 +1542,7 @@ function updateAmphibians(deltaTime, seed) {
         return worldPos;
       };
 
-      const scale = c.type === 'meganeura' ? 0.25 : (c.type === 'isopod' ? 0.38 : 0.5);
+      const scale = c.type === 'meganeura' ? 0.25 : (c.type === 'isopod' ? 0.38 : (c.type === 'obsidian_cube' ? 0.45 : 0.5));
 
       // Render using the registered NPC implementation
       const npcReg = window.NpcRegistry[c.type];

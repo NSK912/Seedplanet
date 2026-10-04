@@ -2296,7 +2296,7 @@ window.addEventListener("keyup", (e) => {
                   window.freeCamPitch = Math.max(-1.52, Math.min(1.52, window.freeCamPitch));
                 } else {
                   if (typeof isUIOpen === "function" && isUIOpen()) return;
-                  const isAimingLockedBow = (typeof isUsingItem !== "undefined" && isUsingItem) && (typeof activeItem !== "undefined" && activeItem) && activeItem.name === "BOW" && (typeof activeTargetNPC !== "undefined" && activeTargetNPC);
+                  const isAimingLockedBow = (typeof isUsingItem !== "undefined" && isUsingItem) && (typeof activeItem !== "undefined" && activeItem) && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON") && (typeof activeTargetNPC !== "undefined" && activeTargetNPC);
                   if (!isAimingLockedBow) {
                     rotationY -= dx * touchSens;
                     rotationX += dy * touchSens;
@@ -3613,7 +3613,7 @@ window.addEventListener("keyup", (e) => {
           const holdingShovelOrPickaxe = (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex] && (actionSlotsItems[selectedActionSlotIndex].name === "SHOVEL" || actionSlotsItems[selectedActionSlotIndex].name === "PICKAXE"));
           
           if (holdingShovelOrPickaxe) {
-            if (!isUsingItem || (activeItem && activeItem.name === "BOW" && arrowShotInCurrentAnim && useAnimTimer <= (bowHoldArmTimer - bowSpamClickDelay))) {
+            if (!isUsingItem || (activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON") && arrowShotInCurrentAnim && useAnimTimer <= (bowHoldArmTimer - bowSpamClickDelay))) {
               const item = actionSlotsItems[selectedActionSlotIndex];
               useItem(item, selectedActionSlotIndex, "action", isAltAction);
             }
@@ -3650,7 +3650,7 @@ window.addEventListener("keyup", (e) => {
             }
           } else if (isPlacingFloor) {
             if (!isAltAction) placeFloor();
-          } else if (!isUsingItem || (activeItem && activeItem.name === "BOW" && arrowShotInCurrentAnim && useAnimTimer <= (bowHoldArmTimer - bowSpamClickDelay))) {
+          } else if (!isUsingItem || (activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON") && arrowShotInCurrentAnim && useAnimTimer <= (bowHoldArmTimer - bowSpamClickDelay))) {
              if (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex]) {
                const item = actionSlotsItems[selectedActionSlotIndex];
                if (isAltAction && item.name !== "SHOVEL" && item.name !== "PICKAXE") {
@@ -3722,7 +3722,7 @@ window.addEventListener("keyup", (e) => {
 
         if (typeof isUIOpen === "function" && isUIOpen()) return;
 
-        const isAimingLockedBow = isUsingItem && activeItem && activeItem.name === "BOW" && activeTargetNPC;
+        const isAimingLockedBow = isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON") && activeTargetNPC;
         if (!isAimingLockedBow) {
           rotationY -= dx * 0.007 * mouseSensitivity;
           rotationX += dy * 0.007 * mouseSensitivity;
@@ -5256,9 +5256,9 @@ window.addEventListener("keyup", (e) => {
         playerDiveDepth = pState.diveDepth;
         isDivingMode = pState.isDivingMode;
 
-        // Cancel BOW immediately if the player is swimming (with no auto-resume)
+        // Cancel BOW / ARM_CANNON immediately if the player is swimming (with no auto-resume)
         if (currentSwimFactor > 0.0) {
-          if (typeof activeItem !== "undefined" && activeItem && activeItem.name === "BOW") {
+          if (typeof activeItem !== "undefined" && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON")) {
             useAnimTimer = 0;
             isUsingItem = false;
             activeItem = null;

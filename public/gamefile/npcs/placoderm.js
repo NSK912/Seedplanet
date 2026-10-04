@@ -529,6 +529,20 @@ window.buildPlacodermModel = function(
   // Caudal fin ray ribs
   const pTailCap = p(0.0, 0.0, zTailBase - 0.02, 0.45);
   buildLowPolySphere(pTailCap, 0.018 * scale, 3, skinBelly, 0, 0, vertices, colors, indices);
+
+  // Set colliders for collision and damage
+  if (f !== null && c !== null) {
+    const pHeadCol = p(0.0, 0.04, 0.20, 0.0);
+    const pBodyCol = p(0.0, 0.03, -0.22, 0.15);
+    const pMidCol = p(0.0, 0.01, -0.55, 0.30);
+    const pTailCol = p(0.0, 0.0, -0.85, 0.45);
+    c.colliders = [
+      { offset: [pHeadCol[0] - pos[0], pHeadCol[1] - pos[1], pHeadCol[2] - pos[2]], radius: 0.18 * scale * 1.5 },
+      { offset: [pBodyCol[0] - pos[0], pBodyCol[1] - pos[1], pBodyCol[2] - pos[2]], radius: 0.22 * scale * 1.5 },
+      { offset: [pMidCol[0] - pos[0], pMidCol[1] - pos[1], pMidCol[2] - pos[2]], radius: 0.16 * scale * 1.5 },
+      { offset: [pTailCol[0] - pos[0], pTailCol[1] - pos[1], pTailCol[2] - pos[2]], radius: 0.12 * scale * 1.5 },
+    ];
+  }
 };
 
 // Register Placoderm in global NpcRegistry

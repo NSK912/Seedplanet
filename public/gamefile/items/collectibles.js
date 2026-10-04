@@ -3924,45 +3924,79 @@ function buildCollectibles(count, seed) {
           const _oldR = c.R ? [c.R[0], c.R[1], c.R[2]] : null;
 
           if (c.type === "arrow") {
-             if (c.isStuck) {
-                 continue;
-             }
-
              if (c.attachedToNPC) {
-                 if (!c.attachedToNPC.active) {
+                 const npc = c.attachedToNPC;
+                 const isNpcValid = typeof amphibians !== "undefined" && amphibians && amphibians.includes(npc);
+                 if (!isNpcValid) {
+                     c.attachedToNPC = null;
                      c.active = false;
                  } else {
-                     let nPos = c.attachedToNPC.ragdollPos || c.attachedToNPC.position || [0,0,0];
-                     c.position[0] = nPos[0] + c.relPos[0];
-                     c.position[1] = nPos[1] + c.relPos[1];
-                     c.position[2] = nPos[2] + c.relPos[2];
+                     const tf = (typeof window.getNPCTransform === "function") ? window.getNPCTransform(npc) : {
+                         pos: (npc.ragdollEnabled && npc.ragdollPos) ? npc.ragdollPos : (npc.position || [0,0,0]),
+                         R: npc.R || [1, 0, 0],
+                         N: npc.N || [0, 1, 0],
+                         F: npc.F || [0, 0, 1]
+                     };
+                     const nPos = tf.pos;
+                     const nR = tf.R;
+                     const nN = tf.N;
+                     const nF = tf.F;
+                     
+                     if (c.relLocal) {
+                         c.position[0] = nPos[0] + nR[0] * c.relLocal[0] + nN[0] * c.relLocal[1] + nF[0] * c.relLocal[2];
+                         c.position[1] = nPos[1] + nR[1] * c.relLocal[0] + nN[1] * c.relLocal[1] + nF[1] * c.relLocal[2];
+                         c.position[2] = nPos[2] + nR[2] * c.relLocal[0] + nN[2] * c.relLocal[1] + nF[2] * c.relLocal[2];
+                         
+                         if (c.relLocalF) {
+                             c.F = [
+                                 nR[0] * c.relLocalF[0] + nN[0] * c.relLocalF[1] + nF[0] * c.relLocalF[2],
+                                 nR[1] * c.relLocalF[0] + nN[1] * c.relLocalF[1] + nF[1] * c.relLocalF[2],
+                                 nR[2] * c.relLocalF[0] + nN[2] * c.relLocalF[1] + nF[2] * c.relLocalF[2]
+                             ];
+                         }
+                         if (c.relLocalR) {
+                             c.R = [
+                                 nR[0] * c.relLocalR[0] + nN[0] * c.relLocalR[1] + nF[0] * c.relLocalR[2],
+                                 nR[1] * c.relLocalR[0] + nN[1] * c.relLocalR[1] + nF[1] * c.relLocalR[2],
+                                 nR[2] * c.relLocalR[0] + nN[2] * c.relLocalR[1] + nF[2] * c.relLocalR[2]
+                             ];
+                         }
+                         if (c.relLocalNormal) {
+                             c.normal = [
+                                 nR[0] * c.relLocalNormal[0] + nN[0] * c.relLocalNormal[1] + nF[0] * c.relLocalNormal[2],
+                                 nR[1] * c.relLocalNormal[0] + nN[1] * c.relLocalNormal[1] + nF[1] * c.relLocalNormal[2],
+                                 nR[2] * c.relLocalNormal[0] + nN[2] * c.relLocalNormal[1] + nF[2] * c.relLocalNormal[2]
+                             ];
+                         }
+                     }
                  }
                  window.pendingDynamicCollectibleRefresh = true;
                  continue;
              }
 
-             // 1) Apply gravity towards the center of the sphere
+             if (c.isStuck) {
+                 continue;
+             }
+
              const p = c.position;
              const r_dist = Math.sqrt(p[0]**2 + p[1]**2 + p[2]**2);
-             
-             // Gravity acceleration pulling towards center
-             const gravityPower = 0.0008 * (typeof playerScale !== 'undefined' ? playerScale : 0.1); 
              const nx = p[0] / (r_dist || 1);
              const ny = p[1] / (r_dist || 1);
              const nz = p[2] / (r_dist || 1);
+             let speed = Math.sqrt(c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2);
              
-             // Use Physics engine
-             Physics.applyGravity(c.vel, nx, ny, nz, 1.0, gravityPower);
-             
-             // 2) Update position using velocity
-             p[0] += c.vel[0];
-             p[1] += c.vel[1];
-             p[2] += c.vel[2];
-             
-             // 3) Update orientation: forward F should align with velocity
-             const speed = Math.sqrt(c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2);
-             if (speed > 0.0001) {
-                 c.F = [c.vel[0] / speed, c.vel[1] / speed, c.vel[2] / speed];
+             // HYBRID ANIMATION + PHYSICS SYSTEM:
+             // 1) Animation launch phase: Straight barrel clearance without gravity or player snag
+             if (c.animPhaseActive) {
+                 c.animElapsed = (c.animElapsed || 0) + (1.0 / 60.0);
+                 p[0] += c.animDir[0] * c.animSpeed;
+                 p[1] += c.animDir[1] * c.animSpeed;
+                 p[2] += c.animDir[2] * c.animSpeed;
+                 
+                 c.F = [c.animDir[0], c.animDir[1], c.animDir[2]];
+                 c.vel = [c.animDir[0] * c.animSpeed, c.animDir[1] * c.animSpeed, c.animDir[2] * c.animSpeed];
+                 speed = c.animSpeed;
+                 
                  const localUp = [nx, ny, nz];
                  let right = [
                      c.F[1]*localUp[2] - c.F[2]*localUp[1],
@@ -3970,72 +4004,264 @@ function buildCollectibles(count, seed) {
                      c.F[0]*localUp[1] - c.F[1]*localUp[0]
                  ];
                  const lenR = Math.sqrt(right[0]**2 + right[1]**2 + right[2]**2);
-                 if (lenR > 0.001) {
-                     c.R = [right[0]/lenR, right[1]/lenR, right[2]/lenR];
-                 } else {
-                     c.R = [1, 0, 0];
-                 }
+                 c.R = (lenR > 0.001) ? [right[0]/lenR, right[1]/lenR, right[2]/lenR] : [1, 0, 0];
                  c.normal = [
                      c.R[1]*c.F[2] - c.R[2]*c.F[1],
                      c.R[2]*c.F[0] - c.R[0]*c.F[2],
                      c.R[0]*c.F[1] - c.R[1]*c.F[0]
                  ];
+                 
+                 // If animation exit duration reached, seamlessly switch to full physics
+                 if (c.animElapsed >= (c.animMaxTime || 0.25)) {
+                     c.animPhaseActive = false;
+                 }
+             } else {
+                 // 2) Physics phase: Gravity towards planet center + velocity integration
+                 const gravityPower = 0.0008 * (typeof playerScale !== 'undefined' ? playerScale : 0.1); 
+                 Physics.applyGravity(c.vel, nx, ny, nz, 1.0, gravityPower);
+                 
+                 p[0] += c.vel[0];
+                 p[1] += c.vel[1];
+                 p[2] += c.vel[2];
+                 
+                 speed = Math.sqrt(c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2);
+                 if (speed > 0.0001) {
+                     c.F = [c.vel[0] / speed, c.vel[1] / speed, c.vel[2] / speed];
+                     const localUp = [nx, ny, nz];
+                     let right = [
+                         c.F[1]*localUp[2] - c.F[2]*localUp[1],
+                         c.F[2]*localUp[0] - c.F[0]*localUp[2],
+                         c.F[0]*localUp[1] - c.F[1]*localUp[0]
+                     ];
+                     const lenR = Math.sqrt(right[0]**2 + right[1]**2 + right[2]**2);
+                     if (lenR > 0.001) {
+                         c.R = [right[0]/lenR, right[1]/lenR, right[2]/lenR];
+                     } else {
+                         c.R = [1, 0, 0];
+                     }
+                     c.normal = [
+                         c.R[1]*c.F[2] - c.R[2]*c.F[1],
+                         c.R[2]*c.F[0] - c.R[0]*c.F[2],
+                         c.R[0]*c.F[1] - c.R[1]*c.F[0]
+                     ];
+                 }
              }
              
-             // 4) Check collision with amphibians (NPCs)
+             // 4) Check collision with amphibians (NPCs) - Universal Mesh-Direct Sticking System
              let hitNPC = false;
              if (typeof amphibians !== "undefined" && amphibians) {
+                 const sScale = typeof playerScale !== "undefined" ? playerScale : 0.1;
+                 const arrowL = 1.12 * sScale; // 0.112m
+                 const halfL = arrowL * 0.5;   // 0.056m
+                 const arrowTipOffset = halfL + 0.04 * sScale; // Tip is ~0.060m forward from arrow center
+
+                 let arrowF = c.F ? [c.F[0], c.F[1], c.F[2]] : (c.vel ? [c.vel[0], c.vel[1], c.vel[2]] : [0, 0, 1]);
+                 const fLen = Math.hypot(arrowF[0], arrowF[1], arrowF[2]);
+                 if (fLen > 0.001) {
+                     arrowF[0] /= fLen; arrowF[1] /= fLen; arrowF[2] /= fLen;
+                 } else {
+                     arrowF = [0, 0, 1];
+                 }
+
+                 const currTip = [p[0] + arrowF[0] * arrowTipOffset, p[1] + arrowF[1] * arrowTipOffset, p[2] + arrowF[2] * arrowTipOffset];
+                 const prevP = _oldP || [p[0] - arrowF[0] * speed, p[1] - arrowF[1] * speed, p[2] - arrowF[2] * speed];
+                 const prevTip = [prevP[0] + arrowF[0] * arrowTipOffset, prevP[1] + arrowF[1] * arrowTipOffset, prevP[2] + arrowF[2] * arrowTipOffset];
+
                  for (let npc of amphibians) {
-                     if (npc.ragdollEnabled) continue;
-                     
-                     // Get NPC position
-                     let nPos = npc.position || [0, 0, 0];
-                     if (npc.ragdollPos && npc.ragdollInitialized) {
-                         nPos = npc.ragdollPos;
-                     }
-                     const dx = p[0] - nPos[0];
-                     const dy = p[1] - nPos[1];
-                     const dz = p[2] - nPos[2];
-                     const distSq = dx*dx + dy*dy + dz*dz;
-                     const hitRadius = npc.type === "meganeura" ? 0.25 : (npc.type === "isopod" ? 0.35 : (npc.type === "placoderm" ? 0.95 : 0.45));
-                      if (distSq < hitRadius * hitRadius) {
-                          // Hit!
-                          if (npc.hp === undefined) {
-                              const regHp = (window.NpcRegistry && window.NpcRegistry[npc.type]) ? window.NpcRegistry[npc.type].maxHp : 1;
-                              npc.hp = regHp;
-                              npc.maxHp = regHp;
-                          }
-                          npc.hp -= 1;
-                          let hpHearts = "";
-                          for (let i = 0; i < npc.maxHp; i++) {
-                              hpHearts += i < npc.hp ? "🔴" : "⚪";
-                          }
-                          showNotice("🎯 ยิงถูกเป้าหมาย! (Target hit!) " + hpHearts);
-                          
-                          if (npc.hp <= 0) {
-                              npc.ragdollEnabled = true;
-                              showNotice("💀 กำจัดเป้าหมายสำเร็จ! (Target eliminated!)");
-                          } else {
-                              npc.ragdollEnabled = false;
-                          }
+                     // Get NPC position and orthonormal orientation basis
+                     const tf = (typeof window.getNPCTransform === "function") ? window.getNPCTransform(npc) : {
+                         pos: (npc.ragdollEnabled && npc.ragdollPos) ? npc.ragdollPos : (npc.position || [0, 0, 0]),
+                         R: npc.R || [1, 0, 0],
+                         N: npc.N || [0, 1, 0],
+                         F: npc.F || [0, 0, 1]
+                     };
+                     const nPos = tf.pos;
+                     const nR = tf.R;
+                     const nN = tf.N;
+                     const nF = tf.F;
+
+                     const npcCenter = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(npc) : null) || nPos;
+                     const hitRadius = npc.type === "meganeura" ? 0.25 : (npc.type === "isopod" ? 0.20 : (npc.type === "placoderm" ? 0.45 : (npc.type === "georgiacetus" ? 0.55 : (npc.type === "human" ? 0.35 : 0.35))));
+
+                     // Find closest point on arrow trajectory segment to the NPC model center
+                     const segX = currTip[0] - prevTip[0];
+                     const segY = currTip[1] - prevTip[1];
+                     const segZ = currTip[2] - prevTip[2];
+                     const segLenSq = segX * segX + segY * segY + segZ * segZ;
+
+                     const toNpcX = npcCenter[0] - prevTip[0];
+                     const toNpcY = npcCenter[1] - prevTip[1];
+                     const toNpcZ = npcCenter[2] - prevTip[2];
+
+                     let tSeg = segLenSq > 0.00001 ? (toNpcX * segX + toNpcY * segY + toNpcZ * segZ) / segLenSq : 0;
+                     tSeg = Math.max(0, Math.min(1, tSeg));
+
+                     const closestX = prevTip[0] + segX * tSeg;
+                     const closestY = prevTip[1] + segY * tSeg;
+                     const closestZ = prevTip[2] + segZ * tSeg;
+
+                     const distSq = (closestX - npcCenter[0]) ** 2 + (closestY - npcCenter[1]) ** 2 + (closestZ - npcCenter[2]) ** 2;
+
+                     if (distSq <= hitRadius * hitRadius) {
+                         c.animPhaseActive = false;
+                         // Arrow Immunity Check: Arrows cannot damage obsidian_cube
+                         const isImmuneToArrows = (npc.type === "obsidian_cube") || (npc.immuneToArrows) || (window.NpcRegistry && window.NpcRegistry[npc.type] && window.NpcRegistry[npc.type].immuneToArrows);
+                         if (isImmuneToArrows) {
+                             if (typeof showNotice === "function") {
+                                 showNotice("🛡️ ลูกธนูเด้งสะท้อน! ศิลาออบซิเดียนทนทานต่อธนู 100% (Immune to arrows!)");
+                             }
+                             c.vel[0] = -c.vel[0] * 0.45 + (Math.random() - 0.5) * 0.04;
+                             c.vel[1] = -c.vel[1] * 0.45 + (Math.random() - 0.5) * 0.04;
+                             c.vel[2] = -c.vel[2] * 0.45 + (Math.random() - 0.5) * 0.04;
+                             hitNPC = true;
+                             break;
+                         }
+
+                         // User requirement: Arrow damage reduces only 1 HP!
+                         const damage = 1;
+                         if (npc.hp === undefined) {
+                             const regHp = (window.NpcRegistry && window.NpcRegistry[npc.type]) ? window.NpcRegistry[npc.type].maxHp : 1;
+                             npc.hp = regHp;
+                             npc.maxHp = regHp;
+                         }
+
+                         if (npc.hp > 0) {
+                             npc.hp = Math.max(0, npc.hp - damage);
+                             let hpHearts = "";
+                             for (let i = 0; i < npc.maxHp; i++) {
+                                 hpHearts += i < npc.hp ? "🔴" : "⚪";
+                             }
+                             const weaponName = (c.isCannonShot || c.sourceWeapon === "WOODEN_ARM_CANNON") ? "🪵🦾 ปืนไม้ติดแขน" : "🏹 ลูกธนู";
+                             showNotice("🎯 " + weaponName + " ยิงเข้าเป้า! ลดดาเมจ -" + damage + " " + hpHearts + " [HP: " + npc.hp + "/" + npc.maxHp + "]");
+                             
+                             if (npc.hp <= 0) {
+                                 npc.ragdollEnabled = true;
+                                 showNotice("💀 กำจัดเป้าหมายสำเร็จ! (Target eliminated!)");
+                             }
+                         } else {
+                             showNotice("🎯 ลูกธนูปักโดนร่างเป้าหมาย!");
+                         }
                          
-                         const normV = speed > 0 ? [c.vel[0]/speed, c.vel[1]/speed, c.vel[2]/speed] : [0, 0, 0];
-                         npc.ragdollVel = [
-                             c.vel[0] * 0.4,
-                             c.vel[1] * 0.4,
-                             c.vel[2] * 0.4
-                         ];
+                         if (npc.ragdollEnabled && npc.ragdollVel) {
+                             npc.ragdollVel[0] = (c.vel[0] || 0) * 0.25;
+                             npc.ragdollVel[1] = (c.vel[1] || 0) * 0.25;
+                             npc.ragdollVel[2] = (c.vel[2] || 0) * 0.25;
+                         }
                          
                          if (typeof playSplashSound === "function") {
                              playSplashSound(1.0);
                          }
                          
+                         // Transform impact point into NPC local coordinate space
+                         const toImpact = [closestX - nPos[0], closestY - nPos[1], closestZ - nPos[2]];
+                         let lx = toImpact[0] * nR[0] + toImpact[1] * nR[1] + toImpact[2] * nR[2];
+                         let ly = toImpact[0] * nN[0] + toImpact[1] * nN[1] + toImpact[2] * nN[2];
+                         let lz = toImpact[0] * nF[0] + toImpact[1] * nF[1] + toImpact[2] * nF[2];
+
+                         let ldx = arrowF[0] * nR[0] + arrowF[1] * nR[1] + arrowF[2] * nR[2];
+                         let ldy = arrowF[0] * nN[0] + arrowF[1] * nN[1] + arrowF[2] * nN[2];
+                         let ldz = arrowF[0] * nF[0] + arrowF[1] * nF[1] + arrowF[2] * nF[2];
+                         const ldLen = Math.hypot(ldx, ldy, ldz) || 1;
+                         ldx /= ldLen; ldy /= ldLen; ldz /= ldLen;
+
+                         // Snap impact point directly onto the true 3D surface of the model mesh
+                         if (npc.type === "human") {
+                             ly = Math.max(-0.16, Math.min(0.16, ly));
+                             const rBody = ly > 0.08 ? 0.055 : (ly >= -0.03 ? 0.075 : 0.055);
+                             const dHoriz = Math.hypot(lx, lz);
+                             if (dHoriz > rBody && dHoriz > 0.001) {
+                                 lx = (lx / dHoriz) * rBody;
+                                 lz = (lz / dHoriz) * rBody;
+                             }
+                         } else if (npc.type === "isopod") {
+                             lz = Math.max(-0.10, Math.min(0.10, lz));
+                             const dShell = Math.hypot(lx, ly);
+                             if (dShell > 0.07 && dShell > 0.001) {
+                                 lx = (lx / dShell) * 0.07;
+                                 ly = (ly / dShell) * 0.07;
+                             }
+                         } else if (npc.type === "placoderm") {
+                             lz = Math.max(-0.40, Math.min(0.18, lz));
+                             const rFish = Math.max(0.04, 0.12 * (1.0 - Math.abs(lz + 0.1) / 0.35));
+                             const dFish = Math.hypot(lx, ly);
+                             if (dFish > rFish && dFish > 0.001) {
+                                 lx = (lx / dFish) * rFish;
+                                 ly = (ly / dFish) * rFish;
+                             }
+                         } else if (npc.type === "georgiacetus") {
+                             lz = Math.max(-0.48, Math.min(0.25, lz));
+                             const rGeo = Math.max(0.05, 0.14 * (1.0 - Math.abs(lz + 0.1) / 0.40));
+                             const dGeo = Math.hypot(lx, ly);
+                             if (dGeo > rGeo && dGeo > 0.001) {
+                                 lx = (lx / dGeo) * rGeo;
+                                 ly = (ly / dGeo) * rGeo;
+                             }
+                         } else if (npc.type === "meganeura") {
+                             lz = Math.max(-0.12, Math.min(0.08, lz));
+                             const dBug = Math.hypot(lx, ly);
+                             if (dBug > 0.05 && dBug > 0.001) {
+                                 lx = (lx / dBug) * 0.05;
+                                 ly = (ly / dBug) * 0.05;
+                             }
+                         }
+
+                         // User requirement: Embed arrow deep, half of the arrow length (50%) buried into mesh
+                         const penetration = halfL; // 0.056m
+                         const centerOffset = arrowTipOffset - penetration; // 0.004m
+
+                         c.relLocal = [
+                             lx - ldx * centerOffset,
+                             ly - ldy * centerOffset,
+                             lz - ldz * centerOffset
+                         ];
+
+                         c.relLocalF = [ldx, ldy, ldz];
+
+                         const cR = (c.R && Math.hypot(c.R[0], c.R[1], c.R[2]) > 0.5) ? c.R : [1, 0, 0];
+                         c.relLocalR = [
+                             cR[0] * nR[0] + cR[1] * nR[1] + cR[2] * nR[2],
+                             cR[0] * nN[0] + cR[1] * nN[1] + cR[2] * nN[2],
+                             cR[0] * nF[0] + cR[1] * nF[1] + cR[2] * nF[2]
+                         ];
+
+                         const cN = (c.normal && Math.hypot(c.normal[0], c.normal[1], c.normal[2]) > 0.5) ? c.normal : [0, 1, 0];
+                         c.relLocalNormal = [
+                             cN[0] * nR[0] + cN[1] * nR[1] + cN[2] * nR[2],
+                             cN[0] * nN[0] + cN[1] * nN[1] + cN[2] * nN[2],
+                             cN[0] * nF[0] + cN[1] * nF[1] + cN[2] * nF[2]
+                         ];
+
                          c.attachedToNPC = npc;
-                         c.relPos = [p[0] - nPos[0], p[1] - nPos[1], p[2] - nPos[2]];
                          c.vel = [0, 0, 0];
+                         c.animPhaseActive = false;
+                         c.isDynamic = true;
+                         c.active = true;
+                         c.isStuck = false;
+
+                         // Compute and update immediate world coordinates
+                         c.position = [
+                             nPos[0] + nR[0] * c.relLocal[0] + nN[0] * c.relLocal[1] + nF[0] * c.relLocal[2],
+                             nPos[1] + nR[1] * c.relLocal[0] + nN[1] * c.relLocal[1] + nF[1] * c.relLocal[2],
+                             nPos[2] + nR[2] * c.relLocal[0] + nN[2] * c.relLocal[1] + nF[2] * c.relLocal[2]
+                         ];
+                         c.F = [
+                             nR[0] * c.relLocalF[0] + nN[0] * c.relLocalF[1] + nF[0] * c.relLocalF[2],
+                             nR[1] * c.relLocalF[0] + nN[1] * c.relLocalF[1] + nF[1] * c.relLocalF[2],
+                             nR[2] * c.relLocalF[0] + nN[2] * c.relLocalF[1] + nF[2] * c.relLocalF[2]
+                         ];
+                         c.R = [
+                             nR[0] * c.relLocalR[0] + nN[0] * c.relLocalR[1] + nF[0] * c.relLocalR[2],
+                             nR[1] * c.relLocalR[0] + nN[1] * c.relLocalR[1] + nF[1] * c.relLocalR[2],
+                             nR[2] * c.relLocalR[0] + nN[2] * c.relLocalR[1] + nF[2] * c.relLocalR[2]
+                         ];
+                         c.normal = [
+                             nR[0] * c.relLocalNormal[0] + nN[0] * c.relLocalNormal[1] + nF[0] * c.relLocalNormal[2],
+                             nR[1] * c.relLocalNormal[0] + nN[1] * c.relLocalNormal[1] + nF[1] * c.relLocalNormal[2],
+                             nR[2] * c.relLocalNormal[0] + nN[2] * c.relLocalNormal[1] + nF[2] * c.relLocalNormal[2]
+                         ];
+
                          window.pendingDynamicCollectibleRefresh = true;
                          hitNPC = true;
-                         // Already showed custom HP notice
                          break;
                      }
                  }
@@ -4056,6 +4282,7 @@ function buildCollectibles(count, seed) {
              const coreCollectible = collectibles.find(c => c.type === "planet_core");
              const coreRadius = coreCollectible ? coreCollectible.radius : 2.0;
              if (current_dist <= coreRadius) {
+                 c.animPhaseActive = false;
                  p[0] = nx * (coreRadius + 0.001);
                  p[1] = ny * (coreRadius + 0.001);
                  p[2] = nz * (coreRadius + 0.001);
@@ -4071,6 +4298,7 @@ function buildCollectibles(count, seed) {
              
              if (current_dist <= terrainRad) {
                  // Stick into ground
+                 c.animPhaseActive = false;
                  p[0] = nx * (terrainRad + 0.001);
                  p[1] = ny * (terrainRad + 0.001);
                  p[2] = nz * (terrainRad + 0.001);
@@ -4955,6 +5183,30 @@ function buildCollectibles(count, seed) {
           damage: 1.5,
           usage_th: "ถือในมือ เล็งและคลิกซ้ายยิงลูกธนูระยะไกล (ต้องมีลูกธนู ARROW ในกระเป๋า)",
           usage_en: "Hold in hand. Aim and left-click to shoot arrows (requires ARROW in inventory).",
+          maxStack: 1
+        },
+        "WOODEN_ARM_CANNON": {
+          id: "WOODEN_ARM_CANNON",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "ปืนไม้ติดแขน",
+          name_en: "Wooden Arm Cannon",
+          icon: "🪵🦾",
+          actionType: "WEAPON_RANGED",
+          damage: 2.5,
+          usage_th: "สวมครอบแขน เล็งและคลิกซ้ายยิงลูกธนูพลังสูง (ต้องมีลูกธนู ARROW ในกระเป๋า)",
+          usage_en: "Mounted on arm. Aim and left-click to shoot high-velocity arrows (requires ARROW in inventory).",
+          maxStack: 1
+        },
+        "ARM_CANNON": {
+          id: "WOODEN_ARM_CANNON",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "ปืนไม้ติดแขน",
+          name_en: "Wooden Arm Cannon",
+          icon: "🪵🦾",
+          actionType: "WEAPON_RANGED",
+          damage: 2.5,
+          usage_th: "สวมครอบแขน เล็งและคลิกซ้ายยิงลูกธนูพลังสูง (ต้องมีลูกธนู ARROW ในกระเป๋า)",
+          usage_en: "Mounted on arm. Aim and left-click to shoot high-velocity arrows (requires ARROW in inventory).",
           maxStack: 1
         },
         "BRANCH": {

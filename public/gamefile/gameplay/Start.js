@@ -172,6 +172,8 @@ function startGameWithSlot(loadedData, devMode = false) {
       inventory.push(null);
     }
     actionSlotsItems = new Array(8).fill(null);
+    actionSlotsItems[0] = { name: "WOODEN_ARM_CANNON", icon: "🪵🦾", label: "WOODEN_ARM_CANNON", count: 1 };
+    actionSlotsItems[1] = { name: "ARROW", icon: "🏹", label: "ARROW", count: 30 };
     collectedCount = { rock: 0, branch: 0, big_rock: 0 };
     choppedTrees = [];
     destroyedRocks = [];

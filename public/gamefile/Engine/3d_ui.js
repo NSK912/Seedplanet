@@ -1246,6 +1246,105 @@ const World3DUI = {
       this.removeSign("mech_stand_world_sign");
     }
   },
+
+  // --- 3D Aim Reticle System (Bow & Wooden Arm Cannon) ---
+  _drawAimReticleCanvas(ctx, w, h, isLocked) {
+    ctx.clearRect(0, 0, w, h);
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = w * 0.38;
+
+    // Subtle drop shadow for clarity on all terrain
+    ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+    ctx.shadowBlur = 6;
+
+    // Simple clean white circle ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+
+    // Subtle center dot
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+  },
+
+  updateAimReticle(options) {
+    if (!this.backend) return;
+    const {
+      targetPos,
+      isLocked = false,
+      cameraPos = null,
+      cameraUp = null
+    } = options;
+
+    if (!targetPos || !Array.isArray(targetPos) || targetPos.length < 3) {
+      this.hideAimReticle();
+      return;
+    }
+
+    const signId = "bow_aim_reticle";
+    const camP = cameraPos || (window.cameraPos || [0, 10, 0]);
+
+    // Vector pointing towards camera
+    const dx = camP[0] - targetPos[0];
+    const dy = camP[1] - targetPos[1];
+    const dz = camP[2] - targetPos[2];
+    const dist = Math.hypot(dx, dy, dz) || 1.0;
+    const normal = [dx / dist, dy / dist, dz / dist];
+
+    // Minimal offset (0.015m) towards camera to maintain exact center positioning on the NPC
+    const displayPos = [
+      targetPos[0] + normal[0] * 0.015,
+      targetPos[1] + normal[1] * 0.015,
+      targetPos[2] + normal[2] * 0.015
+    ];
+
+    let up = cameraUp || [0, 1, 0];
+    // Keep angular size consistent across distances (apparent reticle diameter)
+    const scaleSize = Math.max(0.14, Math.min(1.1, dist * 0.042));
+
+    if (!this.hasSign(signId)) {
+      const sign = this.createSign({
+        id: signId,
+        position: displayPos,
+        normal: normal,
+        up: up,
+        size: [scaleSize, scaleSize],
+        resolution: [256, 256],
+        drawFn: (ctx, w, h) => {
+          this._drawAimReticleCanvas(ctx, w, h, isLocked);
+        },
+        visible: true
+      });
+      if (sign) {
+        sign._lastIsLocked = isLocked;
+      }
+    } else {
+      const sign = this.signs.get(signId);
+      if (sign) {
+        sign.position = displayPos;
+        sign.normal = normal;
+        sign.up = up;
+        sign.scale = [scaleSize, scaleSize, 1];
+        sign.visible = true;
+        if (sign._lastIsLocked !== isLocked) {
+          sign._lastIsLocked = isLocked;
+          sign.needsTextureUpdate = true;
+        }
+      }
+    }
+  },
+
+  hideAimReticle() {
+    const sign = this.signs.get("bow_aim_reticle");
+    if (sign && sign.visible) {
+      sign.visible = false;
+    }
+  },
   createWebGPUBackend(device) {
     // Left as placeholder since game uses WebGL mode by default
     // If WebGPU mode is needed, port the WGSL code here.

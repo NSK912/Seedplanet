@@ -253,6 +253,7 @@
         { name: "LOG", icon: "🪵" },
         { name: "BOW", icon: "🏹" },
         { name: "ARROW", icon: "🏹" },
+        { name: "WOODEN_ARM_CANNON", icon: "🪵🦾" },
         { name: "WOOD_FLOOR", icon: "🪵" },
         { name: "THIN_WOOD_FLOOR", icon: "🪵" },
         { name: "STONE_FLOOR", icon: "🪨" },
@@ -586,6 +587,21 @@
             buildTaperedSegment([0, -0.3, 0], [0, 0.3, 0], 0.005, 0.005, 4, [0.55, 0.4, 0.25], rawVertices, rawColors, rawIndices);
             buildTaperedSegment([0, -0.3, 0], [0, -0.2, 0], 0.015, 0.006, 4, [0.9, 0.2, 0.2], rawVertices, rawColors, rawIndices);
             buildTaperedSegment([0, 0.3, 0], [0, 0.34, 0], 0.012, 0.001, 4, [0.35, 0.35, 0.35], rawVertices, rawColors, rawIndices);
+          } else if (name === "WOODEN_ARM_CANNON" || name === "ARM_CANNON") {
+            scaleFactor = 1.2;
+            const woodColor = [0.55, 0.38, 0.22];
+            const woodDark = [0.42, 0.28, 0.15];
+            const ironColor = [0.28, 0.28, 0.30];
+            const boreColor = [0.10, 0.10, 0.10];
+            // Rear to front cylinder
+            buildTaperedSegment([0, -0.25, 0], [0, 0, 0], 0.09, 0.08, 6, woodColor, rawVertices, rawColors, rawIndices);
+            buildTaperedSegment([0, 0, 0], [0, 0.28, 0], 0.08, 0.085, 6, woodDark, rawVertices, rawColors, rawIndices);
+            // Iron bands
+            buildTaperedSegment([0, -0.25, 0], [0, -0.21, 0], 0.096, 0.096, 6, ironColor, rawVertices, rawColors, rawIndices);
+            buildTaperedSegment([0, -0.02, 0], [0, 0.02, 0], 0.088, 0.088, 6, ironColor, rawVertices, rawColors, rawIndices);
+            buildTaperedSegment([0, 0.25, 0], [0, 0.28, 0], 0.092, 0.092, 6, ironColor, rawVertices, rawColors, rawIndices);
+            // Muzzle bore
+            buildTaperedSegment([0, 0.22, 0], [0, 0.28, 0], 0.05, 0.055, 6, boreColor, rawVertices, rawColors, rawIndices);
           } else if (name === "STONE_FLOOR") {
             scaleFactor = 1.1;
             addBox(p, 0.9, 0.1, 0.9, [0.6, 0.6, 0.6], r, n, f, rawVertices, rawColors, rawIndices);
@@ -2466,11 +2482,14 @@ function cancelFloorPlacement() {
             ];
         }
 
+        const isCannon = activeItem && (activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+
         if (window.lastBowGripPos && window.lastBowAimDir && (window.lastBowAimDir[0] !== 0 || window.lastBowAimDir[1] !== 0 || window.lastBowAimDir[2] !== 0)) {
+            const clearance = isCannon ? 0.09 * (playerScale / 0.1) : 0.05;
             startPos = [
-                window.lastBowGripPos[0] + window.lastBowAimDir[0] * 0.05,
-                window.lastBowGripPos[1] + window.lastBowAimDir[1] * 0.05,
-                window.lastBowGripPos[2] + window.lastBowAimDir[2] * 0.05
+                window.lastBowGripPos[0] + window.lastBowAimDir[0] * clearance,
+                window.lastBowGripPos[1] + window.lastBowAimDir[1] * clearance,
+                window.lastBowGripPos[2] + window.lastBowAimDir[2] * clearance
             ];
             arrowDir = [
                 window.lastBowAimDir[0],
@@ -2486,21 +2505,36 @@ function cancelFloorPlacement() {
             }
         }
 
-        // Add a slight arc upwards (counteract gravity slightly depending on draw power)
-        const pitchUpAngle = 0.05 * (1.0 - drawPower) + 0.01;
-        arrowDir[0] += nx * pitchUpAngle;
-        arrowDir[1] += ny * pitchUpAngle;
-        arrowDir[2] += nz * pitchUpAngle;
+        // Direct arrow trajectory exactly towards currentAimTargetPos
+        if (window.currentAimTargetPos) {
+            const toTarget = [
+                window.currentAimTargetPos[0] - startPos[0],
+                window.currentAimTargetPos[1] - startPos[1],
+                window.currentAimTargetPos[2] - startPos[2]
+            ];
+            const tLen = Math.hypot(toTarget[0], toTarget[1], toTarget[2]);
+            if (tLen > 0.001) {
+                arrowDir = [toTarget[0] / tLen, toTarget[1] / tLen, toTarget[2] / tLen];
+            }
+        }
+
+        // Only bows not locked add slight upward arc pitch angle; cannon fires 100% straight
+        if (!isCannon && !window.isAimTargetLocked) {
+            const pitchUpAngle = 0.05 * (1.0 - drawPower) + 0.01;
+            arrowDir[0] += nx * pitchUpAngle;
+            arrowDir[1] += ny * pitchUpAngle;
+            arrowDir[2] += nz * pitchUpAngle;
+        }
         
-        dLen = Math.sqrt(arrowDir[0]**2 + arrowDir[1]**2 + arrowDir[2]**2);
+        let dLen = Math.sqrt(arrowDir[0]**2 + arrowDir[1]**2 + arrowDir[2]**2);
         if (dLen > 0) {
           arrowDir[0] /= dLen;
           arrowDir[1] /= dLen;
           arrowDir[2] /= dLen;
         }
         
-        // Base speed for full draw, minimum speed for zero draw
-        const speed = (0.2 + (0.6 * drawPower)) * playerScale; 
+        // Base speed for full draw (cannon has higher initial muzzle velocity)
+        const speed = (isCannon ? 1.15 : (0.2 + (0.6 * drawPower))) * playerScale; 
         const arrowVel = [
           arrowDir[0] * speed,
           arrowDir[1] * speed,
@@ -2527,17 +2561,27 @@ function cancelFloorPlacement() {
         
         const arrowCollectible = {
           type: "arrow",
-          position: startPos,
+          position: [startPos[0], startPos[1], startPos[2]],
           vel: arrowVel,
           normal: u_arrow,
           R: r_arrow,
           F: f_arrow,
           U: u_arrow,
-          color: [0.55, 0.4, 0.25],
+          color: isCannon ? [0.62, 0.44, 0.26] : [0.55, 0.4, 0.25],
           size: 0.1,
           active: true,
           isDynamic: true,
-          seed: Math.random()
+          seed: Math.random(),
+          // Hybrid Animation + Physics parameters
+          sourceWeapon: isCannon ? "WOODEN_ARM_CANNON" : "BOW",
+          isCannonShot: !!isCannon,
+          animPhaseActive: !!isCannon,
+          animElapsed: 0,
+          animMaxTime: 0.25, // Pure animated barrel exit phase
+          animOrigin: [startPos[0], startPos[1], startPos[2]],
+          animDir: [arrowDir[0], arrowDir[1], arrowDir[2]],
+          animSpeed: speed,
+          ignorePlayer: true
         };
         
         collectibles.push(arrowCollectible);
@@ -2616,18 +2660,17 @@ function cancelFloorPlacement() {
               modTerrainAtPlayer(-0.35, true);
           }
         } else if (itemName === "BOW") {
+          showNotice("🚫 คันธนูถูกปิดใช้งาน กรุณาใช้ปืนไม้ติดแขน (ARM CANNON) แทน!");
+          return;
+        } else if (itemName === "WOODEN_ARM_CANNON" || itemName === "ARM_CANNON") {
           const arrowRef = findArrowInInventory();
           if (!arrowRef) {
             showNotice("🏹 ลูกธนูไม่เพียงพอ! (No arrows!)");
             return;
           }
-          if (activeItem && activeItem.name === "BOW" && useAnimTimer > 0) {
-              useAnimTimer = 1.2; 
-              bowComboActive = true;
-          } else {
-              useAnimTimer = 1.4; 
-              bowComboActive = false;
-          }
+          // Animation 01a09186-787b-771f-b4ee-5b234572bcef trimmed 1.40s to 2.47s (total 1.07s)
+          useAnimTimer = 1.07;
+          bowComboActive = false;
           activeItem = item;
           isUsingItem = true;
           arrowShotInCurrentAnim = false;
@@ -3306,17 +3349,18 @@ function cancelFloorPlacement() {
             ]
           },
           {
-            id: "bow",
-            output: { name: "BOW", icon: "🏹", count: 1, label: "ธนู (BOW) x1" },
-            ingredients: [
-              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" }
-            ]
-          },
-          {
             id: "arrow",
             output: { name: "ARROW", icon: "🏹", count: 30, label: "ลูกธนู (ARROW) x30" },
             ingredients: [
               { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" },
+              { name: "BIG_ROCK", icon: "🪨", count: 1, label: "หินใหญ่ (BIG ROCK)" }
+            ]
+          },
+          {
+            id: "wooden_arm_cannon",
+            output: { name: "WOODEN_ARM_CANNON", icon: "🪵🦾", count: 1, label: "ปืนไม้ติดแขน (ARM CANNON) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 2, label: "ท่อนไม้ (LOG)" },
               { name: "BIG_ROCK", icon: "🪨", count: 1, label: "หินใหญ่ (BIG ROCK)" }
             ]
           },
@@ -3662,17 +3706,18 @@ function cancelFloorPlacement() {
             ]
           },
           {
-            id: "bow",
-            output: { name: "BOW", icon: "🏹", count: 1 },
-            ingredients: [
-              { name: "LOG", count: 1 }
-            ]
-          },
-          {
             id: "arrow",
             output: { name: "ARROW", icon: "🏹", count: 30 },
             ingredients: [
               { name: "LOG", count: 1 },
+              { name: "BIG_ROCK", count: 1 }
+            ]
+          },
+          {
+            id: "wooden_arm_cannon",
+            output: { name: "WOODEN_ARM_CANNON", icon: "🪵🦾", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 2 },
               { name: "BIG_ROCK", count: 1 }
             ]
           },
@@ -4102,7 +4147,7 @@ function cancelFloorPlacement() {
                 if (selectedActionSlotIndex === i) {
                   selectedActionSlotIndex = -1;
                   renderActionSlots();
-                  if (activeItem && activeItem.name === "BOW") {
+                  if (activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON")) {
                     useAnimTimer = 0;
                     isUsingItem = false;
                     activeItem = null;
