@@ -92,6 +92,7 @@ function startGameWithSlot(loadedData, devMode = false) {
   }
   if (gameStarted) return;
   gameStarted = true;
+  window.gameStarted = true;
   isDevMode = devMode;
   window.isDevMode = devMode;
 
@@ -344,6 +345,7 @@ if (settingsMenuBtn) {
     overlay.classList.add("open");
 
     activeTab = "settings";
+    if (typeof window.setActiveTab === "function") window.setActiveTab("settings");
     document.getElementById("tabSettings").classList.add("active");
     document.getElementById("tabInventory").classList.remove("active");
     document.getElementById("tabCrafting").classList.remove("active");
@@ -362,6 +364,9 @@ if (settingsMenuBtn) {
     document.getElementById("cookingList").style.display = "none";
 
     document.getElementById("inventorySettings").style.display = "flex";
+
+    const bottomBtns = document.getElementById("inventoryBottomButtons");
+    if (bottomBtns) bottomBtns.style.display = "none";
 
     // ซ่อนแท็บอื่นๆ และปุ่มออกไปหน้าหลัก
     document.getElementById("tabInventory").style.display = "none";

@@ -923,6 +923,24 @@
       window.create3DIconCanvas = create3DIconCanvas;
 
       let activeTab = "inventory";
+      window.getActiveTab = () => activeTab;
+      window.setActiveTab = (tab) => {
+        activeTab = tab;
+        const bottomBtns = document.getElementById("inventoryBottomButtons");
+        if (bottomBtns) {
+          const tabInv = document.getElementById("tabInventory");
+          const isTabActive = tabInv ? tabInv.classList.contains("active") : (tab === "inventory");
+          bottomBtns.style.display = (tab === "inventory" && isTabActive) ? "flex" : "none";
+        }
+        if (tab !== "inventory") {
+          window.selectedInventorySlot = null;
+          if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+          if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+        }
+        if (typeof updateCustomScrollbar === "function") {
+          setTimeout(updateCustomScrollbar, 30);
+        }
+      };
 
       function updateBadge() {
         const badge = document.getElementById("inventoryBadge");
@@ -1010,6 +1028,7 @@
         }
         updateActionSlotsPosition();
       }
+      window.closeInventoryActually = closeInventoryActually;
 
       function openChest(chestItem) {
         // Close inventory first if open
@@ -1257,14 +1276,111 @@
             }
           };
 
-          slotEl.onclick = onClick || null;
+          if (window.selectedInventorySlot && window.selectedInventorySlot.source === source && window.selectedInventorySlot.index === index) {
+            slotEl.classList.add("item-selected");
+          } else {
+            slotEl.classList.remove("item-selected");
+          }
+
+          slotEl.onclick = (e) => {
+            if (source === "itemsList") {
+              window.selectedInventorySlot = null;
+              if (onClick) onClick(e);
+              return;
+            }
+            if (window.selectedInventorySlot) {
+              const prev = window.selectedInventorySlot;
+              if (prev.source === source && prev.index === index) {
+                // Clicked same slot: deselect
+                window.selectedInventorySlot = null;
+              } else {
+                // Move/swap/stack from prev to target slot
+                const fromItem = getSlotItem(prev.source, prev.index);
+                if (fromItem) {
+                  const toItem = getSlotItem(source, index);
+                  const fromName = fromItem.name || fromItem.label;
+                  const toName = toItem ? (toItem.name || toItem.label) : null;
+
+                  if (toItem && fromName === toName) {
+                    toItem.count = (toItem.count || 1) + (fromItem.count || 1);
+                    setSlotItem(prev.source, prev.index, null);
+                  } else {
+                    setSlotItem(prev.source, prev.index, toItem);
+                    setSlotItem(source, index, fromItem);
+                  }
+
+                  window.selectedInventorySlot = null;
+                  if (currentOpenChest) renderChest();
+                  renderInventory();
+                  renderActionSlots();
+                  updateBadge();
+                  saveSettingsToLocalStorage();
+                  if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+                  if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+                  if (typeof playPlaceSound === "function") try { playPlaceSound(); } catch(err){}
+                  if (window.GamepadController && typeof window.GamepadController.applyUIFocus === "function") {
+                    window.GamepadController.applyUIFocus();
+                  }
+                  if (onClick) onClick(e);
+                  return;
+                }
+              }
+            } else {
+              const cur = getSlotItem(source, index);
+              if (cur) {
+                window.selectedInventorySlot = { source, index, item: cur };
+              }
+            }
+            if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+            if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+
+            if (onClick) onClick(e);
+          };
+
+          // Track hovered slot for bottom inventory action buttons
+          slotEl.addEventListener("mouseenter", () => {
+            window.lastHoveredSlot = { slotEl, source, index, item };
+          });
+          slotEl.addEventListener("mouseleave", () => {
+            if (window.lastHoveredSlot && window.lastHoveredSlot.slotEl === slotEl) {
+              window.lastHoveredSlot = null;
+            }
+          });
         } else {
           slotEl.classList.add("empty");
+          slotEl.classList.remove("item-selected");
           slotEl.draggable = false;
           slotEl.ondragstart = null;
           slotEl.ondragend = null;
           if (cursor) slotEl.style.cursor = cursor;
-          slotEl.onclick = onClick || null;
+          slotEl.onclick = (e) => {
+            if (window.selectedInventorySlot) {
+              const prev = window.selectedInventorySlot;
+              const fromItem = getSlotItem(prev.source, prev.index);
+              if (fromItem) {
+                setSlotItem(source, index, fromItem);
+                setSlotItem(prev.source, prev.index, null);
+                window.selectedInventorySlot = null;
+                if (currentOpenChest) renderChest();
+                renderInventory();
+                renderActionSlots();
+                updateBadge();
+                saveSettingsToLocalStorage();
+                if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+                if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+                if (typeof playPlaceSound === "function") try { playPlaceSound(); } catch(err){}
+                if (window.GamepadController && typeof window.GamepadController.applyUIFocus === "function") {
+                  window.GamepadController.applyUIFocus();
+                }
+                if (onClick) onClick(e);
+                return;
+              }
+            }
+            window.selectedInventorySlot = null;
+            if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+            if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+            if (onClick) onClick(e);
+          };
 
           const emptyText = document.createElement("span");
           emptyText.style.fontSize = "10px";
@@ -2875,7 +2991,9 @@ function cancelFloorPlacement() {
       let _lastNoticeTime = 0;
 
       function showNotice(msg) {
-        if (!isDevMode) {
+        // Essential gamepad connection and flight notices should always be displayed to players
+        const isEssentialNotice = typeof msg === "string" && (msg.includes("🎮") || msg.includes("🪽"));
+        if (!isDevMode && !isEssentialNotice) {
           return; // ซ่อนการแจ้งเตือนทั้งหมดในโหมดเซฟ
         }
         const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
@@ -2909,6 +3027,9 @@ function cancelFloorPlacement() {
         if (_activeNoticeFadeTimer) clearTimeout(_activeNoticeFadeTimer);
 
         let finalMsg = msg;
+        if (window.GamepadController && typeof window.GamepadController.formatPromptText === "function") {
+          finalMsg = window.GamepadController.formatPromptText(finalMsg);
+        }
         const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : (window.gameLanguage || "en");
         if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
           finalMsg = window.Seedian.toSeedian(msg);
@@ -3033,6 +3154,7 @@ function cancelFloorPlacement() {
       }
 
       function renderCooking() {
+        window.renderCooking = renderCooking;
         const list = document.getElementById("cookingList");
         list.innerHTML = "";
         
@@ -3212,9 +3334,12 @@ function cancelFloorPlacement() {
           card.appendChild(btn);
           list.appendChild(card);
         });
+        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
+      window.renderCooking = renderCooking;
 
       function renderCrafting() {
+        window.renderCrafting = renderCrafting;
         const craftingList = document.getElementById("craftingList");
         if (!craftingList) return;
         craftingList.innerHTML = "";
@@ -3581,7 +3706,9 @@ function cancelFloorPlacement() {
           card.appendChild(btn);
           craftingList.appendChild(card);
         });
+        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
+      window.renderCrafting = renderCrafting;
 
       function craftItem(recipeId) {
         const CRAFTING_RECIPES = [
@@ -3904,18 +4031,19 @@ function cancelFloorPlacement() {
         
         const overlay = document.getElementById("trashConfirmOverlay");
         
-        // Append to the active panel to keep it contained
+        // Append strictly inside the active panel to keep it contained within the inventory / chest UI window
         const chestOverlay = document.getElementById("chestOverlay");
+        let targetPanel = null;
         if (source === "chest" || source === "chestPlayerInventory" || (chestOverlay && chestOverlay.classList.contains("open"))) {
-           const chestPanel = document.querySelector("#chestOverlay .inventory-panel");
-           if (chestPanel) {
-             chestPanel.style.overflow = "hidden";
-           }
+           targetPanel = document.querySelector("#chestOverlay .inventory-panel");
+           if (targetPanel) targetPanel.style.overflow = "hidden";
         } else {
-           const invPanel = document.querySelector("#inventoryOverlay .inventory-panel");
-           if (invPanel) {
-             invPanel.style.overflow = "hidden";
-           }
+           targetPanel = document.querySelector("#inventoryOverlay .inventory-panel");
+           if (targetPanel) targetPanel.style.overflow = "hidden";
+        }
+
+        if (targetPanel && overlay && overlay.parentElement !== targetPanel) {
+           targetPanel.appendChild(overlay);
         }
         
         if (overlay) overlay.style.setProperty("display", "flex", "important");
@@ -3923,7 +4051,20 @@ function cancelFloorPlacement() {
         // Reset progress
         clearInterval(trashHoldInterval);
         trashHoldProgress = 0;
-        document.getElementById("trashConfirmProgress").style.width = "0%";
+        const progressEl = document.getElementById("trashConfirmProgress");
+        if (progressEl) {
+          progressEl.style.transition = "none";
+          progressEl.style.width = "0%";
+        }
+
+        // Setup Gamepad navigation to focus trashConfirmBtn
+        if (window.GamepadController) {
+          window.GamepadController.uiNav.area = "trashConfirm";
+          window.GamepadController.uiNav.index = 1; // Default focus to HOLD TO DELETE button
+          setTimeout(() => {
+            if (window.GamepadController.applyUIFocus) window.GamepadController.applyUIFocus();
+          }, 30);
+        }
       }
 
       function closeTrashConfirm() {
@@ -3936,8 +4077,23 @@ function cancelFloorPlacement() {
         if (invPanel) invPanel.style.overflow = "";
         clearInterval(trashHoldInterval);
         trashHoldProgress = 0;
-        document.getElementById("trashConfirmProgress").style.width = "0%";
+        const progressEl = document.getElementById("trashConfirmProgress");
+        if (progressEl) {
+          progressEl.style.transition = "none";
+          progressEl.style.width = "0%";
+        }
+
+        // Restore gamepad navigation back to bottom action buttons or grid
+        if (window.GamepadController) {
+          window.GamepadController.uiNav.area = "bottom";
+          window.GamepadController.uiNav.index = 2; // back on Destroy button
+          setTimeout(() => {
+            if (window.GamepadController.applyUIFocus) window.GamepadController.applyUIFocus();
+          }, 30);
+        }
       }
+      window.openTrashConfirm = openTrashConfirm;
+      window.closeTrashConfirm = closeTrashConfirm;
 
       document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("trashCancelBtn")?.addEventListener("click", closeTrashConfirm);
@@ -3968,6 +4124,8 @@ function cancelFloorPlacement() {
           trashConfirmProgress.style.transition = "width 0.2s";
           trashConfirmProgress.style.width = "0%";
         }
+        window.startTrashHold = startTrashHold;
+        window.cancelTrashHold = cancelTrashHold;
 
         trashConfirmBtn?.addEventListener("mousedown", startTrashHold);
         trashConfirmBtn?.addEventListener("touchstart", startTrashHold, { passive: false });
@@ -3976,7 +4134,386 @@ function cancelFloorPlacement() {
         trashConfirmBtn?.addEventListener("mouseleave", cancelTrashHold);
         trashConfirmBtn?.addEventListener("touchend", cancelTrashHold);
         trashConfirmBtn?.addEventListener("touchcancel", cancelTrashHold);
+
+        // Setup 3 Bottom Inventory Buttons (Action UI, Split, Destroy)
+        const btnActionUI = document.getElementById("btnInventoryActionUI");
+        const btnSplit = document.getElementById("btnInventorySplit");
+        const btnDestroy = document.getElementById("btnInventoryDestroy");
+
+        window.selectedInventorySlot = null; // { source, index, item }
+
+        if (!document.getElementById("inventorySelectedSlotStyles")) {
+          const st = document.createElement("style");
+          st.id = "inventorySelectedSlotStyles";
+          st.textContent = `
+            .inventory-slot.item-selected, .action-slot.item-selected {
+              border-color: #dfb76c !important;
+              box-shadow: inset 0 0 0 2px #dfb76c, inset 0 0 12px rgba(223, 183, 108, 0.4) !important;
+              background: rgba(223, 183, 108, 0.16) !important;
+            }
+          `;
+          document.head.appendChild(st);
+        }
+
+        window.updateSelectedSlotVisuals = function() {
+          document.querySelectorAll(".inventory-slot, .action-slot").forEach(el => {
+            const s = el.dataset.source;
+            const idx = parseInt(el.dataset.index, 10);
+            if (window.selectedInventorySlot && window.selectedInventorySlot.source === s && window.selectedInventorySlot.index === idx) {
+              el.classList.add("item-selected");
+            } else {
+              el.classList.remove("item-selected");
+            }
+          });
+        };
+
+        window.updateBottomButtonsState = function() {
+          const selected = window.selectedInventorySlot;
+
+          if (selected && selected.item) {
+            const curItem = getSlotItem(selected.source, selected.index);
+            if (!curItem) {
+              window.selectedInventorySlot = null;
+              window.updateSelectedSlotVisuals();
+              window.updateBottomButtonsState();
+              return;
+            }
+            selected.item = curItem;
+
+            if (btnActionUI) {
+              btnActionUI.style.opacity = "1";
+              btnActionUI.style.cursor = "pointer";
+              btnActionUI.style.boxShadow = "0 0 10px rgba(223, 183, 108, 0.35)";
+            }
+            if (btnSplit) {
+              const canSplit = (curItem.count > 1);
+              btnSplit.style.opacity = canSplit ? "1" : "0.45";
+              btnSplit.style.cursor = canSplit ? "pointer" : "not-allowed";
+              btnSplit.style.boxShadow = canSplit ? "0 0 10px rgba(56, 189, 248, 0.35)" : "none";
+            }
+            if (btnDestroy) {
+              btnDestroy.style.opacity = "1";
+              btnDestroy.style.cursor = "pointer";
+              btnDestroy.style.boxShadow = "0 0 10px rgba(239, 68, 68, 0.35)";
+            }
+          } else {
+            if (btnActionUI) {
+              btnActionUI.style.opacity = "0.38";
+              btnActionUI.style.cursor = "not-allowed";
+              btnActionUI.style.boxShadow = "none";
+            }
+            if (btnSplit) {
+              btnSplit.style.opacity = "0.38";
+              btnSplit.style.cursor = "not-allowed";
+              btnSplit.style.boxShadow = "none";
+            }
+            if (btnDestroy) {
+              btnDestroy.style.opacity = "0.38";
+              btnDestroy.style.cursor = "not-allowed";
+              btnDestroy.style.boxShadow = "none";
+            }
+          }
+        };
+
+        // Initialize button states as disabled until item is selected
+        window.updateBottomButtonsState();
+
+        btnActionUI?.addEventListener("click", () => {
+          if (!window.selectedInventorySlot || !window.selectedInventorySlot.item) {
+            if (typeof showNotice === "function") {
+              showNotice("⚠️ กรุณาคลิกเลือกไอเทมในกระเป๋าก่อนใช้งาน");
+            }
+            return;
+          }
+          const { source, index, item } = window.selectedInventorySlot;
+          if (source === "action") {
+            if (typeof showNotice === "function") {
+              showNotice(`ℹ️ ไอเทมอยู่ในช่องแอคชั่น [ช่อง ${index + 1}] อยู่แล้ว`);
+            }
+          } else {
+            let targetSlot = actionSlotsItems.findIndex(s => s === null);
+            if (targetSlot === -1) targetSlot = (selectedActionSlotIndex !== -1 ? selectedActionSlotIndex : 0);
+            
+            const toItem = actionSlotsItems[targetSlot];
+            setSlotItem(source, index, toItem);
+            setSlotItem("action", targetSlot, item);
+            selectedActionSlotIndex = targetSlot;
+
+            window.selectedInventorySlot = { source: "action", index: targetSlot, item: item };
+
+            if (typeof renderChest === "function" && currentOpenChest) renderChest();
+            renderInventory();
+            renderActionSlots();
+            updateBadge();
+            saveSettingsToLocalStorage();
+            if (typeof playCollectSound === "function") playCollectSound();
+
+            const dName = typeof getItemDisplayName === "function" ? getItemDisplayName(item.name || item.label) : (item.name || item.label);
+            if (typeof showNotice === "function") {
+              showNotice(`⚡ ย้าย ${item.icon || "📦"} ${dName} ไปยังช่องแอคชั่น [ช่อง ${targetSlot + 1}] แล้ว`);
+            }
+          }
+        });
+
+        btnSplit?.addEventListener("click", () => {
+          if (!window.selectedInventorySlot || !window.selectedInventorySlot.item) {
+            if (typeof showNotice === "function") {
+              showNotice("⚠️ กรุณาคลิกเลือกไอเทมในกระเป๋าก่อนแบ่งจำนวน");
+            }
+            return;
+          }
+          const { source, index, item } = window.selectedInventorySlot;
+          if ((item.count || 1) <= 1) {
+            if (typeof showNotice === "function") {
+              showNotice("❌ ไอเทมนี้มีเพียง 1 ชิ้น ไม่สามารถแบ่งได้");
+            }
+            return;
+          }
+          handleSplitItem(source, index);
+          if (typeof playCollectSound === "function") playCollectSound();
+          window.updateSelectedSlotVisuals();
+          window.updateBottomButtonsState();
+        });
+
+        btnDestroy?.addEventListener("click", () => {
+          if (!window.selectedInventorySlot || !window.selectedInventorySlot.item) {
+            if (typeof showNotice === "function") {
+              showNotice("⚠️ กรุณาคลิกเลือกไอเทมในกระเป๋าก่อนทำลาย");
+            }
+            return;
+          }
+          const { source, index, item } = window.selectedInventorySlot;
+          openTrashConfirm(source, index, item);
+        });
+
+        if (btnDestroy) {
+          btnDestroy.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            btnDestroy.style.background = "rgba(239, 68, 68, 0.35)";
+            btnDestroy.style.borderColor = "#ef4444";
+          });
+          btnDestroy.addEventListener("dragleave", () => {
+            btnDestroy.style.background = "rgba(239, 68, 68, 0.12)";
+            btnDestroy.style.borderColor = "rgba(239, 68, 68, 0.4)";
+          });
+          btnDestroy.addEventListener("drop", (e) => {
+            btnDestroy.style.background = "rgba(239, 68, 68, 0.12)";
+            btnDestroy.style.borderColor = "rgba(239, 68, 68, 0.4)";
+            handleTrashDrop(e);
+          });
+        }
       });
+
+      // ============================================
+      // Custom Sci-Fi DOM Virtual Scrollbar Controller
+      // ============================================
+      function getActiveScrollableContainer() {
+        const overlay = document.getElementById("inventoryOverlay");
+        if (!overlay || !overlay.classList.contains("open")) return null;
+
+        const activeTabName = typeof window.getActiveTab === "function" ? window.getActiveTab() : (typeof activeTab !== "undefined" ? activeTab : "inventory");
+
+        if (activeTabName === "settings") {
+          const el = document.getElementById("inventorySettings");
+          if (el && el.style.display !== "none") return el;
+        } else if (activeTabName === "crafting") {
+          const el = document.getElementById("craftingList");
+          if (el && el.style.display !== "none") return el;
+        } else if (activeTabName === "cooking") {
+          const el = document.getElementById("cookingList");
+          if (el && el.style.display !== "none") return el;
+        } else if (activeTabName === "itemsList" || activeTabName === "inventory") {
+          const mainLayout = document.getElementById("inventoryMainLayout");
+          if (mainLayout && mainLayout.style.display !== "none") return mainLayout;
+          const grid = document.getElementById("inventoryGrid");
+          if (grid && grid.style.display !== "none") return grid;
+        }
+
+        const candidates = [
+          document.getElementById("inventorySettings"),
+          document.getElementById("craftingList"),
+          document.getElementById("cookingList"),
+          document.getElementById("inventoryMainLayout"),
+          document.getElementById("inventoryGrid")
+        ];
+        for (const el of candidates) {
+          if (el && el.style.display !== "none" && window.getComputedStyle(el).display !== "none") {
+            return el;
+          }
+        }
+        return null;
+      }
+
+      function updateCustomScrollbar() {
+        const saveSelect = document.getElementById("saveSelectOverlay");
+        if (saveSelect && saveSelect.classList.contains("open")) {
+          const track = document.getElementById("saveSelectCustomScrollbar");
+          const thumb = document.getElementById("saveSelectCustomScrollbarThumb");
+          const container = document.getElementById("saveSlotsList");
+          if (!track || !thumb || !container) return;
+
+          const scrollHeight = container.scrollHeight;
+          const clientHeight = container.clientHeight;
+          const scrollTop = container.scrollTop;
+
+          if (scrollHeight <= clientHeight + 4) {
+            track.style.display = "none";
+            return;
+          }
+
+          track.style.display = "block";
+          const trackHeight = track.clientHeight;
+          if (trackHeight <= 0) return;
+
+          const thumbHeight = Math.max(36, Math.min(trackHeight - 4, (clientHeight / scrollHeight) * trackHeight));
+          thumb.style.height = `${thumbHeight}px`;
+
+          const maxScroll = scrollHeight - clientHeight;
+          const maxThumbTop = trackHeight - thumbHeight;
+          const scrollRatio = maxScroll > 0 ? (scrollTop / maxScroll) : 0;
+          const thumbTop = Math.max(0, Math.min(maxThumbTop, scrollRatio * maxThumbTop));
+
+          thumb.style.transform = `translateY(${thumbTop}px)`;
+          return;
+        }
+
+        const track = document.getElementById("panelCustomScrollbar");
+        const thumb = document.getElementById("panelCustomScrollbarThumb");
+        if (!track || !thumb) return;
+
+        const container = getActiveScrollableContainer();
+        if (!container) {
+          track.style.display = "none";
+          return;
+        }
+
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        const scrollTop = container.scrollTop;
+
+        // Display scrollbar whenever content overflows client area
+        if (scrollHeight <= clientHeight + 4) {
+          track.style.display = "none";
+          return;
+        }
+
+        track.style.display = "block";
+        const trackHeight = track.clientHeight;
+        if (trackHeight <= 0) return;
+
+        const thumbHeight = Math.max(36, Math.min(trackHeight - 4, (clientHeight / scrollHeight) * trackHeight));
+        thumb.style.height = `${thumbHeight}px`;
+
+        const maxScroll = scrollHeight - clientHeight;
+        const maxThumbTop = trackHeight - thumbHeight;
+        const scrollRatio = maxScroll > 0 ? (scrollTop / maxScroll) : 0;
+        const thumbTop = Math.max(0, Math.min(maxThumbTop, scrollRatio * maxThumbTop));
+
+        thumb.style.transform = `translateY(${thumbTop}px)`;
+      }
+      window.getActiveScrollableContainer = getActiveScrollableContainer;
+      window.updateCustomScrollbar = updateCustomScrollbar;
+
+      window.updateCustomScrollbarFromPosition = function(cursorY) {
+        const saveSelect = document.getElementById("saveSelectOverlay");
+        let track, thumb, container;
+        if (saveSelect && saveSelect.classList.contains("open")) {
+          track = document.getElementById("saveSelectCustomScrollbar");
+          thumb = document.getElementById("saveSelectCustomScrollbarThumb");
+          container = document.getElementById("saveSlotsList");
+        } else {
+          track = document.getElementById("panelCustomScrollbar");
+          thumb = document.getElementById("panelCustomScrollbarThumb");
+          container = getActiveScrollableContainer();
+        }
+        if (!track || !thumb || !container) return;
+
+        const trackRect = track.getBoundingClientRect();
+        const trackHeight = trackRect.height;
+        if (trackHeight <= 0) return;
+
+        const thumbHeight = thumb.offsetHeight || 36;
+        const maxThumbTop = trackHeight - thumbHeight;
+        if (maxThumbTop <= 0) return;
+
+        const relativeY = cursorY - trackRect.top - (thumbHeight / 2);
+        const clampedTop = Math.max(0, Math.min(maxThumbTop, relativeY));
+        const ratio = clampedTop / maxThumbTop;
+
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        container.scrollTop = ratio * maxScroll;
+        thumb.style.transform = `translateY(${clampedTop}px)`;
+      };
+
+      let isCustomScrollbarDragging = false;
+      let isCustomScrollbarInitialized = false;
+      function setupCustomScrollbarListeners() {
+        if (isCustomScrollbarInitialized) return;
+        isCustomScrollbarInitialized = true;
+
+        const tracks = [
+          document.getElementById("panelCustomScrollbar"),
+          document.getElementById("saveSelectCustomScrollbar")
+        ];
+        const thumbs = [
+          document.getElementById("panelCustomScrollbarThumb"),
+          document.getElementById("saveSelectCustomScrollbarThumb")
+        ];
+
+        thumbs.forEach(thumb => {
+          if (!thumb) return;
+          thumb.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            isCustomScrollbarDragging = true;
+            thumb.classList.add("dragging");
+          });
+        });
+
+        tracks.forEach(track => {
+          if (!track) return;
+          track.addEventListener("mousedown", (e) => {
+            const thumb = track.querySelector(".custom-scrollbar-thumb");
+            if (e.target === thumb) return;
+            e.preventDefault();
+            e.stopPropagation();
+            isCustomScrollbarDragging = true;
+            if (thumb) thumb.classList.add("dragging");
+            window.updateCustomScrollbarFromPosition(e.clientY);
+          });
+        });
+
+        window.addEventListener("mousemove", (e) => {
+          if (!isCustomScrollbarDragging) return;
+          window.updateCustomScrollbarFromPosition(e.clientY);
+        });
+
+        window.addEventListener("mouseup", () => {
+          if (isCustomScrollbarDragging) {
+            isCustomScrollbarDragging = false;
+            document.querySelectorAll(".custom-scrollbar-thumb.dragging").forEach(t => t.classList.remove("dragging"));
+          }
+        });
+
+        const scrollables = [
+          document.getElementById("inventorySettings"),
+          document.getElementById("craftingList"),
+          document.getElementById("cookingList"),
+          document.getElementById("inventoryMainLayout"),
+          document.getElementById("inventoryGrid"),
+          document.getElementById("saveSlotsList")
+        ];
+        scrollables.forEach(el => {
+          if (el) {
+            el.addEventListener("scroll", () => {
+              updateCustomScrollbar();
+            }, { passive: true });
+          }
+        });
+
+        window.addEventListener("resize", updateCustomScrollbar);
+      }
+      setupCustomScrollbarListeners();
 
       function executeTrash() {
         if (!trashPendingData) return;
@@ -4044,6 +4581,7 @@ function cancelFloorPlacement() {
       }
 
       function renderInventory() {
+        window.renderInventory = renderInventory;
         const grid = document.getElementById("inventoryGrid");
         if (!grid) return;
         grid.innerHTML = "";
@@ -4101,7 +4639,17 @@ function cancelFloorPlacement() {
         }
 
         updateBadge();
+        const tabInv = document.getElementById("tabInventory");
+        const isTabInventoryActive = tabInv ? tabInv.classList.contains("active") : (activeTab === "inventory");
+        const bottomBtns = document.getElementById("inventoryBottomButtons");
+        if (bottomBtns) {
+          bottomBtns.style.display = (isTabInventoryActive && activeTab === "inventory") ? "flex" : "none";
+        }
+        if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+        if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
+      window.renderInventory = renderInventory;
 
       function renderActionSlots() {
         window.renderActionSlots = renderActionSlots;

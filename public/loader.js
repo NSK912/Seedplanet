@@ -39,8 +39,7 @@
     'gamefile/Engine/physics.js',
     'gamefile/Engine/camera.js',
     'gamefile/Engine/frustumCulling.js',
-    
-    
+    'gamefile/Engine/gamepad.js',
     'gamefile/Engine/3d_ui.js',
 
     // --- Environment ---

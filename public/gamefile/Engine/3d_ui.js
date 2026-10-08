@@ -656,11 +656,16 @@ const World3DUI = {
            ctx.fillText('🔋', w / 2, h / 2);
         }
       } else {
+        const isGp = (typeof isCurrentlyGamepadMode === 'function' ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+        let btnText = 'E';
+        if (isGp && window.GamepadController && typeof window.GamepadController.getButtonLabel === 'function') {
+          btnText = window.GamepadController.getButtonLabel('interact');
+        }
         ctx.fillStyle = World3DUI.BUTTON_COLOR || '#dfb76c';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 120px "Google Sans", sans-serif';
-        ctx.fillText('E', w / 2, h / 2);
+        ctx.font = btnText.length > 1 ? 'bold 96px "Google Sans", sans-serif' : 'bold 120px "Google Sans", sans-serif';
+        ctx.fillText(btnText, w / 2, h / 2);
       }
 
       ctx.restore();
@@ -888,11 +893,16 @@ const World3DUI = {
            ctx.fillText('🔋', w / 2, h / 2);
         }
       } else {
+        const isGp = (typeof isCurrentlyGamepadMode === 'function' ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+        let btnText = 'E';
+        if (isGp && window.GamepadController && typeof window.GamepadController.getButtonLabel === 'function') {
+          btnText = window.GamepadController.getButtonLabel('interact');
+        }
         ctx.fillStyle = World3DUI.BUTTON_COLOR || '#dfb76c';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 120px "Google Sans", sans-serif';
-        ctx.fillText('E', w / 2, h / 2);
+        ctx.font = btnText.length > 1 ? 'bold 96px "Google Sans", sans-serif' : 'bold 120px "Google Sans", sans-serif';
+        ctx.fillText(btnText, w / 2, h / 2);
       }
 
       ctx.restore();

@@ -100,13 +100,208 @@ let currentKeyBindings = {
   demolish: "CapsLock",
 };
 
+const DEFAULT_GAMEPAD_BINDINGS = {
+  attack: 5,         // RB / R1 / R
+  terrainMod: 7,     // RT / R2 / ZR
+  flightThrottle: 7, // RT / R2 / ZR
+  interact: 4,       // LB / L1 / L
+  rotate: 6,         // LT / L2 / ZL
+  jump: 0,           // A / Cross / B
+  cancel: 1,         // B / Circle / A
+  demolish: 2,       // X / Square / Y
+  bottomShortcut: 3, // Y / Triangle / X
+  inventory: 9,      // Menu / Options / +
+  action1: 12,       // D-Pad Up
+  action2: 15,       // D-Pad Right
+  action3: 13,       // D-Pad Down
+  action4: 14,       // D-Pad Left
+  sprint: 10,        // LS / L3
+  resetCam: 11,      // RS / R3
+};
+
+let currentGamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
+
+// Pre-load saved bindings if present
+try {
+  const savedCfg = localStorage.getItem("seedplanet_options_config");
+  if (savedCfg) {
+    const parsed = JSON.parse(savedCfg);
+    if (parsed && parsed.gamepadBindings) {
+      currentGamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS, ...parsed.gamepadBindings };
+    }
+  }
+} catch (e) {}
+
+window.currentGamepadBindings = currentGamepadBindings;
+window.currentKeyBindings = currentKeyBindings;
+
 let isWaitingForKey = false;
 let bindingKeyToSet = null;
+let currentBindingViewMode = "auto"; // "auto", "keyboard", "gamepad"
+window.isWaitingForKey = false;
+
+function isCurrentlyGamepadMode() {
+  if (currentBindingViewMode === "gamepad") return true;
+  if (currentBindingViewMode === "keyboard") return false;
+  return !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected);
+}
+window.isCurrentlyGamepadMode = isCurrentlyGamepadMode;
+
+function getGamepadButtonName(btnIdx, brand) {
+  const isPS = brand === "playstation";
+  const isSwitch = brand === "switch";
+
+  const labels = {
+    0: isPS ? "✕ (Cross)" : (isSwitch ? "B" : "A"),
+    1: isPS ? "◯ (Circle)" : (isSwitch ? "A" : "B"),
+    2: isPS ? "■ (Square)" : (isSwitch ? "Y" : "X"),
+    3: isPS ? "▲ (Triangle)" : (isSwitch ? "X" : "Y"),
+    4: isPS ? "L1" : (isSwitch ? "L" : "LB"),
+    5: isPS ? "R1" : (isSwitch ? "R" : "RB"),
+    6: isPS ? "L2" : (isSwitch ? "ZL" : "LT"),
+    7: isPS ? "R2" : (isSwitch ? "ZR" : "RT"),
+    8: isPS ? "Share" : (isSwitch ? "-" : "Back / View"),
+    9: isPS ? "Options" : (isSwitch ? "+" : "Menu"),
+    10: isPS ? "L3 (กดอนาล็อกซ้าย)" : (isSwitch ? "L-Stick (กด)" : "LS (กดอนาล็อกซ้าย)"),
+    11: isPS ? "R3 (กดอนาล็อกขวา)" : (isSwitch ? "R-Stick (กด)" : "RS (กดอนาล็อกขวา)"),
+    12: "D-Pad ↑ (ขึ้น)",
+    13: "D-Pad ↓ (ลง)",
+    14: "D-Pad ← (ซ้าย)",
+    15: "D-Pad → (ขวา)"
+  };
+
+  return labels[btnIdx] || `ปุ่ม ${btnIdx}`;
+}
+
+function syncInputDeviceSettingsUI() {
+  const isGp = isCurrentlyGamepadMode();
+
+  // 1. Update Mouse / Right-Stick Sensitivity Label
+  const mouseLabel = document.getElementById("mouseSensitivityLabel");
+  if (mouseLabel) {
+    if (isGp) {
+      const brand = (window.GamepadController && typeof window.GamepadController.getBrand === "function") 
+        ? window.GamepadController.getBrand() 
+        : ((window.GamepadController && window.GamepadController.isPlayStation) ? "playstation" : "xbox");
+      const rStickText = brand === "playstation" ? "ความไวอนาล็อกขวา (R-Stick / R3)" : (brand === "switch" ? "ความไวอนาล็อกขวา (R-Stick)" : "ความไวอนาล็อกขวา (RS / R3)");
+      mouseLabel.textContent = typeof t === "function" ? t("rstick_sensitivity") : rStickText;
+    } else {
+      mouseLabel.textContent = typeof t === "function" ? t("mouse_sensitivity") : "ความไวเมาส์";
+    }
+  }
+
+  // 2. Update Key / Gamepad Bindings Header
+  const headerLabel = document.getElementById("keyBindingsHeaderLabel");
+  if (headerLabel) {
+    if (isGp) {
+      const cName = window.GamepadController ? window.GamepadController.controllerName : "Gamepad";
+      headerLabel.textContent = typeof t === "function" ? t("gamepad_bindings") : `ตั้งค่าปุ่มจอย (${cName})`;
+    } else {
+      headerLabel.textContent = typeof t === "function" ? t("key_bindings") : "ตั้งค่าปุ่มควบคุม";
+    }
+  }
+
+  // 3. Update Toggle Buttons Styling
+  const btnKb = document.getElementById("btnBindingModeKb");
+  const btnGp = document.getElementById("btnBindingModeGp");
+  if (btnKb && btnGp) {
+    btnKb.style.borderRadius = "0px";
+    btnGp.style.borderRadius = "0px";
+    if (isGp) {
+      btnGp.style.background = "rgba(223, 183, 108, 0.22)";
+      btnGp.style.borderColor = "#dfb76c";
+      btnGp.style.color = "#dfb76c";
+      btnGp.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+
+      btnKb.style.background = "rgba(255, 255, 255, 0.05)";
+      btnKb.style.borderColor = "rgba(255, 255, 255, 0.2)";
+      btnKb.style.color = "rgba(255, 255, 255, 0.6)";
+      btnKb.style.textShadow = "none";
+    } else {
+      btnKb.style.background = "rgba(223, 183, 108, 0.22)";
+      btnKb.style.borderColor = "#dfb76c";
+      btnKb.style.color = "#dfb76c";
+      btnKb.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+
+      btnGp.style.background = "rgba(255, 255, 255, 0.05)";
+      btnGp.style.borderColor = "rgba(255, 255, 255, 0.2)";
+      btnGp.style.color = "rgba(255, 255, 255, 0.6)";
+      btnGp.style.textShadow = "none";
+    }
+  }
+
+  renderKeyBindingsUI();
+}
+window.syncInputDeviceSettingsUI = syncInputDeviceSettingsUI;
 
 function renderKeyBindingsUI() {
   const container = document.getElementById("keyBindingsContainer");
   if (!container) return;
 
+  const isGp = isCurrentlyGamepadMode();
+
+  if (isGp) {
+    const brand = (window.GamepadController && typeof window.GamepadController.getBrand === "function")
+      ? window.GamepadController.getBrand()
+      : ((window.GamepadController && window.GamepadController.isPlayStation) ? "playstation" : "xbox");
+    const isPS = brand === "playstation";
+    const isSwitch = brand === "switch";
+
+    const gpBindings = [
+      { id: "move", label: "เดิน / เคลื่อนที่ (Move)", fixed: true, fixedBtn: isPS ? "L-Stick (อนาล็อกซ้าย)" : (isSwitch ? "L-Stick (อนาล็อกซ้าย)" : "LS (อนาล็อกซ้าย)") },
+      { id: "camera", label: "หมุนมุมกล้อง (Camera Look)", fixed: true, fixedBtn: isPS ? "R-Stick (อนาล็อกขวา)" : (isSwitch ? "R-Stick (อนาล็อกขวา)" : "RS (อนาล็อกขวา)") },
+      { id: "attack", label: "โจมตี / ใช้อาวุธ / วางของ (Attack / Place)" },
+      { id: "terrainMod", label: "ขุดดิน / ถมดิน (Dig / Fill Terrain)" },
+      { id: "flightThrottle", label: "เรือติดปีก: เร่งเครื่อง (Flight Throttle)" },
+      { id: "flightPitch", label: "เรือติดปีก: บินขึ้น / บินลง (Flight Pitch)", fixed: true, fixedBtn: "L-Stick ↑ (ขึ้น) / ↓ (ลง)" },
+      { id: "interact", label: "สำรวจ / เก็บของ / ขี่ (Interact / Ride)" },
+      { id: "rotate", label: "หมุนโครงสร้าง / ว่ายขึ้น (Rotate / Swim Up)" },
+      { id: "jump", label: "กระโดด (Jump)" },
+      { id: "cancel", label: "ยกเลิก / ปิดเมนู (Cancel / Close)" },
+      { id: "demolish", label: "แอคชั่นด่วน / รื้อถอน (Quick Action / Demolish)" },
+      { id: "bottomShortcut", label: "ลัดไป 3 ปุ่มล่างในกระเป๋า (Bottom Shortcut)" },
+      { id: "inventory", label: "กระเป๋า / เมนู (Inventory / Menu)" },
+      { id: "action1", label: "ช่องแอคชั่น 1 (Action Slot 1)" },
+      { id: "action2", label: "ช่องแอคชั่น 2 (Action Slot 2)" },
+      { id: "action3", label: "ช่องแอคชั่น 3 (Action Slot 3)" },
+      { id: "action4", label: "ช่องแอคชั่น 4 (Action Slot 4)" },
+      { id: "sprint", label: "วิ่งเร็ว / บูสต์ (Sprint / Boost)" },
+      { id: "resetCam", label: "รีเซ็ตมุมกล้อง (Center Camera View)" },
+    ];
+
+    let html = "";
+    for (const item of gpBindings) {
+      const isFixed = !!item.fixed;
+      const btnText = isFixed ? item.fixedBtn : getGamepadButtonName(currentGamepadBindings[item.id] !== undefined ? currentGamepadBindings[item.id] : DEFAULT_GAMEPAD_BINDINGS[item.id], brand);
+      html += `
+        <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 5px 8px; border: 1px solid rgba(223, 183, 108, 0.15); border-radius: 0px; transition: all 0.2s;">
+            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; color: #f1f5f9; pointer-events: none;">${item.label}</span>
+            ${isFixed ? `
+              <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 4px 10px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; border-radius: 0px; user-select: none;">
+                ${btnText}
+              </div>
+            ` : `
+              <button type="button" class="key-bind-btn game-ui gp-bind-btn" data-gpaction="${item.id}" style="background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; text-shadow: 0 0 6px rgba(223, 183, 108, 0.3); border-radius: 0px; cursor: pointer; transition: all 0.2s; outline: none;">
+                ${btnText}
+              </button>
+            `}
+        </div>
+      `;
+    }
+    container.innerHTML = html;
+
+    const btns = container.querySelectorAll(".gp-bind-btn");
+    btns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const action = e.currentTarget.dataset.gpaction;
+        if (!action) return;
+        startBindingAction(action, true, e.currentTarget);
+      });
+    });
+    return;
+  }
+
+  // Keyboard Mode
   const getLabel = (key) => {
     if (typeof t === "function") {
       const translated = t("key_" + key);
@@ -136,43 +331,122 @@ function renderKeyBindingsUI() {
   for (const [key, value] of Object.entries(currentKeyBindings)) {
     const label = getLabel(key);
     const isLocked = key === "toggleMouse";
+    const displayVal = value.replace("Key", "").replace("Arrow", "").replace("Left", "").replace("Right", "");
     html += `
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 4px 8px; border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;">
-            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif;">${label}</span>
-            <button class="key-bind-btn game-ui" data-key="${key}" ${isLocked ? "disabled" : ""} style="background: rgba(223,183,108,0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; ${isLocked ? "opacity: 0.5; cursor: not-allowed;" : "cursor: pointer;"} min-width: 60px; text-align: center; transition: all 0.2s;">
-                ${value.replace("Key", "").replace("Arrow", "").replace("Left", "").replace("Right", "")}
-            </button>
+        <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 4px 8px; border: 1px solid rgba(255,255,255,0.05); border-radius: 0px; transition: all 0.2s;">
+            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; pointer-events: none;">${label}</span>
+            ${isLocked ? `
+              <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 4px 10px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; border-radius: 0px; user-select: none;">
+                ${displayVal}
+              </div>
+            ` : `
+              <button class="key-bind-btn game-ui" data-key="${key}" style="background: rgba(223,183,108,0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; cursor: pointer; min-width: 60px; text-align: center; border-radius: 0px; transition: all 0.2s; outline: none;">
+                ${displayVal}
+              </button>
+            `}
         </div>
     `;
   }
+
   container.innerHTML = html;
 
   const btns = container.querySelectorAll(".key-bind-btn");
   btns.forEach((btn) => {
-    btn?.addEventListener("click", (e) => {
-      if (isWaitingForKey) return;
-      isWaitingForKey = true;
-      bindingKeyToSet = e.target.dataset.key;
-      e.target.style.background = "rgba(239, 68, 68, 0.2)";
-      e.target.style.borderColor = "#ef4444";
-      e.target.style.color = "#ef4444";
-      e.target.textContent = typeof t === "function" ? t("key_press_key") : "กดปุ่ม...";
-
-      const keyHandler = (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        currentKeyBindings[bindingKeyToSet] = ev.code;
-        isWaitingForKey = false;
-        bindingKeyToSet = null;
-        window.removeEventListener("keydown", keyHandler, true);
-        renderKeyBindingsUI();
-        if (typeof saveSettingsToLocalStorage === "function") {
-          saveSettingsToLocalStorage();
-        }
-      };
-      window.addEventListener("keydown", keyHandler, true);
+    btn.addEventListener("click", (e) => {
+      const key = e.currentTarget.dataset.key;
+      if (!key) return;
+      startBindingAction(key, false, e.currentTarget);
     });
   });
+}
+
+function startBindingAction(actionKey, isGamepadAction, btnElement) {
+  if (isWaitingForKey) return;
+  isWaitingForKey = true;
+  window.isWaitingForKey = true;
+  window.isWaitingForGamepadMode = isGamepadAction;
+  bindingKeyToSet = actionKey;
+  window.bindingKeyToSet = actionKey;
+  window.keyBindingStartTime = Date.now();
+
+  btnElement.style.background = "rgba(239, 68, 68, 0.25)";
+  btnElement.style.borderColor = "#ef4444";
+  btnElement.style.color = "#ef4444";
+  btnElement.style.boxShadow = "0 0 12px rgba(239, 68, 68, 0.6)";
+  btnElement.textContent = typeof t === "function" ? t("key_press_key") : "กดปุ่ม...";
+
+  const finish = () => {
+    isWaitingForKey = false;
+    window.isWaitingForKey = false;
+    window.lastRebindFinishTime = Date.now();
+    if (window.GamepadController) {
+      window.GamepadController.lastRebindFinishTime = Date.now();
+      window.GamepadController.prevADown = true;
+    }
+    bindingKeyToSet = null;
+    window.bindingKeyToSet = null;
+    window.setKeyFromGamepadButton = null;
+    window.removeEventListener("keydown", keyHandler, true);
+    if (typeof playPlaceSound === "function") try { playPlaceSound(); } catch(e){}
+    renderKeyBindingsUI();
+    if (typeof saveSettingsToLocalStorage === "function") {
+      saveSettingsToLocalStorage();
+    } else if (typeof window.saveSettingsToLocalStorage === "function") {
+      window.saveSettingsToLocalStorage();
+    }
+  };
+
+  const keyHandler = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (isGamepadAction) {
+      if (ev.code === "Escape") {
+        finish();
+        return;
+      }
+    } else {
+      currentKeyBindings[actionKey] = ev.code;
+      window.currentKeyBindings = currentKeyBindings;
+    }
+    finish();
+  };
+
+  window.addEventListener("keydown", keyHandler, true);
+
+  window.setKeyFromGamepadButton = function(btnIndex, btnLabel) {
+    if (Date.now() - (window.keyBindingStartTime || 0) < 180) {
+      return false; // Still within debounce time from activating button
+    }
+
+    if (isGamepadAction) {
+      currentGamepadBindings[actionKey] = btnIndex;
+      window.currentGamepadBindings = currentGamepadBindings;
+    } else {
+      const gpToKeyMap = {
+        0: "Space",
+        1: "Escape",
+        2: "CapsLock",
+        3: "KeyY",
+        4: "KeyE",
+        5: "Mouse0",
+        6: "KeyQ",
+        7: "Mouse2",
+        8: "Tab",
+        9: "Tab",
+        10: "ShiftLeft",
+        11: "KeyR",
+        12: "Digit1",
+        13: "Digit3",
+        14: "Digit4",
+        15: "Digit2"
+      };
+      currentKeyBindings[actionKey] = gpToKeyMap[btnIndex] || ("Button" + btnIndex);
+      window.currentKeyBindings = currentKeyBindings;
+    }
+
+    finish();
+    return true;
+  };
 }
 
 function syncInventorySettingsUI() {
@@ -267,6 +541,7 @@ function syncInventorySettingsUI() {
   updateFxaaUI();
 
   renderKeyBindingsUI();
+  if (typeof window.updateCustomScrollbar === "function") setTimeout(window.updateCustomScrollbar, 30);
 }
 
 function initSettingsEventListeners() {
@@ -349,6 +624,48 @@ function initSettingsEventListeners() {
       document.getElementById("mouseSensitivityVal").textContent = mouseSensitivity.toFixed(2) + "x";
     });
   }
+
+  // Binding view mode buttons (Keyboard vs Gamepad)
+  const btnKb = document.getElementById("btnBindingModeKb");
+  if (btnKb) {
+    btnKb.addEventListener("click", () => {
+      currentBindingViewMode = "keyboard";
+      syncInputDeviceSettingsUI();
+    });
+  }
+  const btnGp = document.getElementById("btnBindingModeGp");
+  if (btnGp) {
+    btnGp.addEventListener("click", () => {
+      currentBindingViewMode = "gamepad";
+      syncInputDeviceSettingsUI();
+    });
+  }
+
+  // Auto detect input switch
+  window.addEventListener("keydown", (e) => {
+    if (e && e.isTrusted === false) return;
+    if (currentBindingViewMode === "auto" && window.isUsingGamepad) {
+      if (window.GamepadController && typeof window.GamepadController.setInputDeviceMode === "function") {
+        window.GamepadController.setInputDeviceMode(false);
+      } else {
+        window.isUsingGamepad = false;
+        syncInputDeviceSettingsUI();
+      }
+    }
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (e && (e.isTrusted === false || e.simulated)) return;
+    const dx = Math.abs(e.movementX || 0);
+    const dy = Math.abs(e.movementY || 0);
+    if ((dx > 2 || dy > 2) && currentBindingViewMode === "auto" && window.isUsingGamepad) {
+      if (window.GamepadController && typeof window.GamepadController.setInputDeviceMode === "function") {
+        window.GamepadController.setInputDeviceMode(false);
+      } else {
+        window.isUsingGamepad = false;
+        syncInputDeviceSettingsUI();
+      }
+    }
+  });
 
   const pfSlider = document.getElementById("playerFootstepVolumeSlider");
   if (pfSlider) {

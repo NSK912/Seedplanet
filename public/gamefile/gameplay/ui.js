@@ -144,12 +144,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <div
         class="inventory-panel game-ui lg"
         style="
-          max-width: 520px;
+          max-width: 540px;
           display: flex;
           flex-direction: column;
           gap: 16px;
           border: 1px solid rgba(223, 183, 108, 0.4);
           box-shadow: 0 0 35px rgba(223, 183, 108, 0.25);
+          position: relative;
         "
       >
         <div
@@ -193,10 +194,15 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             gap: 12px;
             max-height: 50vh;
             overflow-y: auto;
-            padding-right: 4px;
+            padding-right: 14px;
           "
         >
           <!-- ช่องเซฟจะถูกสร้างด้วย JS ที่นี่ -->
+        </div>
+
+        <!-- Custom Sci-Fi DOM Virtual Scrollbar for Save Slots -->
+        <div id="saveSelectCustomScrollbar" class="custom-scrollbar-track game-ui clickable" style="top: 72px; bottom: 68px; right: 8px; width: 8px;">
+          <div id="saveSelectCustomScrollbarThumb" class="custom-scrollbar-thumb game-ui clickable"></div>
         </div>
 
         <div
@@ -383,9 +389,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     </div>
 
 
-    <!-- Modal ยืนยันทำลายไอเทม -->
-    <div class="confirm-overlay" id="trashConfirmOverlay" onwheel="event.preventDefault(); event.stopPropagation();" ontouchmove="event.preventDefault(); event.stopPropagation();" style="display: none; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0, 0, 0, 0.85) !important; z-index: 2147483647 !important; align-items: center !important; justify-content: center !important; backdrop-filter: blur(4px) !important; pointer-events: auto !important;">
-      <div  class="game-ui" style="background: #0a0a0f; border: 1px solid rgba(255, 60, 60, 0.3); padding: 24px; text-align: center; min-width: 280px; max-width: 320px; display: flex; flex-direction: column; gap: 16px;  box-shadow: inset 0 0 20px rgba(255,60,60,0.05); position: relative;">
+    <!-- Modal ยืนยันทำลายไอเทม (Contained inside Inventory / Chest Panel) -->
+    <div class="confirm-overlay" id="trashConfirmOverlay" onwheel="event.preventDefault(); event.stopPropagation();" ontouchmove="event.preventDefault(); event.stopPropagation();" style="display: none; position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.78) !important; z-index: 1000 !important; border-radius: inherit !important; align-items: center !important; justify-content: center !important; backdrop-filter: blur(4px) !important; pointer-events: auto !important;">
+      <div class="game-ui" style="background: #0a0a0f; border: 1px solid rgba(255, 60, 60, 0.4); padding: 24px; text-align: center; min-width: 280px; max-width: 320px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(255,60,60,0.08); position: relative;">
         <!-- decorative corner accents -->
         <div style="position: absolute; top: -1px; left: -1px; width: 8px; height: 8px; border-top: 2px solid #ff5555; border-left: 2px solid #ff5555;"></div>
         <div style="position: absolute; bottom: -1px; right: -1px; width: 8px; height: 8px; border-bottom: 2px solid #ff5555; border-right: 2px solid #ff5555;"></div>
@@ -395,19 +401,19 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <span style="font-size: 11px; opacity: 0.7;">DESTROY ITEM?</span>
         </h3>
         
-        <div  class="game-ui" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+        <div class="game-ui" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
            <span id="trashConfirmIcon" style="font-size: 28px; line-height: 1; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));">📦</span>
-           <span id="trashConfirmText" style="color: rgba(255, 255, 255, 0.35); font-size: 11px; font-family: 'Google Sans', sans-serif; letter-spacing: 0.5px; text-transform: uppercase;">Item Name x1</span>
+           <span id="trashConfirmText" style="color: rgba(255, 255, 255, 0.7); font-size: 11px; font-family: 'Google Sans', sans-serif; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 500;">Item Name x1</span>
         </div>
         
         <div style="display: flex; gap: 12px; justify-content: center; margin-top: 10px;">
-          <button id="trashCancelBtn"  onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" class="game-ui" style="flex: 1; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
+          <button id="trashCancelBtn" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" class="game-ui" style="flex: 1; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.15); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
             <span>ยกเลิก</span>
             <span style="font-size: 9px; opacity: 0.6;">CANCEL</span>
           </button>
           
-          <button id="trashConfirmBtn"  onmouseover="this.style.background='rgba(255,60,60,0.15)'" onmouseout="this.style.background='rgba(255,60,60,0.1)'" class="game-ui" style="flex: 1; background: rgba(255, 60, 60, 0.1); color: #ff5555; border: 1px solid rgba(255,60,60,0.4); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; position: relative; overflow: hidden; user-select: none; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
-            <div id="trashConfirmProgress" style="position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: rgba(255, 60, 60, 0.3); pointer-events: none;"></div>
+          <button id="trashConfirmBtn" onmouseover="this.style.background='rgba(255,60,60,0.18)'" onmouseout="this.style.background='rgba(255,60,60,0.1)'" class="game-ui" style="flex: 1; background: rgba(255, 60, 60, 0.1); color: #ff5555; border: 1px solid rgba(255,60,60,0.5); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; position: relative; overflow: hidden; user-select: none; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
+            <div id="trashConfirmProgress" style="position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: rgba(255, 60, 60, 0.35); pointer-events: none;"></div>
             <span style="position: relative; z-index: 1;">กดค้าง (ลบ)</span>
             <span style="position: relative; z-index: 1; font-size: 9px; opacity: 0.8;">HOLD TO DELETE</span>
           </button>
@@ -593,6 +599,90 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               <div class="action-slot game-ui"></div>
             </div>
           </div>
+        </div>
+
+        <!-- 3 ปุ่มด้านล่างกระเป๋า -->
+        <div id="inventoryBottomButtons" class="game-ui" style="display: none; gap: 10px; align-items: center; justify-content: center; width: 100%; max-width: 480px; margin: 12px auto 0 auto; box-sizing: border-box;">
+          <button id="btnInventoryActionUI" class="game-ui clickable" style="
+            flex: 1;
+            height: 38px;
+            background: rgba(223, 183, 108, 0.12);
+            border: 1px solid rgba(223, 183, 108, 0.45);
+            color: #dfb76c;
+            border-radius: 0 !important;
+            --cut: 8px;
+            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            transition: all 0.2s;
+            font-family: 'Google Sans', sans-serif;
+          ">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="rgba(223, 183, 108, 0.25)"></polygon>
+            </svg>
+            <span>แอคชั่น UI</span>
+          </button>
+          <button id="btnInventorySplit" class="game-ui clickable" style="
+            flex: 1;
+            height: 38px;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            color: #38bdf8;
+            border-radius: 0 !important;
+            --cut: 8px;
+            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            transition: all 0.2s;
+            font-family: 'Google Sans', sans-serif;
+          ">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+              <!-- Back sci-fi square -->
+              <rect x="8" y="3" width="13" height="13" rx="1.5" fill="rgba(56, 189, 248, 0.22)" stroke="#38bdf8" stroke-dasharray="2.5 2.5"></rect>
+              <!-- Front sci-fi square overlapping -->
+              <rect x="3" y="8" width="13" height="13" rx="1.5" fill="rgba(15, 23, 42, 0.85)" stroke="#38bdf8"></rect>
+              <!-- Dividing / split indicator line inside -->
+              <line x1="6.5" y1="14.5" x2="12.5" y2="14.5" stroke="#38bdf8" stroke-width="1.8"></line>
+            </svg>
+            <span>แบ่งจำนวนไอเทม</span>
+          </button>
+          <button id="btnInventoryDestroy" class="game-ui clickable" style="
+            flex: 1;
+            height: 38px;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            color: #ef4444;
+            border-radius: 0 !important;
+            --cut: 8px;
+            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            transition: all 0.2s;
+            font-family: 'Google Sans', sans-serif;
+          ">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            <span>ทำลายไอเทม</span>
+          </button>
         </div>
         <div
           id="craftingList"
@@ -796,7 +886,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               </button>
             </div>
           </div>
-          <!-- ความเร็วเมาส์ (Mouse Sensitivity) -->
+          <!-- ความเร็วเมาส์ / อนาล็อกขวา (Mouse / Right Stick Sensitivity) -->
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div
               style="
@@ -806,7 +896,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'Google Sans', sans-serif;
               "
             >
-              <span data-i18n="mouse_sensitivity">ความไวเมาส์</span>
+              <span id="mouseSensitivityLabel" data-i18n="mouse_sensitivity">ความไวเมาส์</span>
               <span
                 id="mouseSensitivityVal"
                 style="color: #dfb76c; font-weight: bold"
@@ -998,7 +1088,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
 
-          <!-- ตั้งค่าปุ่มควบคุม (Key Bindings) -->
+          <!-- ตั้งค่าปุ่มควบคุม (Key / Gamepad Bindings) -->
           <div
             style="
               display: flex;
@@ -1008,16 +1098,53 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               padding-top: 12px;
             "
           >
-            <span
-              data-i18n="key_bindings"
-              style="
-                font-size: 13px;
-                font-family: 'Google Sans', sans-serif;
-                color: #dfb76c;
-                font-weight: bold;
-              "
-            >ตั้งค่าปุ่มควบคุม</span
-            >
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span
+                id="keyBindingsHeaderLabel"
+                data-i18n="key_bindings"
+                style="
+                  font-size: 13px;
+                  font-family: 'Google Sans', sans-serif;
+                  color: #dfb76c;
+                  font-weight: bold;
+                "
+              >ตั้งค่าปุ่มควบคุม</span>
+              <div style="display: flex; gap: 4px;">
+                <button
+                  id="btnBindingModeKb"
+                  class="game-ui"
+                  style="background: rgba(223, 183, 108, 0.18); border: 1px solid #dfb76c; color: #dfb76c; padding: 2px 8px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; border-radius: 0px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    <line x1="6" y1="8" x2="6.01" y2="8"></line>
+                    <line x1="10" y1="8" x2="10.01" y2="8"></line>
+                    <line x1="14" y1="8" x2="14.01" y2="8"></line>
+                    <line x1="18" y1="8" x2="18.01" y2="8"></line>
+                    <line x1="6" y1="12" x2="6.01" y2="12"></line>
+                    <line x1="10" y1="12" x2="10.01" y2="12"></line>
+                    <line x1="14" y1="12" x2="14.01" y2="12"></line>
+                    <line x1="18" y1="12" x2="18.01" y2="12"></line>
+                    <line x1="7" y1="16" x2="17" y2="16"></line>
+                  </svg>
+                  <span>คีย์บอร์ด</span>
+                </button>
+                <button
+                  id="btnBindingModeGp"
+                  class="game-ui"
+                  style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); padding: 2px 8px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; border-radius: 0px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+                    <line x1="6" y1="12" x2="10" y2="12"></line>
+                    <line x1="8" y1="10" x2="8" y2="14"></line>
+                    <line x1="15" y1="13" x2="15.01" y2="13"></line>
+                    <line x1="18" y1="11" x2="18.01" y2="11"></line>
+                    <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                  </svg>
+                  <span>จอยสติ๊ก</span>
+                </button>
+              </div>
+            </div>
             <div
               style="display: grid; grid-template-columns: 1fr; gap: 6px"
               id="keyBindingsContainer"
@@ -1073,30 +1200,35 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             </button>
           </div>
         </div>
+
+        <!-- Custom Sci-Fi DOM Virtual Scrollbar -->
+        <div id="panelCustomScrollbar" class="custom-scrollbar-track game-ui clickable">
+          <div id="panelCustomScrollbarThumb" class="custom-scrollbar-thumb game-ui clickable"></div>
+        </div>
       </div>
     </div>
 
     <!-- หน้าต่างกล่องไม้ (Wooden Chest Overlay) -->
     <div class="inventory-overlay" id="chestOverlay">
-      <div class="inventory-panel game-ui" style="width: auto; max-width: 960px; max-height: 90vh; display: flex; flex-direction: row; gap: 32px; padding: 28px; margin: auto; justify-content: center;">
+      <div class="inventory-panel game-ui">
         <!-- Left Column: Chest Storage -->
         <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0;">
           <!-- Chest Header -->
-          <div class="inventory-header" style="margin-bottom: 12px; margin-left: 0; margin-right: 0; margin-top: 0;">
+          <div class="inventory-header">
             <div class="inventory-tabs">
-              <h2 class="active" style="font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+              <h2 class="active">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
                   <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                   <line x1="12" y1="22.08" x2="12" y2="12"></line>
                 </svg>
-                <span data-i18n="chest_storage">กล่องเก็บของ</span>
+                <span data-i18n="chest_storage">CHEST STORAGE</span>
               </h2>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
-              <button id="chestTakeAllBtn" data-i18n="chest_take_all" onmouseover="this.style.background='rgba(223, 183, 108, 0.1)'; this.style.borderColor='#dfb76c';" onmouseout="this.style.background='rgba(0, 0, 0, 0.85)'; this.style.borderColor='rgba(223, 183, 108, 0.3)';" class="game-ui" style="height: 32px; padding: 0 12px; font-size: 11px; background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(223, 183, 108, 0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s; display: flex; align-items: center;">
-                เก็บทั้งหมด
+              <button id="chestTakeAllBtn" data-i18n="chest_take_all" class="game-ui" style="height: 32px; padding: 0 12px; font-size: 11px; font-weight: bold; background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(223, 183, 108, 0.35); color: #dfb76c; cursor: pointer; transition: all 0.2s; display: flex; align-items: center;">
+                Take All
               </button>
             </div>
           </div>
@@ -1108,21 +1240,21 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
 
         <!-- Right Column: Player Inventory -->
-        <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0; border-left: 1px solid rgba(255, 255, 255, 0.06); padding-left: 32px; position: relative;">
+        <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0; border-left: 1px solid rgba(255, 255, 255, 0.06); padding-left: 28px; position: relative;">
           <!-- Player Inventory Header in Chest UI -->
-          <div class="inventory-header" style="margin-bottom: 12px; margin-left: 0; margin-right: 0; margin-top: 0;">
+          <div class="inventory-header">
             <div class="inventory-tabs">
-              <h2 class="active" style="font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+              <h2 class="active">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
                   <path d="M4 20V10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
                   <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
                   <rect x="9" y="10" width="6" height="5" rx="1"/>
                 </svg>
-                <span data-i18n="your_inventory">กระเป๋าเดินทาง</span>
+                <span data-i18n="your_inventory">YOUR INVENTORY</span>
               </h2>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
-              <button class="close-btn game-ui" id="chestClose" style="height: 32px; width: 32px; display: flex; align-items: center; justify-content: center; padding: 0;">✕</button>
+              <button class="close-btn game-ui" id="chestClose">✕</button>
             </div>
           </div>
 
@@ -2820,6 +2952,7 @@ window.addEventListener("keyup", (e) => {
       
       document.getElementById("tabCooking")?.addEventListener("click", () => {
         activeTab = "cooking";
+        if (typeof window.setActiveTab === "function") window.setActiveTab("cooking");
         document.getElementById("tabInventory").classList.remove("active");
         document.getElementById("tabItemsList").classList.remove("active");
         document.getElementById("tabSettings").classList.remove("active");
@@ -2830,121 +2963,145 @@ window.addEventListener("keyup", (e) => {
         document.getElementById("craftingList").style.display = "none";
         document.getElementById("cookingList").style.display = "flex";
         
+        const bottomBtns = document.getElementById("inventoryBottomButtons");
+        if (bottomBtns) bottomBtns.style.display = "none";
+
         const mainLayout = document.getElementById("inventoryMainLayout");
         if (mainLayout) mainLayout.style.display = "none";
         const divider = document.getElementById("inventoryVerticalDivider");
         if (divider) divider.style.display = "none";
         const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
         if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
-        renderCooking();
+        if (typeof renderCooking === "function") renderCooking();
+        else if (typeof window.renderCooking === "function") window.renderCooking();
       });
 
-      document.getElementById("tabInventory")?.addEventListener("click", () => {
+      function switchInventoryTab(tabName) {
+        activeTab = tabName;
+        if (typeof window.setActiveTab === "function") window.setActiveTab(tabName);
 
-        activeTab = "inventory";
-        document.getElementById("tabInventory").classList.add("active");
-        document.getElementById("tabCrafting").classList.remove("active");
-        document.getElementById("tabItemsList").classList.remove("active");
-        document.getElementById("tabSettings").classList.remove("active");
-        
-        document.getElementById("tabCooking").classList.remove("active");
-          document.getElementById("tabCooking").style.display = "none";
-        document.getElementById("cookingList").style.display = "none";
+        const tabCrafting = document.getElementById("tabCrafting");
+        const tabInventory = document.getElementById("tabInventory");
+        const tabItemsList = document.getElementById("tabItemsList");
+        const tabSettings = document.getElementById("tabSettings");
+        const tabCooking = document.getElementById("tabCooking");
 
-        document.getElementById("inventoryGrid").style.display = "grid";
-        document.getElementById("inventorySettings").style.display = "none";
-        document.getElementById("craftingList").style.display = "none";
-        
-        const mainLayout = document.getElementById("inventoryMainLayout");
-        if (mainLayout) {
-          mainLayout.style.display = "flex";
-          mainLayout.style.maxWidth = "none";
+        if (tabCrafting) tabCrafting.classList.toggle("active", tabName === "crafting");
+        if (tabInventory) tabInventory.classList.toggle("active", tabName === "inventory");
+        if (tabItemsList) tabItemsList.classList.toggle("active", tabName === "itemsList");
+        if (tabSettings) tabSettings.classList.toggle("active", tabName === "settings");
+        if (tabCooking) {
+          tabCooking.classList.toggle("active", tabName === "cooking");
+          if (tabName !== "cooking") tabCooking.style.display = "none";
         }
-        const divider = document.getElementById("inventoryVerticalDivider");
-        if (divider) divider.style.display = "block";
-        const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
-        if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
-        renderInventory();
-        setTimeout(updateActionSlotsPosition, 0);
-      });
 
-      document.getElementById("tabCrafting")?.addEventListener("click", () => {
-        activeTab = "crafting";
-        document.getElementById("tabCrafting").classList.add("active");
-        document.getElementById("tabInventory").classList.remove("active");
-        document.getElementById("tabItemsList").classList.remove("active");
-        document.getElementById("tabSettings").classList.remove("active");
-        document.getElementById("inventoryGrid").style.display = "none";
-        document.getElementById("inventorySettings").style.display = "none";
-        
-        document.getElementById("tabCooking").classList.remove("active");
-          document.getElementById("tabCooking").style.display = "none";
-        document.getElementById("cookingList").style.display = "none";
-
-        document.getElementById("craftingList").style.display = "flex";
-        
+        const inventoryGrid = document.getElementById("inventoryGrid");
+        const inventorySettings = document.getElementById("inventorySettings");
+        const craftingList = document.getElementById("craftingList");
+        const cookingList = document.getElementById("cookingList");
+        const bottomBtns = document.getElementById("inventoryBottomButtons");
         const mainLayout = document.getElementById("inventoryMainLayout");
-        if (mainLayout) mainLayout.style.display = "none";
         const divider = document.getElementById("inventoryVerticalDivider");
-        if (divider) divider.style.display = "none";
         const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
-        if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
-        renderCrafting();
-        setTimeout(updateActionSlotsPosition, 0);
-      });
 
-      document.getElementById("tabItemsList")?.addEventListener("click", () => {
-        activeTab = "itemsList";
-        document.getElementById("tabItemsList").classList.add("active");
-        document.getElementById("tabInventory").classList.remove("active");
-        document.getElementById("tabCrafting").classList.remove("active");
-        document.getElementById("tabSettings").classList.remove("active");
-        
-        document.getElementById("tabCooking").classList.remove("active");
-          document.getElementById("tabCooking").style.display = "none";
-        document.getElementById("cookingList").style.display = "none";
-
-        document.getElementById("inventoryGrid").style.display = "grid";
-        document.getElementById("inventorySettings").style.display = "none";
-        document.getElementById("craftingList").style.display = "none";
-        
-        const mainLayout = document.getElementById("inventoryMainLayout");
-        if (mainLayout) {
-          mainLayout.style.display = "flex";
-          mainLayout.style.maxWidth = "none";
+        if (tabName === "inventory") {
+          if (inventoryGrid) inventoryGrid.style.display = "grid";
+          if (inventorySettings) inventorySettings.style.display = "none";
+          if (craftingList) craftingList.style.display = "none";
+          if (cookingList) cookingList.style.display = "none";
+          if (bottomBtns) bottomBtns.style.display = "flex";
+          if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
+          if (divider) divider.style.display = "block";
+          if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
+          if (typeof renderInventory === "function") renderInventory();
+          else if (typeof window.renderInventory === "function") window.renderInventory();
+        } else if (tabName === "crafting") {
+          if (inventoryGrid) inventoryGrid.style.display = "none";
+          if (inventorySettings) inventorySettings.style.display = "none";
+          if (craftingList) craftingList.style.display = "flex";
+          if (cookingList) cookingList.style.display = "none";
+          if (bottomBtns) bottomBtns.style.display = "none";
+          if (mainLayout) mainLayout.style.display = "none";
+          if (divider) divider.style.display = "none";
+          if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (typeof renderCrafting === "function") renderCrafting();
+          else if (typeof window.renderCrafting === "function") window.renderCrafting();
+        } else if (tabName === "settings") {
+          if (inventoryGrid) inventoryGrid.style.display = "none";
+          if (inventorySettings) inventorySettings.style.display = "flex";
+          if (craftingList) craftingList.style.display = "none";
+          if (cookingList) cookingList.style.display = "none";
+          if (bottomBtns) bottomBtns.style.display = "none";
+          if (mainLayout) mainLayout.style.display = "none";
+          if (divider) divider.style.display = "none";
+          if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          syncInventorySettingsUI();
+        } else if (tabName === "itemsList") {
+          if (inventoryGrid) inventoryGrid.style.display = "grid";
+          if (inventorySettings) inventorySettings.style.display = "none";
+          if (craftingList) craftingList.style.display = "none";
+          if (cookingList) cookingList.style.display = "none";
+          if (bottomBtns) bottomBtns.style.display = "none";
+          if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
+          if (divider) divider.style.display = "block";
+          if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (typeof renderInventory === "function") renderInventory();
+          else if (typeof window.renderInventory === "function") window.renderInventory();
+        } else if (tabName === "cooking") {
+          if (inventoryGrid) inventoryGrid.style.display = "none";
+          if (inventorySettings) inventorySettings.style.display = "none";
+          if (craftingList) craftingList.style.display = "none";
+          if (cookingList) cookingList.style.display = "flex";
+          if (bottomBtns) bottomBtns.style.display = "none";
+          if (mainLayout) mainLayout.style.display = "none";
+          if (divider) divider.style.display = "none";
+          if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (typeof renderCooking === "function") renderCooking();
+          else if (typeof window.renderCooking === "function") window.renderCooking();
         }
-        const divider = document.getElementById("inventoryVerticalDivider");
-        if (divider) divider.style.display = "none";
-        const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
-        if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
-        renderInventory();
+
         setTimeout(updateActionSlotsPosition, 0);
+        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
+      }
+      window.switchInventoryTab = switchInventoryTab;
+
+      document.getElementById("tabCooking")?.addEventListener("click", () => switchInventoryTab("cooking"));
+      document.getElementById("tabInventory")?.addEventListener("click", () => switchInventoryTab("inventory"));
+      document.getElementById("tabCrafting")?.addEventListener("click", () => switchInventoryTab("crafting"));
+      document.getElementById("tabItemsList")?.addEventListener("click", () => switchInventoryTab("itemsList"));
+      document.getElementById("tabSettings")?.addEventListener("click", () => switchInventoryTab("settings"));
+
+      // Bumper buttons click listeners for menu tab switching (LB / RB)
+      document.getElementById("btnGamepadTabLB")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.GamepadController && typeof window.GamepadController.cycleTabs === "function") {
+          window.GamepadController.cycleTabs(-1);
+        }
+      });
+      document.getElementById("btnGamepadTabRB")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.GamepadController && typeof window.GamepadController.cycleTabs === "function") {
+          window.GamepadController.cycleTabs(1);
+        }
       });
 
-      document.getElementById("tabSettings")?.addEventListener("click", () => {
-        activeTab = "settings";
-        document.getElementById("tabSettings").classList.add("active");
-        document.getElementById("tabInventory").classList.remove("active");
-        document.getElementById("tabCrafting").classList.remove("active");
-        document.getElementById("tabItemsList").classList.remove("active");
-        document.getElementById("inventoryGrid").style.display = "none";
-        
-        document.getElementById("tabCooking").classList.remove("active");
-          document.getElementById("tabCooking").style.display = "none";
-        document.getElementById("cookingList").style.display = "none";
-
-        document.getElementById("inventorySettings").style.display = "flex";
-        document.getElementById("craftingList").style.display = "none";
-        
-        const mainLayout = document.getElementById("inventoryMainLayout");
-        if (mainLayout) mainLayout.style.display = "none";
-        const divider = document.getElementById("inventoryVerticalDivider");
-        if (divider) divider.style.display = "none";
-        const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
-        if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
-        syncInventorySettingsUI();
-        renderInventory();
-        setTimeout(updateActionSlotsPosition, 0);
+      // Keyboard Q and E to switch tabs when inventory overlay is open
+      window.addEventListener("keydown", (e) => {
+        const overlay = document.getElementById("inventoryOverlay");
+        if (overlay && overlay.classList.contains("open")) {
+          if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
+          if (e.code === "KeyQ" || e.code === "PageUp") {
+            if (window.GamepadController && typeof window.GamepadController.cycleTabs === "function") {
+              e.preventDefault();
+              window.GamepadController.cycleTabs(-1);
+            }
+          } else if (e.code === "KeyE" || e.code === "PageDown") {
+            if (window.GamepadController && typeof window.GamepadController.cycleTabs === "function") {
+              e.preventDefault();
+              window.GamepadController.cycleTabs(1);
+            }
+          }
+        }
       });
 
       // Tauri Window Helper supporting both Tauri v1 and v2
@@ -3900,68 +4057,143 @@ window.addEventListener("keyup", (e) => {
         );
 
         const isWingBoat = !!(typeof activeRidingBoat !== 'undefined' && activeRidingBoat && (activeRidingBoat.hasWing || activeRidingBoat.hasWings));
+        const isGp = (typeof isCurrentlyGamepadMode === 'function' ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+        const gpBrand = (window.GamepadController && typeof window.GamepadController.getBrand === 'function') ? window.GamepadController.getBrand() : 'xbox';
 
-        if (inWater !== lastInWaterState || hasActionReach !== lastHasActionReach || isWingBoat !== window._lastIsWingBoatState) {
+        if (inWater !== lastInWaterState || hasActionReach !== lastHasActionReach || isWingBoat !== window._lastIsWingBoatState || isGp !== window._lastIsGpState || gpBrand !== window._lastGpBrandState) {
           lastInWaterState = inWater;
           lastHasActionReach = hasActionReach;
           window._lastIsWingBoatState = isWingBoat;
+          window._lastIsGpState = isGp;
+          window._lastGpBrandState = gpBrand;
+
           const btnQKey = document.querySelector("#btnTouchQ .touch-btn-key");
           const btnQLabel = document.querySelector("#btnTouchQ .touch-btn-label");
           const btnEKey = document.querySelector("#btnTouchE .touch-btn-key");
           const btnELabel = document.querySelector("#btnTouchE .touch-btn-label");
+          const btnRCKey = document.querySelector("#btnTouchRightClick .touch-btn-key");
+          const btnRCLabel = document.querySelector("#btnTouchRightClick .touch-btn-label");
+          const btnLCKey = document.querySelector("#btnTouchLeftClick .touch-btn-key");
+          const btnLCLabel = document.querySelector("#btnTouchLeftClick .touch-btn-label");
           const btnQIcon = document.getElementById("btnTouchQIcon");
           const btnEIcon = document.getElementById("btnTouchEIcon");
 
-          if (isWingBoat) {
-            if (btnQKey) btnQKey.textContent = "Shift";
-            if (btnQLabel) btnQLabel.textContent = "บิน/Fly";
-            if (btnQIcon) {
-              btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
-            }
-          } else if (inWater) {
-            if (btnQKey) btnQKey.textContent = "Shift";
-            if (btnQLabel) btnQLabel.textContent = "ว่ายขึ้น/Up";
-            if (btnQIcon) {
-              btnQIcon.innerHTML = `
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="19" x2="12" y2="5"></line>
-                  <polyline points="5 12 12 5 19 12"></polyline>
-                </svg>
-              `;
-            }
-          } else {
-            if (btnQKey) btnQKey.textContent = "Q";
-            if (btnQLabel) btnQLabel.textContent = "หมุน/Rotate";
-            if (btnQIcon) {
-              btnQIcon.innerHTML = `
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-                </svg>
-              `;
-            }
-          }
+          const gpCtrl = window.GamepadController;
 
-          if (inWater && !hasActionReach) {
-            if (btnEKey) btnEKey.textContent = "Z";
-            if (btnELabel) btnELabel.textContent = "ดำน้ำ/Down";
-            if (btnEIcon) {
-              btnEIcon.innerHTML = `
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <polyline points="19 12 12 19 5 12"></polyline>
-                </svg>
-              `;
+          if (isGp && gpCtrl && typeof gpCtrl.getButtonLabel === 'function') {
+            // Controller Brand UI Buttons (PlayStation: L1/R1/L2/R2, Xbox: LB/RB/LT/RT, Switch: L/R/ZL/ZR)
+            if (isWingBoat) {
+              if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("flightThrottle");
+              if (btnQLabel) btnQLabel.textContent = "เร่งเครื่อง/Fly";
+              if (btnQIcon) btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
+            } else if (inWater) {
+              if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("swimUp");
+              if (btnQLabel) btnQLabel.textContent = "ว่ายขึ้น/Up";
+              if (btnQIcon) {
+                btnQIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                  </svg>
+                `;
+              }
+            } else {
+              if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("rotate");
+              if (btnQLabel) btnQLabel.textContent = "หมุน/Rotate";
+              if (btnQIcon) {
+                btnQIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                  </svg>
+                `;
+              }
             }
+
+            if (inWater && !hasActionReach) {
+              if (btnEKey) btnEKey.textContent = gpCtrl.getButtonLabel("swimDown");
+              if (btnELabel) btnELabel.textContent = "ดำน้ำ/Down";
+              if (btnEIcon) {
+                btnEIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <polyline points="19 12 12 19 5 12"></polyline>
+                  </svg>
+                `;
+              }
+            } else {
+              if (btnEKey) btnEKey.textContent = gpCtrl.getButtonLabel("interact");
+              if (btnELabel) btnELabel.textContent = "สำรวจ/ขี่";
+              if (btnEIcon) {
+                btnEIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 11V3a2 2 0 1 1 4 0v8h1a2 2 0 0 1 2 2v2a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-2a2 2 0 0 1 2-2h1V7a2 2 0 1 1 4 0v4h2z"/>
+                  </svg>
+                `;
+              }
+            }
+
+            if (btnRCKey) btnRCKey.textContent = gpCtrl.getButtonLabel("dig");
+            if (btnRCLabel) btnRCLabel.textContent = "ขุด-ถม/ดิน";
+            if (btnLCKey) btnLCKey.textContent = gpCtrl.getButtonLabel("attack");
+            if (btnLCLabel) btnLCLabel.textContent = "โจมตี-ใช้";
           } else {
-            if (btnEKey) btnEKey.textContent = "E";
-            if (btnELabel) btnELabel.textContent = "เก็บ/คุย";
-            if (btnEIcon) {
-              btnEIcon.innerHTML = `
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 11V3a2 2 0 1 1 4 0v8h1a2 2 0 0 1 2 2v2a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-2a2 2 0 0 1 2-2h1V7a2 2 0 1 1 4 0v4h2z"/>
-                </svg>
-              `;
+            // Standard Keyboard / Mouse Buttons
+            if (isWingBoat) {
+              if (btnQKey) btnQKey.textContent = "Shift";
+              if (btnQLabel) btnQLabel.textContent = "บิน/Fly";
+              if (btnQIcon) {
+                btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
+              }
+            } else if (inWater) {
+              if (btnQKey) btnQKey.textContent = "Shift";
+              if (btnQLabel) btnQLabel.textContent = "ว่ายขึ้น/Up";
+              if (btnQIcon) {
+                btnQIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                  </svg>
+                `;
+              }
+            } else {
+              if (btnQKey) btnQKey.textContent = "Q";
+              if (btnQLabel) btnQLabel.textContent = "หมุน/Rotate";
+              if (btnQIcon) {
+                btnQIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                  </svg>
+                `;
+              }
             }
+
+            if (inWater && !hasActionReach) {
+              if (btnEKey) btnEKey.textContent = "Z";
+              if (btnELabel) btnELabel.textContent = "ดำน้ำ/Down";
+              if (btnEIcon) {
+                btnEIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <polyline points="19 12 12 19 5 12"></polyline>
+                  </svg>
+                `;
+              }
+            } else {
+              if (btnEKey) btnEKey.textContent = "E";
+              if (btnELabel) btnELabel.textContent = "เก็บ/คุย";
+              if (btnEIcon) {
+                btnEIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 11V3a2 2 0 1 1 4 0v8h1a2 2 0 0 1 2 2v2a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-2a2 2 0 0 1 2-2h1V7a2 2 0 1 1 4 0v4h2z"/>
+                  </svg>
+                `;
+              }
+            }
+
+            if (btnRCKey) btnRCKey.textContent = "R-Click";
+            if (btnRCLabel) btnRCLabel.textContent = "ขุด-ถม/ขวา";
+            if (btnLCKey) btnLCKey.textContent = "L-Click";
+            if (btnLCLabel) btnLCLabel.textContent = "ตี-ใช้/ซ้าย";
           }
         }
       }

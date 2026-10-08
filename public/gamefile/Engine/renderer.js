@@ -4334,6 +4334,15 @@ window.cloud3DProgram = cloud3DProgram;
           window.BatterySystem.update(dt);
         }
 
+        // Gamepad Controller Polling & Update (Xbox & PlayStation)
+        if (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.update === "function") {
+          try {
+            window.GamepadController.update(dt);
+          } catch (gpErr) {
+            console.error("GamepadController.update error:", gpErr);
+          }
+        }
+
         // --- Throttled Animation Updates ---
         const now = timestamp;
 
@@ -4835,11 +4844,68 @@ window.cloud3DProgram = cloud3DProgram;
           moveSidewaysInput *= speedFactor;
         }
 
+        // Gamepad Left Stick Movement & Vehicle / Flight Controls
+        let gpThrottle = 0;
+        let gpFlightPitch = 0;
+        const isRidingBoat = !!(typeof activeRidingBoat !== "undefined" && activeRidingBoat);
+        const isBoatFlying = !!(isRidingBoat && activeRidingBoat.isFlying);
+
+        if (!isUIOpen && typeof window.GamepadController !== "undefined") {
+          if (typeof window.GamepadController.getFlightControls === "function") {
+            const flightCtrl = window.GamepadController.getFlightControls();
+            gpThrottle = flightCtrl.throttle || 0;
+            gpFlightPitch = flightCtrl.pitch || 0;
+          }
+
+          if (typeof window.GamepadController.getMovement === "function") {
+            const gpMove = window.GamepadController.getMovement();
+            if (gpMove.active) {
+              if (isBoatFlying) {
+                // In flight mode:
+                // Left Stick X = Steering (ซ้ายขวาเหมือนเดิมไม่แก้)
+                // Left Stick Y is Pitch (ดันขึ้นคือบินขึ้น ดันลงคือบินลง)
+                moveSidewaysInput = gpMove.x;
+              } else {
+                moveForwardInput = gpMove.y;
+                moveSidewaysInput = gpMove.x;
+              }
+            }
+          }
+
+          // In vehicle mode OR flight mode: RT acts as vehicle throttle (เดินหน้า / เร่งเครื่อง)
+          if (isRidingBoat && gpThrottle > 0.05) {
+            moveForwardInput = Math.max(moveForwardInput, gpThrottle);
+          }
+        }
+        window.boatGamepadFlightPitch = gpFlightPitch;
+
         moveForwardInput = Math.max(-1, Math.min(1, moveForwardInput));
         moveSidewaysInput = Math.max(-1, Math.min(1, moveSidewaysInput));
+
+        // Gamepad Right Stick Camera Look / Rotate
+        if (!isUIOpen && typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getLook === "function") {
+          const gpLook = window.GamepadController.getLook(dt);
+          if (gpLook.active) {
+            rotationY -= gpLook.x;
+            rotationX += gpLook.y;
+            const maxPitch = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "freecam")) ? 1.45 : 1.2;
+            const minPitch = -0.55;
+            rotationX = Math.max(minPitch, Math.min(maxPitch, rotationX));
+            window.rotationY = rotationY;
+            window.rotationX = rotationX;
+            if (window.cameraMode === "freecam" || (typeof cameraSpringArm !== "undefined" && cameraSpringArm && cameraSpringArm.mode === "freecam")) {
+              if (typeof window.freeCamYaw !== "number") window.freeCamYaw = 0.0;
+              if (typeof window.freeCamPitch !== "number") window.freeCamPitch = 0.0;
+              window.freeCamYaw -= gpLook.x;
+              window.freeCamPitch += gpLook.y;
+              window.freeCamPitch = Math.max(-1.52, Math.min(1.52, window.freeCamPitch));
+            }
+          }
+        }
         
         // Jump input handling
-        if (!isUIOpen && keysPressed["Space"]) {
+        const isGpJump = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.isJumpJustPressed === "function" && window.GamepadController.isJumpJustPressed());
+        if (!isUIOpen && (keysPressed["Space"] || isGpJump)) {
           if (isPlayerGrounded && !ragdollEnabled && !activeRidingBoat && currentSwimFactor === 0.0) {
             playerVerticalVel = 0.008; // Initial jump velocity
             isPlayerGrounded = false;
@@ -6144,12 +6210,23 @@ window.cloud3DProgram = cloud3DProgram;
             let hasWing = !!(activeRidingBoat.hasWing || activeRidingBoat.hasWings);
             let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0) || hasWing;
             const isShiftHeld = !!(typeof keysPressed !== "undefined" && (keysPressed["ShiftLeft"] || keysPressed["ShiftRight"] || keysPressed["Shift"])) || (typeof keys !== "undefined" && (keys["ShiftLeft"] || keys["ShiftRight"] || keys["Shift"])) || !!(typeof window.boatFlyButtonHeld !== "undefined" && window.boatFlyButtonHeld);
+            const gpPitch = (typeof window.boatGamepadFlightPitch === "number") ? window.boatGamepadFlightPitch : 0;
+            const isGamepadClimb = gpPitch > 0.15;
+            const isGamepadDive = gpPitch < -0.15;
 
             if (hasWing && !activeRidingBoat._hasShownFlightNotice) {
                 activeRidingBoat._hasShownFlightNotice = true;
                 if (typeof showNotice === "function") {
                     if (activeRidingBoat.hasEngine) {
-                        showNotice("🪽 เรือติดปีก: วิ่งเร่งความเร็ว [W] ~3 วิ หรือลอยตัวในอากาศ แล้วกด [Shift] เพื่อเปิดโหมดบิน | [Z] ดิ่งลง");
+                        const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+                        if (isGp) {
+                            const rtBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") ? window.GamepadController.getButtonLabel("throttle") : "RT";
+                            const stickUp = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") ? window.GamepadController.getButtonLabel("flightClimb") : "LS ⬆️";
+                            const stickDown = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") ? window.GamepadController.getButtonLabel("flightDive") : "LS ⬇️";
+                            showNotice(`🪽 เรือติดปีก: เร่งเครื่อง [${rtBtn}] ดันอนาล็อกซ้ายขึ้นเพื่อบินขึ้น [${stickUp}] | ดันลงเพื่อบินลง [${stickDown}]`);
+                        } else {
+                            showNotice("🪽 เรือติดปีก: วิ่งเร่งความเร็ว [W] ~3 วิ หรือลอยตัวในอากาศ แล้วกด [Shift] เพื่อเปิดโหมดบิน | [Z] ดิ่งลง");
+                        }
                     } else {
                         showNotice("🪽 เรือติดปีก: ต้องติดตั้งเครื่องยนต์ไฟฟ้าและใส่แบตเตอรี่ก่อนจึงจะบินได้!");
                     }
@@ -6268,18 +6345,22 @@ window.cloud3DProgram = cloud3DProgram;
 
                         const hasFlightBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
 
-                        if (isDiveInput) {
-                            // Pitch down & dive down rapidly to land on ground or water (กดปุ่ม Z เพื่อดิ่งลง)
-                            activeRidingBoat.verticalVel = Math.max(-0.030, (activeRidingBoat.verticalVel || 0) - 0.0035 * timeScale);
-                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.92 - 0.16 * Math.min(1.0, 0.14 * timeScale);
-                        } else if (isShiftHeld && canClimb && hasFlightBattery) {
-                            // Hold Shift while flying to climb higher (กด Shift ขณะบินเพื่อไต่ระดับขึ้นสูง - ต้องมีแบตเตอรี่)
-                            const climbPower = 0.0035 * timeScale;
-                            const maxClimbVel = 0.035;
-                            activeRidingBoat.verticalVel = Math.min(maxClimbVel, Math.max(0.015, (activeRidingBoat.verticalVel || 0) + climbPower));
-                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.94 + 0.12 * Math.min(1.0, 0.12 * timeScale);
+                        const climbMag = isGamepadClimb ? Math.min(1.0, gpPitch) : (isShiftHeld ? 1.0 : 0.0);
+                        const diveMag = isGamepadDive ? Math.min(1.0, Math.abs(gpPitch)) : (isDiveInput ? 1.0 : 0.0);
+
+                        if (isDiveInput || isGamepadDive) {
+                            // Pitch down & dive down rapidly to land on ground or water (กดปุ่ม Z หรือ ดันอนาล็อกซ้ายลง)
+                            const divePower = 0.0035 * timeScale * diveMag;
+                            activeRidingBoat.verticalVel = Math.max(-0.030 * diveMag, (activeRidingBoat.verticalVel || 0) - divePower);
+                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.92 - (0.16 * diveMag) * Math.min(1.0, 0.14 * timeScale);
+                        } else if ((isShiftHeld || isGamepadClimb) && canClimb && hasFlightBattery) {
+                            // Hold Shift while flying or push Left Stick UP to climb higher (กด Shift หรือ ดันอนาล็อกซ้ายขึ้น - ต้องมีแบตเตอรี่)
+                            const climbPower = 0.0035 * timeScale * climbMag;
+                            const maxClimbVel = 0.035 * climbMag;
+                            activeRidingBoat.verticalVel = Math.min(maxClimbVel, Math.max(0.015 * climbMag, (activeRidingBoat.verticalVel || 0) + climbPower));
+                            activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * 0.94 + (0.12 * climbMag) * Math.min(1.0, 0.12 * timeScale);
                         } else if (moveForwardInput > 0.1 && hasFlightBattery) {
-                            // Pressing forward (W) with active battery: generates engine thrust & aerodynamic lift to maintain cruise altitude
+                            // Pressing forward (W หรือ กดปุ่ม RT เร่งเครื่อง) with active battery: generates engine thrust & aerodynamic lift to maintain cruise altitude
                             activeRidingBoat.verticalVel = (activeRidingBoat.verticalVel || 0) * Math.pow(0.85, timeScale);
                             if (Math.abs(activeRidingBoat.verticalVel) < 0.0003) activeRidingBoat.verticalVel = 0;
                             activeRidingBoat.pitchGrade = (activeRidingBoat.pitchGrade || 0) * Math.pow(0.90, timeScale);
@@ -6342,7 +6423,8 @@ window.cloud3DProgram = cloud3DProgram;
                         // สามารถเปิดโหมดบินได้เมื่อ: วิ่งเดินหน้าครบ ~3 วินาที หรือ อยู่ในสถานะลอยตัวในอากาศ
                         const canEngageFlight = (hasTakeoffSpeed || isNaturallyAirborne) && (activeRidingBoat.airborneCooldown || 0) <= 0;
 
-                        if (isShiftHeld && canEngageFlight) {
+                        const wantsTakeoff = isShiftHeld || isGamepadClimb;
+                        if (wantsTakeoff && canEngageFlight) {
                             if (!hasEngineBoat) {
                                 const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
                                 if (typeof showNotice === "function" && (!activeRidingBoat._lastWingNotice || nowTime - activeRidingBoat._lastWingNotice > 2500)) {
@@ -6362,11 +6444,18 @@ window.cloud3DProgram = cloud3DProgram;
                                 activeRidingBoat.takeoffRunProgress = 0;
                             }
                         } else {
-                            if (isShiftHeld && !canEngageFlight && hasEngineBoat && hasBatteryBoat && !isNaturallyAirborne && moveForwardInput <= 0.1) {
+                            if (wantsTakeoff && !canEngageFlight && hasEngineBoat && hasBatteryBoat && !isNaturallyAirborne && moveForwardInput <= 0.1) {
                                 const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
                                 if (typeof showNotice === "function" && (!activeRidingBoat._lastTaxiNotice || nowTime - activeRidingBoat._lastTaxiNotice > 3000)) {
                                     activeRidingBoat._lastTaxiNotice = nowTime;
-                                    showNotice("🪽 กดเดินหน้า [W] วิ่งเร่งความเร็ว ~3 วินาที เพื่อเทคออฟเปิดโหมดบิน!");
+                                    const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+                                    if (isGp) {
+                                        const rtBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") ? window.GamepadController.getButtonLabel("throttle") : "RT";
+                                        const stickUp = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") ? window.GamepadController.getButtonLabel("flightClimb") : "LS ⬆️";
+                                        showNotice(`🪽 กดเร่งเครื่อง [${rtBtn}] วิ่งเร่งความเร็ว ~3 วินาที ดันอนาล็อกซ้ายขึ้น [${stickUp}] เพื่อเทคออฟ!`);
+                                    } else {
+                                        showNotice("🪽 กดเดินหน้า [W] วิ่งเร่งความเร็ว ~3 วินาที เพื่อเทคออฟเปิดโหมดบิน!");
+                                    }
                                 }
                             }
 
@@ -6973,18 +7062,27 @@ window.cloud3DProgram = cloud3DProgram;
               if (screenPos) {
                 let holdPercent = 0;
                 let instructionsHTML = "";
+                const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+                const attackBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                  ? window.GamepadController.getButtonLabel("attack") 
+                  : "L-Click";
+                const clickActionHold = isGp ? `กด [${attackBtn}] ค้าง` : "กดคลิกซ้ายค้าง";
+                const clickActionHoldEn = isGp ? `Hold [${attackBtn}]` : "Hold Left-click";
+                const clickActionSingle = isGp ? `กด [${attackBtn}]` : "คลิกซ้าย";
+                const clickActionSingleEn = isGp ? `Press [${attackBtn}]` : "Left-click";
+
                 if (isStoneFloor) {
                   holdPercent = Math.min(100, Math.floor((demolishHoldTimer / 1.0) * 100));
                   instructionsHTML = `
                     <strong>🔨 โหมดรื้อถอน (DEMOLISH MODE)</strong><br/>
-                    กดคลิกซ้ายค้าง เพื่อรื้อถอน STONE FLOOR<br/>
-                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">Hold Left-click to demolish STONE FLOOR</span>
+                    ${clickActionHold} เพื่อรื้อถอน STONE FLOOR<br/>
+                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">${clickActionHoldEn} to demolish STONE FLOOR</span>
                   `;
                 } else {
                   instructionsHTML = `
                     <strong>🔨 โหมดรื้อถอน (DEMOLISH MODE)</strong><br/>
-                    คลิกซ้าย เพื่อรื้อถอน ${closestDemolishItem.type.toUpperCase().replace("_", " ")}<br/>
-                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">Left-click to demolish ${closestDemolishItem.type.toUpperCase().replace("_", " ")}</span>
+                    ${clickActionSingle} เพื่อรื้อถอน ${closestDemolishItem.type.toUpperCase().replace("_", " ")}<br/>
+                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">${clickActionSingleEn} to demolish ${closestDemolishItem.type.toUpperCase().replace("_", " ")}</span>
                   `;
                 }
 
@@ -7350,9 +7448,17 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               const fullyAssembled = window.isMechFullyAssembled(activeRidingMech);
               let extraStatus = "";
+              const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+              const interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                ? window.GamepadController.getButtonLabel("interact") 
+                : "E";
+              const throttleBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                ? window.GamepadController.getButtonLabel("flightThrottle") 
+                : "W";
+
               if (activeRidingMech && activeRidingMech._nearbyStand && !activeRidingMech.dockedStand) {
                 const dockPct = Math.min(100, Math.floor(((activeRidingMech._dockingTimer || 0) / 0.8) * 100));
-                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">⚙️ อยู่ใกล้ฐานตั้ง! กด [E] ค้าง เพื่อยึดหุ่นเข้ากับฐาน ${dockPct > 0 ? '(' + dockPct + '%)' : ''}</span>`;
+                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">⚙️ อยู่ใกล้ฐานตั้ง! กด [${interactBtn}] ค้าง เพื่อยึดหุ่นเข้ากับฐาน ${dockPct > 0 ? '(' + dockPct + '%)' : ''}</span>`;
               } else if (!fullyAssembled && activeRidingMech) {
                 let missing = [];
                 const attached = activeRidingMech.attachedParts || [];
@@ -7373,7 +7479,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                 extraStatus = `<br><span style="color: #ff8888; font-size: 10px;">${warnMsg}</span>`;
               } else if (activeRidingMech && activeRidingMech.dockedStand) {
                 let holdPct = Math.min(100, Math.floor(((activeRidingMech._undockHoldTimer || 0) / 0.35) * 100));
-                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">🏗️ กด [W] ค้าง (เดินหน้าอย่างเดียว) เพื่อปลดล็อคออกจากฐานตั้ง ${holdPct > 0 ? '(' + holdPct + '%)' : ''}</span>`;
+                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">🏗️ กด [${isGp ? throttleBtn : 'W'}] ค้าง (เดินหน้าอย่างเดียว) เพื่อปลดล็อคออกจากฐานตั้ง ${holdPct > 0 ? '(' + holdPct + '%)' : ''}</span>`;
               }
 
               if (prompt.style.display !== "none") {
@@ -7623,11 +7729,14 @@ if (prompt._lastText !== _newText_1) {
                   }
 
                   const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
+                  const interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                    ? window.GamepadController.getButtonLabel("interact") 
+                    : "E";
                   const _newHtml_5 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #dfb76c;">
-                      กด [E] ค้าง เพื่อเปิดกล่องไม้<br/>
-                      (HOLD [E] TO OPEN CHEST)
+                      กด [${interactBtn}] ค้าง เพื่อเปิดกล่องไม้<br/>
+                      (HOLD [${interactBtn}] TO OPEN CHEST)
                     </div>
                   </div>`;
 if (prompt._lastHTML !== _newHtml_5) {
@@ -7666,11 +7775,14 @@ if (prompt._lastHTML !== _newHtml_5) {
                     campfireHoldTimer = 0.0;
                   }
                   const holdPercent = Math.min(100, Math.floor((campfireHoldTimer / 0.5) * 100));
+                  const interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                    ? window.GamepadController.getButtonLabel("interact") 
+                    : "E";
                   const _newHtml_6 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 108, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #df6c6c;">
-                      กด [E] ค้าง เพื่อทำอาหาร<br/>
-                      (HOLD [E] TO COOK)
+                      กด [${interactBtn}] ค้าง เพื่อทำอาหาร<br/>
+                      (HOLD [${interactBtn}] TO COOK)
                     </div>
                   </div>`;
 if (prompt._lastHTML !== _newHtml_6) {
@@ -7875,8 +7987,11 @@ if (prompt._lastHTML !== _newHtml_6) {
                   window.innerHeight,
                 );
                 if (screenPos) {
+                  const interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                    ? window.GamepadController.getButtonLabel("interact") 
+                    : "LB";
                   const currentAngle = activeInteractWindow.windowAngle || 0.0;
-                  const actionName = (currentAngle < 0.78) ? "เปิดหน้าต่าง (Hold E)" : "ปิดหน้าต่าง (Hold E)";
+                  const actionName = (currentAngle < 0.78) ? `เปิดหน้าต่าง (Hold ${interactBtn})` : `ปิดหน้าต่าง (Hold ${interactBtn})`;
                   const _newText_2 = actionName;
 if (prompt._lastText !== _newText_2) {
     prompt.textContent = _newText_2;

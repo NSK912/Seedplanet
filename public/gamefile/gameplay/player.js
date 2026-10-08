@@ -5344,6 +5344,7 @@ window.characterVertexShaderSource = `
       // ระบบควบคุมตัวละครและกล้องติดตาม
       // ============================================
       const keysPressed = {};
+      window.keysPressed = keysPressed;
       window.clearKeysPressed = () => { for (let k in keysPressed) keysPressed[k] = false; };
       window.addEventListener("keydown", (e) => {
         initAudio();

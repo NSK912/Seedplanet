@@ -72,7 +72,8 @@ function isUIOpen() {
   const chest = document.getElementById("chestOverlay");
   if (chest && chest.classList.contains("open")) return true;
   
-  if (typeof gameStarted !== "undefined" && !gameStarted) {
+  const isStarted = (typeof gameStarted !== "undefined" && gameStarted) || (typeof window.gameStarted !== "undefined" && window.gameStarted);
+  if (!isStarted) {
     const start = document.getElementById("gameStartOverlay");
     if (start && start.style.display !== "none" && !start.classList.contains("fade-out")) return true;
   }
@@ -289,6 +290,7 @@ var virtualMouseDownX = 0;
 var virtualMouseDownY = 0;
 var activeVirtualDragTarget = null;
 var activeVirtualDragInput = null;
+var activeVirtualCustomScrollbar = null;
 var isVirtualDraggingSlot = false;
 var didVirtualDrag = false;
 var virtualDragSource = null;
@@ -388,21 +390,30 @@ function updateVirtualCursorVisibility() {
   const isTouch = window.devInputMode === "touch" || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || 
                   (window.devInputMode === "auto" && typeof isAndroidProfile !== "undefined" && isAndroidProfile);
 
-  if (isTouch && !isDev) {
-    cursor.style.opacity = "0";
-    cursor.style.display = "none";
-    return;
-  }
-  
-  cursor.style.display = "block";
+  let targetDisplay = "block";
+  let targetOpacity = "1";
 
-  if (uiOpen) {
-    cursor.style.opacity = "1";
+  if (isTouch && !isDev) {
+    targetDisplay = "none";
+    targetOpacity = "0";
+  } else if (uiOpen) {
+    if (window.isGamepadUINavActive) {
+      targetDisplay = "none";
+      targetOpacity = "0";
+    } else {
+      targetDisplay = "block";
+      targetOpacity = "1";
+    }
   } else if (window.isVirtualCursorManualHidden) {
-    cursor.style.opacity = "0";
+    targetDisplay = "block";
+    targetOpacity = "0";
   } else {
-    cursor.style.opacity = "1";
+    targetDisplay = "block";
+    targetOpacity = "1";
   }
+
+  if (cursor.style.display !== targetDisplay) cursor.style.display = targetDisplay;
+  if (cursor.style.opacity !== targetOpacity) cursor.style.opacity = targetOpacity;
 }
 window.updateVirtualCursorVisibility = updateVirtualCursorVisibility;
 
@@ -415,6 +426,7 @@ if (typeof window !== "undefined") {
         const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
         
         if (uiOpen !== lastUIOpen) {
+          lastUIOpen = uiOpen;
           if (uiOpen) {
             if (typeof window.resetVirtualCursorToCenter === "function") window.resetVirtualCursorToCenter();
           } else {
@@ -422,16 +434,20 @@ if (typeof window !== "undefined") {
               if (typeof requestPointerLockSafe === "function") requestPointerLockSafe();
             }
           }
-          lastUIOpen = uiOpen;
+          updateVirtualCursorVisibility();
         }
-        
-        updateVirtualCursorVisibility();
       });
-      observer.observe(document.body, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ["class", "style"]
+
+      // Target only the specific overlay containers instead of the whole page subtree to prevent mutation thrashing
+      const overlayIds = ["inventoryOverlay", "chestOverlay", "saveSelectOverlay"];
+      overlayIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          observer.observe(el, { attributes: true, attributeFilter: ["class", "style"] });
+        }
       });
+      // Fallback observation on body for class changes only (no subtree style churn)
+      observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
   };
   if (document.readyState === "loading") {
@@ -593,6 +609,11 @@ function handleVirtualMouseMove(e) {
   const isNativeLocked = !!(Object.getOwnPropertyDescriptor(Document.prototype, 'pointerLockElement')?.get?.call(document));
   const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
 
+  if (window.isGamepadUINavActive && uiOpen && (Math.abs(e.movementX || 0) > 2 || Math.abs(e.movementY || 0) > 2)) {
+    window.isGamepadUINavActive = false;
+    document.querySelectorAll(".gamepad-focused").forEach(el => el.classList.remove("gamepad-focused"));
+  }
+
   if (window.isVirtualCursorManualHidden && !uiOpen) {
     virtualCursorX = window.innerWidth / 2;
     virtualCursorY = window.innerHeight / 2;
@@ -628,7 +649,15 @@ function handleVirtualMouseMove(e) {
       updateRangeInputFromVirtualCursor(activeVirtualDragInput, virtualCursorX);
     }
 
-    // 2. Dragging inventory/action slots
+    // 2. Dragging custom scrollbars
+    if (activeVirtualCustomScrollbar) {
+      didVirtualDrag = true;
+      if (typeof window.updateCustomScrollbarFromPosition === "function") {
+        window.updateCustomScrollbarFromPosition(virtualCursorY);
+      }
+    }
+
+    // 3. Dragging inventory/action slots
     if (activeVirtualDragTarget) {
       const dist = Math.hypot(virtualCursorX - virtualMouseDownX, virtualCursorY - virtualMouseDownY);
       if (!isVirtualDraggingSlot && dist > 5) {
@@ -717,6 +746,10 @@ function redirectMouseEventToVirtualCursor(e) {
     try { window.focus(); } catch(err){}
   }
 
+  // Allow simulated and synthetic events (from gamepad, touch buttons, or programmatic dispatch) to pass through untouched
+  if (e.simulated || isSyntheticEvent || window.isGamepadTriggeringClick || (e.isTrusted === false && !e.fromVirtualCursor)) return;
+  if (window.isGamepadUINavActive) return;
+
   const uiOpen = typeof isUIOpen === "function" ? isUIOpen() : false;
   if (window.isVirtualCursorManualHidden && !uiOpen) {
     if (e.target !== canvas) {
@@ -756,6 +789,17 @@ function redirectMouseEventToVirtualCursor(e) {
       updateRangeInputFromVirtualCursor(rangeInput, virtualCursorX);
     } else {
       activeVirtualDragInput = null;
+    }
+
+    const scrollbarThumb = targetEl.closest(".custom-scrollbar-thumb, #panelCustomScrollbarThumb");
+    const scrollbarTrack = targetEl.closest(".custom-scrollbar-track, #panelCustomScrollbar");
+    if (scrollbarThumb || scrollbarTrack) {
+      activeVirtualCustomScrollbar = scrollbarThumb || scrollbarTrack;
+      if (typeof window.updateCustomScrollbarFromPosition === "function") {
+        window.updateCustomScrollbarFromPosition(virtualCursorY);
+      }
+    } else {
+      activeVirtualCustomScrollbar = null;
     }
   }
 
@@ -821,6 +865,9 @@ function redirectMouseEventToVirtualCursor(e) {
           updateRangeInputFromVirtualCursor(activeVirtualDragInput, virtualCursorX);
           activeVirtualDragInput.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
           activeVirtualDragInput = null;
+        }
+        if (activeVirtualCustomScrollbar) {
+          activeVirtualCustomScrollbar = null;
         }
 
         if (isVirtualDraggingSlot) {

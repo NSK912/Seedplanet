@@ -35,6 +35,7 @@
             npcSfxVolume,
             sfxMuted,
             keyBindings: currentKeyBindings,
+            gamepadBindings: (typeof currentGamepadBindings !== "undefined" ? currentGamepadBindings : (window.currentGamepadBindings || {})),
             renderScale,
             mouseSensitivity,
             showFps,
@@ -1101,14 +1102,23 @@
           selectOverlay.classList.add("open");
         }
         renderSaveSlots();
+        if (typeof updateCustomScrollbar === "function") {
+          setTimeout(updateCustomScrollbar, 30);
+        } else if (typeof window.updateCustomScrollbar === "function") {
+          setTimeout(window.updateCustomScrollbar, 30);
+        }
       }
+      window.openSaveSelector = openSaveSelector;
 
       function closeSaveSelector() {
         const selectOverlay = document.getElementById("saveSelectOverlay");
         if (selectOverlay) {
           selectOverlay.classList.remove("open");
         }
+        const track = document.getElementById("saveSelectCustomScrollbar");
+        if (track) track.style.display = "none";
       }
+      window.closeSaveSelector = closeSaveSelector;
 
       function renderSaveSlots() {
         const listContainer = document.getElementById("saveSlotsList");
@@ -1159,36 +1169,45 @@
           const deleteBtnText = typeof t === "function" ? t("delete_save") || "ลบเซฟ" : "ลบเซฟ (Delete)";
 
           html += `
-                    <div class="save-slot-card game-ui"  
-                         onmouseover="this.style.background='rgba(223, 183, 108, 0.15)'; this.style.borderColor='#dfb76c'; this.style.boxShadow='0 0 12px rgba(223, 183, 108, 0.15)';" 
-                         onmouseout="this.style.background='rgba(223, 183, 108, 0.05)'; this.style.borderColor='rgba(223, 183, 108, 0.25)'; this.style.boxShadow='none';"
-                         onclick="selectSaveSlotAndStart('${slot.id}')" style="background: rgba(223, 183, 108, 0.05); border: 1px solid rgba(223, 183, 108, 0.25); padding: 14px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: auto;">
-                            <span style="color: #dfb76c; font-weight: bold; font-size: 14px; text-shadow: 0 0 4px rgba(223, 183, 108, 0.3); font-family: 'Google Sans', sans-serif;">${slotTitle}</span>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 11px; font-family: 'Google Sans', sans-serif;">${statusText}</span>
-                                ${
-                                  !isEmpty
-                                    ? `
-                                <button onclick="event.preventDefault(); event.stopPropagation(); deleteSaveSlot('${slot.id}', this, event)" 
-                                         
-                                        onmouseover="this.style.background='rgba(239, 68, 68, 0.35)'; this.style.borderColor='#fca5a5';" 
-                                        onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'; this.style.borderColor='rgba(239, 68, 68, 0.4)';" class="game-ui" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 2px 6px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; transition: all 0.2s;">
-                                    ${deleteBtnText}
-                                </button>
-                                `
-                                    : ""
-                                }
-                            </div>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; color: rgba(255,255,255,0.7); font-size: 11px; font-family: 'Google Sans', sans-serif;">
-                            <span style="color: rgba(255,255,255,0.45); font-size: 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px; margin-top: -2px;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg> LocalStorage KEY: ${slot.id}</span>
-                            <span style="color: rgba(255,255,255,0.8);">${description}</span>
-                        </div>
-                    </div>
-                `;
+            <div class="save-slot-row" data-slot-id="${slot.id}" style="display: flex; align-items: stretch; gap: 8px; width: 100%;">
+              <div class="save-slot-card game-ui"  
+                   data-slot-id="${slot.id}"
+                   onmouseover="this.style.background='rgba(223, 183, 108, 0.15)'; this.style.borderColor='#dfb76c'; this.style.boxShadow='0 0 12px rgba(223, 183, 108, 0.15)';" 
+                   onmouseout="this.style.background='rgba(223, 183, 108, 0.05)'; this.style.borderColor='rgba(223, 183, 108, 0.25)'; this.style.boxShadow='none';"
+                   onclick="selectSaveSlotAndStart('${slot.id}')" 
+                   style="flex: 1; min-width: 0; background: rgba(223, 183, 108, 0.05); border: 1px solid rgba(223, 183, 108, 0.25); padding: 12px 14px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: auto;">
+                  <span style="color: #dfb76c; font-weight: bold; font-size: 14px; text-shadow: 0 0 4px rgba(223, 183, 108, 0.3); font-family: 'Google Sans', sans-serif;">${slotTitle}</span>
+                  <span style="font-size: 11px; font-family: 'Google Sans', sans-serif;">${statusText}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; color: rgba(255,255,255,0.7); font-size: 11px; font-family: 'Google Sans', sans-serif;">
+                  <span style="color: rgba(255,255,255,0.45); font-size: 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px; margin-top: -2px;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg> LocalStorage KEY: ${slot.id}</span>
+                  <span style="color: rgba(255,255,255,0.8);">${description}</span>
+                </div>
+              </div>
+              ${!isEmpty ? `
+                <button class="save-slot-delete-btn game-ui"
+                        id="btnDeleteSave_${slot.id}"
+                        data-slot-id="${slot.id}"
+                        onclick="event.preventDefault(); event.stopPropagation(); deleteSaveSlot('${slot.id}', this, event)"
+                        title="${deleteBtnText}"
+                        style="width: 76px; flex-shrink: 0; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; transition: all 0.2s; font-weight: bold;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  <span>${deleteBtnText}</span>
+                </button>
+              ` : ''}
+            </div>
+          `;
         }
         listContainer.innerHTML = html;
+
+        if (typeof updateCustomScrollbar === "function") {
+          setTimeout(updateCustomScrollbar, 20);
+        } else if (typeof window.updateCustomScrollbar === "function") {
+          setTimeout(window.updateCustomScrollbar, 20);
+        }
       }
 
       function deleteSaveSlot(slotId, buttonElement, e) {
@@ -1202,6 +1221,12 @@
         if (buttonElement.dataset.confirm === "true") {
           localStorage.removeItem(slotId);
           renderSaveSlots();
+          if (window.GamepadController && typeof window.GamepadController.applyUIFocus === "function") {
+            window.GamepadController.uiNav.saveCol = 0;
+            setTimeout(() => {
+              window.GamepadController.applyUIFocus();
+            }, 50);
+          }
         } else {
           buttonElement.dataset.confirm = "true";
           buttonElement.textContent = typeof t === "function" ? (t("confirm_delete") || "ยืนยันลบ?") : "ยืนยันลบ? (Confirm)";

@@ -652,7 +652,9 @@
         display: none;
         justify-content: center;
         align-items: center;
-        background: transparent;
+        background: rgba(0, 0, 0, 0.6) !important;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         pointer-events: none;
       }
       .inventory-overlay.open {
@@ -660,95 +662,252 @@
         pointer-events: auto;
       }
       .inventory-panel {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        max-width: none !important;
-        max-height: none !important;
-        background: rgba(10, 10, 15, 0.97) !important;
-        border: none !important;
-        border-radius: 0 !important;
-        margin: 0 !important;
-        padding: 32px !important;
-        box-shadow: none !important;
-        overflow-y: auto;
-        backdrop-filter: blur(16px);
-        clip-path: none !important; /* เอาส่วนตัดหน้าต่างออก */
-        display: flex;
-        flex-direction: column;
-        box-sizing: border-box !important;
-      }
-      #saveSelectOverlay .inventory-panel {
         position: relative !important;
         top: auto !important;
         left: auto !important;
-        width: 100% !important;
-        max-width: 520px !important;
-        height: auto !important;
-        max-height: 85vh !important;
+        width: auto !important;
+        min-width: 500px !important;
+        max-width: 940px !important;
+        height: 520px !important;
+        min-height: 520px !important;
+        max-height: 88vh !important;
         background: rgba(10, 10, 15, 0.96) !important;
         border: 1px solid rgba(223, 183, 108, 0.45) !important;
         border-radius: 0 !important;
         --cut: 14px;
         clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))) !important;
-        padding: 24px 28px !important;
-        box-shadow: 0 0 35px rgba(223, 183, 108, 0.25) !important;
         margin: auto !important;
+        padding: 24px 28px !important;
+        box-shadow: 0 0 35px rgba(223, 183, 108, 0.25), 0 20px 50px rgba(0, 0, 0, 0.85) !important;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box !important;
       }
-      .inventory-panel::-webkit-scrollbar {
-        width: 4px;
+      #saveSelectOverlay .inventory-panel {
+        max-width: 520px !important;
+        height: auto !important;
+        min-height: 400px !important;
+        max-height: 85vh !important;
       }
-      .inventory-panel::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.02);
+      #chestOverlay .inventory-panel {
+        width: 860px !important;
+        height: 520px !important;
+        flex-direction: row !important;
+        gap: 28px !important;
+        justify-content: center !important;
+        overflow: visible !important;
       }
-      .inventory-panel::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.15);
+      #inventoryOverlay .inventory-panel {
+        width: 580px !important;
+        min-width: 580px !important;
+        max-width: 580px !important;
+        height: 520px !important;
       }
-      .inventory-panel::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+      #craftingList,
+      #cookingList,
+      #inventorySettings,
+      #inventoryMainLayout {
+        overflow-y: auto !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        padding-right: 6px !important;
       }
+      /* Custom DOM Virtual Scrollbar for Virtual Cursor & Gamepad */
+      .custom-scrollbar-track {
+        position: absolute;
+        top: 64px;
+        bottom: 24px;
+        right: 10px;
+        width: 10px;
+        background: rgba(10, 15, 25, 0.75);
+        border: 1px solid rgba(223, 183, 108, 0.35);
+        border-radius: 0;
+        --cut: 4px;
+        clip-path: polygon(0 var(--cut), var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%);
+        z-index: 50;
+        display: none;
+        cursor: pointer;
+        user-select: none;
+        box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+      }
+      .custom-scrollbar-thumb {
+        position: absolute;
+        left: 1px;
+        right: 1px;
+        top: 0;
+        height: 48px;
+        background: linear-gradient(180deg, #dfb76c 0%, #fef08a 50%, #dfb76c 100%);
+        border: 1px solid rgba(254, 240, 138, 0.85);
+        box-shadow: 0 0 8px rgba(223, 183, 108, 0.6);
+        border-radius: 0;
+        --cut: 3px;
+        clip-path: polygon(0 var(--cut), var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%);
+        cursor: grab;
+        transition: background 0.15s, box-shadow 0.15s;
+        will-change: transform;
+      }
+      .custom-scrollbar-thumb:hover,
+      .custom-scrollbar-thumb.dragging,
+      .custom-scrollbar-thumb.virtual-hover {
+        background: linear-gradient(180deg, #ffffff 0%, #fef08a 60%, #eab308 100%);
+        border-color: #ffffff;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95);
+        cursor: grabbing;
+      }
+
+      /* Hide native browser scrollbars in panels */
+      #craftingList,
+      #cookingList,
+      #inventorySettings,
+      #inventoryMainLayout,
+      #saveSlotsList,
       .inventory-panel {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.02);
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
       }
+      #craftingList::-webkit-scrollbar,
+      #cookingList::-webkit-scrollbar,
+      #inventorySettings::-webkit-scrollbar,
+      #inventoryMainLayout::-webkit-scrollbar,
+      #saveSlotsList::-webkit-scrollbar,
+      .inventory-panel::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
+
+      /* Gamepad Direct Slot / UI Element Focus */
+      .gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        outline-offset: -1px !important;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95), inset 0 0 8px rgba(234, 179, 8, 0.45) !important;
+        border-color: #fde047 !important;
+        z-index: 25 !important;
+        position: relative !important;
+        animation: gamepad-focus-glow 1s infinite alternate ease-in-out !important;
+      }
+      #startMenuButtonsContainer .start-btn.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        border-color: #fde047 !important;
+        background: rgba(223, 183, 108, 0.3) !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 24px rgba(250, 204, 21, 0.95), inset 0 0 12px rgba(234, 179, 8, 0.45) !important;
+        transform: scale(1.04) !important;
+      }
+      .save-slot-card.gamepad-focused, #btnSaveSelectBack.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        border-color: #fde047 !important;
+        background: rgba(223, 183, 108, 0.22) !important;
+        box-shadow: 0 0 20px rgba(250, 204, 21, 0.85) !important;
+        transform: scale(1.01) !important;
+      }
+      .save-slot-delete-btn.gamepad-focused {
+        outline: 2px solid #f87171 !important;
+        border-color: #ef4444 !important;
+        background: rgba(239, 68, 68, 0.35) !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.85), inset 0 0 8px rgba(239, 68, 68, 0.5) !important;
+        transform: scale(1.04) !important;
+      }
+      #startScreenSocialBar a.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95) !important;
+        transform: scale(1.12) !important;
+      }
+      #trashCancelBtn.gamepad-focused, #trashConfirmBtn.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        outline-offset: 2px !important;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95) !important;
+        z-index: 10 !important;
+      }
+      input[type="range"].gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        outline-offset: 4px !important;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95) !important;
+        border-radius: 0px !important;
+      }
+      .key-bind-row-wrapper {
+        border-radius: 0px !important;
+      }
+      .key-bind-btn, .gp-bind-btn, .fixed-bind-badge {
+        border-radius: 0px !important;
+      }
+      .key-bind-btn.gamepad-focused, .gp-bind-btn.gamepad-focused {
+        border-radius: 0px !important;
+        outline: 2px solid #fef08a !important;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95), inset 0 0 8px rgba(234, 179, 8, 0.45) !important;
+        border-color: #fde047 !important;
+        background: rgba(223, 183, 108, 0.35) !important;
+        color: #ffffff !important;
+        transform: scale(1.03) !important;
+      }
+      .key-bind-row-wrapper:has(.gamepad-focused) {
+        border-radius: 0px !important;
+        background: rgba(223, 183, 108, 0.12) !important;
+        border-color: rgba(223, 183, 108, 0.55) !important;
+        box-shadow: 0 0 12px rgba(223, 183, 108, 0.2) !important;
+      }
+      #btnBindingModeKb, #btnBindingModeGp {
+        border-radius: 0px !important;
+      }
+      #btnBindingModeKb.gamepad-focused, #btnBindingModeGp.gamepad-focused {
+        border-radius: 0px !important;
+        outline: 2px solid #fef08a !important;
+        box-shadow: 0 0 16px rgba(250, 204, 21, 0.95) !important;
+        border-color: #fde047 !important;
+        transform: scale(1.05) !important;
+      }
+      #inventorySettings button,
+      #inventorySettings .game-ui,
+      #inventorySettings input[type="range"] {
+        border-radius: 0px !important;
+      }
+      @keyframes gamepad-focus-glow {
+        0% {
+          box-shadow: 0 0 10px rgba(250, 204, 21, 0.7), inset 0 0 6px rgba(234, 179, 8, 0.35);
+        }
+        100% {
+          box-shadow: 0 0 22px rgba(254, 240, 138, 1), inset 0 0 12px rgba(234, 179, 8, 0.65);
+        }
+      }
+
       .inventory-header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        margin: -32px -32px 24px -32px;
+        align-items: center;
+        margin: 0 0 16px 0;
         color: #fff;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 32px 32px 16px 32px;
-        position: sticky;
-        top: -32px;
-        background: #0a0a0f;
-        z-index: 5;
-        height: 32px;
-        box-sizing: content-box;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0 0 12px 0;
+        position: relative;
+        background: transparent;
+        z-index: 10;
+        height: 36px;
+        flex-shrink: 0;
+        box-sizing: border-box;
       }
       .inventory-tabs {
         display: flex;
         gap: 16px;
         flex-wrap: nowrap;
         align-items: center;
-        height: 32px;
+        height: 36px;
       }
       .inventory-header h2 {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 500;
-        letter-spacing: 2px;
+        letter-spacing: 1.5px;
         color: rgba(255, 255, 255, 0.4);
         font-family: 'Google Sans', sans-serif;
         text-transform: uppercase;
         cursor: pointer;
         transition: all 0.25s ease-in-out;
         margin: 0;
-        height: 32px;
+        height: 36px;
         padding-bottom: 0;
         box-sizing: border-box;
         border-bottom: 2px solid transparent;
@@ -763,24 +922,62 @@
         border-bottom-color: #dfb76c;
         text-shadow: 0 0 10px rgba(223, 183, 108, 0.4);
       }
+      .inventory-header h2.gamepad-focused {
+        color: #ffffff !important;
+        border-bottom: 2px solid #fef08a !important;
+        text-shadow: 0 0 12px rgba(254, 240, 138, 0.9) !important;
+        box-shadow: 0 2px 12px rgba(250, 204, 21, 0.5) !important;
+        outline: none !important;
+      }
+      .gamepad-tab-bumper {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        font-family: 'Google Sans', sans-serif;
+        color: #dfb76c;
+        background: rgba(223, 183, 108, 0.12);
+        border: 1px solid rgba(223, 183, 108, 0.35);
+        padding: 2px 7px;
+        border-radius: 4px;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.15s ease;
+        height: 22px;
+        box-sizing: border-box;
+        letter-spacing: 0.5px;
+      }
+      .gamepad-tab-bumper:hover {
+        background: rgba(223, 183, 108, 0.3);
+        border-color: #dfb76c;
+        color: #ffffff;
+        box-shadow: 0 0 8px rgba(223, 183, 108, 0.5);
+      }
+      .gamepad-tab-bumper:active {
+        transform: scale(0.92);
+      }
       .inventory-header .close-btn {
         background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: #fff;
         width: 32px;
         height: 32px;
-        font-size: 16px;
+        font-size: 14px;
         cursor: pointer;
-        transition: all 0.3s;
+        transition: all 0.2s;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'Google Sans', sans-serif;
-        }
+        border-radius: 0;
+        --cut: 6px;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+      }
       .inventory-header .close-btn:hover {
-        background: rgba(255, 60, 60, 0.15);
-        border-color: rgba(255, 60, 60, 0.2);
-        color: #ff5555;
+        background: rgba(239, 68, 68, 0.2);
+        border-color: #ef4444;
+        color: #ef4444;
       }
       .inventory-grid {
         display: grid;
@@ -1587,6 +1784,7 @@
       }
       .game-ui {
         clip-path: var(--game-ui-clip);
+        border-radius: 0 !important;
       }
       .game-ui.sm { --cut: 6px; }
       .game-ui.lg { --cut: 12px; }
