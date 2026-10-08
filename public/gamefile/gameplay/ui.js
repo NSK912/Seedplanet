@@ -129,7 +129,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- Version Info -->
           <div style="color: #64748b; font-size: 12px; font-weight: 500; font-family: 'Google Sans', sans-serif; margin-left: 8px;">
             <span style="font-weight: 700; margin-right: 4px;">NSK App</span>
-            ver 2.0.0.8
+            ver 2.0.9
           </div>
         </div>
       </div>
@@ -625,7 +625,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="rgba(223, 183, 108, 0.25)"></polygon>
             </svg>
-            <span>แอคชั่น UI</span>
+            <span data-i18n="bottom_btn_action">แอคชั่น UI</span>
           </button>
           <button id="btnInventorySplit" class="game-ui clickable" style="
             flex: 1;
@@ -654,7 +654,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               <!-- Dividing / split indicator line inside -->
               <line x1="6.5" y1="14.5" x2="12.5" y2="14.5" stroke="#38bdf8" stroke-width="1.8"></line>
             </svg>
-            <span>แบ่งจำนวนไอเทม</span>
+            <span data-i18n="bottom_btn_split">แบ่งจำนวนไอเทม</span>
           </button>
           <button id="btnInventoryDestroy" class="game-ui clickable" style="
             flex: 1;
@@ -681,7 +681,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               <line x1="10" y1="11" x2="10" y2="17"></line>
               <line x1="14" y1="11" x2="14" y2="17"></line>
             </svg>
-            <span>ทำลายไอเทม</span>
+            <span data-i18n="bottom_btn_destroy">ทำลายไอเทม</span>
           </button>
         </div>
         <div

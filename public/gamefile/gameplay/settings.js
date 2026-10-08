@@ -273,9 +273,10 @@ function renderKeyBindingsUI() {
     for (const item of gpBindings) {
       const isFixed = !!item.fixed;
       const btnText = isFixed ? item.fixedBtn : getGamepadButtonName(currentGamepadBindings[item.id] !== undefined ? currentGamepadBindings[item.id] : DEFAULT_GAMEPAD_BINDINGS[item.id], brand);
+      const itemLabel = (typeof t === "function") ? t("key_" + item.id) : item.label;
       html += `
         <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 5px 8px; border: 1px solid rgba(223, 183, 108, 0.15); border-radius: 0px; transition: all 0.2s;">
-            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; color: #f1f5f9; pointer-events: none;">${item.label}</span>
+            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; color: #f1f5f9; pointer-events: none;">${itemLabel}</span>
             ${isFixed ? `
               <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 4px 10px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; border-radius: 0px; user-select: none;">
                 ${btnText}
