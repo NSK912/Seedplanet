@@ -22,6 +22,9 @@
 
   function clearCache() {
     terrainCacheValid.fill(0);
+    if (global && typeof global.clearVisualCache === 'function') {
+      global.clearVisualCache();
+    }
   }
   if (typeof window !== 'undefined') {
     window.clearCache = clearCache;
@@ -467,10 +470,54 @@
 
 })(typeof window !== 'undefined' ? window : this);
 
+  // --- Visual Height on Mesh (Optimized with zero GC allocations, deduplicated trig, and query cache) ---
+  const VCACHE_SIZE = 16;
+  const _vCacheTheta = new Float64Array(VCACHE_SIZE);
+  const _vCachePhi = new Float64Array(VCACHE_SIZE);
+  const _vCacheSeed = new Float64Array(VCACHE_SIZE);
+  const _vCacheGrid = new Float64Array(VCACHE_SIZE);
+  const _vCacheRes = new Float64Array(VCACHE_SIZE);
+  const _vCacheValid = new Uint8Array(VCACHE_SIZE);
+  let _vCachePtr = 0;
+
+  function clearVisualCache() {
+    _vCacheValid.fill(0);
+  }
+  if (typeof window !== 'undefined') {
+    window.clearVisualCache = clearVisualCache;
+  }
+
+  // Preallocated scratch array for 3 triangle vertices (pA, pB, pC) - zero GC allocations
+  const _scratchPos = new Float64Array(9);
+
+  function _fillVisualVertex(idx, l_idx, lg_idx, latSeg, longSeg, seed, currentR, currentHScale) {
+    const t = (l_idx / latSeg) * Math.PI;
+    const p = (lg_idx / longSeg) * (2 * Math.PI);
+    const h = getHeightOnSphere(t, p, seed);
+    const r = currentR + h * currentHScale;
+    const sinT = Math.sin(t);
+    const rSinT = r * sinT;
+    const offset = idx * 3;
+    _scratchPos[offset] = rSinT * Math.cos(p);
+    _scratchPos[offset + 1] = r * Math.cos(t);
+    _scratchPos[offset + 2] = rSinT * Math.sin(p);
+  }
+
   function getVisualHeightOnSphere(theta, phi, seed) {
     const grid = typeof window !== 'undefined' && window.currentGridSize ? window.currentGridSize : (typeof currentGridSize !== 'undefined' ? currentGridSize : 0);
     if (!grid) {
-        return (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, seed) : 0);
+      return (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, seed) : 0);
+    }
+
+    // Check recent cache for exact matching parameters (identical queries within frame)
+    for (let i = 0; i < VCACHE_SIZE; i++) {
+      if (_vCacheValid[i] === 1 &&
+          _vCacheTheta[i] === theta &&
+          _vCachePhi[i] === phi &&
+          _vCacheSeed[i] === seed &&
+          _vCacheGrid[i] === grid) {
+        return _vCacheRes[i];
+      }
     }
 
     const currentR = (typeof window !== 'undefined' && typeof window.RADIUS === 'number') ? window.RADIUS : (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
@@ -496,56 +543,58 @@
     const u = lat - lat0;
     const v = long - long0;
     
-    const getPos = (l_idx, lg_idx) => {
-        const t = (l_idx / latSeg) * Math.PI;
-        const p = (lg_idx / longSeg) * 2 * Math.PI;
-        const h = getHeightOnSphere(t, p, seed);
-        const r = currentR + h * currentHScale;
-        const sinT = Math.sin(t);
-        return [
-            r * sinT * Math.cos(p),
-            r * Math.cos(t),
-            r * sinT * Math.sin(p)
-        ];
-    };
-    
-    let pA, pB, pC;
-    
     if (u + v <= 1) {
-        pA = getPos(lat0, long0);
-        pB = getPos(lat1, long0);
-        pC = getPos(lat0, long1);
+      _fillVisualVertex(0, lat0, long0, latSeg, longSeg, seed, currentR, currentHScale);
+      _fillVisualVertex(1, lat1, long0, latSeg, longSeg, seed, currentR, currentHScale);
+      _fillVisualVertex(2, lat0, long1, latSeg, longSeg, seed, currentR, currentHScale);
     } else {
-        pA = getPos(lat1, long1);
-        pB = getPos(lat0, long1);
-        pC = getPos(lat1, long0);
+      _fillVisualVertex(0, lat1, long1, latSeg, longSeg, seed, currentR, currentHScale);
+      _fillVisualVertex(1, lat0, long1, latSeg, longSeg, seed, currentR, currentHScale);
+      _fillVisualVertex(2, lat1, long0, latSeg, longSeg, seed, currentR, currentHScale);
     }
-    
-    const Dx = Math.sin(safeTheta) * Math.cos(normPhi);
+
+    const pAx = _scratchPos[0], pAy = _scratchPos[1], pAz = _scratchPos[2];
+    const pBx = _scratchPos[3], pBy = _scratchPos[4], pBz = _scratchPos[5];
+    const pCx = _scratchPos[6], pCy = _scratchPos[7], pCz = _scratchPos[8];
+
+    const sinSafeTheta = Math.sin(safeTheta);
+    const Dx = sinSafeTheta * Math.cos(normPhi);
     const Dy = Math.cos(safeTheta);
-    const Dz = Math.sin(safeTheta) * Math.sin(normPhi);
+    const Dz = sinSafeTheta * Math.sin(normPhi);
     
-    const ABx = pB[0] - pA[0], ABy = pB[1] - pA[1], ABz = pB[2] - pA[2];
-    const ACx = pC[0] - pA[0], ACy = pC[1] - pA[1], ACz = pC[2] - pA[2];
+    const ABx = pBx - pAx, ABy = pBy - pAy, ABz = pBz - pAz;
+    const ACx = pCx - pAx, ACy = pCy - pAy, ACz = pCz - pAz;
     
     const Nx = ABy * ACz - ABz * ACy;
     const Ny = ABz * ACx - ABx * ACz;
     const Nz = ABx * ACy - ABy * ACx;
     
-    const dotNA = Nx * pA[0] + Ny * pA[1] + Nz * pA[2];
+    const dotNA = Nx * pAx + Ny * pAy + Nz * pAz;
     const dotND = Nx * Dx + Ny * Dy + Nz * Dz;
     
+    let result;
     if (Math.abs(dotND) < 1e-6) {
-        return getHeightOnSphere(safeTheta, normPhi, seed);
+      result = getHeightOnSphere(safeTheta, normPhi, seed);
+    } else {
+      const rIntersect = dotNA / dotND;
+      if (!isFinite(rIntersect) || rIntersect <= 0) {
+        result = getHeightOnSphere(safeTheta, normPhi, seed);
+      } else {
+        const hIntersect = (rIntersect - currentR) / (currentHScale || 0.6);
+        result = isFinite(hIntersect) ? hIntersect : getHeightOnSphere(safeTheta, normPhi, seed);
+      }
     }
-    
-    const rIntersect = dotNA / dotND;
-    if (!isFinite(rIntersect) || rIntersect <= 0) {
-        return getHeightOnSphere(safeTheta, normPhi, seed);
-    }
-    
-    const hIntersect = (rIntersect - currentR) / (currentHScale || 0.6);
-    return isFinite(hIntersect) ? hIntersect : getHeightOnSphere(safeTheta, normPhi, seed);
+
+    // Save to cache
+    _vCacheTheta[_vCachePtr] = theta;
+    _vCachePhi[_vCachePtr] = phi;
+    _vCacheSeed[_vCachePtr] = seed;
+    _vCacheGrid[_vCachePtr] = grid;
+    _vCacheRes[_vCachePtr] = result;
+    _vCacheValid[_vCachePtr] = 1;
+    _vCachePtr = (_vCachePtr + 1) % VCACHE_SIZE;
+
+    return result;
   }
   window.getVisualHeightOnSphere = getVisualHeightOnSphere;
 
@@ -556,10 +605,11 @@
     const r = currentR + h * currentHScale;
     const safeTheta = Math.max(0.00001, Math.min(Math.PI - 0.00001, theta));
     const sinT = Math.sin(safeTheta);
+    const rSinT = r * sinT;
     return [
-        r * sinT * Math.cos(phi),
+        rSinT * Math.cos(phi),
         r * Math.cos(safeTheta),
-        r * sinT * Math.sin(phi),
+        rSinT * Math.sin(phi),
         h,
         r
     ];
