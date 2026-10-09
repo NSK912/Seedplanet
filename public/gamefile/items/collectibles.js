@@ -1746,7 +1746,7 @@ function buildCollectibles(count, seed) {
         const isInventoryOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
         if (isPlacingFloor && !isInventoryOpen) {
           const placingItemName = floorPlacementInfo && floorPlacementInfo.item ? floorPlacementInfo.item.name : "";
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))));
 
           if (!floorPreviewCollectible || floorPreviewCollectible.type !== typeToPlace) {
             // Remove mismatched preview if it exists
@@ -1772,7 +1772,7 @@ function buildCollectibles(count, seed) {
             floorPreviewCollectible = collectibles[collectibles.length - 1];
             if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
-            } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
+            } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof" || typeToPlace === "folding_ladder") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
             } else if (typeToPlace === "stone_floor") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.STONE_FLOOR;
@@ -1792,8 +1792,25 @@ function buildCollectibles(count, seed) {
           let height = getHeightOnSphere(charTheta, charPhi, globalSeed);
           let terrainRadius = RADIUS + height * HEIGHT_SCALE;
           let groundRadius = terrainRadius;
+          
+          const charScaleVal = (typeof playerScale !== 'undefined') ? playerScale : 0.1;
+          const currentFeetRad = (typeof playerCenterRadius !== 'undefined' && playerCenterRadius !== null)
+            ? (playerCenterRadius - 0.46 * charScaleVal)
+            : terrainRadius;
+
+          let playerCaveInfo = null;
+          let isPlayerInCave = false;
+          if (typeof getTerrainSurfaceAndCeiling === "function") {
+            playerCaveInfo = getTerrainSurfaceAndCeiling(nx, ny, nz, currentFeetRad);
+            if (playerCaveInfo && (playerCaveInfo.insideTunnel || currentFeetRad < playerCaveInfo.surfaceRadius - 0.35)) {
+              isPlayerInCave = true;
+              groundRadius = playerCaveInfo.ground;
+              terrainRadius = playerCaveInfo.ground;
+            }
+          }
+
           const waterRadius = RADIUS + waterLevel * 0.15;
-          if (waterEnabled && terrainRadius < waterRadius) {
+          if (!isPlayerInCave && waterEnabled && terrainRadius < waterRadius) {
               groundRadius = waterRadius;
           }
 
@@ -1833,18 +1850,19 @@ function buildCollectibles(count, seed) {
           let previewHeight = getHeightOnSphere(previewTheta, previewPhi, globalSeed);
           let previewTerrainRadius = RADIUS + previewHeight * HEIGHT_SCALE;
           
-          let isInCave = false;
+          let isInCave = isPlayerInCave;
           if (typeof getTerrainSurfaceAndCeiling === "function") {
-              const caveInfo = getTerrainSurfaceAndCeiling(pnx, pny, pnz, RADIUS - 0.5);
-              if (caveInfo && caveInfo.ground < previewTerrainRadius - 0.5) {
+              const queryRad = isPlayerInCave ? groundRadius : (previewTerrainRadius - 0.2);
+              const caveInfo = getTerrainSurfaceAndCeiling(pnx, pny, pnz, queryRad);
+              if (caveInfo && (caveInfo.insideTunnel || isPlayerInCave || caveInfo.ground < previewTerrainRadius - 0.35)) {
                   previewTerrainRadius = caveInfo.ground;
                   isInCave = true;
               }
           }
           
           let previewGroundRadius = previewTerrainRadius;
-          let isUnderWater = waterEnabled && previewTerrainRadius < waterRadius;
-          if (isUnderWater && !isInCave) {
+          let isUnderWater = !isInCave && waterEnabled && previewTerrainRadius < waterRadius;
+          if (isUnderWater) {
               previewGroundRadius = waterRadius;
           }
           
@@ -2440,6 +2458,454 @@ function buildCollectibles(count, seed) {
               floorPreviewCollectible.isValidPlacement = isInCave;
               }
             }
+          } else if (typeToPlace === "folding_ladder") {
+            // DEATH STRANDING EXTENDABLE FOLDING LADDER PLACEMENT
+            // Requirement: Firmly anchored at player's feet, conforming naturally to terrain, slopes, cliffs, caves & holes
+            // Descending down into drops/cave mouths naturally ("ตั้งลงไปตามธรรมชาติ")
+            // Both ends (Head and Tail) MUST be anchored to solid ground/structure/rock.
+            // Under NO circumstance can it be placed on water, underwater, or floating in empty air!
+
+            const isPlayerInWater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.05) ||
+                                    (typeof isDivingMode !== "undefined" && isDivingMode);
+
+            // Use continuous charHeading (not 90-degree snapped) so ladder faces player's look direction
+            const hCos = Math.cos(charHeading);
+            const hSin = Math.sin(charHeading);
+            const forwardUnsnapped = [
+              North[0] * hCos + East[0] * hSin,
+              North[1] * hCos + East[1] * hSin,
+              North[2] * hCos + East[2] * hSin,
+            ];
+            const rightUnsnapped = [
+              East[0] * hCos - North[0] * hSin,
+              East[1] * hCos - North[1] * hSin,
+              East[2] * hCos - North[2] * hSin,
+            ];
+
+            const rotA = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+            const cosRot = Math.cos(rotA);
+            const sinRot = Math.sin(rotA);
+
+            let ladderF = [
+              forwardUnsnapped[0] * cosRot - rightUnsnapped[0] * sinRot,
+              forwardUnsnapped[1] * cosRot - rightUnsnapped[1] * sinRot,
+              forwardUnsnapped[2] * cosRot - rightUnsnapped[2] * sinRot,
+            ];
+            let ladderR = [
+              rightUnsnapped[0] * cosRot + forwardUnsnapped[0] * sinRot,
+              rightUnsnapped[1] * cosRot + forwardUnsnapped[1] * sinRot,
+              rightUnsnapped[2] * cosRot + forwardUnsnapped[2] * sinRot,
+            ];
+
+            const lenF = Math.hypot(ladderF[0], ladderF[1], ladderF[2]) || 1;
+            ladderF = [ladderF[0]/lenF, ladderF[1]/lenF, ladderF[2]/lenF];
+            const lenR = Math.hypot(ladderR[0], ladderR[1], ladderR[2]) || 1;
+            ladderR = [ladderR[0]/lenR, ladderR[1]/lenR, ladderR[2]/lenR];
+
+            // Camera pitch detection: looking down into hole/slope vs looking forward/up
+            const camPitch = (typeof rotationX === "number") ? rotationX : (typeof window.freeCamPitch === "number" ? window.freeCamPitch : 0.0);
+            const isLookingDown = (camPitch > 0.05);
+            const isLookingUp = (camPitch < -0.05);
+
+            // 1. EXACT Player Feet Position in World Space
+            const charScaleVal = (typeof playerScale !== 'undefined') ? playerScale : 0.1;
+            const seedVal = (typeof globalSeed !== "undefined") ? globalSeed : ((typeof window !== "undefined" && window.globalSeed !== "undefined") ? window.globalSeed : 0);
+            const pUp = [nx, ny, nz];
+
+            const playerFeetRad = (typeof playerCenterRadius !== 'undefined' && playerCenterRadius !== null)
+              ? (playerCenterRadius - 0.46 * charScaleVal)
+              : groundRadius;
+            const playerFeetPos = [nx * playerFeetRad, ny * playerFeetRad, nz * playerFeetRad];
+
+            // Surface terrain radius directly at player
+            const pTheta = Math.acos(Math.max(-1.0, Math.min(1.0, ny)));
+            const pPhi = Math.atan2(nz, nx);
+            const pSurfH = typeof getHeightOnSphere === "function" ? getHeightOnSphere(pTheta, pPhi, seedVal) : 0;
+            const pSurfRad = RADIUS + pSurfH * HEIGHT_SCALE;
+            const isPlayerUnderground = (playerFeetRad < pSurfRad - 0.35);
+
+            // 2. Anchor 1 (Tail / Player Footing): firmly on the solid ground right at player's feet
+            let testA1 = [
+              playerFeetPos[0] + ladderF[0] * 0.16,
+              playerFeetPos[1] + ladderF[1] * 0.16,
+              playerFeetPos[2] + ladderF[2] * 0.16
+            ];
+            let lenA1 = Math.hypot(testA1[0], testA1[1], testA1[2]) || 1;
+            let nA1 = [testA1[0]/lenA1, testA1[1]/lenA1, testA1[2]/lenA1];
+
+            let rA1 = playerFeetRad;
+            if (typeof getFloorTopRadiusAt === "function") {
+              const fRad = getFloorTopRadiusAt(nA1[0], nA1[1], nA1[2], playerFeetRad);
+              if (fRad > -Infinity && Math.abs(fRad - playerFeetRad) < 0.4) {
+                rA1 = fRad;
+              }
+            } else if (!isPlayerUnderground) {
+              const tA1 = Math.acos(Math.max(-1.0, Math.min(1.0, nA1[1])));
+              const phiA1 = Math.atan2(nA1[2], nA1[0]);
+              rA1 = RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(tA1, phiA1, seedVal) : 0) * HEIGHT_SCALE;
+            } else if (typeof getTerrainSurfaceAndCeiling === "function") {
+              const cData = getTerrainSurfaceAndCeiling(nA1[0], nA1[1], nA1[2], playerFeetRad);
+              if (cData && cData.insideTunnel && cData.ground < pSurfRad - 0.15) {
+                rA1 = cData.ground;
+              }
+            }
+            const P_anchor1 = [nA1[0] * rA1, nA1[1] * rA1, nA1[2] * rA1];
+
+            // Helper to test if a 3D point is submerged in water
+            const wRadius = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * 0.15;
+            function isPointInWater(pt) {
+              if (typeof waterEnabled === "undefined" || !waterEnabled) return false;
+              if (isPlayerUnderground) return false;
+              const r = Math.hypot(pt[0], pt[1], pt[2]);
+              return (r <= wRadius + 0.02);
+            }
+
+            // Helper to query solid surface radius at a unit normal direction
+            function getSolidRadAt(nVec, approxR) {
+              if (typeof getFloorTopRadiusAt === "function") {
+                const fR = getFloorTopRadiusAt(nVec[0], nVec[1], nVec[2], approxR);
+                if (fR > -Infinity) return fR;
+              }
+              const th = Math.acos(Math.max(-1.0, Math.min(1.0, nVec[1])));
+              const ph = Math.atan2(nVec[2], nVec[0]);
+              const sH = typeof getHeightOnSphere === "function" ? getHeightOnSphere(th, ph, seedVal) : 0;
+              const sR = RADIUS + sH * HEIGHT_SCALE;
+
+              if (typeof tunnels3D !== "undefined" && tunnels3D && tunnels3D.length > 0) {
+                for (let ti = 0; ti < tunnels3D.length; ti++) {
+                  const t = tunnels3D[ti];
+                  const testP = [nVec[0] * approxR, nVec[1] * approxR, nVec[2] * approxR];
+                  const dx = testP[0] - t.x, dy = testP[1] - t.y, dz = testP[2] - t.z;
+                  if (dx*dx + dy*dy + dz*dz < (t.r * 2.5)*(t.r * 2.5)) {
+                    const dot = nVec[0]*t.x + nVec[1]*t.y + nVec[2]*t.z;
+                    const tSq = t.x*t.x + t.y*t.y + t.z*t.z;
+                    const dSq = dot*dot - tSq + t.r*t.r*0.96;
+                    if (dSq > 0) {
+                      const cFloor = dot - Math.sqrt(dSq);
+                      if (cFloor < sR - 0.2) {
+                        return cFloor;
+                      }
+                    }
+                  }
+                }
+              }
+              return sR;
+            }
+
+            // 3. Probing for Anchor 2 (Landing end) with Fast Directional Raymarching & Transform Caching
+            const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+            const cache = floorPreviewCollectible._ladderCache;
+            const timeDiff = cache ? (nowTime - (cache.time || 0)) : 999;
+            const movedDist = cache ? Math.hypot(playerFeetPos[0]-cache.px, playerFeetPos[1]-cache.py, playerFeetPos[2]-cache.pz) : 999;
+            const rotDiff = cache ? (Math.abs(charHeading - cache.heading) + Math.abs(camPitch - cache.pitch) + Math.abs(rotA - cache.rotA)) : 999;
+
+            let P_anchor2 = null;
+            let isValid = false;
+
+            if (cache && ((timeDiff < 60 && movedDist < 0.12 && rotDiff < 0.12) || (movedDist < 0.04 && rotDiff < 0.04))) {
+              P_anchor2 = cache.P_anchor2;
+              isValid = cache.isValid;
+            } else {
+              const candidates = [];
+
+              // Case A: DOWNWARD RAYS (Descent into hole, cave mouth, cliff face, ravine, steep drop)
+              if (!isLookingUp) {
+                const downAnglesDeg = isLookingDown ? [30, 58, 80] : [36, 65];
+                for (let deg of downAnglesDeg) {
+                  const rad = deg * (Math.PI / 180);
+                  const dirDown = [
+                    ladderF[0] * Math.cos(rad) - pUp[0] * Math.sin(rad),
+                    ladderF[1] * Math.cos(rad) - pUp[1] * Math.sin(rad),
+                    ladderF[2] * Math.cos(rad) - pUp[2] * Math.sin(rad)
+                  ];
+                  const lenD = Math.hypot(dirDown[0], dirDown[1], dirDown[2]) || 1;
+                  dirDown[0] /= lenD; dirDown[1] /= lenD; dirDown[2] /= lenD;
+
+                  let prevPt = [
+                    P_anchor1[0] + dirDown[0] * 0.45,
+                    P_anchor1[1] + dirDown[1] * 0.45,
+                    P_anchor1[2] + dirDown[2] * 0.45
+                  ];
+                  let prevDens = -1.0;
+
+                  // 6 lightweight steps (0.6m to 3.2m) with skipNoise=true
+                  for (let st = 1; st <= 6; st++) {
+                    const distT = 0.6 + (st - 1) * 0.52;
+                    const pMarch = [
+                      P_anchor1[0] + dirDown[0] * distT,
+                      P_anchor1[1] + dirDown[1] * distT,
+                      P_anchor1[2] + dirDown[2] * distT
+                    ];
+                    let dens = 0;
+                    if (typeof getTerrainDensity === "function") {
+                      dens = getTerrainDensity(pMarch[0], pMarch[1], pMarch[2], true);
+                    } else {
+                      const mR = Math.hypot(pMarch[0], pMarch[1], pMarch[2]);
+                      const mN = [pMarch[0]/mR, pMarch[1]/mR, pMarch[2]/mR];
+                      const sR = getSolidRadAt(mN, mR);
+                      dens = sR - mR;
+                    }
+
+                    if (prevDens < 0.01 && dens >= 0.0) {
+                      let pA = prevPt || P_anchor1;
+                      let pB = pMarch;
+                      for (let bi = 0; bi < 2; bi++) {
+                        const pMid = [(pA[0]+pB[0])*0.5, (pA[1]+pB[1])*0.5, (pA[2]+pB[2])*0.5];
+                        const dMid = (typeof getTerrainDensity === "function")
+                          ? getTerrainDensity(pMid[0], pMid[1], pMid[2], true)
+                          : (getSolidRadAt([pMid[0]/Math.hypot(pMid[0],pMid[1],pMid[2]), pMid[1]/Math.hypot(pMid[0],pMid[1],pMid[2]), pMid[2]/Math.hypot(pMid[0],pMid[1],pMid[2])], Math.hypot(pMid[0],pMid[1],pMid[2])) - Math.hypot(pMid[0],pMid[1],pMid[2]));
+                        if (dMid >= 0) pB = pMid; else pA = pMid;
+                      }
+                      const hitPt = pB;
+                      const hitDist = Math.hypot(hitPt[0]-P_anchor1[0], hitPt[1]-P_anchor1[1], hitPt[2]-P_anchor1[2]);
+                      if (hitDist >= 0.85 && hitDist <= 3.5 && !isPointInWater(hitPt)) {
+                        const vertDiff = (hitPt[0]-P_anchor1[0])*pUp[0] + (hitPt[1]-P_anchor1[1])*pUp[1] + (hitPt[2]-P_anchor1[2])*pUp[2];
+                        candidates.push({
+                          point: hitPt,
+                          dist: hitDist,
+                          type: 'downward',
+                          vertDiff: vertDiff,
+                          angleDeg: deg
+                        });
+                        break;
+                      }
+                    }
+                    prevPt = pMarch;
+                    prevDens = dens;
+                  }
+                }
+              }
+
+              // Case B: SURFACE / FORWARD SLOPE / BRIDGING RAYS
+              const forwardDists = [1.5, 2.3, 3.1];
+              for (let d of forwardDists) {
+                const hPt = [
+                  P_anchor1[0] + ladderF[0] * d,
+                  P_anchor1[1] + ladderF[1] * d,
+                  P_anchor1[2] + ladderF[2] * d
+                ];
+                const hLen = Math.hypot(hPt[0], hPt[1], hPt[2]) || 1;
+                const hn = [hPt[0]/hLen, hPt[1]/hLen, hPt[2]/hLen];
+                const solidRad = getSolidRadAt(hn, hLen);
+                const surfacePt = [hn[0] * solidRad, hn[1] * solidRad, hn[2] * solidRad];
+
+                let isSolid = true;
+                if (typeof getTerrainDensity === "function") {
+                  const dens = getTerrainDensity(surfacePt[0], surfacePt[1], surfacePt[2], true);
+                  if (dens < -0.06) isSolid = false;
+                }
+
+                if (isSolid && !isPointInWater(surfacePt)) {
+                  const sDist = Math.hypot(surfacePt[0]-P_anchor1[0], surfacePt[1]-P_anchor1[1], surfacePt[2]-P_anchor1[2]);
+                  if (sDist >= 0.8 && sDist <= 3.5) {
+                    const vertDiff = (surfacePt[0]-P_anchor1[0])*pUp[0] + (surfacePt[1]-P_anchor1[1])*pUp[1] + (surfacePt[2]-P_anchor1[2])*pUp[2];
+                    candidates.push({
+                      point: surfacePt,
+                      dist: sDist,
+                      type: 'slope',
+                      vertDiff: vertDiff
+                    });
+                  }
+                }
+              }
+
+              // Case C: UPWARD WALL / CLIFF RAYS (Leaning up against rock, cliff, or high ledge)
+              if (!isLookingDown) {
+                const upAnglesDeg = isLookingUp ? [30, 60] : [35];
+                for (let deg of upAnglesDeg) {
+                  const rad = deg * (Math.PI / 180);
+                  const dirUp = [
+                    ladderF[0] * Math.cos(rad) + pUp[0] * Math.sin(rad),
+                    ladderF[1] * Math.cos(rad) + pUp[1] * Math.sin(rad),
+                    ladderF[2] * Math.cos(rad) + pUp[2] * Math.sin(rad)
+                  ];
+                  const lenU = Math.hypot(dirUp[0], dirUp[1], dirUp[2]) || 1;
+                  dirUp[0] /= lenU; dirUp[1] /= lenU; dirUp[2] /= lenU;
+
+                  let prevPt = [
+                    P_anchor1[0] + dirUp[0] * 0.45,
+                    P_anchor1[1] + dirUp[1] * 0.45,
+                    P_anchor1[2] + dirUp[2] * 0.45
+                  ];
+                  let prevDens = -1.0;
+                  for (let st = 1; st <= 6; st++) {
+                    const distT = 0.6 + (st - 1) * 0.52;
+                    const pMarch = [
+                      P_anchor1[0] + dirUp[0] * distT,
+                      P_anchor1[1] + dirUp[1] * distT,
+                      P_anchor1[2] + dirUp[2] * distT
+                    ];
+                    let dens = -1;
+                    if (typeof getTerrainDensity === "function") {
+                      dens = getTerrainDensity(pMarch[0], pMarch[1], pMarch[2], true);
+                    }
+                    if (prevDens < 0.01 && dens >= 0.0) {
+                      let pA = prevPt || P_anchor1;
+                      let pB = pMarch;
+                      for (let bi = 0; bi < 2; bi++) {
+                        const pMid = [(pA[0]+pB[0])*0.5, (pA[1]+pB[1])*0.5, (pA[2]+pB[2])*0.5];
+                        const dMid = getTerrainDensity(pMid[0], pMid[1], pMid[2], true);
+                        if (dMid >= 0) pB = pMid; else pA = pMid;
+                      }
+                      const hitPt = pB;
+                      const hitDist = Math.hypot(hitPt[0]-P_anchor1[0], hitPt[1]-P_anchor1[1], hitPt[2]-P_anchor1[2]);
+                      const vertDiff = (hitPt[0]-P_anchor1[0])*pUp[0] + (hitPt[1]-P_anchor1[1])*pUp[1] + (hitPt[2]-P_anchor1[2])*pUp[2];
+                      if (hitDist >= 0.85 && hitDist <= 3.5 && vertDiff > 0.25 && !isPointInWater(hitPt)) {
+                        candidates.push({
+                          point: hitPt,
+                          dist: hitDist,
+                          type: 'wall',
+                          vertDiff: vertDiff,
+                          angleDeg: deg
+                        });
+                        break;
+                      }
+                    }
+                    prevPt = pMarch;
+                    prevDens = dens;
+                  }
+                }
+              }
+
+              // Check if terrain in front drops off sharply (cliff edge / hole mouth)
+              let isAtCliffEdge = false;
+              if (!isLookingUp && typeof getTerrainDensity === "function") {
+                const testDropPt = [
+                  P_anchor1[0] + ladderF[0] * 0.7 - pUp[0] * 0.35,
+                  P_anchor1[1] + ladderF[1] * 0.7 - pUp[1] * 0.35,
+                  P_anchor1[2] + ladderF[2] * 0.7 - pUp[2] * 0.35
+                ];
+                if (getTerrainDensity(testDropPt[0], testDropPt[1], testDropPt[2], true) < -0.05) {
+                  isAtCliffEdge = true;
+                }
+              }
+
+              // Candidate Scoring: Select the most natural landing point
+              let bestCandidate = null;
+              let bestScore = Infinity;
+              const idealDist = 2.2;
+
+              for (let c of candidates) {
+                let score = Math.abs(c.dist - idealDist) * 1.5;
+
+                if (c.type === 'downward') {
+                  if (isLookingDown) {
+                    score -= 10.0 * Math.min(2.0, camPitch * 3.5);
+                  } else if (isAtCliffEdge) {
+                    score -= 5.0;
+                  } else {
+                    score += 1.0;
+                  }
+                } else if (c.type === 'wall') {
+                  if (isLookingUp) {
+                    score -= 10.0 * Math.min(2.0, -camPitch * 3.5);
+                  } else {
+                    score -= 2.0;
+                  }
+                } else if (c.type === 'slope') {
+                  if (isLookingDown && isAtCliffEdge) {
+                    score += 5.0;
+                  } else if (Math.abs(c.vertDiff) < 0.3) {
+                    score -= 1.5;
+                  }
+                }
+
+                if (score < bestScore) {
+                  bestScore = score;
+                  bestCandidate = c;
+                }
+              }
+
+              if (bestCandidate) {
+                P_anchor2 = bestCandidate.point;
+                isValid = true;
+              } else {
+                // Natural fallback: rests angled downward from the player's feet (NEVER floating in mid-air!)
+                const fallbackPitch = isLookingUp ? 0.6 : (isLookingDown ? -0.9 : -0.6);
+                const fbDir = [
+                  ladderF[0] * Math.cos(fallbackPitch) + pUp[0] * Math.sin(fallbackPitch),
+                  ladderF[1] * Math.cos(fallbackPitch) + pUp[1] * Math.sin(fallbackPitch),
+                  ladderF[2] * Math.cos(fallbackPitch) + pUp[2] * Math.sin(fallbackPitch)
+                ];
+                const fbLen = Math.hypot(fbDir[0], fbDir[1], fbDir[2]) || 1;
+                P_anchor2 = [
+                  P_anchor1[0] + (fbDir[0]/fbLen) * idealDist,
+                  P_anchor1[1] + (fbDir[1]/fbLen) * idealDist,
+                  P_anchor1[2] + (fbDir[2]/fbLen) * idealDist
+                ];
+                isValid = false; // Red hologram warning: no solid ground support reached
+              }
+
+              floorPreviewCollectible._ladderCache = {
+                time: nowTime,
+                px: playerFeetPos[0],
+                py: playerFeetPos[1],
+                pz: playerFeetPos[2],
+                heading: charHeading,
+                pitch: camPitch,
+                rotA: rotA,
+                P_anchor2: P_anchor2,
+                isValid: isValid
+              };
+            }
+
+            // Assign P_top and P_bottom by elevation
+            const r1 = Math.hypot(P_anchor1[0], P_anchor1[1], P_anchor1[2]);
+            const r2 = Math.hypot(P_anchor2[0], P_anchor2[1], P_anchor2[2]);
+
+            let P_top, P_bottom;
+            if (r1 >= r2) {
+              P_top = P_anchor1;
+              P_bottom = P_anchor2;
+            } else {
+              P_top = P_anchor2;
+              P_bottom = P_anchor1;
+            }
+
+            targetPos = [
+              (P_top[0] + P_bottom[0]) * 0.5,
+              (P_top[1] + P_bottom[1]) * 0.5,
+              (P_top[2] + P_bottom[2]) * 0.5
+            ];
+
+            const dir_v = [P_top[0] - P_bottom[0], P_top[1] - P_bottom[1], P_top[2] - P_bottom[2]];
+            const len_v = Math.hypot(dir_v[0], dir_v[1], dir_v[2]) || 1;
+            const dir_un = [dir_v[0]/len_v, dir_v[1]/len_v, dir_v[2]/len_v];
+
+            // Lateral rung axis (orthogonal to dir_un)
+            let calcR = [
+              ladderR[0] - dir_un[0] * (ladderR[0]*dir_un[0] + ladderR[1]*dir_un[1] + ladderR[2]*dir_un[2]),
+              ladderR[1] - dir_un[1] * (ladderR[0]*dir_un[0] + ladderR[1]*dir_un[1] + ladderR[2]*dir_un[2]),
+              ladderR[2] - dir_un[2] * (ladderR[0]*dir_un[0] + ladderR[1]*dir_un[1] + ladderR[2]*dir_un[2])
+            ];
+            const lenCalcR = Math.hypot(calcR[0], calcR[1], calcR[2]) || 1;
+            calcR = [calcR[0]/lenCalcR, calcR[1]/lenCalcR, calcR[2]/lenCalcR];
+
+            let calcN = [
+              dir_un[1]*calcR[2] - dir_un[2]*calcR[1],
+              dir_un[2]*calcR[0] - dir_un[0]*calcR[2],
+              dir_un[0]*calcR[1] - dir_un[1]*calcR[0]
+            ];
+            const lenCalcN = Math.hypot(calcN[0], calcN[1], calcN[2]) || 1;
+            calcN = [calcN[0]/lenCalcN, calcN[1]/lenCalcN, calcN[2]/lenCalcN];
+            if (calcN[0]*pUp[0] + calcN[1]*pUp[1] + calcN[2]*pUp[2] < 0) {
+              calcN = [-calcN[0], -calcN[1], -calcN[2]];
+              calcR = [-calcR[0], -calcR[1], -calcR[2]];
+            }
+
+            floorPreviewCollectible.stairTop = P_top;
+            floorPreviewCollectible.stairBottom = P_bottom;
+            floorPreviewCollectible.normal = calcN;
+            floorPreviewCollectible.R = calcR;
+            floorPreviewCollectible.F = dir_un;
+
+            pN = calcN;
+            pR = calcR;
+            pF = dir_un;
+            isSnapped = true;
+
+            const isWater = isPointInWater(P_bottom) || isPointInWater(P_top) || isPlayerInWater;
+            floorPreviewCollectible.isValidPlacement = isValid && !isWater;
           } else if (typeToPlace === "wood_boat") {
              floorPreviewCollectible.size = 0.25;
              pN = [pnx, pny, pnz];
@@ -3828,23 +4294,25 @@ function buildCollectibles(count, seed) {
             }
           }
 
-          // Smooth interpolation (instant if snapped to prevent lag/misalignment)
-          const interpSpeed = isSnapped ? 1.0 : 0.3;
+          // Smooth interpolation (instant if snapped or placing ladder to prevent lag/misalignment)
+          const interpSpeed = (isSnapped || typeToPlace === "folding_ladder") ? 1.0 : 0.3;
           floorPreviewCollectible.position[0] = floorPreviewCollectible.position[0] * (1 - interpSpeed) + targetPos[0] * interpSpeed;
           floorPreviewCollectible.position[1] = floorPreviewCollectible.position[1] * (1 - interpSpeed) + targetPos[1] * interpSpeed;
           floorPreviewCollectible.position[2] = floorPreviewCollectible.position[2] * (1 - interpSpeed) + targetPos[2] * interpSpeed;
 
-          floorPreviewCollectible.normal[0] = pN[0];
-          floorPreviewCollectible.normal[1] = pN[1];
-          floorPreviewCollectible.normal[2] = pN[2];
+          if (typeToPlace !== "folding_ladder") {
+            floorPreviewCollectible.normal[0] = pN[0];
+            floorPreviewCollectible.normal[1] = pN[1];
+            floorPreviewCollectible.normal[2] = pN[2];
 
-          floorPreviewCollectible.R[0] = pR[0];
-          floorPreviewCollectible.R[1] = pR[1];
-          floorPreviewCollectible.R[2] = pR[2];
+            floorPreviewCollectible.R[0] = pR[0];
+            floorPreviewCollectible.R[1] = pR[1];
+            floorPreviewCollectible.R[2] = pR[2];
 
-          floorPreviewCollectible.F[0] = pF[0];
-          floorPreviewCollectible.F[1] = pF[1];
-          floorPreviewCollectible.F[2] = pF[2];
+            floorPreviewCollectible.F[0] = pF[0];
+            floorPreviewCollectible.F[1] = pF[1];
+            floorPreviewCollectible.F[2] = pF[2];
+          }
 
           if (floorPreviewCollectible.isValidPlacement === false) {
               floorPreviewCollectible.color = [0.8, 0.2, 0.2]; // red if invalid
@@ -4919,6 +5387,18 @@ function buildCollectibles(count, seed) {
           placeType: "wood_stairs",
           usage_th: "พรี-วางเป็นบันไดไม้สำหรับเชื่อมต่อต่างระดับและปีนขึ้นที่สูง",
           usage_en: "Pre-place to construct wooden stairs connecting heights and floors.",
+          maxStack: 99
+        },
+        "FOLDING_LADDER": {
+          id: "FOLDING_LADDER",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "บันไดพับ",
+          name_en: "Folding Ladder",
+          icon: "🪜",
+          actionType: "PLACE_STRUCTURE",
+          placeType: "folding_ladder",
+          usage_th: "บันไดพับสไตล์ Death Stranding สำหรับวางพาดได้อย่างอิสระ ทั้งบนพื้นและในถ้ำ พาดขึ้นหน้าผา ผนังถ้ำ ปากถ้ำ หรือพาดข้ามเหว",
+          usage_en: "Death Stranding style extendable folding ladder to lean on cliffs, cave walls, cave entrances, or bridge chasms freely.",
           maxStack: 99
         },
         "WOOD_WALL": {

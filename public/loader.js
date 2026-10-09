@@ -64,6 +64,7 @@
     'gamefile/items/stone_floor.js',
     'gamefile/items/wood_floor.js',
     'gamefile/items/wood_stairs.js',
+    'gamefile/items/folding_ladder.js',
     'gamefile/items/wood_wall.js',
     'gamefile/items/wood_door.js',
     'gamefile/items/wood_roof.js',

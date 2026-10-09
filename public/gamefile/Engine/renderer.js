@@ -3802,54 +3802,62 @@ window.cloud3DProgram = cloud3DProgram;
       function buildWireframe(gridSize) {
         const maxSegments = 24;
         const segments = Math.min(Math.floor(gridSize / 2), maxSegments);
+        const longCount = segments * 2;
+        const r = RADIUS * 1.002;
 
-        const points = [];
+        const totalPoints = ((segments + 1) * (longCount + 1) + (longCount + 1) * (segments + 1)) * 3;
+        const points = new Float32Array(totalPoints);
+
+        const sinLat = new Float64Array(segments + 1);
+        const cosLat = new Float64Array(segments + 1);
         for (let lat = 0; lat <= segments; lat++) {
           const theta = (lat / segments) * Math.PI;
-          const sinTheta = Math.sin(theta);
-          const cosTheta = Math.cos(theta);
-          for (let long = 0; long <= segments * 2; long++) {
-            const phi = (long / (segments * 2)) * Math.PI * 2;
-            const sinPhi = Math.sin(phi);
-            const cosPhi = Math.cos(phi);
-            const r = RADIUS * 1.002;
-            points.push(
-              r * sinTheta * cosPhi,
-              r * cosTheta,
-              r * sinTheta * sinPhi,
-            );
+          sinLat[lat] = Math.sin(theta);
+          cosLat[lat] = Math.cos(theta);
+        }
+
+        const sinLong = new Float64Array(longCount + 1);
+        const cosLong = new Float64Array(longCount + 1);
+        for (let long = 0; long <= longCount; long++) {
+          const phi = (long / longCount) * Math.PI * 2;
+          sinLong[long] = Math.sin(phi);
+          cosLong[long] = Math.cos(phi);
+        }
+
+        let pIdx = 0;
+        for (let lat = 0; lat <= segments; lat++) {
+          const rSin = r * sinLat[lat];
+          const rCos = r * cosLat[lat];
+          for (let long = 0; long <= longCount; long++) {
+            points[pIdx++] = rSin * cosLong[long];
+            points[pIdx++] = rCos;
+            points[pIdx++] = rSin * sinLong[long];
           }
         }
-        for (let long = 0; long <= segments * 2; long++) {
-          const phi = (long / (segments * 2)) * Math.PI * 2;
-          const sinPhi = Math.sin(phi);
-          const cosPhi = Math.cos(phi);
+        for (let long = 0; long <= longCount; long++) {
+          const cLong = cosLong[long];
+          const sLong = sinLong[long];
           for (let lat = 0; lat <= segments; lat++) {
-            const theta = (lat / segments) * Math.PI;
-            const sinTheta = Math.sin(theta);
-            const cosTheta = Math.cos(theta);
-            const r = RADIUS * 1.002;
-            points.push(
-              r * sinTheta * cosPhi,
-              r * cosTheta,
-              r * sinTheta * sinPhi,
-            );
+            const rSin = r * sinLat[lat];
+            points[pIdx++] = rSin * cLong;
+            points[pIdx++] = r * cosLat[lat];
+            points[pIdx++] = rSin * sLong;
           }
         }
 
-        wireframePointCount = points.length / 3;
+        wireframePointCount = pIdx / 3;
 
         if (wireframeBuffer) gl.deleteBuffer(wireframeBuffer);
         wireframeBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, wireframeBuffer);
         gl.bufferData(
           gl.ARRAY_BUFFER,
-          new Float32Array(points),
+          points,
           gl.STATIC_DRAW,
         );
 
-        const wireColors = new Float32Array(points.length);
-        for (let i = 0; i < points.length / 3; i++) {
+        const wireColors = new Float32Array(pIdx);
+        for (let i = 0; i < wireframePointCount; i++) {
           wireColors[i * 3] = 0.15 + (i % 3) * 0.05;
           wireColors[i * 3 + 1] = 0.35 + (i % 2) * 0.05;
           wireColors[i * 3 + 2] = 0.25 + (i % 4) * 0.03;
@@ -4356,11 +4364,11 @@ window.cloud3DProgram = cloud3DProgram;
         
         let isPlacementItem = selectedItem && (
           (typeof isPlaceableItem === "function" ? isPlaceableItem(selectedItem.name) : (window.isPlaceableItem ? window.isPlaceableItem(selectedItem.name) : false)) ||
-          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name.startsWith("ROBOT_")
+          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "FOLDING_LADDER" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name.startsWith("ROBOT_")
         );
         
-        // บังคับไม่ให้เข้าโหมดวางไอเทม ถ้านั่งอยู่บนเรือหรือหุ่นยนต์
-        if (isPlacementItem && ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof activeRidingMech !== "undefined" && activeRidingMech))) {
+        // บังคับไม่ให้เข้าโหมดวางไอเทม ถ้านั่งอยู่บนเรือหรือหุ่นยนต์ หรือกำลังว่ายน้ำในกรณีบันไดพับ
+        if (isPlacementItem && ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof activeRidingMech !== "undefined" && activeRidingMech) || (selectedItem && selectedItem.name === "FOLDING_LADDER" && typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.05))) {
           isPlacementItem = false;
         }
 
@@ -7014,7 +7022,7 @@ window.cloud3DProgram = cloud3DProgram;
             r * Math.sin(px) * Math.sin(py),
           ];
           if (isDemolishModeEnabled) {
-            const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "campfire", "wood_boat", "wood_wheel", "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "meganeura_item", "isopod_item"];
+            const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder", "campfire", "wood_boat", "wood_wheel", "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "meganeura_item", "isopod_item"];
             let closestDemolishItem = null;
             let minDemolishDist = actionReachDistance;
             let currentBestDist = Infinity;
@@ -7515,7 +7523,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const reachInfo = isTargetWithinReach(item.position, actionReachDistance);
                 if (reachInfo.valid) {

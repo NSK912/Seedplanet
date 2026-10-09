@@ -5,42 +5,47 @@
     return x - Math.floor(x);
   }
 
-  // Create an icosahedron (or simple sphere) to use as the base puff
-  function createPuffGeometry(center, radius) {
-    // A simple low-poly sphere approximation
+  // Precomputed unit icosahedron puff geometry (60 vertices with exact normalized lx, ly, lz)
+  const _PUFF_LOCAL_POS = (function() {
     const t = (1.0 + Math.sqrt(5.0)) / 2.0;
     const baseVerts = [
       [-1,  t,  0], [ 1,  t,  0], [-1, -t,  0], [ 1, -t,  0],
       [ 0, -1,  t], [ 0,  1,  t], [ 0, -1, -t], [ 0,  1, -t],
       [ t,  0, -1], [ t,  0,  1], [-t,  0, -1], [-t,  0,  1]
     ];
-    // Normalize and scale
     for (let i = 0; i < baseVerts.length; i++) {
         let len = Math.sqrt(baseVerts[i][0]*baseVerts[i][0] + baseVerts[i][1]*baseVerts[i][1] + baseVerts[i][2]*baseVerts[i][2]);
-        baseVerts[i][0] = baseVerts[i][0] / len;
-        baseVerts[i][1] = baseVerts[i][1] / len;
-        baseVerts[i][2] = baseVerts[i][2] / len;
+        baseVerts[i][0] /= len;
+        baseVerts[i][1] /= len;
+        baseVerts[i][2] /= len;
     }
-
     const indices = [
       0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11,
       1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
       3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9,
       4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1
     ];
+    const local = new Float32Array(indices.length * 3);
+    for (let i = 0; i < indices.length; i++) {
+      const idx = indices[i];
+      local[i * 3]     = baseVerts[idx][0];
+      local[i * 3 + 1] = baseVerts[idx][1];
+      local[i * 3 + 2] = baseVerts[idx][2];
+    }
+    return local;
+  })();
 
+  // Create an icosahedron (or simple sphere) to use as the base puff (uses precomputed unit geometry)
+  function createPuffGeometry(center, radius) {
     let verts = [];
     let localPos = [];
-    for (let i = 0; i < indices.length; i++) {
-        let idx = indices[i];
-        let lx = baseVerts[idx][0];
-        let ly = baseVerts[idx][1];
-        let lz = baseVerts[idx][2];
-        
+    for (let i = 0; i < 60; i++) {
+        let lx = _PUFF_LOCAL_POS[i * 3];
+        let ly = _PUFF_LOCAL_POS[i * 3 + 1];
+        let lz = _PUFF_LOCAL_POS[i * 3 + 2];
         verts.push(center[0] + lx * radius, center[1] + ly * radius, center[2] + lz * radius);
         localPos.push(lx, ly, lz);
     }
-    
     return { vertices: verts, localPos: localPos };
   }
 
@@ -83,13 +88,16 @@
             let oy = (pseudoRandom(currentSeed++) - 0.5) * 0.9 * cloudPuffScale;
             let oz = (pseudoRandom(currentSeed++) - 0.5) * 2.2 * cloudPuffScale;
             
-            let center = [cx + ox, cy + oy, cz + oz];
+            let centerX = cx + ox;
+            let centerY = cy + oy;
+            let centerZ = cz + oz;
             
-            let puff = createPuffGeometry(center, pRadius);
-            
-            for (let v = 0; v < puff.vertices.length / 3; v++) {
-                vertices.push(puff.vertices[v*3], puff.vertices[v*3+1], puff.vertices[v*3+2]);
-                localPositions.push(puff.localPos[v*3], puff.localPos[v*3+1], puff.localPos[v*3+2]);
+            for (let v = 0; v < 60; v++) {
+                const lx = _PUFF_LOCAL_POS[v * 3];
+                const ly = _PUFF_LOCAL_POS[v * 3 + 1];
+                const lz = _PUFF_LOCAL_POS[v * 3 + 2];
+                vertices.push(centerX + lx * pRadius, centerY + ly * pRadius, centerZ + lz * pRadius);
+                localPositions.push(lx, ly, lz);
                 indices.push(currentIndex++);
             }
         }

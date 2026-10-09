@@ -276,6 +276,7 @@
           'wood_floor': { icon: '🪵', label: 'Wood Floor', color: '#c29d62', priority: 50, itemType: 'WOOD_FLOOR' },
           'thin_wood_floor': { icon: '🪵', label: 'Floor', color: '#c29d62', priority: 50, itemType: 'THIN_WOOD_FLOOR' },
           'wood_stairs': { icon: '🪜', label: 'Stairs', color: '#c29d62', priority: 50, itemType: 'WOOD_STAIRS' },
+          'folding_ladder': { icon: '🪜', label: 'Ladder', color: '#90a4ae', priority: 50, itemType: 'FOLDING_LADDER' },
           'wood_wall': { icon: '🪵', label: 'Wall', color: '#c29d62', priority: 50, itemType: 'WOOD_WALL' },
           'wood_window': { icon: '🪟', label: 'Window', color: '#c29d62', priority: 50, itemType: 'WOOD_WINDOW' },
           'wood_door': { icon: '🚪', label: 'Door', color: '#c29d62', priority: 50, itemType: 'WOOD_DOOR' },

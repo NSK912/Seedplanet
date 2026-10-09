@@ -258,6 +258,7 @@
         { name: "THIN_WOOD_FLOOR", icon: "🪵" },
         { name: "STONE_FLOOR", icon: "🪨" },
         { name: "WOOD_STAIRS", icon: "🪜" },
+        { name: "FOLDING_LADDER", icon: "🪜" },
         { name: "CAMPFIRE", icon: "🔥" },
         { name: "WOOD_BOAT", icon: "🛶" },
         { name: "WOOD_WHEEL", icon: "🛞" },
@@ -427,8 +428,9 @@
             mockItem.width = 0.75;
             mockItem.depth = 0.75;
             mockItem.isIconPreview = true;
-          } else if (name === "WOOD_STAIRS") {
+          } else if (name === "WOOD_STAIRS" || name === "FOLDING_LADDER") {
             scaleFactor = 1.05;
+            mockItem.type = name === "FOLDING_LADDER" ? "folding_ladder" : "wood_stairs";
             mockItem.stairTop = [-0.175, 0.175, -0.175];
             mockItem.stairBottom = [0.175, -0.175, 0.175];
           } else if (name === "WOOD_WALL" || name === "WOOD_WINDOW") {
@@ -617,11 +619,12 @@
             addBox([0.38, -0.2, -0.38], 0.1, 0.4, 0.1, [0.5, 0.33, 0.17], r, n, f, rawVertices, rawColors, rawIndices);
             addBox([-0.38, -0.2, 0.38], 0.1, 0.4, 0.1, [0.5, 0.33, 0.17], r, n, f, rawVertices, rawColors, rawIndices);
             addBox([-0.38, -0.2, -0.38], 0.1, 0.4, 0.1, [0.5, 0.33, 0.17], r, n, f, rawVertices, rawColors, rawIndices);
-          } else if (name === "WOOD_STAIRS") {
+          } else if (name === "WOOD_STAIRS" || name === "FOLDING_LADDER") {
             scaleFactor = 1.05;
-            addBox([0, -0.15, 0.15], 0.9, 0.15, 0.3, [0.65, 0.45, 0.25], r, n, f, rawVertices, rawColors, rawIndices);
-            addBox([0, 0.0, 0.0], 0.9, 0.15, 0.3, [0.55, 0.38, 0.2], r, n, f, rawVertices, rawColors, rawIndices);
-            addBox([0, 0.15, -0.15], 0.9, 0.15, 0.3, [0.45, 0.3, 0.15], r, n, f, rawVertices, rawColors, rawIndices);
+            const ladderCol = name === "FOLDING_LADDER" ? [0.4, 0.42, 0.45] : [0.65, 0.45, 0.25];
+            addBox([0, -0.15, 0.15], 0.9, 0.15, 0.3, ladderCol, r, n, f, rawVertices, rawColors, rawIndices);
+            addBox([0, 0.0, 0.0], 0.9, 0.15, 0.3, [ladderCol[0]*0.85, ladderCol[1]*0.85, ladderCol[2]*0.85], r, n, f, rawVertices, rawColors, rawIndices);
+            addBox([0, 0.15, -0.15], 0.9, 0.15, 0.3, [ladderCol[0]*0.7, ladderCol[1]*0.7, ladderCol[2]*0.7], r, n, f, rawVertices, rawColors, rawIndices);
           } else if (name === "WOOD_WALL") {
             scaleFactor = 1.05;
             addBox(p, 0.9, 0.9, 0.1, [0.65, 0.45, 0.25], r, n, f, rawVertices, rawColors, rawIndices);
@@ -2130,7 +2133,11 @@ function cancelFloorPlacement() {
         if (!isPlacingFloor || !floorPreviewCollectible) return;
         
         if (floorPreviewCollectible.isValidPlacement === false) {
-           showNotice("พื้นที่ไม่เหมาะสมสำหรับการวาง! (Invalid placement)");
+           if (floorPreviewCollectible.type === "folding_ladder") {
+             showNotice("ส่วนหัวและท้ายของบันไดต้องติดพื้นทั้ง 2 ด้าน และห้ามวางบนน้ำ! (Both ends must touch ground and cannot be placed on water)");
+           } else {
+             showNotice("พื้นที่ไม่เหมาะสมสำหรับการวาง! (Invalid placement)");
+           }
            return;
         }
 
@@ -2215,14 +2222,23 @@ function cancelFloorPlacement() {
             }
         }
         
-        if (placingItemName === "WOOD_STAIRS") {
-          floorPreviewCollectible.type = "wood_stairs";
-          // Copy top and bottom points so they are saved
+        if (placingItemName === "WOOD_STAIRS" || placingItemName === "FOLDING_LADDER") {
+          floorPreviewCollectible.type = placingItemName === "FOLDING_LADDER" ? "folding_ladder" : "wood_stairs";
+          // Copy top and bottom points and orientation vectors so they are permanently saved
           if (floorPreviewCollectible.stairTop) {
             floorPreviewCollectible.stairTop = [...floorPreviewCollectible.stairTop];
           }
           if (floorPreviewCollectible.stairBottom) {
             floorPreviewCollectible.stairBottom = [...floorPreviewCollectible.stairBottom];
+          }
+          if (floorPreviewCollectible.normal) {
+            floorPreviewCollectible.normal = [...floorPreviewCollectible.normal];
+          }
+          if (floorPreviewCollectible.R) {
+            floorPreviewCollectible.R = [...floorPreviewCollectible.R];
+          }
+          if (floorPreviewCollectible.F) {
+            floorPreviewCollectible.F = [...floorPreviewCollectible.F];
           }
         } else if (placingItemName === "CAMPFIRE") {
           floorPreviewCollectible.type = "campfire";
@@ -2368,7 +2384,7 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))));
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -3439,6 +3455,13 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "folding_ladder",
+            output: { name: "FOLDING_LADDER", icon: "🪜", count: 2, label: "บันไดพับ (FOLDING LADDER) x2" },
+            ingredients: [
+              { name: "IRON_ORE", icon: "🟥", count: 1, label: "แร่เหล็ก (IRON ORE)" }
+            ]
+          },
+          {
             id: "wood_wall",
             output: { name: "WOOD_WALL", icon: "🧱", count: 3, label: "กำแพงไม้ (WOOD WALL) x3" },
             ingredients: [
@@ -3798,6 +3821,13 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "folding_ladder",
+            output: { name: "FOLDING_LADDER", icon: "🪜", count: 2 },
+            ingredients: [
+              { name: "IRON_ORE", count: 1 }
+            ]
+          },
+          {
             id: "wood_wall",
             output: { name: "WOOD_WALL", icon: "🧱", count: 3 },
             ingredients: [
@@ -4027,7 +4057,18 @@ function cancelFloorPlacement() {
         const displayName = typeof getItemDisplayName === "function" ? getItemDisplayName(rawName) : rawName;
         document.getElementById("trashConfirmText").textContent = displayName + (item.count > 1 ? " x" + item.count : "");
         const iconEl = document.getElementById("trashConfirmIcon");
-        if (iconEl) iconEl.textContent = item.icon || "📦";
+        if (iconEl) {
+          iconEl.innerHTML = "";
+          let canvas3D = null;
+          if (typeof create3DIconCanvas === "function") {
+            canvas3D = create3DIconCanvas(item, 56, 56);
+          }
+          if (canvas3D) {
+            iconEl.appendChild(canvas3D);
+          } else {
+            iconEl.textContent = item.icon || "📦";
+          }
+        }
         
         const overlay = document.getElementById("trashConfirmOverlay");
         
@@ -4070,6 +4111,8 @@ function cancelFloorPlacement() {
       function closeTrashConfirm() {
         window.isConfirmOverlayOpen = false;
         trashPendingData = null;
+        const iconEl = document.getElementById("trashConfirmIcon");
+        if (iconEl) iconEl.innerHTML = "";
         document.getElementById("trashConfirmOverlay").style.setProperty("display", "none", "important");
         const chestPanel = document.querySelector("#chestOverlay .inventory-panel");
         if (chestPanel) chestPanel.style.overflow = "";
@@ -4828,6 +4871,8 @@ function cancelFloorPlacement() {
           itemData = { name: "THIN_WOOD_FLOOR", icon: "������", label: "THIN_WOOD_FLOOR" };
         } else if (closestDemolishItem.type === "wood_stairs") {
           itemData = { name: "WOOD_STAIRS", icon: "🪜", label: "WOOD_STAIRS" };
+        } else if (closestDemolishItem.type === "folding_ladder") {
+          itemData = { name: "FOLDING_LADDER", icon: "🪜", label: "FOLDING_LADDER" };
         } else if (closestDemolishItem.type === "campfire") {
           itemData = { name: "CAMPFIRE", icon: "🔥", label: "CAMPFIRE" };
         } else if (closestDemolishItem.type === "wood_boat") {

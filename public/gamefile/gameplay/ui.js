@@ -402,7 +402,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </h3>
         
         <div class="game-ui" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-           <span id="trashConfirmIcon" style="font-size: 28px; line-height: 1; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));">📦</span>
+           <span id="trashConfirmIcon" style="font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 56px;">📦</span>
            <span id="trashConfirmText" style="color: rgba(255, 255, 255, 0.7); font-size: 11px; font-family: 'Google Sans', sans-serif; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 500;">Item Name x1</span>
         </div>
         

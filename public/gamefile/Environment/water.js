@@ -403,6 +403,10 @@
     return baseWaterRadius;
   }
 
+  let _lastWaterGSize = -1;
+  let _lastWaterLevel = -1;
+  let _lastWaterRad = -1;
+
   function buildWaterSphere(gridSize, wLevel, planetR) {
     if (!glContext) return;
     const gl = glContext;
@@ -410,6 +414,14 @@
     const gSize = gridSize || (typeof currentGridSize !== 'undefined' ? currentGridSize : 400);
     const level = wLevel !== undefined ? wLevel : (typeof waterLevel !== 'undefined' ? waterLevel : 1.0);
     const rad = planetR || (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
+
+    // Skip redundant rebuild if parameters have not changed and buffer is valid
+    if (gSize === _lastWaterGSize && level === _lastWaterLevel && rad === _lastWaterRad && waterVertexBuffer) {
+      return;
+    }
+    _lastWaterGSize = gSize;
+    _lastWaterLevel = level;
+    _lastWaterRad = rad;
 
     const maxWaterSize = Math.min(gSize, 200);
     const latSeg = maxWaterSize;
@@ -424,20 +436,27 @@
     const hScale = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(rad / 8.0, 0.70));
     const waterRadius = rad + level * (hScale * 0.25);
 
+    // Precompute longitude trig table once to eliminate tens of thousands of duplicate sin/cos calls
+    const sinPhiTable = new Float64Array(longSeg + 1);
+    const cosPhiTable = new Float64Array(longSeg + 1);
+    for (let long = 0; long <= longSeg; long++) {
+      const phi = (long / longSeg) * Math.PI * 2;
+      sinPhiTable[long] = Math.sin(phi);
+      cosPhiTable[long] = Math.cos(phi);
+    }
+
     let vIdx = 0;
     for (let lat = 0; lat <= latSeg; lat++) {
       const theta = (lat / latSeg) * Math.PI;
       const sinTheta = Math.sin(theta);
       const cosTheta = Math.cos(theta);
+      const rSin = waterRadius * sinTheta;
+      const rCos = waterRadius * cosTheta;
 
       for (let long = 0; long <= longSeg; long++) {
-        const phi = (long / longSeg) * Math.PI * 2;
-        const sinPhi = Math.sin(phi);
-        const cosPhi = Math.cos(phi);
-
-        vertices[vIdx++] = waterRadius * sinTheta * cosPhi;
-        vertices[vIdx++] = waterRadius * cosTheta;
-        vertices[vIdx++] = waterRadius * sinTheta * sinPhi;
+        vertices[vIdx++] = rSin * cosPhiTable[long];
+        vertices[vIdx++] = rCos;
+        vertices[vIdx++] = rSin * sinPhiTable[long];
       }
     }
 

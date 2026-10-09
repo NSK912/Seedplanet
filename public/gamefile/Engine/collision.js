@@ -1049,9 +1049,10 @@ const CollisionCore = {
       
       const minCenter = caveData.ground + 0.46 * charScale;
       const maxCenter = (caveData.ceiling !== Infinity) ? (caveData.ceiling - 0.46 * charScale) : Infinity;
+      const safeMaxCenter = Math.max(maxCenter, minCenter);
       
       // Clamp the player's center radius to stay strictly between the floor and ceiling
-      let testCenterRadius = Math.max(minCenter, Math.min(maxCenter, pushR));
+      let testCenterRadius = Math.max(minCenter, Math.min(safeMaxCenter, pushR));
 
       if (swimFactor > 0.0) {
         const targetSwimRadius = wRadius + (-0.22 + swimMoveFactor * 0.27) * charScale;

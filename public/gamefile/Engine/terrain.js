@@ -413,11 +413,12 @@
                 }
               }
             }
-          } else if (other.active && other.type === "wood_stairs" && !other.isPreview && other.stairTop && other.stairBottom) {
+          } else if (other.active && (other.type === "wood_stairs" || other.type === "folding_ladder") && !other.isPreview && other.stairTop && other.stairBottom) {
             const dx_dist = playerPos[0] - other.position[0];
             const dy_dist = playerPos[1] - other.position[1];
             const dz_dist = playerPos[2] - other.position[2];
-            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > 36.0) {
+            const maxLadderReachSq = other.type === "folding_ladder" ? 25.0 : 36.0;
+            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > maxLadderReachSq) {
               continue;
             }
 
@@ -435,11 +436,13 @@
 
             const t_proj = v_p[0] * dir_un[0] + v_p[1] * dir_un[1] + v_p[2] * dir_un[2];
             // Extend slightly past ends for smooth transition
-            if (t_proj >= -0.15 && t_proj <= len_v + 0.20) {
-              // Project sideways along stair tangent
+            const endMargin = other.type === "folding_ladder" ? 0.35 : 0.20;
+            if (t_proj >= -endMargin && t_proj <= len_v + endMargin) {
+              // Project sideways along stair/ladder tangent
               const stairR = (other.R && typeof other.R[0] === 'number') ? other.R : [1, 0, 0];
               const w_proj = v_p[0] * stairR[0] + v_p[1] * stairR[1] + v_p[2] * stairR[2];
-              if (Math.abs(w_proj) <= 0.35) {
+              const maxW = other.type === "folding_ladder" ? 0.45 : 0.35;
+              if (Math.abs(w_proj) <= maxW) {
                 const clampedT = Math.max(0, Math.min(len_v, t_proj));
                 const P_on_stair = [
                   P_bottom[0] + dir_un[0] * clampedT,
@@ -448,9 +451,12 @@
                 ];
                 const r_stair = Math.sqrt(P_on_stair[0]*P_on_stair[0] + P_on_stair[1]*P_on_stair[1] + P_on_stair[2]*P_on_stair[2]);
                 
-                const stepUpLimit = 0.35 * (typeof playerScale !== 'undefined' ? playerScale / 0.1 : 1.0);
+                const stepUpLimit = (other.type === "folding_ladder" ? 0.60 : 0.35) * (typeof playerScale !== 'undefined' ? playerScale / 0.1 : 1.0);
                 if (currentFeetRadius >= r_stair - stepUpLimit) {
                   if (r_stair > maxRadius) {
+                    maxRadius = r_stair;
+                  } else if (t_proj >= 0.1 && t_proj <= len_v - 0.1 && currentFeetRadius <= r_stair + 0.35) {
+                    // Smoothly descend along ladder when entering caves or descending steep drops
                     maxRadius = r_stair;
                   }
                 }
@@ -482,7 +488,7 @@
         let h_scale = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6;
         let terrainRadius = r_planet + h * h_scale;
         
-        if (typeof getFloorTopRadiusAt === "function") {
+        if (!skipNoise && typeof getFloorTopRadiusAt === "function") {
           terrainRadius = getFloorTopRadiusAt(ux, uy, uz, terrainRadius);
         }
 
@@ -2401,51 +2407,82 @@
         }
       }
 
+      class FastFloat32Array {
+        constructor(cap) {
+          this.data = new Float32Array(cap);
+          this.length = 0;
+        }
+        push() {
+          let l = this.length;
+          const aLen = arguments.length;
+          if (l + aLen > this.data.length) {
+            let newCap = Math.max(this.data.length + 100000, Math.floor(this.data.length * 1.5) + aLen);
+            let n = new Float32Array(newCap);
+            n.set(this.data);
+            this.data = n;
+          }
+          if (aLen === 3) {
+            this.data[l] = arguments[0];
+            this.data[l + 1] = arguments[1];
+            this.data[l + 2] = arguments[2];
+          } else if (aLen === 1) {
+            this.data[l] = arguments[0];
+          } else if (aLen === 6) {
+            this.data[l] = arguments[0];
+            this.data[l + 1] = arguments[1];
+            this.data[l + 2] = arguments[2];
+            this.data[l + 3] = arguments[3];
+            this.data[l + 4] = arguments[4];
+            this.data[l + 5] = arguments[5];
+          } else {
+            for (let i = 0; i < aLen; i++) this.data[l + i] = arguments[i];
+          }
+          this.length = l + aLen;
+        }
+      }
+      class FastUint32Array {
+        constructor(cap) {
+          this.data = new Uint32Array(cap);
+          this.length = 0;
+        }
+        push() {
+          let l = this.length;
+          const aLen = arguments.length;
+          if (l + aLen > this.data.length) {
+            let newCap = Math.max(this.data.length + 100000, Math.floor(this.data.length * 1.5) + aLen);
+            let n = new Uint32Array(newCap);
+            n.set(this.data);
+            this.data = n;
+          }
+          if (aLen === 3) {
+            this.data[l] = arguments[0];
+            this.data[l + 1] = arguments[1];
+            this.data[l + 2] = arguments[2];
+          } else if (aLen === 1) {
+            this.data[l] = arguments[0];
+          } else if (aLen === 6) {
+            this.data[l] = arguments[0];
+            this.data[l + 1] = arguments[1];
+            this.data[l + 2] = arguments[2];
+            this.data[l + 3] = arguments[3];
+            this.data[l + 4] = arguments[4];
+            this.data[l + 5] = arguments[5];
+          } else {
+            for (let i = 0; i < aLen; i++) this.data[l + i] = arguments[i];
+          }
+          this.length = l + aLen;
+        }
+      }
+
       async function buildNature(count, seed) {
         if (window.DISABLE_ENVIRONMENT) {
             count = 0;
         }
         const _origRandom = Math.random;
 
-        class FastFloat32Array {
-          constructor(cap) {
-            this.data = new Float32Array(cap);
-            this.length = 0;
-          }
-          push() {
-            let l = this.length;
-            let aLen = arguments.length;
-            if (l + aLen > this.data.length) {
-              let newCap = Math.max(this.data.length + 100000, Math.floor(this.data.length * 1.5) + aLen);
-              let n = new Float32Array(newCap);
-              n.set(this.data);
-              this.data = n;
-            }
-            for (let i = 0; i < aLen; i++) this.data[l++] = arguments[i];
-            this.length = l;
-          }
-        }
-        class FastUint32Array {
-          constructor(cap) {
-            this.data = new Uint32Array(cap);
-            this.length = 0;
-          }
-          push() {
-            let l = this.length;
-            let aLen = arguments.length;
-            if (l + aLen > this.data.length) {
-              let newCap = Math.max(this.data.length + 100000, Math.floor(this.data.length * 1.5) + aLen);
-              let n = new Uint32Array(newCap);
-              n.set(this.data);
-              this.data = n;
-            }
-            for (let i = 0; i < aLen; i++) this.data[l++] = arguments[i];
-            this.length = l;
-          }
-        }
-        const vertices = new FastFloat32Array(100000);
-        const colors = new FastFloat32Array(100000);
-        const indices = new FastUint32Array(100000);
+        const vertices = new FastFloat32Array(150000);
+        const colors = new FastFloat32Array(150000);
+        const indices = new FastUint32Array(150000);
         natureObstacles = [];
         window.natureObstacles = natureObstacles;
         const treePositions = [];
@@ -3806,20 +3843,26 @@
         // ทรงกลมท้องฟ้าอวกาศมาตรฐาน (Normalized Unit Sphere สำหรับ Infinite Projection)
         const skyRadius = 1.0;
 
+        const sinPhiTable = new Float64Array(longSeg + 1);
+        const cosPhiTable = new Float64Array(longSeg + 1);
+        for (let long = 0; long <= longSeg; long++) {
+          const phi = (long / longSeg) * Math.PI * 2;
+          sinPhiTable[long] = Math.sin(phi);
+          cosPhiTable[long] = Math.cos(phi);
+        }
+
         let vIdx = 0;
         for (let lat = 0; lat <= latSeg; lat++) {
           const theta = (lat / latSeg) * Math.PI;
           const sinTheta = Math.sin(theta);
           const cosTheta = Math.cos(theta);
+          const rSin = skyRadius * sinTheta;
+          const rCos = skyRadius * cosTheta;
 
           for (let long = 0; long <= longSeg; long++) {
-            const phi = (long / longSeg) * Math.PI * 2;
-            const sinPhi = Math.sin(phi);
-            const cosPhi = Math.cos(phi);
-
-            vertices[vIdx++] = skyRadius * sinTheta * cosPhi;
-            vertices[vIdx++] = skyRadius * cosTheta;
-            vertices[vIdx++] = skyRadius * sinTheta * sinPhi;
+            vertices[vIdx++] = rSin * cosPhiTable[long];
+            vertices[vIdx++] = rCos;
+            vertices[vIdx++] = rSin * sinPhiTable[long];
           }
         }
 
@@ -3864,10 +3907,22 @@
       // ============================================
       // สร้างทรงกลมชั้นบรรยากาศ
       // ============================================
+      let _lastAtmSize = -1;
+      let _lastAtmRadius = -1;
+
       function buildAtmosphereSphere(gridSize) {
         const maxAtmSize = Math.min(gridSize || 60, 60);
         const latSeg = maxAtmSize;
         const longSeg = maxAtmSize;
+
+        const atmScale = typeof atmosphereScale !== "undefined" ? atmosphereScale : 1.05;
+        const atmRadius = RADIUS + Math.max(RADIUS * (atmScale - 1.0), (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 2.0 : 1.2) + 2.0);
+
+        if (maxAtmSize === _lastAtmSize && atmRadius === _lastAtmRadius && atmosphereVertexBuffer) {
+          return;
+        }
+        _lastAtmSize = maxAtmSize;
+        _lastAtmRadius = atmRadius;
 
         const vertexCount = (latSeg + 1) * (longSeg + 1);
         const vertices = new Float32Array(vertexCount * 3);
@@ -3875,23 +3930,26 @@
         const isUint32 = supportUint32 && indexCount > 65535;
         const indices = isUint32 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
 
-        const atmScale = typeof atmosphereScale !== "undefined" ? atmosphereScale : 1.05;
-        const atmRadius = RADIUS + Math.max(RADIUS * (atmScale - 1.0), (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 2.0 : 1.2) + 2.0);
+        const sinPhiTable = new Float64Array(longSeg + 1);
+        const cosPhiTable = new Float64Array(longSeg + 1);
+        for (let long = 0; long <= longSeg; long++) {
+          const phi = (long / longSeg) * Math.PI * 2;
+          sinPhiTable[long] = Math.sin(phi);
+          cosPhiTable[long] = Math.cos(phi);
+        }
 
         let vIdx = 0;
         for (let lat = 0; lat <= latSeg; lat++) {
           const theta = (lat / latSeg) * Math.PI;
           const sinTheta = Math.sin(theta);
           const cosTheta = Math.cos(theta);
+          const rSin = atmRadius * sinTheta;
+          const rCos = atmRadius * cosTheta;
 
           for (let long = 0; long <= longSeg; long++) {
-            const phi = (long / longSeg) * Math.PI * 2;
-            const sinPhi = Math.sin(phi);
-            const cosPhi = Math.cos(phi);
-
-            vertices[vIdx++] = atmRadius * sinTheta * cosPhi;
-            vertices[vIdx++] = atmRadius * cosTheta;
-            vertices[vIdx++] = atmRadius * sinTheta * sinPhi;
+            vertices[vIdx++] = rSin * cosPhiTable[long];
+            vertices[vIdx++] = rCos;
+            vertices[vIdx++] = rSin * sinPhiTable[long];
           }
         }
 
