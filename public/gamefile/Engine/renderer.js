@@ -236,6 +236,18 @@
                      finalColor = vColor * diffuseVal * 1.2 + vec3(0.1, 0.2, 0.05);
                  }
 
+                 // Glowing Ore (แร่เรืองแสง) - เรืองแสงสว่างเจิดจ้าออกมาจากโมเดลจริงในฉาก ไม่หม่นหมองตามเงามืด
+                 bool isGlowingOre = (abs(vColor.r - 0.22) < 0.08 && abs(vColor.g - 0.95) < 0.08 && abs(vColor.b - 0.88) < 0.08);
+                 if (isGlowingOre) {
+                     float pulse = 0.92 + 0.16 * sin(uTime * 3.2 + vWorldPos.x * 2.8 + vWorldPos.y * 2.8 + vWorldPos.z * 2.8);
+                     vec3 emissiveBase = vColor * (1.35 * pulse);
+                     vec3 coreRadiance = vec3(0.40, 1.05, 0.98) * (0.65 * pulse);
+                     float rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0);
+                     vec3 rimAura = vec3(0.25, 0.98, 0.95) * (rimFactor * 2.0);
+                     float crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 1.2;
+                     finalColor = emissiveBase + coreRadiance + rimAura + vec3(1.0) * crystalGlint;
+                 }
+
                 // Apply Water Volume Tint & Fog
                 float dist = length(vWorldPos);
                 if (dist < uWaterRadius) {
@@ -622,6 +634,15 @@
                     finalColor = vColor * diffuse;
                 } else {
                     finalColor = vColor;
+                }
+
+                // Glowing Ore Emissive Radiance
+                bool isGlowingOre = (abs(vColor.r - 0.22) < 0.08 && abs(vColor.g - 0.95) < 0.08 && abs(vColor.b - 0.88) < 0.08);
+                if (isGlowingOre) {
+                    vec3 normalGlow = normalize(vNormal);
+                    vec3 viewDirGlow = normalize(uCameraPos - vWorldPos);
+                    float rim = pow(1.0 - max(dot(normalGlow, viewDirGlow), 0.0), 2.0);
+                    finalColor = vColor * 1.45 + vec3(0.40, 1.05, 0.98) * 0.65 + vec3(0.25, 0.98, 0.95) * (rim * 1.8);
                 }
 
                 // Apply Water Volume Tint & Fog
@@ -1197,6 +1218,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var finalColor = in.color * diffuse + vec3<f32>(1.0) * spec + vec3<f32>(0.95, 0.97, 1.0) * fresnel;
     if (in.isGrass > 0.5) {
         finalColor = in.color * diffuseVal * 1.2 + vec3<f32>(0.1, 0.2, 0.05);
+    }
+    
+    let isGlowingOre = (abs(in.color.r - 0.22) < 0.08 && abs(in.color.g - 0.95) < 0.08 && abs(in.color.b - 0.88) < 0.08);
+    if (isGlowingOre) {
+        let pulse = 0.92 + 0.16 * sin(in.worldPos.x * 2.8 + in.worldPos.y * 2.8 + in.worldPos.z * 2.8);
+        let emissiveBase = in.color * (1.35 * pulse);
+        let coreRadiance = vec3<f32>(0.40, 1.05, 0.98) * (0.65 * pulse);
+        let rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0);
+        let rimAura = vec3<f32>(0.25, 0.98, 0.95) * (rimFactor * 2.0);
+        let crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 1.2;
+        finalColor = emissiveBase + coreRadiance + rimAura + vec3<f32>(1.0) * crystalGlint;
     }
     
     let dist = length(in.worldPos);
@@ -7279,18 +7311,6 @@ if (prompt._lastHTML !== _newHtml_2) {
               }
               if (activeRidingBoat) {
                 const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-                let actionText = "ลงจากเรือ<br>Dismount Boat";
-                let isBoatInWater = waterEnabled && (bTerrainRadius < bWaterRadius) && (bDepth > 0.48 * playerScale);
-                let extraStatus = "";
-                if (!isBoatInWater) {
-                  if (!hasWheels) {
-                    extraStatus = "<br><span style='font-size: 9px; color: #ffaa44;'>เรืออยู่บนบก - ติดล้อไม้เพื่อขับเคลื่อนเต็มที่<br>(On land - attach Wooden Wheels to drive)</span>";
-                  } else if (!activeRidingBoat.hasEngine) {
-                    extraStatus = "<br><span style='font-size: 9px; color: #ffaa44;'>เรือติดล้อ - ต้องติดเครื่องยนต์ไฟฟ้าเพื่อขับเคลื่อนบนบก<br>(Wheeled boat - attach Electric Engine to drive)</span>";
-                  }
-                } else if (!canRideBoat) {
-                  extraStatus = "<br><span style='font-size: 9px; color: #ff8888;'>น้ำตื้นเกินไป พายไม่ได้ (Too shallow to row)</span>";
-                }
                 
                 const isEngineBoat_3 = !!(activeRidingBoat && activeRidingBoat.hasEngine);
                 let batteryPercent = 0;
@@ -7523,7 +7543,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const reachInfo = isTargetWithinReach(item.position, actionReachDistance);
                 if (reachInfo.valid) {
@@ -7555,12 +7575,32 @@ if (prompt._lastHTML !== _newHtml_2) {
                 }
               }
 
+              // Check boat FIRST so 2D item UI is never pulled in for a boat
+              let bestBoatT = Infinity;
+              let candidateBoat = null;
+              for (let item of nearbyCandidates) {
+                if (item.active && (item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat"))) && !item.isPreview) {
+                  const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.22 * (playerScale / 0.1)));
+                  if (reachInfo.valid) {
+                    if (reachInfo.t < bestBoatT) {
+                      bestBoatT = reachInfo.t;
+                      candidateBoat = item;
+                    }
+                  }
+                }
+              }
+
               let closestChest = null;
               let closestCampfire = null;
               let closestBoat = null;
               let closestMech = null;
               let closestMechTargetPos = null;
-              if (!closestItem) {
+
+              if (candidateBoat) {
+                // When aiming at a boat: boat ONLY uses 3D UI, completely eliminate 2D UI for the boat
+                closestBoat = candidateBoat;
+                closestItem = null;
+              } else if (!closestItem) {
                 let bestMechT = Infinity;
                 let candidateMech = null;
                 let candidateMechTargetPos = null;
@@ -7623,20 +7663,6 @@ if (prompt._lastHTML !== _newHtml_2) {
                   }
                 }
 
-                let bestBoatT = Infinity;
-                let candidateBoat = null;
-                for (let item of nearbyCandidates) {
-                  if (item.active && item.type === "wood_boat" && !item.isPreview) {
-                    const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.22 * (playerScale / 0.1)));
-                    if (reachInfo.valid) {
-                      if (reachInfo.t < bestBoatT) {
-                        bestBoatT = reachInfo.t;
-                        candidateBoat = item;
-                      }
-                    }
-                  }
-                }
-
                 let bestChestT = Infinity;
                 let candidateChest = null;
                 for (let item of nearbyCandidates) {
@@ -7676,11 +7702,6 @@ if (prompt._lastHTML !== _newHtml_2) {
                   closestChest = null;
                   closestBoat = null;
                   closestCampfire = null;
-                } else if (candidateBoat) {
-                  closestBoat = candidateBoat;
-                  closestChest = null;
-                  closestCampfire = null;
-                  closestMech = null;
                 } else if (candidateCampfire) {
                   closestCampfire = candidateCampfire;
                   closestChest = null;
