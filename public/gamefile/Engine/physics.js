@@ -319,9 +319,19 @@ const Physics = {
         let targetGroundRadius = bR_baseline;
         if (reqRadii.length === 4) {
             let avgWheelReq = (reqRadii[0] + reqRadii[1] + reqRadii[2] + reqRadii[3]) / 4;
-            targetGroundRadius = Math.max(bR_baseline, avgWheelReq);
+            const slopeDiff = avgWheelReq - centerTerrainRad;
+            const approxWheelDist = 0.35;
+            if (slopeDiff > 0.01 && (slopeDiff / approxWheelDist) > 1.0) {
+                targetGroundRadius = centerTerrainRad;
+            } else {
+                targetGroundRadius = Math.max(bR_baseline, avgWheelReq);
+            }
         } else if (maxWheelRequiredRadius > -Infinity) {
-            targetGroundRadius = Math.max(targetGroundRadius, maxWheelRequiredRadius);
+            if ((maxWheelRequiredRadius - centerTerrainRad) > 0.01 && ((maxWheelRequiredRadius - centerTerrainRad) / 0.35) > 1.0) {
+                targetGroundRadius = centerTerrainRad;
+            } else {
+                targetGroundRadius = Math.max(targetGroundRadius, maxWheelRequiredRadius);
+            }
         }
 
         let pitchGrade = 0;

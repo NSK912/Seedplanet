@@ -1072,14 +1072,16 @@ const CollisionCore = {
     const currFeetRadius = (centerRadius !== null) ? (centerRadius - playerFootOffset) : (r_planet + charHeight * h_scale);
     const thetaCurr = Math.acos(Math.max(-1, Math.min(1, P_curr[1])));
     const phiCurr = Math.atan2(P_curr[2], P_curr[0]);
-    const heightCurr = typeof getHeightOnSphere === "function" ? getHeightOnSphere(thetaCurr, phiCurr, typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0;
+    const getH_fn = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere : (typeof getHeightOnSphere === "function" ? getHeightOnSphere : () => 0);
+    const seedVal = (typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined') ? window.globalSeed : 0;
+    const heightCurr = getH_fn(thetaCurr, phiCurr, seedVal);
     const currCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P_curr[0], P_curr[1], P_curr[2], currFeetRadius) : null;
     const currTerrainRadius = currCaveData ? currCaveData.ground : (r_planet + heightCurr * h_scale);
 
     function evaluatePosition(P, currentR) {
       const thetaP = Math.acos(Math.max(-1, Math.min(1, P[1])));
       const phiP = Math.atan2(P[2], P[0]);
-      const heightP = typeof getHeightOnSphere === "function" ? getHeightOnSphere(thetaP, phiP, typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0;
+      const heightP = getH_fn(thetaP, phiP, seedVal);
       const pFeetRadius = currentR - playerFootOffset;
       const caveDataP = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P[0], P[1], P[2], pFeetRadius) : null;
       let terrainRadius = (caveDataP && (caveDataP.insideTunnel || caveDataP.ground < r_planet + heightP * h_scale - 0.1)) ? caveDataP.ground : (r_planet + heightP * h_scale);
@@ -1091,6 +1093,34 @@ const CollisionCore = {
         }
       }
 
+      // Check whether target position is supported by constructed stairs or folding ladders
+      let isStairOrLadder = false;
+      if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+        const testFeet = currentR - playerFootOffset;
+        for (let itm of collectibles) {
+          if (itm.active && (itm.type === "wood_stairs" || itm.type === "folding_ladder") && !itm.isPreview && itm.position) {
+            const dxStair = P[0] * testFeet - itm.position[0];
+            const dyStair = P[1] * testFeet - itm.position[1];
+            const dzStair = P[2] * testFeet - itm.position[2];
+            const reachLim = itm.type === "folding_ladder" ? 5.5 : 4.0;
+            if (dxStair*dxStair + dyStair*dyStair + dzStair*dzStair < reachLim*reachLim) {
+              isStairOrLadder = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // Calculate terrain slope angle using spherical surface arc distance and visual map noise height
+      const dotPP = Math.max(-1.0, Math.min(1.0, P[0] * P_curr[0] + P[1] * P_curr[1] + P[2] * P_curr[2]));
+      const arcAngle = Math.acos(dotPP);
+      const groundDistance = arcAngle * currTerrainRadius;
+      const elevationDiff = terrainRadius - currTerrainRadius;
+      
+      // Maximum climbable slope angle: 45 degrees (tan 45° = 1.0)
+      const slopeRatio = groundDistance > 0.0001 ? (elevationDiff / groundDistance) : 0.0;
+      const isTooSteep = (!isStairOrLadder) && (elevationDiff > 0.01) && (slopeRatio > 1.0);
+
       let testCenterRadius = currentR;
       let testDiveDepth = diveDepth;
       let testIsDiving = testDiveDepth > 0.01 * charScale;
@@ -1101,36 +1131,36 @@ const CollisionCore = {
 
         const testFeetRadius = testCenterRadius - playerFootOffset;
 
-        // Terrain Wall Block (Horizontal collision on surface)
-        if (terrainRadius > currTerrainRadius + maxStepUp) {
-          if (testFeetRadius < terrainRadius) {
-            return { colliding: true };
+        // Terrain Wall Block (Horizontal collision on surface & cliffs > 45 degrees)
+        if (terrainRadius > currTerrainRadius + maxStepUp || isTooSteep) {
+          if (testFeetRadius < terrainRadius || isTooSteep) {
+            return { colliding: true, isTooSteep: isTooSteep, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
           }
         }
 
         // Terrain Floor Adjustment (Shallow water step up)
         if (testFeetRadius < terrainRadius) {
-          if (terrainRadius <= currTerrainRadius + maxStepUp) {
+          if (terrainRadius <= currTerrainRadius + maxStepUp && !isTooSteep) {
             testCenterRadius = terrainRadius + playerFootOffset;
             testDiveDepth = Math.max(0.0, targetSwimRadius - testCenterRadius);
             testIsDiving = testDiveDepth > 0.015 * charScale;
           } else {
-            return { colliding: true };
+            return { colliding: true, isTooSteep: isTooSteep, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
           }
         }
       } else {
         // Walking logic on surface
         let testFeetRadius = testCenterRadius - playerFootOffset;
         
-        // Wall collision
-        if (terrainRadius > currTerrainRadius + maxStepUp) {
-          if (testFeetRadius < terrainRadius) {
-            return { colliding: true };
+        // Wall collision & Steep slope / Vertical cliff blocking (> 45 degrees)
+        if (terrainRadius > currTerrainRadius + maxStepUp || isTooSteep) {
+          if (testFeetRadius < terrainRadius || isTooSteep) {
+            return { colliding: true, isTooSteep: isTooSteep, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
           }
         }
         
         // Step up
-        if (testFeetRadius < terrainRadius && terrainRadius <= currTerrainRadius + maxStepUp) {
+        if (testFeetRadius < terrainRadius && terrainRadius <= currTerrainRadius + maxStepUp && !isTooSteep) {
           testCenterRadius = terrainRadius + playerFootOffset;
           testFeetRadius = testCenterRadius - playerFootOffset;
         }
@@ -1242,6 +1272,16 @@ const CollisionCore = {
     }
 
     const targetEval = evaluatePosition(pushP, pushR);
+
+    if (targetEval.isTooSteep) {
+      return {
+        P_new: [P_curr[0], P_curr[1], P_curr[2]],
+        playerCenterRadius: centerRadius,
+        playerDiveDepth: diveDepth,
+        isDivingMode: diveDepth > 0.015 * charScale,
+        shouldBlock: true
+      };
+    }
 
     if (!targetEval.colliding) {
       return {

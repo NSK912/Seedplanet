@@ -236,16 +236,16 @@
                      finalColor = vColor * diffuseVal * 1.2 + vec3(0.1, 0.2, 0.05);
                  }
 
-                 // Glowing Ore (แร่เรืองแสง) - เรืองแสงสว่างเจิดจ้าออกมาจากโมเดลจริงในฉาก ไม่หม่นหมองตามเงามืด
+                 // Glowing Ore (แร่เรืองแสง) - เรืองแสงสว่างด้วยสีดั้งเดิมของตัวเอง (Cyan / Teal) ไม่ฟอกขาว
                  bool isGlowingOre = (abs(vColor.r - 0.22) < 0.08 && abs(vColor.g - 0.95) < 0.08 && abs(vColor.b - 0.88) < 0.08);
                  if (isGlowingOre) {
-                     float pulse = 0.92 + 0.16 * sin(uTime * 3.2 + vWorldPos.x * 2.8 + vWorldPos.y * 2.8 + vWorldPos.z * 2.8);
-                     vec3 emissiveBase = vColor * (1.35 * pulse);
-                     vec3 coreRadiance = vec3(0.40, 1.05, 0.98) * (0.65 * pulse);
-                     float rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0);
-                     vec3 rimAura = vec3(0.25, 0.98, 0.95) * (rimFactor * 2.0);
-                     float crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 1.2;
-                     finalColor = emissiveBase + coreRadiance + rimAura + vec3(1.0) * crystalGlint;
+                     float pulse = 0.94 + 0.12 * sin(uTime * 3.0 + vWorldPos.x * 2.8 + vWorldPos.y * 2.8 + vWorldPos.z * 2.8);
+                     float rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5);
+                     float crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 0.4;
+                     vec3 glowColor = vColor * pulse;
+                     vec3 rimGlow = vColor * (rimFactor * 0.35);
+                     vec3 glintColor = vColor * crystalGlint;
+                     finalColor = clamp(glowColor * 1.15 + rimGlow + glintColor, 0.0, 1.0);
                  }
 
                 // Apply Water Volume Tint & Fog
@@ -636,13 +636,13 @@
                     finalColor = vColor;
                 }
 
-                // Glowing Ore Emissive Radiance
+                // Glowing Ore Emissive Radiance - คงสีเดิม (Cyan/Teal) ไม่ฟอกขาว
                 bool isGlowingOre = (abs(vColor.r - 0.22) < 0.08 && abs(vColor.g - 0.95) < 0.08 && abs(vColor.b - 0.88) < 0.08);
                 if (isGlowingOre) {
                     vec3 normalGlow = normalize(vNormal);
                     vec3 viewDirGlow = normalize(uCameraPos - vWorldPos);
-                    float rim = pow(1.0 - max(dot(normalGlow, viewDirGlow), 0.0), 2.0);
-                    finalColor = vColor * 1.45 + vec3(0.40, 1.05, 0.98) * 0.65 + vec3(0.25, 0.98, 0.95) * (rim * 1.8);
+                    float rim = pow(1.0 - max(dot(normalGlow, viewDirGlow), 0.0), 2.5);
+                    finalColor = clamp(vColor * 1.15 + vColor * (rim * 0.35), 0.0, 1.0);
                 }
 
                 // Apply Water Volume Tint & Fog
@@ -1222,13 +1222,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     let isGlowingOre = (abs(in.color.r - 0.22) < 0.08 && abs(in.color.g - 0.95) < 0.08 && abs(in.color.b - 0.88) < 0.08);
     if (isGlowingOre) {
-        let pulse = 0.92 + 0.16 * sin(in.worldPos.x * 2.8 + in.worldPos.y * 2.8 + in.worldPos.z * 2.8);
-        let emissiveBase = in.color * (1.35 * pulse);
-        let coreRadiance = vec3<f32>(0.40, 1.05, 0.98) * (0.65 * pulse);
-        let rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0);
-        let rimAura = vec3<f32>(0.25, 0.98, 0.95) * (rimFactor * 2.0);
-        let crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 1.2;
-        finalColor = emissiveBase + coreRadiance + rimAura + vec3<f32>(1.0) * crystalGlint;
+        let pulse = 0.94 + 0.12 * sin(in.worldPos.x * 2.8 + in.worldPos.y * 2.8 + in.worldPos.z * 2.8);
+        let rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5);
+        let crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 0.4;
+        let glowColor = in.color * pulse;
+        let rimGlow = in.color * (rimFactor * 0.35);
+        let glintColor = in.color * crystalGlint;
+        finalColor = clamp(glowColor * 1.15 + rimGlow + glintColor, vec3<f32>(0.0), vec3<f32>(1.0));
     }
     
     let dist = length(in.worldPos);
