@@ -288,101 +288,81 @@ function initAmphibians(count, seed) {
   function spawnNpcOfType(type) {
     if (amphibians.length >= count) return 0;
 
-    if (type === 'human') {
-      // Humans prefer land and spawn in cohesive groups (2, or 3 if slots permit)
-      const coord = findSpawnCoordinate('land');
-      const maxHp = (window.NpcRegistry && window.NpcRegistry['human']) ? window.NpcRegistry['human'].maxHp : 1;
-      const remainingSlots = count - amphibians.length;
-      if (remainingSlots <= 0) return 0;
-      
-      const groupSize = (remainingSlots >= 3 && Math.random() < 0.35) ? 3 : (remainingSlots >= 2 ? 2 : 1);
-      
-      for (let j = 0; j < groupSize; j++) {
-        let offsetTheta = coord.theta;
-        let offsetPhi = coord.phi;
-        if (j > 0) {
-          offsetTheta += (Math.random() - 0.5) * (0.04 / rRatio);
-          offsetPhi += (Math.random() - 0.5) * (0.04 / rRatio);
-        }
-        const oHeight = getHeightOnSphere(offsetTheta, offsetPhi, seed);
-        const oR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH) + 0.05 + Math.random() * 0.04;
-        
-        const hSeed = Math.random();
-        amphibians.push({
-          type: 'human',
-          theta: offsetTheta,
-          phi: offsetPhi,
-          r: oR,
-          heading: Math.random() * Math.PI * 2,
-          animPhase: Math.random() * Math.PI * 2,
-          ragdollEnabled: false,
-          ragdollInitialized: false,
-          ragdollAxis: [0, 1, 0],
-          ragdollAngle: 0,
-          ragdollAngularSpeed: 0,
-          isSwimming: false,
-          seed: hSeed,
-          hp: maxHp,
-          maxHp: maxHp,
-          energy: 75 + Math.random() * 25,
-          hunger: 15 + Math.random() * 25,
-          lifeSchedule: Math.random() < 0.35 ? 'FORAGING' : (Math.random() < 0.7 ? 'WANDERING' : 'SOCIALIZING'),
-          scheduleTimer: 15 + Math.random() * 25,
-          npcName: (typeof getHumanNpcName === "function") ? getHumanNpcName(hSeed * 1000) : "Tribe Member",
-          npcRole: (typeof getHumanNpcRole === "function") ? getHumanNpcRole(hSeed * 1000) : { title: "ชาวเผ่าพสุธา", icon: "🏹" },
-          lodLevel: 0,
-        });
+    // Human NPC is disabled from spawning completely (ปิดการใช้งานสปอน)
+    if (type === 'human' || (window.NpcRegistry && window.NpcRegistry[type] && window.NpcRegistry[type].disabled)) {
+      return 0;
+    }
+
+    // All other NPCs spawn in natural packs/flocks of 3-5 individuals (สปอนเป็นฝูง 3-5 ตัว)
+    const remainingSlots = count - amphibians.length;
+    if (remainingSlots <= 0) return 0;
+    const desiredPack = Math.floor(Math.random() * 3) + 3; // 3, 4, or 5
+    const packSize = Math.max(1, Math.min(desiredPack, remainingSlots));
+
+    const isGeorgiacetus = (type === 'georgiacetus');
+    const isPlacoderm = (type === 'placoderm');
+    const isMeganeura = (type === 'meganeura');
+    const isIsopod = (type === 'isopod');
+
+    // Georgiacetus and Placoderm strictly prefer ocean water; Isopod/Meganeura can be anywhere
+    const pref = (isGeorgiacetus || isPlacoderm) ? 'water' : 'any';
+    const coord = findSpawnCoordinate(pref);
+
+    const maxHp = (window.NpcRegistry && window.NpcRegistry[type]) ? window.NpcRegistry[type].maxHp : 1;
+    const baseHeading = Math.random() * Math.PI * 2;
+
+    for (let j = 0; j < packSize; j++) {
+      let offsetTheta = coord.theta;
+      let offsetPhi = coord.phi;
+      if (j > 0) {
+        // Naturally disperse flock/pack members around center coordinate
+        const angle = Math.random() * Math.PI * 2;
+        const dist = (0.015 + Math.random() * 0.04) / rRatio;
+        offsetTheta += Math.sin(angle) * dist;
+        offsetPhi += Math.cos(angle) * dist;
       }
-      return groupSize;
-    } else {
-      const isGeorgiacetus = (type === 'georgiacetus');
-      const isPlacoderm = (type === 'placoderm');
-      const isMeganeura = (type === 'meganeura');
-      const isIsopod = (type === 'isopod');
 
-      // Georgiacetus and Placoderm strictly prefer ocean water; Isopod/Meganeura can be anywhere
-      const pref = (isGeorgiacetus || isPlacoderm) ? 'water' : 'any';
-      const coord = findSpawnCoordinate(pref);
+      const oHeight = getHeightOnSphere(offsetTheta, offsetPhi, seed);
+      const oIsLand = (oHeight * HEIGHT_SCALE > effectiveWaterH);
 
-      const maxHp = (window.NpcRegistry && window.NpcRegistry[type]) ? window.NpcRegistry[type].maxHp : 1;
       let spawnR;
       let swimming = false;
 
       if (isMeganeura) {
-        // Flying dragonfly hovering gracefully over land and water
-        const surfaceR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH);
+        // Swarm of dragonflies hovering together over land and water
+        const surfaceR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH);
         spawnR = surfaceR + 0.35 + Math.random() * 0.15;
         swimming = false;
       } else if (isIsopod) {
-        // Giant isopod crawling on ground or seabed
-        spawnR = RADIUS + coord.height * HEIGHT_SCALE + 0.02;
-        swimming = !coord.isLand;
+        // Colony of giant isopods crawling together on ground or seabed
+        spawnR = RADIUS + oHeight * HEIGHT_SCALE + 0.02;
+        swimming = !oIsLand;
       } else if (isGeorgiacetus || isPlacoderm) {
-        // Prehistoric marine animals swimming in ocean, or crawling along shore if planet is dry
-        if (!coord.isLand) {
-          spawnR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH - 0.04) + 0.04;
+        // Pod/School of prehistoric marine animals swimming together
+        if (!oIsLand) {
+          spawnR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH - 0.04) + 0.04;
           swimming = true;
         } else {
-          spawnR = RADIUS + coord.height * HEIGHT_SCALE + 0.05;
+          spawnR = RADIUS + oHeight * HEIGHT_SCALE + 0.05;
           swimming = false;
         }
       } else if (type === 'obsidian_cube') {
-        // Floating gilded obsidian diamond cube hovering gracefully above land or water
-        const surfaceR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH);
+        // Cluster of floating gilded obsidian diamond cubes hovering gracefully
+        const surfaceR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH);
         spawnR = surfaceR + 1.25 + Math.random() * 0.35;
         swimming = false;
       } else {
-        spawnR = RADIUS + Math.max(coord.height * HEIGHT_SCALE, effectiveWaterH) + 0.05;
-        swimming = !coord.isLand;
+        spawnR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH) + 0.05;
+        swimming = !oIsLand;
       }
 
       const aSeed = Math.random();
       amphibians.push({
         type: type,
-        theta: coord.theta,
-        phi: coord.phi,
+        theta: offsetTheta,
+        phi: offsetPhi,
         r: spawnR,
-        heading: Math.random() * Math.PI * 2,
+        heading: baseHeading + (Math.random() - 0.5) * 0.6,
         animPhase: Math.random() * Math.PI * 2,
         ragdollEnabled: false,
         ragdollInitialized: false,
@@ -399,19 +379,21 @@ function initAmphibians(count, seed) {
         scheduleTimer: 15 + Math.random() * 25,
         lodLevel: 0,
       });
-      return 1;
     }
+    return packSize;
   }
 
-  // 1. GUARANTEED PHASE: Ensure every single known NPC type is guaranteed to spawn!
-  const knownTypes = ['human', 'georgiacetus', 'placoderm', 'meganeura', 'isopod', 'obsidian_cube'];
+  // 1. GUARANTEED PHASE: Ensure active known NPC types spawn in packs of 3-5 (human is excluded)
+  const knownTypes = ['georgiacetus', 'placoderm', 'meganeura', 'isopod', 'obsidian_cube'];
   if (window.NpcRegistry) {
     for (const k in window.NpcRegistry) {
-      if (!knownTypes.includes(k)) knownTypes.push(k);
+      if (k !== 'human' && !window.NpcRegistry[k].disabled && !knownTypes.includes(k)) {
+        knownTypes.push(k);
+      }
     }
   }
 
-  // Spawn each registered species at least once (humans spawn as a pair)
+  // Spawn each registered species in a pack of 3-5
   for (const t of knownTypes) {
     if (amphibians.length < count) {
       spawnNpcOfType(t);
@@ -419,7 +401,7 @@ function initAmphibians(count, seed) {
   }
 
   // 2. PROPORTIONAL FILL PHASE:
-  // Distribute remaining slots smoothly across all types in a balanced rotation
+  // Distribute remaining slots smoothly across species in packs of 3-5
   let typeIdx = 0;
   while (amphibians.length < count) {
     const t = knownTypes[typeIdx % knownTypes.length];
@@ -434,7 +416,7 @@ function initAmphibians(count, seed) {
     savedAmphibiansState.length === amphibians.length
   ) {
     for (let i = 0; i < amphibians.length; i++) {
-      if (savedAmphibiansState[i].type === amphibians[i].type || !savedAmphibiansState[i].type) {
+      if (amphibians[i].type !== 'human' && (savedAmphibiansState[i].type === amphibians[i].type || !savedAmphibiansState[i].type)) {
         Object.assign(amphibians[i], savedAmphibiansState[i]);
       }
       if (amphibians[i].hp === undefined) {
@@ -445,6 +427,9 @@ function initAmphibians(count, seed) {
       }
     }
   }
+
+  // Ensure no human NPCs are present in the active amphibians list
+  amphibians = amphibians.filter(a => a.type !== 'human');
 }
 
 // === NPC Life-Cycle Simulation State Machine ===

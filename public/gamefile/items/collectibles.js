@@ -1735,6 +1735,203 @@ function buildCollectibles(count, seed) {
         }
       }
 
+      // === AUTHORITATIVE CENTRALIZED WHEELED BOAT CONTROLLER ===
+      window.updateWheeledBoatControls = function(boat, inputState, dt) {
+        if (!boat) return null;
+        dt = (typeof dt === "number" && dt > 0) ? dt : 1.0;
+        const moveForwardInput = (typeof inputState.moveForwardInput === "number") ? inputState.moveForwardInput : 0;
+        const moveSidewaysInput = (typeof inputState.moveSidewaysInput === "number") ? inputState.moveSidewaysInput : 0;
+        const isShiftHeld = !!inputState.isShiftHeld;
+        const isHandbrake = !!inputState.isHandbrake;
+        const pSpeed = (typeof inputState.playerSpeed === "number" && inputState.playerSpeed > 0) ? inputState.playerSpeed : 0.005;
+        const isInWater = !!inputState.isInWater;
+        const waterEnabled = !!inputState.waterEnabled;
+        const charScale = (typeof inputState.charScale === "number") ? inputState.charScale : 1.0;
+        let heading = (typeof inputState.charHeading === "number") ? inputState.charHeading : 0;
+        const pitchGrade = (typeof inputState.pitchGrade === "number") ? inputState.pitchGrade : (boat.pitchGrade || 0);
+
+        const hasWing = !!(boat.hasWing || boat.hasWings);
+        const hasWheels = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
+        const isLandBoat = hasWheels || hasWing;
+        const hasEngine = !!boat.hasEngine;
+        const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
+        const isAirborne = !!(boat.isAirborne && !isInWater);
+        const isControlledFlight = !!(boat.isFlying && hasWing);
+
+        let moveNorthFactor = 0;
+        let moveEastFactor = 0;
+        let currentSpeedVal = 0;
+
+        if (isLandBoat) {
+            // === 1. FRONT WHEEL STEERING ANGLE ===
+            // Left (A, moveSidewaysInput = -1) -> targetSteer = +0.52 (wheels point Left along +R)
+            // Right (D, moveSidewaysInput = +1) -> targetSteer = -0.52 (wheels point Right along -R)
+            const maxSteerRad = 0.52; // ~30 degrees
+            const targetSteer = -moveSidewaysInput * maxSteerRad;
+            let currentSteer = boat.steerAngle || 0;
+            currentSteer += (targetSteer - currentSteer) * Math.min(1.0, 0.25 * dt);
+            boat.steerAngle = currentSteer;
+
+            // === 2. ACCELERATION, BRAKING, REVERSING & HANDBRAKE ===
+            let vehSpeed = boat.vehicleSpeed || 0;
+            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : (!hasWheels && isInWater ? pSpeed * 1.5 : 0));
+            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (!hasWheels && isInWater ? pSpeed * 0.8 : 0));
+            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (!hasWheels && isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
+            let brakePower = pSpeed * 0.30 * dt;
+            let coastFriction = Math.pow(isInWater ? 0.96 : ((isAirborne || boat.isFlying) && hasWing ? 0.995 : 0.985), dt);
+
+            if (hasWing && hasEngine && hasBattery && (boat.isFlying || isShiftHeld)) {
+                topFwdSpeed = Math.max(topFwdSpeed, pSpeed * 4.5);
+                accelPower = Math.max(accelPower, pSpeed * 0.16 * dt);
+            }
+
+            const canAccelerate = (hasEngine && hasBattery) || (!hasWheels && isInWater && !hasEngine);
+
+            // Feedback notices
+            if (!hasEngine && hasWheels && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
+                const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+                if (typeof showNotice === "function" && (!boat._lastEngineNotice || nowTime - boat._lastEngineNotice > 3000)) {
+                    boat._lastEngineNotice = nowTime;
+                    showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
+                }
+            } else if (hasEngine && !hasBattery && (Math.abs(moveForwardInput) > 0.1 || (boat.isFlying && isShiftHeld))) {
+                if (typeof window.BatterySystem !== "undefined") {
+                    window.BatterySystem.showEmptyNotice();
+                }
+            }
+
+            const isUsingPower = Math.abs(moveForwardInput) > 0.1 || (boat.isFlying && isShiftHeld);
+            if (hasEngine && hasBattery && isUsingPower) {
+                if (typeof window.BatterySystem !== "undefined") {
+                    window.BatterySystem.consumePower(dt);
+                }
+            }
+
+            boat.isHandbraking = isHandbrake && !boat.isFlying;
+
+            // Slope gravity roll
+            const gravityRollPower = pitchGrade * pSpeed * 0.4 * dt * (isInWater ? 0.2 : 1.0);
+            if (!boat.isHandbraking) {
+                vehSpeed -= gravityRollPower;
+            }
+
+            // Slope angle limit (Cliffs steeper than 45 degrees / pitchGrade > 1.0 cannot be driven up)
+            // 45-degree angle condition ONLY works on land/ground, NEVER on water or in flight!
+            const isSlopeTooSteep = !isInWater && !boat.isFlying && !isAirborne && (pitchGrade > 1.0);
+
+            if (boat.isHandbraking) {
+                vehSpeed *= Math.pow(0.85, dt);
+            } else if (moveForwardInput > 0.1 && canAccelerate) {
+                if (vehSpeed < -0.01) {
+                    vehSpeed += brakePower; // Braking while moving backwards
+                } else if (!isSlopeTooSteep) {
+                    vehSpeed = Math.min(topFwdSpeed, vehSpeed + accelPower);
+                } else {
+                    // GTA Style Inertia & Slope Traction Slip:
+                    // Does NOT abruptly freeze to 0. Existing inertia smoothly carries momentum,
+                    // while drive traction slips (wheels spin without full grip).
+                    // Gravity rollback smoothly decelerates and slips the vehicle back down.
+                    const tractionGrip = Math.max(0.0, 1.0 - (pitchGrade - 1.0) * 3.0);
+                    vehSpeed = Math.min(topFwdSpeed, vehSpeed + accelPower * tractionGrip);
+                    vehSpeed -= (pitchGrade * pSpeed * 0.25 * dt);
+                }
+            } else if (!boat.isFlying && moveForwardInput < -0.1 && canAccelerate) {
+                if (vehSpeed > 0.01) {
+                    vehSpeed -= brakePower; // Braking while moving forward
+                } else {
+                    vehSpeed = Math.max(-topRevSpeed, vehSpeed - accelPower); // Reversing backwards
+                }
+            } else {
+                vehSpeed *= coastFriction;
+                if (Math.abs(vehSpeed) < 0.00001) vehSpeed = 0;
+            }
+
+            boat.vehicleSpeed = vehSpeed;
+
+            // === 3. VEHICLE STEERING / HEADING (UNIFIED REALISTIC FLATOUT / ARCADE CONTROLS) ===
+            const refMaxSpeed = pSpeed * 5.0;
+            if (!isAirborne && !boat.isFlying) {
+                // Forward (W / vehSpeed >= 0):
+                //   Press Left (A, currentSteer > 0) -> turnDir = +1 -> heading increases -> turns Left!
+                //   Press Right (D, currentSteer < 0) -> turnDir = +1 -> heading decreases -> turns Right!
+                // Reverse (S / vehSpeed < 0):
+                //   Press Left (A, currentSteer > 0) -> turnDir = -1 -> heading decreases -> rear curves Left, backs up Left!
+                //   Press Right (D, currentSteer < 0) -> turnDir = -1 -> heading increases -> rear curves Right, backs up Right!
+                const isReversing = (vehSpeed < -0.001 || (moveForwardInput < -0.1 && vehSpeed <= 0.001));
+                const turnDir = isReversing ? -1 : 1;
+                const driftMultiplier = boat.isHandbraking ? 2.4 : 1.0;
+
+                if (Math.abs(vehSpeed) > 0.001) {
+                    const turnRate = currentSteer * (Math.abs(vehSpeed) / refMaxSpeed) * 0.035 * turnDir * driftMultiplier;
+                    heading += turnRate * dt;
+                }
+                if (Math.abs(moveSidewaysInput) > 0.05) {
+                    const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / refMaxSpeed);
+                    if (canAccelerate || Math.abs(vehSpeed) > 0.0005 || isInWater) {
+                        heading += currentSteer * 0.025 * dt * lowSpeedTurning * turnDir;
+                    }
+                }
+            } else if (isControlledFlight) {
+                // Controlled wing flight: bank & steer
+                heading += currentSteer * 0.045 * dt;
+            }
+
+            // === 4. WHEEL SPIN ANGLE ===
+            const isFlyingInAir = !!(isAirborne || boat.isFlying);
+            if (!isFlyingInAir) {
+                const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+                const wheelRadius = 0.16 * wheelScale;
+                const distTraveled = vehSpeed * dt;
+                boat.spinAngle = (boat.spinAngle || 0) + (distTraveled / wheelRadius);
+                boat.frozenSpinAngle = boat.spinAngle;
+            } else {
+                if (boat.frozenSpinAngle === undefined) {
+                    boat.frozenSpinAngle = boat.spinAngle || 0;
+                }
+                boat.spinAngle = boat.frozenSpinAngle;
+            }
+
+            // === 5. MOVEMENT VECTORS ===
+            let speedRatio = vehSpeed / pSpeed;
+            if (Math.abs(speedRatio) > 0.001) {
+                moveNorthFactor = Math.cos(heading) * Math.sign(speedRatio);
+                moveEastFactor  = Math.sin(heading) * Math.sign(speedRatio);
+            } else if (moveForwardInput !== 0) {
+                moveNorthFactor = Math.cos(heading) * moveForwardInput;
+                moveEastFactor  = Math.sin(heading) * moveForwardInput;
+            }
+            currentSpeedVal = Math.abs(vehSpeed);
+        } else {
+            // Water-only boat (no wheels and no wings)
+            let canRow = isInWater;
+            if (canRow) {
+                heading += -moveSidewaysInput * 0.05 * dt;
+                moveNorthFactor = Math.cos(heading) * moveForwardInput;
+                moveEastFactor  = Math.sin(heading) * moveForwardInput;
+                const hasEngineActive = hasEngine && hasBattery;
+                currentSpeedVal = hasEngineActive ? pSpeed * 5.0 : pSpeed * 1.5;
+            } else {
+                moveNorthFactor = 0;
+                moveEastFactor = 0;
+                currentSpeedVal = 0;
+                if (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1) {
+                    const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+                    if (typeof showNotice === "function" && (!boat._lastLandNotice || nowTime - boat._lastLandNotice > 3000)) {
+                        boat._lastLandNotice = nowTime;
+                        showNotice("เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
+                    }
+                }
+            }
+        }
+
+        return {
+            heading,
+            moveNorthFactor,
+            moveEastFactor,
+            currentSpeedVal
+        };
+      };
+
       function updateCollectibles(dt) {
         if (!collectibles || collectibles.length === 0) return;
         
@@ -5137,69 +5334,40 @@ function buildCollectibles(count, seed) {
                 let vehSpeed = typeof c.vehicleSpeed !== "undefined" ? c.vehicleSpeed : 0;
                 let dt = typeof window.timeScale !== "undefined" ? window.timeScale : 1.0;
 
-                const isRidden = (typeof activeRidingBoat !== "undefined" && activeRidingBoat === c);
+                const isRidden = (typeof activeRidingBoat !== "undefined" && activeRidingBoat === c) || (typeof window !== "undefined" && window.activeRidingBoat === c);
 
-                if (!isRidden && c._isSleeping) {
-                    vehSpeed = 0;
-                    c.vehicleSpeed = 0;
-                    c.vel[0] = 0; c.vel[1] = 0; c.vel[2] = 0;
-                } else {
-                    // 1. Apply gravity to vehSpeed
-                    let gravityRollPower = pitchGrade * pSpeed * 0.5 * dt;
-                    vehSpeed -= gravityRollPower;
-
-                    // 2. Apply coast friction
-                    vehSpeed *= Math.pow(0.96, dt);
-                    if (Math.abs(vehSpeed) < 0.0005) {
+                if (!isRidden) {
+                    if (c._isSleeping) {
                         vehSpeed = 0;
-                        if (!isRidden) {
+                        c.vehicleSpeed = 0;
+                        c.vel[0] = 0; c.vel[1] = 0; c.vel[2] = 0;
+                    } else {
+                        // 1. Apply gravity to vehSpeed
+                        const pitchGrade = c.pitchGrade || 0;
+                        let gravityRollPower = pitchGrade * pSpeed * 0.5 * dt;
+                        vehSpeed -= gravityRollPower;
+
+                        // 2. Apply coast friction
+                        vehSpeed *= Math.pow(0.96, dt);
+                        if (Math.abs(vehSpeed) < 0.0005) {
+                            vehSpeed = 0;
                             c._isSleeping = true;
                         }
+                        c.vehicleSpeed = vehSpeed;
+
+                        // 3. Move along forward vector
+                        c.vel[0] = (bF ? bF[0] : 0) * vehSpeed;
+                        c.vel[1] = (bF ? bF[1] : 0) * vehSpeed;
+                        c.vel[2] = (bF ? bF[2] : 0) * vehSpeed;
+
+                        // 4. Update wheel spin visually
+                        if (Math.abs(vehSpeed) > 0.0001) {
+                            const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+                            const wheelRadius = 0.16 * wheelScale;
+                            const distTraveled = vehSpeed * dt;
+                            c.spinAngle = (c.spinAngle || 0) + (distTraveled / wheelRadius);
+                        }
                     }
-                    c.vehicleSpeed = vehSpeed;
-
-                    // 3. Move along forward vector
-                    c.vel[0] = bF[0] * vehSpeed;
-                    c.vel[1] = bF[1] * vehSpeed;
-                    c.vel[2] = bF[2] * vehSpeed;
-
-                    // 4. Update wheel spin visually
-                    if (Math.abs(vehSpeed) > 0.0001) {
-                        let moveDir = vehSpeed >= 0 ? 1 : -1;
-                        const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
-                        const wheelRadius = 0.16 * wheelScale;
-                        const distTraveled = vehSpeed * dt;
-                        c.spinAngle = (c.spinAngle || 0) + (distTraveled / wheelRadius);
-                    }
-                }
-
-                // 5. Turn based on steer angle
-                let currentSteer = c.steerAngle || 0;
-                if (Math.abs(vehSpeed) > 0.001 && Math.abs(currentSteer) > 0.01) {
-                    const topFwdSpeed = pSpeed * 5.0;
-                    const turnRate = currentSteer * (Math.abs(vehSpeed) / topFwdSpeed) * 0.03 * moveDir;
-                    
-                    // Rotate F and R around normal by turnRate
-                    let cosT = Math.cos(turnRate * dt);
-                    let sinT = Math.sin(turnRate * dt);
-                    
-                    let rx = c.R[0]*cosT + c.F[0]*sinT;
-                    let ry = c.R[1]*cosT + c.F[1]*sinT;
-                    let rz = c.R[2]*cosT + c.F[2]*sinT;
-                    
-                    let fx = -c.R[0]*sinT + c.F[0]*cosT;
-                    let fy = -c.R[1]*sinT + c.F[1]*cosT;
-                    let fz = -c.R[2]*sinT + c.F[2]*cosT;
-                    
-                    c.R = [rx, ry, rz];
-                    c.F = [fx, fy, fz];
-
-                    // Orthogonalize F and R
-                    let fDot = c.F[0]*c.normal[0] + c.F[1]*c.normal[1] + c.F[2]*c.normal[2];
-                    let newF = [c.F[0] - fDot*c.normal[0], c.F[1] - fDot*c.normal[1], c.F[2] - fDot*c.normal[2]];
-                    let lenF = Math.sqrt(newF[0]**2 + newF[1]**2 + newF[2]**2);
-                    if (lenF > 0.001) { c.F = [newF[0]/lenF, newF[1]/lenF, newF[2]/lenF]; }
-                    c.R = [c.normal[1]*c.F[2] - c.normal[2]*c.F[1], c.normal[2]*c.F[0] - c.normal[0]*c.F[2], c.normal[0]*c.F[1] - c.normal[1]*c.F[0]];
                 }
             }
             Physics.applyFriction(c.vel, friction);

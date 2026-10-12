@@ -1009,6 +1009,8 @@ window.buildHumanModel = function(
 
 window.NpcRegistry = window.NpcRegistry || {};
 window.NpcRegistry["human"] = {
+  disabled: true,
+  canSpawn: false,
   maxHp: 10,
   animSpeed: 2.5,
   moveSpeed: 0.05,

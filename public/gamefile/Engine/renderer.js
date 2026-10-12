@@ -5326,142 +5326,30 @@ window.cloud3DProgram = cloud3DProgram;
           };
         }
 
+        let boatControlResult = null;
         if (activeRidingBoat) {
           let boatDepth = waterRadius - terrainRadius;
           let isInWater = activeRidingBoat.isInWater !== undefined ? activeRidingBoat.isInWater : (waterEnabled && boatDepth > 0.35 * charScale);
-          let hasWing = !!(activeRidingBoat.hasWing || activeRidingBoat.hasWings);
-          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0) || hasWing;
+          const isShiftHeld = !!(typeof keysPressed !== "undefined" && (keysPressed["ShiftLeft"] || keysPressed["ShiftRight"] || keysPressed["Shift"])) || !!(typeof window.boatFlyButtonHeld !== "undefined" && window.boatFlyButtonHeld);
+          const isHandbrake = !activeRidingBoat.isFlying && (typeof keys !== "undefined" && (keys["Space"] || keys[" "]));
+          const pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
 
-          if (isLandBoat) {
-            // === GTA REALISTIC VEHICLE DRIVING PHYSICS (LIGHTWEIGHT & RESPONSIVE) ===
-            const dt = timeScale;
-            const isShiftHeld = !!(typeof keysPressed !== "undefined" && (keysPressed["ShiftLeft"] || keysPressed["ShiftRight"] || keysPressed["Shift"])) || !!(typeof window.boatFlyButtonHeld !== "undefined" && window.boatFlyButtonHeld);
-            
-            // 1. Front Wheel Steering Angle (A / D keys)
-            const maxSteerRad = 0.52; // ~30 degrees
-            const targetSteer = -moveSidewaysInput * maxSteerRad;
-            let currentSteer = activeRidingBoat.steerAngle || 0;
-            currentSteer += (targetSteer - currentSteer) * Math.min(1.0, 0.25 * dt);
-            activeRidingBoat.steerAngle = currentSteer;
+          if (typeof window.updateWheeledBoatControls === "function") {
+            boatControlResult = window.updateWheeledBoatControls(activeRidingBoat, {
+              moveForwardInput,
+              moveSidewaysInput,
+              isShiftHeld,
+              isHandbrake,
+              playerSpeed: pSpeed,
+              isInWater,
+              waterEnabled,
+              charScale,
+              charHeading,
+              pitchGrade: activeRidingBoat.pitchGrade || 0
+            }, timeScale);
 
-            // 2. Acceleration, Braking, Reversing & Handbrake (W / S / Space)
-            let vehSpeed = activeRidingBoat.vehicleSpeed || 0;
-            const pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
-            const hasEngine = !!activeRidingBoat.hasEngine;
-            const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
-            const hasWheels = !!(activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0));
-            
-            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : (!hasWheels && isInWater ? pSpeed * 1.5 : 0));
-            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (!hasWheels && isInWater ? pSpeed * 0.8 : 0));
-            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (!hasWheels && isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
-            let brakePower = pSpeed * 0.30 * dt;
-            let coastFriction = Math.pow(isInWater ? 0.96 : ((activeRidingBoat.isAirborne || activeRidingBoat.isFlying) && hasWing ? 0.995 : 0.985), dt);
-            
-            if (hasWing && hasEngine && hasBattery && (activeRidingBoat.isFlying || isShiftHeld)) {
-              topFwdSpeed = Math.max(topFwdSpeed, pSpeed * 4.5);
-              accelPower = Math.max(accelPower, pSpeed * 0.16 * dt);
-            }
-
-            let canAccelerate = (hasEngine && hasBattery) || (!hasWheels && isInWater && !hasEngine);
-
-            if (!hasEngine && hasWheels && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
-              const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-              if (typeof showNotice === "function" && (!activeRidingBoat._lastEngineNotice || nowTime - activeRidingBoat._lastEngineNotice > 3000)) {
-                activeRidingBoat._lastEngineNotice = nowTime;
-                showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
-              }
-            } else if (hasEngine && !hasBattery && (Math.abs(moveForwardInput) > 0.1 || (activeRidingBoat.isFlying && isShiftHeld))) {
-              if (typeof window.BatterySystem !== "undefined") {
-                window.BatterySystem.showEmptyNotice();
-              }
-            }
-
-            const isUsingPower = Math.abs(moveForwardInput) > 0.1 || (activeRidingBoat.isFlying && isShiftHeld);
-            if (hasEngine && hasBattery && isUsingPower) {
-              if (typeof window.BatterySystem !== "undefined") {
-                window.BatterySystem.consumePower(dt);
-              }
-            }
-
-            const isHandbrake = !activeRidingBoat.isFlying && (typeof keys !== "undefined" && (keys["Space"] || keys[" "]));
-            activeRidingBoat.isHandbraking = isHandbrake;
-            
-            // Add Gravity Roll when on land slope
-            const currentPitch = activeRidingBoat.pitchGrade || 0;
-            const gravityRollPower = currentPitch * pSpeed * 0.4 * dt * (isInWater ? 0.2 : 1.0); 
-            
-            if (!isHandbrake) {
-                vehSpeed -= gravityRollPower;
-            }
-
-            if (isHandbrake) {
-              vehSpeed *= Math.pow(0.85, dt);
-            } else if (moveForwardInput > 0.1 && canAccelerate) {
-              if (vehSpeed < -0.01) {
-                vehSpeed += brakePower;
-              } else {
-                vehSpeed = Math.min(topFwdSpeed, vehSpeed + accelPower);
-              }
-            } else if (!activeRidingBoat.isFlying && moveForwardInput < -0.1 && canAccelerate) {
-              if (vehSpeed > 0.01) {
-                vehSpeed -= brakePower;
-              } else {
-                vehSpeed = Math.max(-topRevSpeed, vehSpeed - accelPower);
-              }
-            } else {
-              vehSpeed *= coastFriction;
-              if (Math.abs(vehSpeed) < 0.00001) vehSpeed = 0;
-            }
-
-            activeRidingBoat.vehicleSpeed = vehSpeed;
-
-            // 3. Vehicle Turning / Steering Heading (GTA PS2 Car Physics & Aerodynamic Air Rudder)
-            // Ground wheels steer when on ground or water; airborne wheeled vehicles cannot steer without active flight wings
-            const refMaxSpeed = pSpeed * 5.0;
-            const isAirborne = !!(activeRidingBoat.isAirborne && !isInWater);
-            const isControlledFlight = !!(activeRidingBoat.isFlying && hasWing);
-
-            if (!isAirborne && !activeRidingBoat.isFlying) {
-              // Ground & Water Steering: Only turns when wheels touch the ground or hull touches water
-              if (Math.abs(vehSpeed) > 0.001) {
-                const turnDir = vehSpeed >= 0 ? 1 : -1;
-                const driftMultiplier = isHandbrake ? 2.4 : 1.0;
-                const turnRate = currentSteer * (Math.abs(vehSpeed) / refMaxSpeed) * 0.035 * turnDir * driftMultiplier;
-                charHeading += turnRate * dt;
-              }
-              if (Math.abs(moveSidewaysInput) > 0.05) {
-                // Smooth, lightweight steering give at low speeds or in water (GTA PS2 arcade feel)
-                const lowSpeedTurning = Math.max(0.0, 1.0 - Math.abs(vehSpeed) / refMaxSpeed);
-                if (canAccelerate || Math.abs(vehSpeed) > 0.0005 || isInWater) {
-                  charHeading += -moveSidewaysInput * 0.018 * dt * lowSpeedTurning;
-                }
-              }
-            } else if (isControlledFlight) {
-              // Smooth responsive flight banking & turning ONLY in active controlled flight mode with wings
-              charHeading += -moveSidewaysInput * 0.030 * dt;
-            } else {
-              // Airborne / floating off ground (เรือติดล้อที่ลอย หรือเรือติดล้อมีปีกที่แค่วิ่งเร็วจนลอยตัว):
-              // ล้อไม่สัมผัสพื้น ไม่สามารถเลี้ยวได้ (Zero steering in mid-air without ground contact)
-            }
-
-            // 4. Wheel Spin Angle (ตอนบิน ล้อไม่ต้องหมุน: only spins when rolling on ground / water surface)
-            const isFlyingInAir = !!(activeRidingBoat.isAirborne || activeRidingBoat.isFlying);
-            if (!isFlyingInAir) {
-              const wheelScale = typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
-              const wheelRadius = 0.16 * wheelScale;
-              const distTraveled = vehSpeed * dt;
-              activeRidingBoat.spinAngle = (activeRidingBoat.spinAngle || 0) + (distTraveled / wheelRadius);
-              activeRidingBoat.frozenSpinAngle = activeRidingBoat.spinAngle;
-            } else {
-              if (activeRidingBoat.frozenSpinAngle === undefined) {
-                activeRidingBoat.frozenSpinAngle = activeRidingBoat.spinAngle || 0;
-              }
-              activeRidingBoat.spinAngle = activeRidingBoat.frozenSpinAngle;
-            }
-          } else {
-            let canRow = isInWater || isLandBoat;
-            if (canRow) {
-              charHeading += -moveSidewaysInput * 0.05 * timeScale;
+            if (boatControlResult) {
+              charHeading = boatControlResult.heading;
             }
           }
         }
@@ -5482,28 +5370,12 @@ window.cloud3DProgram = cloud3DProgram;
         let moveEastFactor = 0;
         
         if (activeRidingBoat) {
-          let boatDepth = waterRadius - terrainRadius;
-          let isInWater = activeRidingBoat.isInWater !== undefined ? activeRidingBoat.isInWater : (waterEnabled && boatDepth > 0.35 * charScale);
-          let hasWing = !!(activeRidingBoat.hasWing || activeRidingBoat.hasWings);
-          let isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0) || hasWing;
-
-          if (isLandBoat) {
-            let speedRatio = (activeRidingBoat.vehicleSpeed || 0) / (typeof playerSpeed !== "undefined" ? playerSpeed : 0.005);
-            moveNorthFactor = Math.cos(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : (moveForwardInput !== 0 ? moveForwardInput : 0));
-            moveEastFactor = Math.sin(charHeading) * (Math.abs(speedRatio) > 0.001 ? Math.sign(speedRatio) : (moveForwardInput !== 0 ? moveForwardInput : 0));
-          } else if (isInWater || isLandBoat) {
+          if (boatControlResult) {
+            moveNorthFactor = boatControlResult.moveNorthFactor;
+            moveEastFactor = boatControlResult.moveEastFactor;
+          } else {
             moveNorthFactor = Math.cos(charHeading) * moveForwardInput;
             moveEastFactor = Math.sin(charHeading) * moveForwardInput;
-          } else {
-            moveNorthFactor = 0;
-            moveEastFactor = 0;
-            if (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1) {
-              const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-              if (typeof showNotice === "function" && (!activeRidingBoat._lastLandNotice || nowTime - activeRidingBoat._lastLandNotice > 3000)) {
-                activeRidingBoat._lastLandNotice = nowTime;
-                showNotice("เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
-              }
-            }
           }
         } else if (activeRidingMech) {
           if (!window.isMechFullyAssembled(activeRidingMech)) {
@@ -5644,47 +5516,10 @@ window.cloud3DProgram = cloud3DProgram;
           let pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
           let currentSpeedVal = pSpeed * (1.0 - 0.4 * currentSwimFactor);
           if (activeRidingBoat) {
-            let _bDepth = waterRadius - terrainRadius;
-            let _isInWater = waterEnabled && _bDepth > 0.48 * charScale;
-            let _isLandBoat = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
-            const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
-            if (_isLandBoat) {
-              currentSpeedVal = Math.abs(activeRidingBoat.vehicleSpeed || 0);
-            } else if (_isInWater) {
-              const hasEngineActive = activeRidingBoat.hasEngine && hasBattery;
-              if (hasEngineActive) {
-                 currentSpeedVal = pSpeed * 5.0;
-                 if (Math.abs(moveForwardInput) > 0.1) {
-                   if (typeof window.BatterySystem !== "undefined") {
-                     window.BatterySystem.consumePower(dt);
-                   }
-                 }
-              } else {
-                 if (activeRidingBoat.hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
-                   if (typeof window.BatterySystem !== "undefined") {
-                     window.BatterySystem.showEmptyNotice();
-                   }
-                 }
-                 currentSpeedVal = pSpeed * 1.5;
-              }
+            if (boatControlResult && typeof boatControlResult.currentSpeedVal === "number") {
+              currentSpeedVal = boatControlResult.currentSpeedVal;
             } else {
-              // Non-wheeled boat on land: dragged with friction
-              const hasEngineActive = activeRidingBoat.hasEngine && hasBattery;
-              if (hasEngineActive) {
-                 currentSpeedVal = pSpeed * 1.8;
-                 if (Math.abs(moveForwardInput) > 0.1) {
-                   if (typeof window.BatterySystem !== "undefined") {
-                     window.BatterySystem.consumePower(dt);
-                   }
-                 }
-              } else {
-                 if (activeRidingBoat.hasEngine && !hasBattery && Math.abs(moveForwardInput) > 0.1) {
-                   if (typeof window.BatterySystem !== "undefined") {
-                     window.BatterySystem.showEmptyNotice();
-                   }
-                 }
-                 currentSpeedVal = pSpeed * 0.6;
-              }
+              currentSpeedVal = Math.abs(activeRidingBoat.vehicleSpeed || 0);
             }
           }
           const speed = currentSpeedVal / currentRadius;
@@ -5946,12 +5781,16 @@ window.cloud3DProgram = cloud3DProgram;
             P_new[2] /= pLenTemp;
 
             // Step-height / Cave-wall and low ceiling blocking check to prevent clipping/teleporting to surface
+            let collisionSwimFactor = currentSwimFactor;
+            if (activeRidingBoat && (activeRidingBoat.isInWater || (waterEnabled && waterRadius > terrainRadius))) {
+              collisionSwimFactor = 1.0;
+            }
             const collisionResult = checkCaveAndTerrainCollision(
               P_new,
               P_curr,
               playerCenterRadius,
               charScale,
-              currentSwimFactor,
+              collisionSwimFactor,
               waterRadius,
               playerDiveDepth,
               swimMovementFactor,
@@ -6134,12 +5973,16 @@ window.cloud3DProgram = cloud3DProgram;
             // Enforce cave & terrain collision checks even when horizontally stationary,
             // so manual diving (Shift / Z) or water bobbing respects cave ceilings/floors and 3D mesh collisions.
             const P_curr = [nx, ny, nz];
+            let collisionSwimFactor = currentSwimFactor;
+            if (activeRidingBoat && (activeRidingBoat.isInWater || (waterEnabled && waterRadius > (typeof tRadius !== 'undefined' ? tRadius : 0)))) {
+              collisionSwimFactor = 1.0;
+            }
             const collisionResult = checkCaveAndTerrainCollision(
               P_curr,
               P_curr,
               playerCenterRadius,
               charScale,
-              currentSwimFactor,
+              collisionSwimFactor,
               waterRadius,
               playerDiveDepth,
               swimMovementFactor,

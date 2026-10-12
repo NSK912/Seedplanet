@@ -922,7 +922,7 @@ const CollisionCore = {
     const r_planet = typeof RADIUS !== "undefined" ? RADIUS : 8.0;
     const h_scale = typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 0.6;
     
-    const maxStepUp = Math.max(0.35, 3.5 * charScale);
+    const maxStepUp = Math.max(0.20, 0.35 * charScale);
     
     const isMech = (typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech);
     const playerFootOffset = isMech ? ((typeof window !== "undefined" && typeof window.mechSeatOffset !== "undefined") ? window.mechSeatOffset : 0.71) : 0.46 * charScale;
@@ -1027,13 +1027,13 @@ const CollisionCore = {
         ? getTerrainSurfaceAndCeiling(pushP[0], pushP[1], pushP[2], updatedFeetRadius) 
         : caveData;
     
-    // Fallback: If we just forced them inside the math boundary and they are underground, treat them as inside!
+    // Fallback: If we just forced them inside the math boundary and they are underground inside a real cave tunnel, treat them as inside!
     const thetaFinal = Math.acos(Math.max(-1, Math.min(1, pushP[1])));
     const phiFinal = Math.atan2(pushP[2], pushP[0]);
     const heightFinal = typeof getHeightOnSphere === "function" ? getHeightOnSphere(thetaFinal, phiFinal, typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0) : 0;
     const finalTerrainRadius = r_planet + heightFinal * h_scale;
-    if (pushR < finalTerrainRadius - 0.2 * charScale && (!updatedCaveData || !updatedCaveData.insideTunnel)) {
-        // We know they are underground, ensure they stay in cave space
+    if (caveData && caveData.insideTunnel && pushR < finalTerrainRadius - 0.2 * charScale && (!updatedCaveData || !updatedCaveData.insideTunnel)) {
+        // We know they are underground inside a real cave tunnel, ensure they stay in cave space
         if (!updatedCaveData) {
             updatedCaveData = { ground: pushR - playerFootOffset, ceiling: Infinity, insideTunnel: true };
         } else {
@@ -1076,22 +1076,19 @@ const CollisionCore = {
     const seedVal = (typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined') ? window.globalSeed : 0;
     const heightCurr = getH_fn(thetaCurr, phiCurr, seedVal);
     const currCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P_curr[0], P_curr[1], P_curr[2], currFeetRadius) : null;
-    const currTerrainRadius = currCaveData ? currCaveData.ground : (r_planet + heightCurr * h_scale);
+    const currTerrainRadius = (currCaveData && currCaveData.insideTunnel) ? currCaveData.ground : (r_planet + heightCurr * h_scale);
 
     function evaluatePosition(P, currentR) {
+      let testCenterRadius = currentR;
+      let testDiveDepth = diveDepth;
+      let testIsDiving = testDiveDepth > 0.01 * charScale;
+
       const thetaP = Math.acos(Math.max(-1, Math.min(1, P[1])));
       const phiP = Math.atan2(P[2], P[0]);
       const heightP = getH_fn(thetaP, phiP, seedVal);
       const pFeetRadius = currentR - playerFootOffset;
       const caveDataP = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P[0], P[1], P[2], pFeetRadius) : null;
-      let terrainRadius = (caveDataP && (caveDataP.insideTunnel || caveDataP.ground < r_planet + heightP * h_scale - 0.1)) ? caveDataP.ground : (r_planet + heightP * h_scale);
-      if (currentR < r_planet + heightP * h_scale - 0.2 * charScale && terrainRadius > currentR) {
-        if (caveDataP && caveDataP.ground < r_planet + heightP * h_scale) {
-          terrainRadius = caveDataP.ground;
-        } else {
-          terrainRadius = currentR - playerFootOffset;
-        }
-      }
+      let terrainRadius = (caveDataP && caveDataP.insideTunnel) ? caveDataP.ground : (r_planet + heightP * h_scale);
 
       // Check whether target position is supported by constructed stairs or folding ladders
       let isStairOrLadder = false;
@@ -1114,33 +1111,90 @@ const CollisionCore = {
       // Calculate terrain slope angle using spherical surface arc distance and visual map noise height
       const dotPP = Math.max(-1.0, Math.min(1.0, P[0] * P_curr[0] + P[1] * P_curr[1] + P[2] * P_curr[2]));
       const arcAngle = Math.acos(dotPP);
-      const groundDistance = arcAngle * currTerrainRadius;
+      const groundDistance = arcAngle * r_planet;
       const elevationDiff = terrainRadius - currTerrainRadius;
       
-      // Maximum climbable slope angle: 45 degrees (tan 45° = 1.0)
-      const slopeRatio = groundDistance > 0.0001 ? (elevationDiff / groundDistance) : 0.0;
-      const isTooSteep = (!isStairOrLadder) && (elevationDiff > 0.01) && (slopeRatio > 1.0);
+      // Check whether target is on water surface or submerged under water
+      const hasWater = (typeof waterEnabled !== "undefined" && waterEnabled && wRadius > 0);
+      const isTargetUnderWater = hasWater && (terrainRadius < wRadius - 0.02);
+      const isCurrUnderWater = hasWater && (currTerrainRadius < wRadius - 0.02);
 
-      let testCenterRadius = currentR;
-      let testDiveDepth = diveDepth;
-      let testIsDiving = testDiveDepth > 0.01 * charScale;
+      const activeBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
+      const isBoatInWater = !!(activeBoat && (activeBoat.isInWater || (hasWater && currTerrainRadius < wRadius)));
+      const isBoatFlying = !!(activeBoat && (activeBoat.isFlying || activeBoat.isAirborne));
+
+      // Calculate slope ratio:
+      // 1. When on water (both current and target in water), there is NO 45-degree slope limit (water surface is flat/navigable).
+      // 2. When encountering dry ground/land (> 45 degrees), whether walking on land or transitioning from water onto land ("กึ่งบกกึ่งน้ำ"),
+      //    the 45-degree slope restriction and GTA-style tangential slip MUST work!
+      let isTooSteep = false;
+      if (!isTargetUnderWater && !isBoatFlying && !isStairOrLadder) {
+        if (!isCurrUnderWater && swimFactor <= 0.0 && !isBoatInWater) {
+          // Both current and target are on dry land
+          const elevationDiff = terrainRadius - currTerrainRadius;
+          const slopeRatio = groundDistance > 0.0001 ? (elevationDiff / groundDistance) : 0.0;
+          isTooSteep = (elevationDiff > 0.01) && (slopeRatio > 1.0);
+        } else {
+          // Transitioning from water up onto emergent dry land (amphibious / กึ่งบกกึ่งน้ำ)
+          // 1) Elevation climb from the water surface up onto the emergent land:
+          const climbFromWater = terrainRadius - wRadius;
+          const climbRatio = groundDistance > 0.0001 ? (climbFromWater / groundDistance) : 0.0;
+          // 2) Terrain elevation difference between land and underwater floor:
+          const elevationFromTerrain = terrainRadius - currTerrainRadius;
+          const terrainSlopeRatio = groundDistance > 0.0001 ? (elevationFromTerrain / groundDistance) : 0.0;
+
+          // Slope > 45 degrees (slope ratio > 1.0, tan 45° = 1.0)
+          isTooSteep = (climbFromWater > 0.005 && climbRatio > 1.0) ||
+                       (terrainRadius > wRadius + 0.02 && elevationFromTerrain > 0.005 && terrainSlopeRatio > 1.0);
+        }
+
+        // Additional probe: sample local terrain slope gradient ahead along movement direction
+        if (!isTooSteep) {
+          const dispP = [P[0] - P_curr[0], P[1] - P_curr[1], P[2] - P_curr[2]];
+          const dispPLen = Math.sqrt(dispP[0]*dispP[0] + dispP[1]*dispP[1] + dispP[2]*dispP[2]);
+          if (dispPLen > 1e-6) {
+            const stepLen = 0.03;
+            const dirP = [dispP[0] / dispPLen, dispP[1] / dispPLen, dispP[2] / dispPLen];
+            let probeP = [P[0] + dirP[0] * stepLen, P[1] + dirP[1] * stepLen, P[2] + dirP[2] * stepLen];
+            const prLen = Math.sqrt(probeP[0]*probeP[0] + probeP[1]*probeP[1] + probeP[2]*probeP[2]) || 1;
+            probeP = [probeP[0] / prLen, probeP[1] / prLen, probeP[2] / prLen];
+            const thetaPr = Math.acos(Math.max(-1, Math.min(1, probeP[1])));
+            const phiPr = Math.atan2(probeP[2], probeP[0]);
+            const heightPr = getH_fn(thetaPr, phiPr, seedVal);
+            const probeRadius = r_planet + heightPr * h_scale;
+            const probeDist = stepLen * r_planet;
+            const localSlope = (probeRadius - terrainRadius) / probeDist;
+            if (probeRadius > terrainRadius + 0.005 && localSlope > 1.0) {
+              isTooSteep = true;
+            }
+          }
+        }
+      }
       
-      if (swimFactor > 0.0) {
+      if (swimFactor > 0.0 || isBoatInWater) {
         const targetSwimRadius = wRadius + (-0.22 + swimMoveFactor * 0.27) * charScale;
-        testCenterRadius = targetSwimRadius - testDiveDepth;
+        testCenterRadius = isBoatInWater ? Math.max(targetSwimRadius, currentR) : (targetSwimRadius - testDiveDepth);
 
         const testFeetRadius = testCenterRadius - playerFootOffset;
 
-        // Terrain Wall Block (Horizontal collision on surface & cliffs > 45 degrees)
-        if (terrainRadius > currTerrainRadius + maxStepUp || isTooSteep) {
-          if (testFeetRadius < terrainRadius || isTooSteep) {
-            return { colliding: true, isTooSteep: isTooSteep, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
+        // If target is a steep cliff or slope (> 45 degrees) rising out of water (กึ่งบกกึ่งน้ำ),
+        // trigger steep collision so GTA-style contour tangential slip / inertia activates!
+        if (isTooSteep) {
+          return { colliding: true, isTooSteep: true, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
+        }
+
+        // Terrain Wall Block in water (Blocks vertical cliffs/docks rising higher than maxStepUp above water surface)
+        const isEmergentLand = (terrainRadius > wRadius - 0.05);
+        const effectiveBase = hasWater ? Math.max(currTerrainRadius, wRadius) : currTerrainRadius;
+        if (isEmergentLand && (terrainRadius > effectiveBase + maxStepUp)) {
+          if (testFeetRadius < terrainRadius) {
+            return { colliding: true, isTooSteep: false, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
           }
         }
 
-        // Terrain Floor Adjustment (Shallow water step up)
+        // Terrain Floor Adjustment (Gentle beach / shallow water step up)
         if (testFeetRadius < terrainRadius) {
-          if (terrainRadius <= currTerrainRadius + maxStepUp && !isTooSteep) {
+          if (terrainRadius <= effectiveBase + maxStepUp && !isTooSteep) {
             testCenterRadius = terrainRadius + playerFootOffset;
             testDiveDepth = Math.max(0.0, targetSwimRadius - testCenterRadius);
             testIsDiving = testDiveDepth > 0.015 * charScale;
@@ -1273,7 +1327,62 @@ const CollisionCore = {
 
     const targetEval = evaluatePosition(pushP, pushR);
 
+    // GTA-style Tangential Slip / Inertia handling on steep slopes (> 45 degrees):
+    // If movement collides with a steep slope, do NOT freeze abruptly to [P_curr]!
+    // Instead, try sliding tangentially along the slope contour where the slope is manageable,
+    // keeping momentum fluid like GTA.
     if (targetEval.isTooSteep) {
+      if (typeof activeRidingBoat !== "undefined" && activeRidingBoat && typeof activeRidingBoat.vehicleSpeed === "number") {
+        activeRidingBoat.vehicleSpeed *= 0.8;
+      }
+
+      const disp = [pushP[0] - P_curr[0], pushP[1] - P_curr[1], pushP[2] - P_curr[2]];
+      const dispLen = Math.sqrt(disp[0]*disp[0] + disp[1]*disp[1] + disp[2]*disp[2]);
+
+      if (dispLen > 0.000001) {
+        const dir = [disp[0] / dispLen, disp[1] / dispLen, disp[2] / dispLen];
+        // Tangent perpendicular (contour vector along the mountain / slope)
+        let cross = [
+          P_curr[1] * dir[2] - P_curr[2] * dir[1],
+          P_curr[2] * dir[0] - P_curr[0] * dir[2],
+          P_curr[0] * dir[1] - P_curr[1] * dir[0]
+        ];
+        const crossLen = Math.sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]) || 1;
+        cross = [cross[0] / crossLen, cross[1] / crossLen, cross[2] / crossLen];
+
+        // Candidate directions: glancing deflection (contour tangential slide with inertia)
+        const candidateVecs = [
+          [dir[0] * 0.25 + cross[0] * 0.9, dir[1] * 0.25 + cross[1] * 0.9, dir[2] * 0.25 + cross[2] * 0.9],
+          [dir[0] * 0.25 - cross[0] * 0.9, dir[1] * 0.25 - cross[1] * 0.9, dir[2] * 0.25 - cross[2] * 0.9],
+          [cross[0] * 0.95, cross[1] * 0.95, cross[2] * 0.95],
+          [-cross[0] * 0.95, -cross[1] * 0.95, -cross[2] * 0.95],
+          [-dir[0] * 0.2 + cross[0] * 0.8, -dir[1] * 0.2 + cross[0] * 0.8, -dir[2] * 0.2 + cross[0] * 0.8],
+          [-dir[0] * 0.2 - cross[0] * 0.8, -dir[1] * 0.2 - cross[0] * 0.8, -dir[2] * 0.2 - cross[0] * 0.8]
+        ];
+
+        for (let cVec of candidateVecs) {
+          const P_cand = [
+            P_curr[0] + cVec[0] * dispLen,
+            P_curr[1] + cVec[1] * dispLen,
+            P_curr[2] + cVec[2] * dispLen
+          ];
+          const cLen = Math.sqrt(P_cand[0]*P_cand[0] + P_cand[1]*P_cand[1] + P_cand[2]*P_cand[2]) || 1;
+          P_cand[0] /= cLen; P_cand[1] /= cLen; P_cand[2] /= cLen;
+
+          const evalCand = evaluatePosition(P_cand, pushR);
+          if (!evalCand.isTooSteep && !evalCand.colliding) {
+            return {
+              P_new: P_cand,
+              playerCenterRadius: evalCand.centerRadius,
+              playerDiveDepth: evalCand.diveDepth,
+              isDivingMode: evalCand.isDiving,
+              shouldBlock: false
+            };
+          }
+        }
+      }
+
+      // If directly facing cliff and contour slide is not clear, stay at P_curr
       return {
         P_new: [P_curr[0], P_curr[1], P_curr[2]],
         playerCenterRadius: centerRadius,
