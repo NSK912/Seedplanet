@@ -5347,6 +5347,7 @@ window.characterVertexShaderSource = `
       window.keysPressed = keysPressed;
       window.clearKeysPressed = () => { for (let k in keysPressed) keysPressed[k] = false; };
       window.addEventListener("keydown", (e) => {
+        if (window.isWaitingForKey) return;
         initAudio();
         if (e.code === "KeyH") {
           window.cyclePlayerHair();
@@ -5594,6 +5595,7 @@ window.characterVertexShaderSource = `
         keysPressed[e.code] = true;
       });
       window.addEventListener("keyup", (e) => {
+        if (window.isWaitingForKey) return;
         if (e.key === "Alt" || e.code === "AltLeft" || e.code === "AltRight" || (typeof currentKeyBindings !== "undefined" && e.code === currentKeyBindings.toggleMouse)) {
           e.preventDefault();
         }

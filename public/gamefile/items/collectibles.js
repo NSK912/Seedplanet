@@ -403,11 +403,12 @@ function buildCollectibles(count, seed) {
             let terrainOk = true;
             let minH = h;
             let maxH = h;
+            const sampleHeights = [];
             for (let sIdx = 0; sIdx < sampleOffsets.length; sIdx++) {
               const [sx, sy] = sampleOffsets[sIdx];
-              const spX = candWx + candR[0]*(sx * 1.1) + candF[0]*(sy * 1.1);
-              const spY = candWy + candR[1]*(sx * 1.1) + candF[1]*(sy * 1.1);
-              const spZ = candWz + candR[2]*(sx * 1.1) + candF[2]*(sy * 1.1);
+              const spX = candWx + candR[0]*(sx * 1.15) + candF[0]*(sy * 1.15);
+              const spY = candWy + candR[1]*(sx * 1.15) + candF[1]*(sy * 1.15);
+              const spZ = candWz + candR[2]*(sx * 1.15) + candF[2]*(sy * 1.15);
               const cDist = Math.sqrt(spX*spX + spY*spY + spZ*spZ) || 1;
               const cny = spY / cDist;
               const cnx = spX / cDist;
@@ -416,6 +417,7 @@ function buildCollectibles(count, seed) {
               const cPhi = Math.atan2(cnz, cnx);
               const cH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(cTheta, cPhi, seed) : getHeightOnSphere(cTheta, cPhi, seed);
 
+              sampleHeights.push(cH);
               if (cH < minLandHeight) {
                 terrainOk = false;
                 break;
@@ -423,13 +425,70 @@ function buildCollectibles(count, seed) {
               if (cH < minH) minH = cH;
               if (cH > maxH) maxH = cH;
 
-              if (Math.abs(cH - h) > 0.038) {
+              // House footprint must be level: maximum 0.016 elevation deviation from center
+              if (Math.abs(cH - h) > 0.016) {
                 terrainOk = false;
                 break;
               }
             }
 
-            if (!terrainOk || (maxH - minH) > 0.045) continue;
+            // Height delta across footprint must not exceed 0.022 (~1.8% slope)
+            if (!terrainOk || (maxH - minH) > 0.022) continue;
+
+            // ============================================
+            // D) Calculate true local terrain normal to prevent tilted houses (ป้องกันบ้านสุ่มเอียง)
+            // Calculate gradients along local candR and candF axes
+            // ============================================
+            const deltaProbe = 0.15;
+            const probeRx = candWx + candR[0] * deltaProbe;
+            const probeRy = candWy + candR[1] * deltaProbe;
+            const probeRz = candWz + candR[2] * deltaProbe;
+            const distPrR = Math.sqrt(probeRx*probeRx + probeRy*probeRy + probeRz*probeRz) || 1;
+            const hProbeR = typeof getVisualHeightOnSphere === "function" 
+              ? getVisualHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeRy / distPrR))), Math.atan2(probeRz, probeRx), seed)
+              : getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeRy / distPrR))), Math.atan2(probeRz, probeRx), seed);
+
+            const probeFx = candWx + candF[0] * deltaProbe;
+            const probeFy = candWy + candF[1] * deltaProbe;
+            const probeFz = candWz + candF[2] * deltaProbe;
+            const distPrF = Math.sqrt(probeFx*probeFx + probeFy*probeFy + probeFz*probeFz) || 1;
+            const hProbeF = typeof getVisualHeightOnSphere === "function"
+              ? getVisualHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeFy / distPrF))), Math.atan2(probeFz, probeFx), seed)
+              : getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeFy / distPrF))), Math.atan2(probeFz, probeFx), seed);
+
+            const slopeR = ((hProbeR - h) * HEIGHT_SCALE) / deltaProbe;
+            const slopeF = ((hProbeF - h) * HEIGHT_SCALE) / deltaProbe;
+
+            // Discard locations with surface gradient/slope > 0.08 (strictly ~4.5 degrees)
+            if (Math.abs(slopeR) > 0.08 || Math.abs(slopeF) > 0.08) continue;
+
+            // Compute exact terrain surface normal
+            let terrNx = candNx - candR[0] * slopeR - candF[0] * slopeF;
+            let terrNy = candNy - candR[1] * slopeR - candF[1] * slopeF;
+            let terrNz = candNz - candR[2] * slopeR - candF[2] * slopeF;
+            const lenTerrN = Math.sqrt(terrNx*terrNx + terrNy*terrNy + terrNz*terrNz) || 1;
+            terrNx /= lenTerrN; terrNy /= lenTerrN; terrNz /= lenTerrN;
+
+            // If normal tilts by more than 5 degrees away from spherical up, skip to guarantee perfectly upright houses
+            const dotUp = terrNx * candNx + terrNy * candNy + terrNz * candNz;
+            if (dotUp < 0.994) continue; // cos(6.3 deg) ~ 0.994
+
+            // Re-orthogonalize candR and candF against the true surface normal
+            let adjR = [
+              candR[0] - terrNx * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz),
+              candR[1] - terrNy * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz),
+              candR[2] - terrNz * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz)
+            ];
+            const lenAdjR = Math.sqrt(adjR[0]*adjR[0] + adjR[1]*adjR[1] + adjR[2]*adjR[2]) || 1;
+            adjR[0] /= lenAdjR; adjR[1] /= lenAdjR; adjR[2] /= lenAdjR;
+
+            let adjF = [
+              terrNy * adjR[2] - terrNz * adjR[1],
+              terrNz * adjR[0] - terrNx * adjR[2],
+              terrNx * adjR[1] - terrNy * adjR[0]
+            ];
+            const lenAdjF = Math.sqrt(adjF[0]*adjF[0] + adjF[1]*adjF[1] + adjF[2]*adjF[2]) || 1;
+            adjF[0] /= lenAdjF; adjF[1] /= lenAdjF; adjF[2] /= lenAdjF;
 
             // ============================================
             // 3. Check TREES ("ต้นไม้") & ROCKS ("หิน") in natureObstacles
@@ -503,8 +562,8 @@ function buildCollectibles(count, seed) {
 
             // All checks passed! Valid spot found.
             wx = candWx; wy = candWy; wz = candWz;
-            nx = candNx; ny = candNy; nz = candNz;
-            R = candR; F = candF;
+            nx = terrNx; ny = terrNy; nz = terrNz;
+            R = adjR; F = adjF;
             foundFlatSpot = true;
             placedHouses.push({
               x: wx,

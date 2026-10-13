@@ -14,6 +14,7 @@
   let tunnelWireframeIndexBuffer = null;
 
   let tunnelShellVertexBuffer = null;
+  let tunnelShellColorBuffer = null;
   let tunnelShellTerrainRadiusBuffer = null;
   let tunnelShellCenterBuffer = null;
   let tunnelShellIndexBuffer = null;
@@ -267,6 +268,7 @@
       }
     }
     buildTunnelsGrid();
+    rebuildTunnelBuffers();
   }
 
   // --- Precomputed Static Index Templates ---
@@ -689,6 +691,7 @@
 
     // Shell Geometry
     const shellVertices = new Float32Array(vertsCount * 3);
+    const shellColors = new Float32Array(vertsCount * 3);
     const shellTerrainRadii = new Float32Array(vertsCount);
     const shellCenters = new Float32Array(vertsCount * 3);
     const shellR = r * 1.32;
@@ -709,7 +712,7 @@
 
       const theta = Math.acos(Math.max(-1.0, Math.min(1.0, uy)));
       const phi = Math.atan2(uz, ux);
-      const height = global.getHeightOnSphere(theta, phi, gSeed);
+      const { height, color: terrainColor } = global.getTerrainHeightAndColor(theta, phi, gSeed);
       let terrainRadius = rPlanet + height * hScale;
       if (hasFloorTopRadius) {
         terrainRadius = global.getFloorTopRadiusAt(ux, uy, uz, terrainRadius);
@@ -729,7 +732,18 @@
       shellVertices[baseIdx3] = finalPx;
       shellVertices[baseIdx3 + 1] = finalPy;
       shellVertices[baseIdx3 + 2] = finalPz;
-      shellTerrainRadii[vIdx] = terrainRadius;
+
+      const strataDepth = (rPlanet + height * hScale) - distToCenter;
+      const strataColor = getCaveStrataColor(finalPx, finalPy, finalPz, strataDepth);
+      const blendT = Math.max(0.0, Math.min(1.0, Math.max(0.0, depth) / (r * 0.6)));
+      const smoothBlend = blendT * blendT * (3 - 2 * blendT);
+      const noiseVal = (Math.sin(finalPx * 35) * Math.cos(finalPy * 35) + Math.cos(finalPz * 35)) * 0.04;
+
+      shellColors[baseIdx3] = Math.max(0.02, Math.min(0.85, (terrainColor[0] * (1 - smoothBlend) + strataColor[0] * smoothBlend + noiseVal)));
+      shellColors[baseIdx3 + 1] = Math.max(0.02, Math.min(0.85, (terrainColor[1] * (1 - smoothBlend) + strataColor[1] * smoothBlend + noiseVal)));
+      shellColors[baseIdx3 + 2] = Math.max(0.02, Math.min(0.85, (terrainColor[2] * (1 - smoothBlend) + strataColor[2] * smoothBlend + noiseVal)));
+
+      shellTerrainRadii[vIdx] = -terrainRadius;
       shellCenters[baseIdx3] = cx;
       shellCenters[baseIdx3 + 1] = cy;
       shellCenters[baseIdx3 + 2] = cz;
@@ -747,6 +761,7 @@
       collarRadii,
       collarCenters,
       shellVertices,
+      shellColors,
       shellTerrainRadii,
       shellCenters
     };
@@ -869,6 +884,7 @@
 
     // 5. Assemble Shell Geometry
     const shellVertices = new Float32Array(totalShellVerts * 3);
+    const shellColors = new Float32Array(totalShellVerts * 3);
     const shellTerrainRadii = new Float32Array(totalShellVerts);
     const shellCenters = new Float32Array(totalShellVerts * 3);
     const useUint32Shell = uint32Supported && totalShellVerts > 65535;
@@ -883,6 +899,7 @@
       const m = tunnelMeshCache.get(t);
 
       shellVertices.set(m.shellVertices, sVOffset * 3);
+      shellColors.set(m.shellColors, sVOffset * 3);
       shellTerrainRadii.set(m.shellTerrainRadii, sVOffset);
       shellCenters.set(m.shellCenters, sVOffset * 3);
 
@@ -948,6 +965,7 @@
 
       if (shellIndices.length > 0) {
         if (tunnelShellVertexBuffer) glCtx.deleteBuffer(tunnelShellVertexBuffer);
+        if (tunnelShellColorBuffer) glCtx.deleteBuffer(tunnelShellColorBuffer);
         if (tunnelShellTerrainRadiusBuffer) glCtx.deleteBuffer(tunnelShellTerrainRadiusBuffer);
         if (tunnelShellCenterBuffer) glCtx.deleteBuffer(tunnelShellCenterBuffer);
         if (tunnelShellIndexBuffer) glCtx.deleteBuffer(tunnelShellIndexBuffer);
@@ -955,6 +973,10 @@
         tunnelShellVertexBuffer = glCtx.createBuffer();
         glCtx.bindBuffer(glCtx.ARRAY_BUFFER, tunnelShellVertexBuffer);
         glCtx.bufferData(glCtx.ARRAY_BUFFER, shellVertices, glCtx.STATIC_DRAW);
+
+        tunnelShellColorBuffer = glCtx.createBuffer();
+        glCtx.bindBuffer(glCtx.ARRAY_BUFFER, tunnelShellColorBuffer);
+        glCtx.bufferData(glCtx.ARRAY_BUFFER, shellColors, glCtx.STATIC_DRAW);
 
         tunnelShellTerrainRadiusBuffer = glCtx.createBuffer();
         glCtx.bindBuffer(glCtx.ARRAY_BUFFER, tunnelShellTerrainRadiusBuffer);
@@ -985,6 +1007,10 @@
     init: function(gl, supportUint32) {
       _gl = gl;
       _supportUint32 = supportUint32;
+      const tunnels = global.tunnels3D || [];
+      if (tunnels.length > 0 && !tunnelVertexBuffer) {
+        rebuildTunnelBuffers(gl, supportUint32);
+      }
     },
 
     clearCache: function() {
@@ -1038,6 +1064,7 @@
 
       if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 1.0);
 
+      // --- 1. Draw Cave Interior & Collar Mesh ---
       if (terrainRadiusAttrLoc !== -1 && tunnelTerrainRadiusBuffer) {
         gl.enableVertexAttribArray(terrainRadiusAttrLoc);
         gl.bindBuffer(gl.ARRAY_BUFFER, tunnelTerrainRadiusBuffer);
@@ -1061,6 +1088,30 @@
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tunnelIndexBuffer);
       gl.drawElements(gl.TRIANGLES, tunnelIndicesCount, useUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
 
+      // --- 2. Draw Cave Outer Shell (เปลือกถ้ำ) ---
+      if (tunnelShellIndicesCount > 0 && tunnelShellVertexBuffer && tunnelShellColorBuffer && tunnelShellIndexBuffer) {
+        const useUint32Shell = locations.supportUint32 && tunnelShellIndicesCount > 65535;
+
+        if (terrainRadiusAttrLoc !== -1 && tunnelShellTerrainRadiusBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellTerrainRadiusBuffer);
+          gl.vertexAttribPointer(terrainRadiusAttrLoc, 1, gl.FLOAT, false, 0, 0);
+        }
+
+        if (tunnelCenterAttrLoc !== -1 && tunnelShellCenterBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellCenterBuffer);
+          gl.vertexAttribPointer(tunnelCenterAttrLoc, 3, gl.FLOAT, false, 0, 0);
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellVertexBuffer);
+        gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellColorBuffer);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tunnelShellIndexBuffer);
+        gl.drawElements(gl.TRIANGLES, tunnelShellIndicesCount, useUint32Shell ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+      }
+
       // Restore
       gl.cullFace(gl.BACK);
       if (terrainRadiusAttrLoc !== -1) {
@@ -1072,6 +1123,53 @@
         gl.vertexAttrib3f(tunnelCenterAttrLoc, 0.0, 0.0, 0.0);
       }
 
+      gl.disable(gl.CULL_FACE);
+    },
+
+    drawShell: function(gl, locations) {
+      if (!tunnelShellIndicesCount || !tunnelShellVertexBuffer || !tunnelShellColorBuffer || !tunnelShellIndexBuffer) {
+        return;
+      }
+      const positionLoc = locations.positionLoc;
+      const colorLoc = locations.colorLoc;
+      const isTunnelMeshLoc = locations.isTunnelMeshLoc;
+      const terrainRadiusAttrLoc = locations.terrainRadiusAttrLoc;
+      const tunnelCenterAttrLoc = locations.tunnelCenterAttrLoc;
+      const useUint32Shell = locations.supportUint32 && tunnelShellIndicesCount > 65535;
+
+      gl.disable(gl.CULL_FACE);
+      if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 1.0);
+
+      if (terrainRadiusAttrLoc !== -1 && tunnelShellTerrainRadiusBuffer) {
+        gl.enableVertexAttribArray(terrainRadiusAttrLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellTerrainRadiusBuffer);
+        gl.vertexAttribPointer(terrainRadiusAttrLoc, 1, gl.FLOAT, false, 0, 0);
+      }
+      if (tunnelCenterAttrLoc !== -1 && tunnelShellCenterBuffer) {
+        gl.enableVertexAttribArray(tunnelCenterAttrLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellCenterBuffer);
+        gl.vertexAttribPointer(tunnelCenterAttrLoc, 3, gl.FLOAT, false, 0, 0);
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellVertexBuffer);
+      gl.enableVertexAttribArray(positionLoc);
+      gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellColorBuffer);
+      gl.enableVertexAttribArray(colorLoc);
+      gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tunnelShellIndexBuffer);
+      gl.drawElements(gl.TRIANGLES, tunnelShellIndicesCount, useUint32Shell ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+
+      gl.cullFace(gl.BACK);
+      if (terrainRadiusAttrLoc !== -1) {
+        gl.disableVertexAttribArray(terrainRadiusAttrLoc);
+        gl.vertexAttrib1f(terrainRadiusAttrLoc, 99999.0);
+      }
+      if (tunnelCenterAttrLoc !== -1) {
+        gl.disableVertexAttribArray(tunnelCenterAttrLoc);
+        gl.vertexAttrib3f(tunnelCenterAttrLoc, 0.0, 0.0, 0.0);
+      }
       gl.disable(gl.CULL_FACE);
     },
 

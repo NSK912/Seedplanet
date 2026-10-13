@@ -961,6 +961,7 @@ function redirectMouseEventToVirtualCursor(e) {
 
 // Automatically blur focused buttons on keydown in gameplay so controls don't get trapped
 window.addEventListener("keydown", (e) => {
+  if (window.isWaitingForKey) return;
   if (!isUIOpen()) {
     if (document.activeElement && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
       if (document.activeElement !== document.body) {

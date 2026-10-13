@@ -537,6 +537,65 @@
         this.setInputDeviceMode(true);
       }
 
+      // 0. Completely suppress ALL gamepad processing while user is rebinding keys/buttons
+      if (window.isWaitingForKey) {
+        if (gp.buttons) {
+          if (!this.rebindPrevButtons) {
+            // Capture currently held buttons (e.g. A pressed to click 'Rebind') to prevent false immediate trigger
+            this.rebindPrevButtons = gp.buttons.map((b, idx) => this.getButtonValue(gp, idx) > 0.35);
+          }
+          for (let i = 0; i < gp.buttons.length; i++) {
+            const val = this.getButtonValue(gp, i);
+            const isDown = val > 0.35 || (gp.buttons[i] && gp.buttons[i].pressed);
+            const wasDown = !!this.rebindPrevButtons[i];
+            if (isDown && !wasDown) {
+              if (typeof window.setKeyFromGamepadButton === "function") {
+                const handled = window.setKeyFromGamepadButton(i, `Button ${i}`);
+                if (handled !== false) {
+                  this.rebindPrevButtons = gp.buttons.map((b, idx) => this.getButtonValue(gp, idx) > 0.35);
+                  this.lastRebindFinishTime = Date.now();
+                  this.rebindDebounceUntil = Date.now() + 350;
+                  this.prevADown = true;
+                  this.prevBDown = true;
+                  this.prevXDown = true;
+                  this.prevYDown = true;
+                  this.prevRBDown = true;
+                  this.prevLBDown = true;
+                  this.prevRTDown = true;
+                  this.prevLTDown = true;
+                  window.lastRebindFinishTime = Date.now();
+                  return;
+                }
+              }
+            }
+          }
+          this.rebindPrevButtons = gp.buttons.map((b, idx) => this.getButtonValue(gp, idx) > 0.35);
+        }
+        return; // Suppress ALL further game/UI actions while awaiting input
+      } else {
+        this.rebindPrevButtons = null;
+      }
+
+      // Debounce window right after rebinding: prevent newly released rebind buttons from leaking into gameplay
+      const timeSinceRebind = Date.now() - (this.lastRebindFinishTime || window.lastRebindFinishTime || 0);
+      if (timeSinceRebind < 350) {
+        if (gp.buttons) {
+          this.prevADown = this.getButtonValue(gp, 0) > 0.25;
+          this.prevBDown = this.getButtonValue(gp, 1) > 0.25;
+          this.prevXDown = this.getButtonValue(gp, 2) > 0.25;
+          this.prevYDown = this.getButtonValue(gp, 3) > 0.25;
+          const rbBtn = (window.currentGamepadBindings && window.currentGamepadBindings.attack !== undefined) ? window.currentGamepadBindings.attack : 5;
+          this.prevRBDown = this.getButtonValue(gp, rbBtn) > 0.25;
+          const lbBtn = (window.currentGamepadBindings && window.currentGamepadBindings.interact !== undefined) ? window.currentGamepadBindings.interact : 4;
+          this.prevLBDown = this.getButtonValue(gp, lbBtn) > 0.25;
+          const rtBtn = (window.currentGamepadBindings && window.currentGamepadBindings.terrainMod !== undefined) ? window.currentGamepadBindings.terrainMod : 7;
+          this.prevRTDown = this.getTriggerValue(gp, rtBtn) > this.deadzoneTrigger;
+          const ltBtn = (window.currentGamepadBindings && window.currentGamepadBindings.block !== undefined) ? window.currentGamepadBindings.block : 6;
+          this.prevLTDown = this.getTriggerValue(gp, ltBtn) > this.deadzoneTrigger;
+        }
+        return;
+      }
+
       dt = Math.max(0.001, Math.min(0.05, dt || 0.016));
 
       const isUIOpen = this.checkIsUIOpen();
@@ -649,39 +708,6 @@
         }
       }
 
-      // Check if user is currently rebinding a key / gamepad button in Settings
-      if (window.isWaitingForKey) {
-        if (gp.buttons) {
-          if (!this.rebindPrevButtons) {
-            // Capture currently held buttons (e.g. A pressed to trigger click) to prevent false initial trigger
-            this.rebindPrevButtons = gp.buttons.map((b, idx) => this.getButtonValue(gp, idx) > 0.35);
-          }
-          for (let i = 0; i < gp.buttons.length; i++) {
-            const val = this.getButtonValue(gp, i);
-            const isDown = val > 0.35 || (gp.buttons[i] && gp.buttons[i].pressed);
-            const wasDown = !!this.rebindPrevButtons[i];
-            if (isDown && !wasDown) {
-              if (typeof window.setKeyFromGamepadButton === "function") {
-                const handled = window.setKeyFromGamepadButton(i, `Button ${i}`);
-                if (handled !== false) {
-                  this.rebindPrevButtons = gp.buttons.map((b, idx) => this.getButtonValue(gp, idx) > 0.35);
-                  this.prevADown = this.getButtonValue(gp, 0) > 0.25;
-                  this.prevBDown = this.getButtonValue(gp, 1) > 0.25;
-                  this.prevXDown = this.getButtonValue(gp, 2) > 0.25;
-                  this.prevYDown = this.getButtonValue(gp, 3) > 0.25;
-                  this.lastRebindFinishTime = Date.now();
-                  window.lastRebindFinishTime = Date.now();
-                  return;
-                }
-              }
-            }
-          }
-          this.rebindPrevButtons = gp.buttons.map((b, idx) => this.getButtonValue(gp, idx) > 0.35);
-        }
-        return; // Suppress further game/UI actions while awaiting input
-      } else {
-        this.rebindPrevButtons = null;
-      }
 
       // ----------------------------------------------------
       // 1. RB (Button 5) -> Attack / Primary Action

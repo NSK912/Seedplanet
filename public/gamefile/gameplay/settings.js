@@ -370,6 +370,10 @@ function startBindingAction(actionKey, isGamepadAction, btnElement) {
   window.bindingKeyToSet = actionKey;
   window.keyBindingStartTime = Date.now();
 
+  if (typeof window.clearKeysPressed === "function") {
+    try { window.clearKeysPressed(); } catch(e){}
+  }
+
   btnElement.style.background = "rgba(239, 68, 68, 0.25)";
   btnElement.style.borderColor = "#ef4444";
   btnElement.style.color = "#ef4444";
@@ -382,12 +386,25 @@ function startBindingAction(actionKey, isGamepadAction, btnElement) {
     window.lastRebindFinishTime = Date.now();
     if (window.GamepadController) {
       window.GamepadController.lastRebindFinishTime = Date.now();
+      window.GamepadController.rebindDebounceUntil = Date.now() + 350;
       window.GamepadController.prevADown = true;
+      window.GamepadController.prevBDown = true;
+      window.GamepadController.prevXDown = true;
+      window.GamepadController.prevYDown = true;
+      window.GamepadController.prevRBDown = true;
+      window.GamepadController.prevLBDown = true;
+      window.GamepadController.prevRTDown = true;
+      window.GamepadController.prevLTDown = true;
     }
     bindingKeyToSet = null;
     window.bindingKeyToSet = null;
     window.setKeyFromGamepadButton = null;
     window.removeEventListener("keydown", keyHandler, true);
+    window.removeEventListener("keyup", keyupHandler, true);
+    window.removeEventListener("keypress", keypressHandler, true);
+    if (typeof window.clearKeysPressed === "function") {
+      try { window.clearKeysPressed(); } catch(e){}
+    }
     if (typeof playPlaceSound === "function") try { playPlaceSound(); } catch(e){}
     renderKeyBindingsUI();
     if (typeof saveSettingsToLocalStorage === "function") {
@@ -400,19 +417,40 @@ function startBindingAction(actionKey, isGamepadAction, btnElement) {
   const keyHandler = (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
+    if (typeof ev.stopImmediatePropagation === "function") {
+      ev.stopImmediatePropagation();
+    }
     if (isGamepadAction) {
       if (ev.code === "Escape") {
         finish();
-        return;
       }
+      return;
     } else {
       currentKeyBindings[actionKey] = ev.code;
       window.currentKeyBindings = currentKeyBindings;
+      finish();
     }
-    finish();
+  };
+
+  const keyupHandler = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (typeof ev.stopImmediatePropagation === "function") {
+      ev.stopImmediatePropagation();
+    }
+  };
+
+  const keypressHandler = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (typeof ev.stopImmediatePropagation === "function") {
+      ev.stopImmediatePropagation();
+    }
   };
 
   window.addEventListener("keydown", keyHandler, true);
+  window.addEventListener("keyup", keyupHandler, true);
+  window.addEventListener("keypress", keypressHandler, true);
 
   window.setKeyFromGamepadButton = function(btnIndex, btnLabel) {
     if (Date.now() - (window.keyBindingStartTime || 0) < 180) {

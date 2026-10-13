@@ -2231,14 +2231,14 @@ window.canvas = canvas;
 window.isConfirmOverlayOpen = false;
 
 window.addEventListener("keydown", (e) => {
-  if (window.isConfirmOverlayOpen) {
-    e.stopImmediatePropagation();
+  if (window.isConfirmOverlayOpen || window.isWaitingForKey) {
+    if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
   }
 }, true);
 
 window.addEventListener("keyup", (e) => {
-  if (window.isConfirmOverlayOpen) {
-    e.stopImmediatePropagation();
+  if (window.isConfirmOverlayOpen || window.isWaitingForKey) {
+    if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
   }
 }, true);
 
@@ -2611,6 +2611,7 @@ window.addEventListener("keyup", (e) => {
 
       // ป้องกันปุ่ม Tab นำทางโฟกัสเบราว์เซอร์ในหน้าเริ่มเกม และเปิด/ปิดหรือปิดเมื่อเปิดตั้งค่าอยู่
       window.addEventListener("keydown", (e) => {
+        if (window.isWaitingForKey) return;
         if (e.key === "Tab" || e.code === "Tab") {
           const overlay = document.getElementById("inventoryOverlay");
           const isCurrentlyOpen = overlay && overlay.classList.contains("open");
@@ -2626,6 +2627,7 @@ window.addEventListener("keyup", (e) => {
       }, true);
 
       document.addEventListener("keydown", (e) => {
+        if (window.isWaitingForKey) return;
         if (e.code === currentKeyBindings.inventory) {
           e.preventDefault();
           if (!gameStarted) return;
@@ -2641,12 +2643,14 @@ window.addEventListener("keyup", (e) => {
       });
 
       document.addEventListener("keyup", (e) => {
+        if (window.isWaitingForKey) return;
         if (e.code === currentKeyBindings.inventory) {
           inventoryKeyPressed = false;
         }
       });
 
       document.addEventListener("keydown", (e) => {
+        if (window.isWaitingForKey) return;
         if (!gameStarted) return;
         
         let newSelection = -1;
