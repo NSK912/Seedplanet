@@ -6897,27 +6897,161 @@ window.cloud3DProgram = cloud3DProgram;
             r * Math.sin(px) * Math.sin(py),
           ];
           if (isDemolishModeEnabled) {
-            const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder", "campfire", "wood_boat", "wood_wheel", "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "meganeura_item", "isopod_item"];
-            let closestDemolishItem = null;
-            let minDemolishDist = actionReachDistance;
-            let currentBestDist = Infinity;
-            const maxDemolishReach = Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)) + 1.5;
+            const demolishableTypes = [
+              "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
+              "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
+              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest",
+              "meganeura_item", "isopod_item", "robot_stand", "robot_cockpit",
+              "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
+            ];
+            const maxDemolishReach = Math.max(actionReachDistance * 2.8, 6.5 * (playerScale / 0.1));
+            const camLookDir = [-viewMatrix[2], -viewMatrix[6], -viewMatrix[10]];
+            const halfW = window.innerWidth / 2;
+            const halfH = window.innerHeight / 2;
+            const maxScreenRadius = Math.min(window.innerWidth, window.innerHeight) * 0.42;
+
             const candidates = (typeof SpatialGrid !== "undefined")
-              ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], maxDemolishReach, item => item.active && !item.isPreview && item.position && demolishableTypes.includes(item.type))
+              ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], maxDemolishReach + 2.5, item => item.active && !item.isPreview && item.position && demolishableTypes.includes(item.type))
               : collectibles;
+
+            let closestDemolishItem = null;
+            let currentBestScore = Infinity;
+            let currentBestDist = Infinity;
+            let bestAimHit = null;
 
             for (let item of candidates) {
               if (!item.active || item.isPreview || !item.position) continue;
-              if (demolishableTypes.includes(item.type)) {
-                const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
-                if (reachInfo.valid) {
-                  if (reachInfo.t < currentBestDist) {
-                    currentBestDist = reachInfo.t;
-                    closestDemolishItem = item;
-                  }
+              if (item.type === "planet_core") continue;
+              if (!demolishableTypes.includes(item.type)) continue;
+
+              const dx = item.position[0] - pVec[0];
+              const dy = item.position[1] - pVec[1];
+              const dz = item.position[2] - pVec[2];
+              const distToPlayer = Math.hypot(dx, dy, dz);
+              if (distToPlayer > maxDemolishReach) continue;
+
+              // Camera ray test
+              const vx = item.position[0] - eyePos[0];
+              const vy = item.position[1] - eyePos[1];
+              const vz = item.position[2] - eyePos[2];
+              const distToCam = Math.hypot(vx, vy, vz);
+              if (distToCam < 0.1) continue;
+
+              const projDist = vx * camLookDir[0] + vy * camLookDir[1] + vz * camLookDir[2];
+              if (projDist <= 0.2) continue; // Behind or right inside camera
+
+              const perpDistSq = (vx - camLookDir[0] * projDist)**2 + (vy - camLookDir[1] * projDist)**2 + (vz - camLookDir[2] * projDist)**2;
+              const perpDist = Math.sqrt(perpDistSq);
+
+              const hitThreshold = (item.type.includes("floor") || item.type.includes("roof") || item.type.includes("wall")) ? 3.0 : 2.0;
+              if (perpDist > hitThreshold) continue;
+
+              const screenPos = projectWorldToScreen(
+                item.position,
+                viewMatrix,
+                projMatrix,
+                window.innerWidth,
+                window.innerHeight
+              );
+              if (!screenPos) continue;
+
+              const sdx = screenPos.x - halfW;
+              const sdy = screenPos.y - halfH;
+              const sDist = Math.hypot(sdx, sdy);
+              if (sDist > maxScreenRadius) continue;
+
+              const score = sDist + perpDist * 60;
+              if (score < currentBestScore) {
+                currentBestScore = score;
+                currentBestDist = distToPlayer;
+                closestDemolishItem = item;
+                const rayHitX = eyePos[0] + camLookDir[0] * projDist;
+                const rayHitY = eyePos[1] + camLookDir[1] * projDist;
+                const rayHitZ = eyePos[2] + camLookDir[2] * projDist;
+                const offX = rayHitX - item.position[0];
+                const offY = rayHitY - item.position[1];
+                const offZ = rayHitZ - item.position[2];
+                const offDist = Math.hypot(offX, offY, offZ);
+                const maxRadius = (item.type.includes("floor") || item.type.includes("roof")) ? 2.5 : 1.8;
+                if (offDist > maxRadius && offDist > 0.001) {
+                  const s = maxRadius / offDist;
+                  bestAimHit = [
+                    item.position[0] + offX * s,
+                    item.position[1] + offY * s,
+                    item.position[2] + offZ * s
+                  ];
+                } else {
+                  bestAimHit = [rayHitX, rayHitY, rayHitZ];
                 }
               }
             }
+
+            // Close-proximity fallback if player is right next to an item looking towards it
+            if (!closestDemolishItem) {
+              let minFallbackDist = Infinity;
+              for (let item of candidates) {
+                if (!item.active || item.isPreview || !item.position) continue;
+                if (item.type === "planet_core") continue;
+                if (!demolishableTypes.includes(item.type)) continue;
+                const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
+                if (reachInfo.valid && reachInfo.t < minFallbackDist) {
+                  minFallbackDist = reachInfo.t;
+                  closestDemolishItem = item;
+                  currentBestDist = reachInfo.t;
+                  bestAimHit = item.position;
+                }
+              }
+            }
+
+            window.activeDemolishTarget = closestDemolishItem;
+
+            let aimTargetWorld = null;
+            let isLocked = false;
+            let targetLabel = "";
+
+            if (closestDemolishItem) {
+              aimTargetWorld = bestAimHit || closestDemolishItem.position;
+              isLocked = true;
+              targetLabel = closestDemolishItem.type.toUpperCase().replace(/_/g, " ");
+            } else {
+              // Free aim raymarch in demolish mode (same behavior as gun free aim)
+              let curD = 0.5;
+              const maxD = Math.min(maxDemolishReach, 12.0);
+              const step = 0.35;
+              while (curD < maxD) {
+                const testP = [
+                  eyePos[0] + camLookDir[0] * curD,
+                  eyePos[1] + camLookDir[1] * curD,
+                  eyePos[2] + camLookDir[2] * curD
+                ];
+                const dC = Math.hypot(testP[0], testP[1], testP[2]);
+                if (dC > 0.01) {
+                  const ux = testP[0] / dC, uy = testP[1] / dC, uz = testP[2] / dC;
+                  const theta = Math.acos(Math.max(-1.0, Math.min(1.0, uy)));
+                  const phi = Math.atan2(uz, ux);
+                  const h = getHeightOnSphere(theta, phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+                  const tRad = RADIUS + h * HEIGHT_SCALE;
+                  const wRad = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel * 0.15 : 0);
+                  const checkR = (typeof waterEnabled !== "undefined" && waterEnabled) ? Math.max(tRad, wRad) : tRad;
+                  if (dC <= checkR + 0.08) {
+                    aimTargetWorld = testP;
+                    break;
+                  }
+                }
+                curD += step;
+              }
+              if (!aimTargetWorld) {
+                aimTargetWorld = [
+                  eyePos[0] + camLookDir[0] * 5.0,
+                  eyePos[1] + camLookDir[1] * 5.0,
+                  eyePos[2] + camLookDir[2] * 5.0
+                ];
+              }
+              isLocked = false;
+            }
+
+            // Handle Stone Floor Hold-to-Demolish
+            let holdPercent = 0;
             if (closestDemolishItem) {
               const isStoneFloor = closestDemolishItem.type === "stone_floor";
               if (isStoneFloor) {
@@ -6927,23 +7061,43 @@ window.cloud3DProgram = cloud3DProgram;
                   if (demolishHoldTimer >= 1.0) {
                     demolishHoldTimer = 0.0;
                     tryDemolishItem(closestDemolishItem);
-            }
-          } else {
+                    window.activeDemolishTarget = null;
+                    closestDemolishItem = null;
+                  }
+                } else {
                   demolishHoldTimer = 0.0;
-            }
-          } else {
+                }
+                holdPercent = Math.min(100, Math.floor((demolishHoldTimer / 1.0) * 100));
+              } else {
                 demolishHoldTimer = 0.0;
               }
+            } else {
+              demolishHoldTimer = 0.0;
+            }
 
+            // Update Genuine 3D Target Reticle via World3DUI (exact same 3D crosshair system as gun)
+            if (typeof World3DUI !== "undefined") {
+              World3DUI.updateAimReticle({
+                targetPos: aimTargetWorld,
+                isLocked: isLocked,
+                cameraPos: eyePos,
+                cameraUp: [viewMatrix[1], viewMatrix[5], viewMatrix[9]],
+                isDemolish: true,
+                demolishProgress: demolishHoldTimer / 1.0,
+                demolishLabel: targetLabel
+              });
+            }
+
+            if (closestDemolishItem) {
+              const isStoneFloor = closestDemolishItem.type === "stone_floor";
               const screenPos = projectWorldToScreen(
-                closestDemolishItem.position,
+                aimTargetWorld || closestDemolishItem.position,
                 viewMatrix,
                 projMatrix,
                 window.innerWidth,
                 window.innerHeight,
               );
               if (screenPos) {
-                let holdPercent = 0;
                 let instructionsHTML = "";
                 const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
                 const attackBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
@@ -6955,7 +7109,6 @@ window.cloud3DProgram = cloud3DProgram;
                 const clickActionSingleEn = isGp ? `Press [${attackBtn}]` : "Left-click";
 
                 if (isStoneFloor) {
-                  holdPercent = Math.min(100, Math.floor((demolishHoldTimer / 1.0) * 100));
                   instructionsHTML = `
                     <strong>🔨 โหมดรื้อถอน (DEMOLISH MODE)</strong><br/>
                     ${clickActionHold} เพื่อรื้อถอน STONE FLOOR<br/>
@@ -6964,8 +7117,8 @@ window.cloud3DProgram = cloud3DProgram;
                 } else {
                   instructionsHTML = `
                     <strong>🔨 โหมดรื้อถอน (DEMOLISH MODE)</strong><br/>
-                    ${clickActionSingle} เพื่อรื้อถอน ${closestDemolishItem.type.toUpperCase().replace("_", " ")}<br/>
-                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">${clickActionSingleEn} to demolish ${closestDemolishItem.type.toUpperCase().replace("_", " ")}</span>
+                    ${clickActionSingle} เพื่อรื้อถอน ${closestDemolishItem.type.toUpperCase().replace(/_/g, " ")}<br/>
+                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">${clickActionSingleEn} to demolish ${closestDemolishItem.type.toUpperCase().replace(/_/g, " ")}</span>
                   `;
                 }
 
@@ -6973,23 +7126,23 @@ window.cloud3DProgram = cloud3DProgram;
                   ${isStoneFloor ? `<div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(255, 255, 255, 0.35); pointer-events: none; transition: width 0.05s ease-out;"></div>` : ""}
                   <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #ffffff;">
                     ${instructionsHTML}
-                    <span style="font-size: 9px; opacity: 0.8; display: block; margin-top: 4px;">ระยะห่าง / Distance: ${currentBestDist.toFixed(2)} / ${minDemolishDist.toFixed(2)}</span>
+                    <span style="font-size: 9px; opacity: 0.8; display: block; margin-top: 4px;">ระยะห่าง / Distance: ${currentBestDist.toFixed(2)}m</span>
                   </div>
                 </div>`;
-if (prompt._lastHTML !== _newHtml_1) {
-    prompt.innerHTML = _newHtml_1;
-    prompt._lastHTML = _newHtml_1;
-}
+                if (prompt._lastHTML !== _newHtml_1) {
+                  prompt.innerHTML = _newHtml_1;
+                  prompt._lastHTML = _newHtml_1;
+                }
                 if (prompt.style.display !== "block") prompt.style.display = "block";
                 const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 45 )}px) translate(-50%, -100%)`;
-                  if (prompt._lastT !== newT) {
-                      prompt.style.transform = newT;
-                      prompt._lastT = newT;
-                  }
+                if (prompt._lastT !== newT) {
+                  prompt.style.transform = newT;
+                  prompt._lastT = newT;
+                }
               } else {
                 if (prompt.style.display !== "none") prompt.style.display = "none";
-            }
-          } else {
+              }
+            } else {
               demolishHoldTimer = 0.0;
               if (prompt.style.display !== "none") prompt.style.display = "none";
             }
@@ -8287,10 +8440,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
         } else {
             activeTargetNPC = null;
-            window.currentAimTargetPos = null;
-            window.isAimTargetLocked = false;
-            if (typeof World3DUI !== "undefined") {
-                World3DUI.hideAimReticle();
+            if (!isDemolishModeEnabled) {
+                window.currentAimTargetPos = null;
+                window.isAimTargetLocked = false;
+                if (typeof World3DUI !== "undefined") {
+                    World3DUI.hideAimReticle();
+                }
             }
             if (!_cachedTargetCircle) _cachedTargetCircle = document.getElementById("targetCircle");
             if (_cachedTargetCircle && _cachedTargetCircle.style.display !== "none") {

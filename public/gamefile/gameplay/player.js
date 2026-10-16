@@ -2253,11 +2253,13 @@ window.characterVertexShaderSource = `
             if (typeof window.updateDevBonesAndParts === "function") window.updateDevBonesAndParts();
             console.log("Chibi GLB loaded successfully");
             
-            // Create texture
-            window.createChibiGlbTexture();
-
-            if (window.characterModel === "chibi") {
-              if (typeof updateCharacterMesh === "function") updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
+            // Create texture if gl is available
+            const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
+            if (activeGl) {
+              window.createChibiGlbTexture(activeGl);
+              if (window.characterModel === "chibi") {
+                if (typeof updateCharacterMesh === "function") updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
+              }
             }
           }).catch(e => console.error("Failed to load Chibi GLB:", e));
         }
@@ -2947,6 +2949,9 @@ window.characterVertexShaderSource = `
       }
 
       function updateChibiEquipMesh() {
+        const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
+        if (!activeGl) return;
+        if (typeof gl === "undefined" || !gl) gl = activeGl;
         const heldItem = (typeof window.getHeldItem === "function" ? window.getHeldItem() : (typeof getHeldItem === "function" ? getHeldItem() : null));
         if (!heldItem || !window.chibiGlbModel || !window.chibiGlbModel.nodes) {
           equipIndicesLength = 0;
@@ -3037,9 +3042,12 @@ window.characterVertexShaderSource = `
       }
 
       function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0, cloneSwimFactor = 0.0, cloneSwimMove = 0.0) {
+        const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
+        if (!activeGl) return;
+        if (typeof gl === "undefined" || !gl) gl = activeGl;
         if (typeof window !== "undefined" && window.characterModel === "chibi" && !isClone) {
           if (!window.chibiGlbTexture && typeof window.createChibiGlbTexture === "function") {
-            window.createChibiGlbTexture(gl);
+            window.createChibiGlbTexture(activeGl);
           }
           const glbData = getGlbCharacterMeshData(phase, isClone, cloneWalkBlend);
           if (glbData) {
@@ -5357,6 +5365,13 @@ window.characterVertexShaderSource = `
           if (isDemolishModeEnabled) {
             isTerrainModModeEnabled = false;
             cancelFloorPlacement();
+          } else {
+            window.activeDemolishTarget = null;
+            if (typeof World3DUI !== "undefined") {
+              World3DUI.hideAimReticle();
+            }
+            const prompt = document.getElementById("interactPrompt");
+            if (prompt) prompt.style.display = "none";
           }
           showNotice("โหมดรื้อถอน: " + (isDemolishModeEnabled ? "เปิด" : "ปิด") + " / Demolish Mode: " + (isDemolishModeEnabled ? "ON" : "OFF"));
           updateDemolishBanner();

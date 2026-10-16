@@ -427,10 +427,9 @@ const World3DUI = {
       },
       render(glContext, viewProjMatrix) {
         if (this.parent.signs.size === 0) return;
+        this.updateAll();
         const gl = this.gl;
         gl.useProgram(this.program);
-        gl.enable(gl.DEPTH_TEST);
-        gl.depthMask(true);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -448,6 +447,13 @@ const World3DUI = {
 
         for (const [id, sign] of this.parent.signs) {
           if (!sign.visible) continue;
+          if (sign.noDepthTest || id === "bow_aim_reticle") {
+            gl.disable(gl.DEPTH_TEST);
+            gl.depthMask(false);
+          } else {
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthMask(true);
+          }
           const fwd = [-sign.normal[0], -sign.normal[1], -sign.normal[2]];
           const up = sign.up;
           const right = [
@@ -476,6 +482,7 @@ const World3DUI = {
           gl.bindTexture(gl.TEXTURE_2D, sign.texture);
           gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
+        gl.enable(gl.DEPTH_TEST);
         gl.depthMask(true);
         gl.disable(gl.BLEND);
       }
@@ -1257,29 +1264,80 @@ const World3DUI = {
     }
   },
 
-  // --- 3D Aim Reticle System (Bow & Wooden Arm Cannon) ---
-  _drawAimReticleCanvas(ctx, w, h, isLocked) {
+  // --- 3D Aim Reticle System (Bow, Arm Cannon & Demolish Mode) ---
+  _drawAimReticleCanvas(ctx, w, h, isLocked, isDemolish = false, demolishProgress = 0, demolishLabel = "") {
     ctx.clearRect(0, 0, w, h);
     const cx = w / 2;
     const cy = h / 2;
-    const r = w * 0.38;
+    const r = w * 0.36;
 
     // Subtle drop shadow for clarity on all terrain
-    ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
     ctx.shadowBlur = 6;
 
-    // Simple clean white circle ring
+    const mainColor = isDemolish
+      ? (isLocked ? "#ff3b30" : "#ffffff")
+      : (isLocked ? "#ff3b30" : "#ffffff");
+
+    // Circular ring (the same 3D crosshair circle as gun)
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = isLocked ? 6.5 : 5.5;
+    ctx.strokeStyle = mainColor;
     ctx.stroke();
 
-    // Subtle center dot
+    // Center dot
     ctx.beginPath();
-    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = mainColor;
     ctx.fill();
+
+    // Corner brackets when locked (precision target reticle)
+    if (isLocked) {
+      const bDist = r + 7;
+      const bLen = 9;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = mainColor;
+
+      // Top-Left corner
+      ctx.beginPath();
+      ctx.moveTo(cx - bDist, cy - bDist + bLen);
+      ctx.lineTo(cx - bDist, cy - bDist);
+      ctx.lineTo(cx - bDist + bLen, cy - bDist);
+      ctx.stroke();
+
+      // Top-Right corner
+      ctx.beginPath();
+      ctx.moveTo(cx + bDist - bLen, cy - bDist);
+      ctx.lineTo(cx + bDist, cy - bDist);
+      ctx.lineTo(cx + bDist, cy - bDist + bLen);
+      ctx.stroke();
+
+      // Bottom-Left corner
+      ctx.beginPath();
+      ctx.moveTo(cx - bDist, cy + bDist - bLen);
+      ctx.lineTo(cx - bDist, cy + bDist);
+      ctx.lineTo(cx - bDist + bLen, cy + bDist);
+      ctx.stroke();
+
+      // Bottom-Right corner
+      ctx.beginPath();
+      ctx.moveTo(cx + bDist - bLen, cy + bDist);
+      ctx.lineTo(cx + bDist, cy + bDist);
+      ctx.lineTo(cx + bDist, cy + bDist - bLen);
+      ctx.stroke();
+
+      // Circular progress bar when holding to demolish (e.g. stone floor)
+      if (demolishProgress > 0) {
+        ctx.beginPath();
+        const startAng = -Math.PI / 2;
+        const endAng = startAng + Math.PI * 2 * Math.min(1.0, demolishProgress);
+        ctx.arc(cx, cy, r + 4, startAng, endAng);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+      }
+    }
   },
 
   updateAimReticle(options) {
@@ -1288,7 +1346,10 @@ const World3DUI = {
       targetPos,
       isLocked = false,
       cameraPos = null,
-      cameraUp = null
+      cameraUp = null,
+      isDemolish = false,
+      demolishProgress = 0,
+      demolishLabel = ""
     } = options;
 
     if (!targetPos || !Array.isArray(targetPos) || targetPos.length < 3) {
@@ -1306,16 +1367,19 @@ const World3DUI = {
     const dist = Math.hypot(dx, dy, dz) || 1.0;
     const normal = [dx / dist, dy / dist, dz / dist];
 
-    // Minimal offset (0.015m) towards camera to maintain exact center positioning on the NPC
+    // Offset slightly towards camera (0.05m - 0.2m depending on distance) to stay clearly in front of surfaces
+    const offsetDist = Math.max(0.04, Math.min(0.2, dist * 0.025));
     const displayPos = [
-      targetPos[0] + normal[0] * 0.015,
-      targetPos[1] + normal[1] * 0.015,
-      targetPos[2] + normal[2] * 0.015
+      targetPos[0] + normal[0] * offsetDist,
+      targetPos[1] + normal[1] * offsetDist,
+      targetPos[2] + normal[2] * offsetDist
     ];
 
     let up = cameraUp || [0, 1, 0];
     // Keep angular size consistent across distances (apparent reticle diameter)
     const scaleSize = Math.max(0.14, Math.min(1.1, dist * 0.042));
+
+    const stateKey = `${isLocked}_${isDemolish}_${Math.round(demolishProgress * 25)}_${demolishLabel}`;
 
     if (!this.hasSign(signId)) {
       const sign = this.createSign({
@@ -1326,12 +1390,13 @@ const World3DUI = {
         size: [scaleSize, scaleSize],
         resolution: [256, 256],
         drawFn: (ctx, w, h) => {
-          this._drawAimReticleCanvas(ctx, w, h, isLocked);
+          this._drawAimReticleCanvas(ctx, w, h, isLocked, isDemolish, demolishProgress, demolishLabel);
         },
         visible: true
       });
       if (sign) {
-        sign._lastIsLocked = isLocked;
+        sign.noDepthTest = true;
+        sign._lastStateKey = stateKey;
       }
     } else {
       const sign = this.signs.get(signId);
@@ -1340,9 +1405,13 @@ const World3DUI = {
         sign.normal = normal;
         sign.up = up;
         sign.scale = [scaleSize, scaleSize, 1];
+        sign.noDepthTest = true;
         sign.visible = true;
-        if (sign._lastIsLocked !== isLocked) {
-          sign._lastIsLocked = isLocked;
+        if (sign._lastStateKey !== stateKey) {
+          sign._lastStateKey = stateKey;
+          sign.drawFn = (ctx, w, h) => {
+            this._drawAimReticleCanvas(ctx, w, h, isLocked, isDemolish, demolishProgress, demolishLabel);
+          };
           sign.needsTextureUpdate = true;
         }
       }

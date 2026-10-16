@@ -3786,26 +3786,33 @@ window.addEventListener("keyup", (e) => {
             }
           } else if (isDemolishModeEnabled) {
             if (!isAltAction) {
-                // Trigger demolition logic on click!
-                const demolishableTypes = ["wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "campfire", "wood_boat", "wood_wheel", "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "meganeura_item", "isopod_item"];
-                let closestDemolishItem = null;
-                let bestT = Infinity;
-                for (let item of collectibles) {
-                  if (!item.active || item.isPreview || !item.position) continue;
-                  if (item.type === "planet_core") continue;
-                  if (demolishableTypes.includes(item.type)) {
-                    const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
-                    if (reachInfo.valid) {
-                      if (reachInfo.t < bestT) {
+                // Demolish the item targeted by the 3D crosshair!
+                let target = window.activeDemolishTarget;
+                if (!target || !target.active || target.isPreview) {
+                  const demolishableTypes = [
+                    "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
+                    "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
+                    "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest",
+                    "meganeura_item", "isopod_item", "robot_stand", "robot_cockpit",
+                    "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
+                  ];
+                  let bestT = Infinity;
+                  for (let item of collectibles) {
+                    if (!item.active || item.isPreview || !item.position) continue;
+                    if (item.type === "planet_core") continue;
+                    if (demolishableTypes.includes(item.type)) {
+                      const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
+                      if (reachInfo.valid && reachInfo.t < bestT) {
                         bestT = reachInfo.t;
-                        closestDemolishItem = item;
+                        target = item;
                       }
                     }
                   }
                 }
-                if (closestDemolishItem) {
-                  if (closestDemolishItem.type !== "stone_floor") {
-                    tryDemolishItem(closestDemolishItem);
+                if (target && target.active && !target.isPreview) {
+                  if (target.type !== "stone_floor") {
+                    tryDemolishItem(target);
+                    window.activeDemolishTarget = null;
                   }
                 }
             }
