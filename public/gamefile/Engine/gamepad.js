@@ -919,6 +919,15 @@
           this.uiNav.index = 0;
           if (typeof playPlaceSound === "function") try { playPlaceSound(); } catch(e){}
           this.applyUIFocus();
+        } else if (document.getElementById("qrDonateOverlay") && document.getElementById("qrDonateOverlay").classList.contains("open")) {
+          if (typeof window.closeQrDonate === "function") window.closeQrDonate();
+          else if (typeof closeQrDonate === "function") closeQrDonate();
+          else document.getElementById("qrDonateOverlay").classList.remove("open");
+
+          this.uiNav.area = "startMenu";
+          this.uiNav.index = 0;
+          if (typeof playPlaceSound === "function") try { playPlaceSound(); } catch(e){}
+          this.applyUIFocus();
         } else if (!isGameStarted && invOverlay && invOverlay.classList.contains("open")) {
           invOverlay.classList.remove("open");
           this.uiNav.area = "startMenu";
