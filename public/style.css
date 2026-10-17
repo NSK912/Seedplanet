@@ -684,11 +684,10 @@
         flex-direction: column;
         box-sizing: border-box !important;
       }
-      #saveSelectOverlay .inventory-panel,
-      #qrDonateOverlay .inventory-panel {
+      #saveSelectOverlay .inventory-panel {
         max-width: 520px !important;
         height: auto !important;
-        min-height: 380px !important;
+        min-height: 400px !important;
         max-height: 85vh !important;
       }
       #chestOverlay .inventory-panel {

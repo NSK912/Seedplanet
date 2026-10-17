@@ -146,10 +146,6 @@ function startGameWithSlot(loadedData, devMode = false) {
   if (saveOverlay) {
     saveOverlay.classList.remove("open");
   }
-  const qrOverlay = document.getElementById("qrDonateOverlay");
-  if (qrOverlay) {
-    qrOverlay.classList.remove("open");
-  }
 
   // 1. ตั้งค่าพื้นฐานและสุ่มค่าหากเป็นเซฟใหม่ก่อนนำไปใช้งาน
   if (!loadedData) {
@@ -476,45 +472,6 @@ const btnSaveSelectBack = document.getElementById("btnSaveSelectBack");
 if (btnSaveSelectBack) {
   btnSaveSelectBack?.addEventListener("click", () => {
     closeSaveSelector();
-  });
-}
-
-function openQrDonate() {
-  const qrOverlay = document.getElementById("qrDonateOverlay");
-  if (qrOverlay) {
-    qrOverlay.classList.add("open");
-  }
-}
-window.openQrDonate = openQrDonate;
-
-function closeQrDonate() {
-  const qrOverlay = document.getElementById("qrDonateOverlay");
-  if (qrOverlay) {
-    qrOverlay.classList.remove("open");
-  }
-}
-window.closeQrDonate = closeQrDonate;
-
-const btnQrDonate = document.getElementById("btnQrDonate");
-if (btnQrDonate) {
-  btnQrDonate.addEventListener("click", () => {
-    openQrDonate();
-  });
-}
-
-const btnQrDonateBack = document.getElementById("btnQrDonateBack");
-if (btnQrDonateBack) {
-  btnQrDonateBack.addEventListener("click", () => {
-    closeQrDonate();
-  });
-}
-
-const qrDonateOverlay = document.getElementById("qrDonateOverlay");
-if (qrDonateOverlay) {
-  qrDonateOverlay.addEventListener("click", (e) => {
-    if (e.target === qrDonateOverlay) {
-      closeQrDonate();
-    }
   });
 }
 

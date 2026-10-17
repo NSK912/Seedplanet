@@ -81,9 +81,6 @@ function isUIOpen() {
   const saveSelect = document.getElementById("saveSelectOverlay");
   if (saveSelect && saveSelect.classList.contains("open")) return true;
 
-  const qrDonate = document.getElementById("qrDonateOverlay");
-  if (qrDonate && qrDonate.classList.contains("open")) return true;
-
   const trash = document.getElementById("trashConfirmOverlay");
   if (trash && trash.style.display !== "none" && trash.style.display !== "") return true;
 
@@ -442,7 +439,7 @@ if (typeof window !== "undefined") {
       });
 
       // Target only the specific overlay containers instead of the whole page subtree to prevent mutation thrashing
-      const overlayIds = ["inventoryOverlay", "chestOverlay", "saveSelectOverlay", "qrDonateOverlay"];
+      const overlayIds = ["inventoryOverlay", "chestOverlay", "saveSelectOverlay"];
       overlayIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
