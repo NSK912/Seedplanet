@@ -602,69 +602,91 @@ window.NpcRegistry["placoderm"] = {
     const isOnGround = isWaterDisabled || !wRadius || (wRadius <= 0) || (gRadius > wRadius - 0.02) || (c.r > wRadius + 0.03);
 
     if (isOnGround) {
-      // Stranded on dry land: Placoderm flops toward water
-      c.isSwimming = false;
-      c.moveSpeed = 0.0;
-      c.walkBlend = 0.0;
-      c.isChasing = false;
-      c.isTurningFromShore = false;
-      if (c.r < gRadius + 0.04) {
-        c.r = gRadius + 0.04;
-        c.heading += Math.sin(c.animPhase * 3.0) * deltaTime * 0.5; // Natural flopping back and forth on land
-      } else if (c.r > gRadius + 0.05) {
-        c.r -= 0.6 * deltaTime;
-      }
-      if (npcCaveData && npcCaveData.insideTunnel && npcCaveData.ceiling !== Infinity) {
-        const maxAllowedR = npcCaveData.ceiling - 0.05;
-        if (c.r > maxAllowedR) {
-          c.r = maxAllowedR;
+      // Placoderm strictly lives in water: try to relocate to valid ocean water immediately
+      let relocated = false;
+      const wR_target = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15;
+      if (!isWaterDisabled && wR_target > RADIUS + 0.01) {
+        for (let tries = 0; tries < 40; tries++) {
+          const testT = Math.random() * Math.PI;
+          const testP = Math.random() * Math.PI * 2;
+          const testH = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(testT, testP, seed) : 0;
+          const testGR = RADIUS + testH * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6);
+          if (testGR < wR_target - 0.02) {
+            c.theta = testT;
+            c.phi = testP;
+            c.r = Math.max(testGR + 0.04, wR_target - 0.04);
+            c.isSwimming = true;
+            relocated = true;
+            break;
+          }
         }
       }
-      c.animPhase += deltaTime * 1.8; // Heavy slow flopping animation on land
-      c.diveDepth = 0.0;
-      c.targetDiveDepth = 0.0;
 
-      // Placoderm is out of water on the ground: HP continuously decreases until it dies
-      const suffocateDmgRate = 1.2; // ~10 seconds from full health (12 HP) to death
-      c.hp -= suffocateDmgRate * deltaTime;
-
-      if (c.hp <= 0) {
-        c.hp = 0;
-        c.ragdollEnabled = true;
+      if (!relocated) {
+        // Stranded on dry land without water access: Placoderm flops toward water
         c.isSwimming = false;
         c.moveSpeed = 0.0;
         c.walkBlend = 0.0;
-        const sinT = Math.sin(c.theta);
-        const cosT = Math.cos(c.theta);
-        const sinP = Math.sin(c.phi);
-        const cosP = Math.cos(c.phi);
-        const N_init = [sinT * cosP, cosT, sinT * sinP];
-        c.ragdollPos = [
-          N_init[0] * c.r,
-          N_init[1] * c.r,
-          N_init[2] * c.r
-        ];
-        c.position = [c.ragdollPos[0], c.ragdollPos[1], c.ragdollPos[2]];
-        c.ragdollVel = [0, 0, 0];
-        c.ragdollAxis = c.ragdollAxis && Array.isArray(c.ragdollAxis) && c.ragdollAxis.length >= 3 ? c.ragdollAxis : [0, 1, 0];
-        c.ragdollAngle = Math.PI * 0.48; // Lies flat on its side when dead on land
-        c.ragdollAngularSpeed = 0;
-        c.ragdollInitialized = true;
-        c.ragdollAsleep = false;
-        c.diedOnSurface = true;
-        return;
+        c.isChasing = false;
+        c.isTurningFromShore = false;
+        if (c.r < gRadius + 0.04) {
+          c.r = gRadius + 0.04;
+          c.heading += Math.sin(c.animPhase * 3.0) * deltaTime * 0.5; // Natural flopping back and forth on land
+        } else if (c.r > gRadius + 0.05) {
+          c.r -= 0.6 * deltaTime;
+        }
+        if (npcCaveData && npcCaveData.insideTunnel && npcCaveData.ceiling !== Infinity) {
+          const maxAllowedR = npcCaveData.ceiling - 0.05;
+          if (c.r > maxAllowedR) {
+            c.r = maxAllowedR;
+          }
+        }
+        c.animPhase += deltaTime * 1.8; // Heavy slow flopping animation on land
+        c.diveDepth = 0.0;
+        c.targetDiveDepth = 0.0;
+
+        // Placoderm is out of water on the ground: HP continuously decreases until it dies
+        const suffocateDmgRate = 1.2; // ~10 seconds from full health (12 HP) to death
+        c.hp -= suffocateDmgRate * deltaTime;
+
+        if (c.hp <= 0) {
+          c.hp = 0;
+          c.ragdollEnabled = true;
+          c.isSwimming = false;
+          c.moveSpeed = 0.0;
+          c.walkBlend = 0.0;
+          const sinT = Math.sin(c.theta);
+          const cosT = Math.cos(c.theta);
+          const sinP = Math.sin(c.phi);
+          const cosP = Math.cos(c.phi);
+          const N_init = [sinT * cosP, cosT, sinT * sinP];
+          c.ragdollPos = [
+            N_init[0] * c.r,
+            N_init[1] * c.r,
+            N_init[2] * c.r
+          ];
+          c.position = [c.ragdollPos[0], c.ragdollPos[1], c.ragdollPos[2]];
+          c.ragdollVel = [0, 0, 0];
+          c.ragdollAxis = c.ragdollAxis && Array.isArray(c.ragdollAxis) && c.ragdollAxis.length >= 3 ? c.ragdollAxis : [0, 1, 0];
+          c.ragdollAngle = Math.PI * 0.48; // Lies flat on its side when dead on land
+          c.ragdollAngularSpeed = 0;
+          c.ragdollInitialized = true;
+          c.ragdollAsleep = false;
+          c.diedOnSurface = true;
+          return;
+        }
       }
     } else {
       // In ocean / water: Active apex predator swimming
       c.isSwimming = true;
 
-      // Check if player is actually in the water (swimming, diving, or on a boat)
+      // Check if player is actually in the water (swimming, diving, but NOT driving a vehicle)
       const pR_est = Math.sqrt(px * px + py * py + pz * pz);
       const pwRadius = (typeof getWaterRadiusAt === "function") ? getWaterRadiusAt(px, py, pz, false) : wRadius;
-      const isPlayerInWater = isDriving || (pR_est < pwRadius + 0.04 && (typeof currentSwimFactor !== "undefined" ? currentSwimFactor > 0.05 : true));
+      const isPlayerInWater = !isDriving && (pR_est < pwRadius + 0.04 && (typeof currentSwimFactor !== "undefined" ? currentSwimFactor > 0.05 : true));
 
-      // Aggressive predator behavior: Only chases player when the player is in water or boat!
-      if (distToPlayer < 12.0 && isPlayerInWater && !ignorePlayer) {
+      // Aggressive predator behavior: Only chases player when the player is in water and NOT driving!
+      if (distToPlayer < 12.0 && isPlayerInWater && !isDriving && !ignorePlayer) {
         c.isChasing = true;
         c.isTurningFromShore = false;
         c.moveSpeed = 0.46; // Fast, powerful swim speed when pursuing
@@ -700,8 +722,8 @@ window.NpcRegistry["placoderm"] = {
           c.r = Math.max(targetR, c.r - 0.35 * deltaTime);
         }
 
-        // Shearing bite attack when within striking distance
-        if (distToPlayer < 1.6) {
+        // Shearing bite attack when within striking distance and NOT driving
+        if (distToPlayer < 1.6 && !isDriving && !ignorePlayer) {
           try {
             if (
               typeof damagePlayer === 'function' &&

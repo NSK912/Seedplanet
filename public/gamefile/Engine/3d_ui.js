@@ -1367,8 +1367,8 @@ const World3DUI = {
     const dist = Math.hypot(dx, dy, dz) || 1.0;
     const normal = [dx / dist, dy / dist, dz / dist];
 
-    // Offset slightly towards camera (0.05m - 0.2m depending on distance) to stay clearly in front of surfaces
-    const offsetDist = Math.max(0.04, Math.min(0.2, dist * 0.025));
+    // Offset slightly towards camera to stay clearly in front of surfaces without clipping into camera
+    const offsetDist = Math.min(0.15, Math.max(0.005, dist * 0.03));
     const displayPos = [
       targetPos[0] + normal[0] * offsetDist,
       targetPos[1] + normal[1] * offsetDist,
@@ -1376,8 +1376,9 @@ const World3DUI = {
     ];
 
     let up = cameraUp || [0, 1, 0];
-    // Keep angular size consistent across distances (apparent reticle diameter)
-    const scaleSize = Math.max(0.14, Math.min(1.1, dist * 0.042));
+    // Keep apparent screen pixel size 100% constant across all distances (no minimum clamp explosion when close)
+    const targetScreenFactor = isDemolish ? 0.028 : 0.034;
+    const scaleSize = Math.max(0.002, dist * targetScreenFactor);
 
     const stateKey = `${isLocked}_${isDemolish}_${Math.round(demolishProgress * 25)}_${demolishLabel}`;
 

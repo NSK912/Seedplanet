@@ -253,13 +253,22 @@ function initAmphibians(count, seed) {
   const effectiveWaterH = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
   const rRatio = Math.max(0.5, planetRadius / 8.0);
 
+  function checkWaterAtCoord(theta, phi) {
+    const h = getHeightOnSphere(theta, phi, seed);
+    const gR = RADIUS + h * HEIGHT_SCALE;
+    const wR = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15;
+    const isWater = (gR < wR - 0.015);
+    return { height: h, gR, wR, isWater };
+  }
+
   // Helper to find a suitable coordinate on the planet sphere
   function findSpawnCoordinate(preferType) {
     // preferType: 'water', 'land', or 'any'
     let bestTheta = Math.random() * Math.PI;
     let bestPhi = Math.random() * Math.PI * 2;
-    let bestH = getHeightOnSphere(bestTheta, bestPhi, seed);
-    let bestIsLand = (bestH * HEIGHT_SCALE > effectiveWaterH);
+    let initialCheck = checkWaterAtCoord(bestTheta, bestPhi);
+    let bestH = initialCheck.height;
+    let bestIsLand = !initialCheck.isWater;
 
     if (preferType === 'any') {
       return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
@@ -270,18 +279,33 @@ function initAmphibians(count, seed) {
       return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
     }
 
-    // Try up to 40 attempts to find desired terrain type
-    for (let attempt = 0; attempt < 40; attempt++) {
+    let deepestWaterTheta = bestTheta;
+    let deepestWaterPhi = bestPhi;
+    let deepestWaterH = bestH;
+    let maxWaterDepth = -999;
+
+    // Try up to 80 attempts to find desired terrain type
+    for (let attempt = 0; attempt < 80; attempt++) {
       const t = Math.random() * Math.PI;
       const p = Math.random() * Math.PI * 2;
-      const h = getHeightOnSphere(t, p, seed);
-      const isL = (h * HEIGHT_SCALE > effectiveWaterH);
+      const cCheck = checkWaterAtCoord(t, p);
+      const isL = !cCheck.isWater;
+      const depth = cCheck.wR - cCheck.gR;
+      if (depth > maxWaterDepth) {
+        maxWaterDepth = depth;
+        deepestWaterTheta = t;
+        deepestWaterPhi = p;
+        deepestWaterH = cCheck.height;
+      }
       if (isL === wantLand) {
-        return { theta: t, phi: p, height: h, isLand: isL };
+        return { theta: t, phi: p, height: cCheck.height, isLand: isL };
       }
     }
 
-    // If planet is 100% water or 100% land, fallback to best available
+    if (!wantLand) {
+      return { theta: deepestWaterTheta, phi: deepestWaterPhi, height: deepestWaterH, isLand: (maxWaterDepth <= 0.015) };
+    }
+
     return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
   }
 
@@ -315,44 +339,76 @@ function initAmphibians(count, seed) {
       let offsetTheta = coord.theta;
       let offsetPhi = coord.phi;
       if (j > 0) {
-        // Naturally disperse flock/pack members around center coordinate
-        const angle = Math.random() * Math.PI * 2;
-        const dist = (0.015 + Math.random() * 0.04) / rRatio;
-        offsetTheta += Math.sin(angle) * dist;
-        offsetPhi += Math.cos(angle) * dist;
+        if (isPlacoderm) {
+          // Placoderms strictly require ocean water
+          for (let tryOff = 0; tryOff < 25; tryOff++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = (0.015 + Math.random() * 0.04) / rRatio;
+            const testT = coord.theta + Math.sin(angle) * dist;
+            const testP = coord.phi + Math.cos(angle) * dist;
+            const cCheck = checkWaterAtCoord(testT, testP);
+            if (cCheck.isWater) {
+              offsetTheta = testT;
+              offsetPhi = testP;
+              break;
+            }
+          }
+        } else {
+          // Naturally disperse flock/pack members around center coordinate
+          const angle = Math.random() * Math.PI * 2;
+          const dist = (0.015 + Math.random() * 0.04) / rRatio;
+          offsetTheta += Math.sin(angle) * dist;
+          offsetPhi += Math.cos(angle) * dist;
+        }
       }
 
-      const oHeight = getHeightOnSphere(offsetTheta, offsetPhi, seed);
-      const oIsLand = (oHeight * HEIGHT_SCALE > effectiveWaterH);
+      let cCheck = checkWaterAtCoord(offsetTheta, offsetPhi);
+      let oHeight = cCheck.height;
+      let oIsLand = !cCheck.isWater;
+
+      if (isPlacoderm && oIsLand) {
+        const reCheck = checkWaterAtCoord(coord.theta, coord.phi);
+        if (reCheck.isWater) {
+          offsetTheta = coord.theta;
+          offsetPhi = coord.phi;
+          cCheck = reCheck;
+          oHeight = reCheck.height;
+          oIsLand = false;
+        }
+      }
 
       let spawnR;
       let swimming = false;
 
       if (isMeganeura) {
         // Swarm of dragonflies hovering together over land and water
-        const surfaceR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH);
+        const surfaceR = Math.max(cCheck.gR, cCheck.wR);
         spawnR = surfaceR + 0.35 + Math.random() * 0.15;
         swimming = false;
       } else if (isIsopod) {
         // Colony of giant isopods crawling together on ground or seabed
-        spawnR = RADIUS + oHeight * HEIGHT_SCALE + 0.02;
+        spawnR = cCheck.gR + 0.02;
         swimming = !oIsLand;
-      } else if (isGeorgiacetus || isPlacoderm) {
-        // Pod/School of prehistoric marine animals swimming together
+      } else if (isPlacoderm) {
+        // Armored fish strictly swimming underwater
+        spawnR = Math.max(cCheck.gR + 0.04, cCheck.wR - 0.04);
+        swimming = true;
+      } else if (isGeorgiacetus) {
+        // Amphibious mammal swimming in water or crawling on land
         if (!oIsLand) {
-          spawnR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH - 0.04) + 0.04;
+          spawnR = Math.max(cCheck.gR + 0.04, cCheck.wR - 0.04);
           swimming = true;
         } else {
-          spawnR = RADIUS + oHeight * HEIGHT_SCALE + 0.05;
+          spawnR = cCheck.gR + 0.05;
           swimming = false;
         }
       } else if (type === 'obsidian_cube') {
         // Cluster of floating gilded obsidian diamond cubes hovering gracefully
-        const surfaceR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH);
+        const surfaceR = Math.max(cCheck.gR, cCheck.wR);
         spawnR = surfaceR + 1.25 + Math.random() * 0.35;
         swimming = false;
       } else {
-        spawnR = RADIUS + Math.max(oHeight * HEIGHT_SCALE, effectiveWaterH) + 0.05;
+        spawnR = Math.max(cCheck.gR, cCheck.wR) + 0.05;
         swimming = !oIsLand;
       }
 
@@ -418,6 +474,16 @@ function initAmphibians(count, seed) {
     for (let i = 0; i < amphibians.length; i++) {
       if (amphibians[i].type !== 'human' && (savedAmphibiansState[i].type === amphibians[i].type || !savedAmphibiansState[i].type)) {
         Object.assign(amphibians[i], savedAmphibiansState[i]);
+        if (amphibians[i].type === 'placoderm') {
+          const sCheck = checkWaterAtCoord(amphibians[i].theta, amphibians[i].phi);
+          if (!sCheck.isWater) {
+            const wCoord = findSpawnCoordinate('water');
+            amphibians[i].theta = wCoord.theta;
+            amphibians[i].phi = wCoord.phi;
+            amphibians[i].r = Math.max(RADIUS + wCoord.height * HEIGHT_SCALE + 0.04, RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15 - 0.04);
+            amphibians[i].isSwimming = true;
+          }
+        }
       }
       if (amphibians[i].hp === undefined) {
         const type = amphibians[i].type;
@@ -490,6 +556,8 @@ function updateNpcLifeCycle(c, deltaTime, seed) {
       break;
 
     case 'FORAGING':
+      c.isIdle = false;
+      c.walkBlend = Math.min(1.0, (c.walkBlend !== undefined ? c.walkBlend : 0.0) + deltaTime * 3.0);
       c.energy = Math.max(0, c.energy - deltaTime * 0.5);
       c.hunger = Math.max(0, c.hunger - deltaTime * 1.8);
       if (c.hunger <= 10) {
@@ -502,6 +570,8 @@ function updateNpcLifeCycle(c, deltaTime, seed) {
       break;
 
     case 'SOCIALIZING':
+      c.isIdle = false;
+      c.walkBlend = Math.min(1.0, (c.walkBlend !== undefined ? c.walkBlend : 0.0) + deltaTime * 3.0);
       c.energy = Math.max(0, c.energy - deltaTime * 0.4);
       c.hunger = Math.min(100, c.hunger + deltaTime * 0.35);
       if (c.scheduleTimer <= 0) {
@@ -512,6 +582,8 @@ function updateNpcLifeCycle(c, deltaTime, seed) {
 
     case 'WANDERING':
     default:
+      c.isIdle = false;
+      c.walkBlend = Math.min(1.0, (c.walkBlend !== undefined ? c.walkBlend : 0.0) + deltaTime * 3.0);
       c.energy = Math.max(0, c.energy - deltaTime * 0.7);
       c.hunger = Math.min(100, c.hunger + deltaTime * 0.4);
       if (c.energy < 18) {
@@ -544,7 +616,7 @@ window.getNPCTransform = function(npc) {
   const naturalPos = [r * sinTheta * cosPhi, r * cosTheta, r * sinTheta * sinPhi];
   const pos = (npc.ragdollEnabled && npc.ragdollPos && Array.isArray(npc.ragdollPos) && npc.ragdollPos.length >= 3)
     ? npc.ragdollPos
-    : (npc.position || naturalPos);
+    : naturalPos;
 
   let N = [sinTheta * cosPhi, cosTheta, sinTheta * sinPhi];
   const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
@@ -728,9 +800,10 @@ function updateAmphibians(deltaTime, seed) {
             }
           } else if (c.type === 'georgiacetus' || c.type === 'placoderm') {
             // Prehistoric aquatic animals: try to find an ocean/water spot for respawn
-            const effWaterH = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15);
-            for (let tries = 0; tries < 30; tries++) {
-              if (newHeight * HEIGHT_SCALE <= effWaterH) break;
+            const wR = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15;
+            for (let tries = 0; tries < 50; tries++) {
+              const testGR = RADIUS + newHeight * HEIGHT_SCALE;
+              if (testGR < wR - 0.015) break;
               newTheta = Math.random() * Math.PI;
               newPhi = Math.random() * Math.PI * 2;
               newHeight = getHeightOnSphere(newTheta, newPhi, seed);

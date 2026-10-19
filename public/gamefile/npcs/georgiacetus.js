@@ -478,7 +478,7 @@ window.NpcRegistry["georgiacetus"] = {
         
         c.animPhase += deltaTime * 20.0; // Fast animation when chasing
         
-        if (distToPlayer < 0.8) {
+        if (distToPlayer < 0.8 && !isDriving && !ignorePlayer) {
             try {
                 if (typeof damagePlayer === 'function' && typeof playerDamageCooldown !== 'undefined' && playerDamageCooldown <= 0 && typeof playerControlsLocked !== 'undefined' && !playerControlsLocked && typeof playerHP !== 'undefined' && playerHP > 0) {
                     damagePlayer(5);

@@ -236,9 +236,11 @@
                      finalColor = vColor * diffuseVal * 1.2 + vec3(0.1, 0.2, 0.05);
                  }
 
-                 // Glowing Ore (แร่เรืองแสง) - เรืองแสงสว่างด้วยสีดั้งเดิมของตัวเอง (Cyan / Teal) ไม่ฟอกขาว
+                 // Glowing Ore & Obsidian Pad (White Core & Gold Accents Glow)
                  bool isGlowingOre = (abs(vColor.r - 0.22) < 0.08 && abs(vColor.g - 0.95) < 0.08 && abs(vColor.b - 0.88) < 0.08);
-                 if (isGlowingOre) {
+                 bool isWhiteGlow = (abs(vColor.r - 0.98) < 0.03 && abs(vColor.g - 0.98) < 0.03 && abs(vColor.b - 1.0) < 0.03);
+                 bool isGoldGlow = (abs(vColor.r - 0.95) < 0.04 && abs(vColor.g - 0.78) < 0.04 && abs(vColor.b - 0.23) < 0.04);
+                 if (isGlowingOre || isWhiteGlow) {
                      float pulse = 0.94 + 0.12 * sin(uTime * 3.0 + vWorldPos.x * 2.8 + vWorldPos.y * 2.8 + vWorldPos.z * 2.8);
                      float rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5);
                      float crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 0.4;
@@ -246,6 +248,14 @@
                      vec3 rimGlow = vColor * (rimFactor * 0.35);
                      vec3 glintColor = vColor * crystalGlint;
                      finalColor = clamp(glowColor * 1.15 + rimGlow + glintColor, 0.0, 1.0);
+                 } else if (isGoldGlow) {
+                     // Ratio-locked 24K Gold Glow: keeps G/R ratio strictly at ~0.82 so it never shifts to yellow (G/R > 0.9) or orange (G/R < 0.7)
+                     float pulse = 0.96 + 0.04 * sin(uTime * 2.8 + vWorldPos.x * 2.5 + vWorldPos.y * 2.5 + vWorldPos.z * 2.5);
+                     float rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.2);
+                     float goldGlint = pow(max(dot(normal, halfDir), 0.0), 28.0) * 0.45;
+                     float lum = clamp(0.88 + 0.07 * diffuseVal + 0.05 * rimFactor, 0.86, 1.0) * pulse;
+                     vec3 baseGold = vec3(0.95, 0.78, 0.23) * lum;
+                     finalColor = mix(baseGold, vec3(1.0, 0.90, 0.48), clamp(goldGlint, 0.0, 0.42));
                  }
 
                 // Apply Water Volume Tint & Fog
@@ -4447,8 +4457,9 @@ window.cloud3DProgram = cloud3DProgram;
                 } else {
                     const arrRef = findArrowInInventory();
                     if (arrRef) {
+                        const ammoName = arrRef.item ? arrRef.item.name : null;
                         consumeArrow(arrRef);
-                        shootArrowProjectile(isCannon ? drawPower * 1.3 : drawPower);
+                        shootArrowProjectile(isCannon ? drawPower * 1.3 : drawPower, ammoName);
                         if (typeof playBowShootSound === "function") {
                             playBowShootSound();
                         }
@@ -4571,112 +4582,100 @@ window.cloud3DProgram = cloud3DProgram;
           doorsToCheck = collectibles;
         }
 
+        const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
+
+        let activeInteractDoor = null;
+        let bestT_door = Infinity;
+
+        for (let other of doorsToCheck) {
+          if (other.active && other.type === "wood_door" && !other.isPreview) {
+            // Only locked doors have manual interaction prompt
+            if (other.isLocked) {
+              const reachInfo = isTargetWithinReach(other.position, Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) + 0.8);
+              if (reachInfo.valid && reachInfo.t < bestT_door) {
+                bestT_door = reachInfo.t;
+                activeInteractDoor = other;
+              }
+            }
+          }
+        }
+
         for (let other of doorsToCheck) {
           if (other.active && other.type === "wood_door" && !other.isPreview) {
             if (other.doorAngle === undefined) other.doorAngle = 0.0;
-            if (other.doorVel === undefined) other.doorVel = 0.0;
+            if (other.doorTargetAngle === undefined) other.doorTargetAngle = 0.0;
+            if (other.doorOpenTimer === undefined) other.doorOpenTimer = 0.0;
 
-            const isSwinging = (Math.abs(other.doorVel) > 0.005 || Math.abs(other.doorAngle) > 0.005);
-            
-            // Fast distance check to see if player is near
+            // Distance check to player
             const dx = pX - other.position[0];
             const dy = pY - other.position[1];
             const dz = pZ - other.position[2];
             const distSq = dx*dx + dy*dy + dz*dz;
-            const playerIsNear = (distSq <= 0.16); // 0.4 * 0.4 = 0.16
+            const playerIsNear = (distSq <= 0.36); // ~0.6m
 
-            if (!isSwinging && !playerIsNear) {
-              other.doorAngle = 0.0;
-              other.doorVel = 0.0;
-              if (window._activeSwingingDoors) window._activeSwingingDoors.delete(other);
-              continue;
+            // Auto-open when walking near/through doorway (unlocked doors)
+            if (!other.isLocked && playerIsNear) {
+              if (other._wallR === undefined) {
+                const angle = other.angle || 0.0;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                other._wallR = [
+                  other.R[0] * cosA + other.F[0] * sinA,
+                  other.R[1] * cosA + other.F[1] * sinA,
+                  other.R[2] * cosA + other.F[2] * sinA
+                ];
+                other._wallF = [
+                  other.F[0] * cosA - other.R[0] * sinA,
+                  other.F[1] * cosA - other.R[1] * sinA,
+                  other.F[2] * cosA - other.R[2] * sinA
+                ];
+              }
+              const local_dx = dx * other._wallR[0] + dy * other._wallR[1] + dz * other._wallR[2];
+              const local_dz = dx * other._wallF[0] + dy * other._wallF[1] + dz * other._wallF[2];
+
+              // If player is in front of or inside doorway
+              if (Math.abs(local_dx) < 0.09 && Math.abs(local_dz) < 0.22) {
+                other.doorOpenTimer = 1.0; // Keep open while player is near doorway
+                if (Math.abs(other.doorTargetAngle) < 0.2) {
+                  const openDir = (local_dz >= 0) ? -1.57 : 1.57;
+                  other.doorTargetAngle = openDir;
+                  if (Math.abs(other.doorAngle) < 0.35) {
+                    other.doorAngle = openDir * 0.4;
+                  }
+                  if (typeof playPlaceSound === "function") playPlaceSound(other.position);
+                }
+              }
             }
 
-            // Restoring spring force towards 0 (closed)
-            const springK = 7.0; // Spring constant
-            const damping = 0.94; // Friction damping
-            other.doorVel += -springK * other.doorAngle * dt;
-            other.doorVel *= damping;
-
-            if (Math.abs(other.doorVel) > 0.005 || Math.abs(other.doorAngle) > 0.005) {
-              if (window._activeSwingingDoors) window._activeSwingingDoors.add(other);
-              other.doorAngle += other.doorVel * dt;
-
-              // Only constrain door swing angle by player position if player is near
-              if (playerIsNear) {
-                if (other._wallR === undefined) {
-                  const angle = other.angle || 0.0;
-                  const cosA = Math.cos(angle);
-                  const sinA = Math.sin(angle);
-                  other._wallR = [
-                    other.R[0] * cosA + other.F[0] * sinA,
-                    other.R[1] * cosA + other.F[1] * sinA,
-                    other.R[2] * cosA + other.F[2] * sinA
-                  ];
-                  other._wallF = [
-                    other.F[0] * cosA - other.R[0] * sinA,
-                    other.F[1] * cosA - other.R[1] * sinA,
-                    other.F[2] * cosA - other.R[2] * sinA
-                  ];
-                  other._centerRadius = Math.sqrt(
-                    other.position[0] * other.position[0] +
-                    other.position[1] * other.position[1] +
-                    other.position[2] * other.position[2]
-                  );
-                }
-                const wallCenterRadius = other._centerRadius;
-                const wallHeight = 0.25;
-                const feetRadius = pRadius - 0.46 * playerScale;
-                const headRadius = pRadius + 0.46 * playerScale;
-                const overlapsVertically = (headRadius > wallCenterRadius && feetRadius < wallCenterRadius + wallHeight);
-
-                if (overlapsVertically) {
-                  const wallR = other._wallR;
-                  const wallF = other._wallF;
-
-                  const local_dx = dx * wallR[0] + dy * wallR[1] + dz * wallR[2];
-                  const local_dz = dx * wallF[0] + dy * wallF[1] + dz * wallF[2];
-
-                  const px = local_dx + 0.063;
-                  const pz = local_dz;
-                  const d = Math.sqrt(px*px + pz*pz);
-
-                  const charRadius = playerScale * 0.38;
-                  const leafLength = 0.125;
-                  const leafThickness = 0.015;
-                  const colZ = leafThickness / 2 + charRadius;
-
-                  if (d <= leafLength + charRadius && d > colZ) {
-                    const playerAngle = Math.atan2(pz, px);
-                    const limitAngle = Math.asin(colZ / d);
-
-                    const angleDiff = other.doorAngle - playerAngle;
-                    if (Math.abs(angleDiff) < limitAngle) {
-                      if (angleDiff >= 0) {
-                        other.doorAngle = playerAngle + limitAngle;
-                      } else {
-                        other.doorAngle = playerAngle - limitAngle;
-                      }
-                      other.doorVel = 0.0;
-                    }
-                  }
-                }
+            // Auto-close: when door is open, countdown timer and close automatically once player has cleared doorway
+            if (Math.abs(other.doorTargetAngle) > 0.1 || Math.abs(other.doorAngle) > 0.1) {
+              if (other.doorOpenTimer > 0) {
+                other.doorOpenTimer -= dt;
               }
 
-              // Clamp door swing angle and bounce back slightly
-              const limit = 1.6; // ~92 degrees
-              if (other.doorAngle > limit) {
-                other.doorAngle = limit;
-                other.doorVel = -other.doorVel * 0.3;
-              } else if (other.doorAngle < -limit) {
-                other.doorAngle = -limit;
-                other.doorVel = -other.doorVel * 0.3;
+              // Check if player has stepped away from doorway
+              const isClearingDoor = (distSq > 0.18);
+              if (other.doorOpenTimer <= 0 || (isClearingDoor && other.doorOpenTimer <= 0.6)) {
+                other.doorTargetAngle = 0.0;
+                other.doorOpenTimer = 0.0;
+              }
+            }
+
+            // Animate door towards target angle smoothly
+            const swingSpeed = 4.5; // rads/sec
+            if (Math.abs(other.doorAngle - other.doorTargetAngle) > 0.01) {
+              if (other.doorAngle < other.doorTargetAngle) {
+                other.doorAngle = Math.min(other.doorTargetAngle, other.doorAngle + swingSpeed * dt);
+              } else {
+                other.doorAngle = Math.max(other.doorTargetAngle, other.doorAngle - swingSpeed * dt);
               }
               doorActiveSwinging = true;
+              if (window._activeSwingingDoors) window._activeSwingingDoors.add(other);
             } else {
-              other.doorAngle = 0.0;
-              other.doorVel = 0.0;
-              if (window._activeSwingingDoors) window._activeSwingingDoors.delete(other);
+              other.doorAngle = other.doorTargetAngle;
+              if (other.doorTargetAngle === 0.0 && window._activeSwingingDoors) {
+                window._activeSwingingDoors.delete(other);
+              }
             }
           }
         }
@@ -4685,8 +4684,6 @@ window.cloud3DProgram = cloud3DProgram;
         let windowActiveSwinging = false;
         let activeInteractWindow = null;
         let bestT_window = Infinity;
-
-        const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
 
         let windowsToCheck = [];
         if (typeof SpatialGrid !== "undefined") {
@@ -4855,10 +4852,12 @@ window.cloud3DProgram = cloud3DProgram;
 
         if (!_cachedInvOverlay) _cachedInvOverlay = document.getElementById("inventoryOverlay");
         if (!_cachedChestOverlay) _cachedChestOverlay = document.getElementById("chestOverlay");
+        const _cachedWarpOverlay = document.getElementById("warpOverlay");
         const isInvOpen = _cachedInvOverlay?.classList.contains("open");
         const isCstOpen = _cachedChestOverlay?.classList.contains("open");
+        const isWrpOpen = _cachedWarpOverlay?.classList.contains("open");
         const isFreeCamActive = (cameraMode === "freecam" || (typeof window.cameraMode !== "undefined" && window.cameraMode === "freecam"));
-        const isUIOpen = isInvOpen || isCstOpen || isFreeCamActive;
+        const isUIOpen = isInvOpen || isCstOpen || isWrpOpen || isFreeCamActive;
 
         // Keyboard input
         if (!isUIOpen && (keysPressed[currentKeyBindings.forward] || keysPressed["ArrowUp"]))
@@ -6901,53 +6900,136 @@ window.cloud3DProgram = cloud3DProgram;
               "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
               "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
               "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest",
-              "meganeura_item", "isopod_item", "robot_stand", "robot_cockpit",
+              "meganeura_item", "isopod_item", "obsidian_pad_warp_item", "obsidian_compass_pad_item",
+              "robot_stand", "robot_cockpit",
               "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
             ];
-            const maxDemolishReach = Math.max(actionReachDistance * 2.8, 6.5 * (playerScale / 0.1));
+            const maxDemolishReach = 0.50 * (playerScale / 0.1);
             const camLookDir = [-viewMatrix[2], -viewMatrix[6], -viewMatrix[10]];
             const halfW = window.innerWidth / 2;
             const halfH = window.innerHeight / 2;
-            const maxScreenRadius = Math.min(window.innerWidth, window.innerHeight) * 0.42;
+            const maxScreenRadius = 55; // Precise 3D crosshair radius in pixels
 
             const candidates = (typeof SpatialGrid !== "undefined")
-              ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], maxDemolishReach + 2.5, item => item.active && !item.isPreview && item.position && demolishableTypes.includes(item.type))
+              ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], maxDemolishReach + 1.0, item => item.active && !item.isPreview && item.position && demolishableTypes.includes(item.type))
               : collectibles;
 
             let closestDemolishItem = null;
-            let currentBestScore = Infinity;
+            let bestEffectiveDepth = Infinity;
+            let bestItemCenter = null;
             let currentBestDist = Infinity;
-            let bestAimHit = null;
 
             for (let item of candidates) {
               if (!item.active || item.isPreview || !item.position) continue;
               if (item.type === "planet_core") continue;
               if (!demolishableTypes.includes(item.type)) continue;
 
-              const dx = item.position[0] - pVec[0];
-              const dy = item.position[1] - pVec[1];
-              const dz = item.position[2] - pVec[2];
+              const n = (item.normal && item.normal.length === 3) ? item.normal : [0, 1, 0];
+              let itemCenter = item.position;
+              if (item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door") {
+                // Elevate visual center to middle of the wall so eye-level crosshair hits it directly
+                itemCenter = [
+                  item.position[0] + n[0] * 0.12,
+                  item.position[1] + n[1] * 0.12,
+                  item.position[2] + n[2] * 0.12
+                ];
+              } else if (item.type === "wood_roof") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.10,
+                  item.position[1] + n[1] * 0.10,
+                  item.position[2] + n[2] * 0.10
+                ];
+              } else if (item.type === "wood_stairs") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.12,
+                  item.position[1] + n[1] * 0.12,
+                  item.position[2] + n[2] * 0.12
+                ];
+              } else if (item.type === "folding_ladder") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.17,
+                  item.position[1] + n[1] * 0.17,
+                  item.position[2] + n[2] * 0.17
+                ];
+              } else if (item.type === "wood_chest") {
+                // Elevate visual center to center of chest mass
+                itemCenter = [
+                  item.position[0] + n[0] * 0.055,
+                  item.position[1] + n[1] * 0.055,
+                  item.position[2] + n[2] * 0.055
+                ];
+              } else if (item.type === "campfire") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.06,
+                  item.position[1] + n[1] * 0.06,
+                  item.position[2] + n[2] * 0.06
+                ];
+              } else if (item.type === "wood_boat" || item.type.includes("boat")) {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.20,
+                  item.position[1] + n[1] * 0.20,
+                  item.position[2] + n[2] * 0.20
+                ];
+              } else if (item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.10,
+                  item.position[1] + n[1] * 0.10,
+                  item.position[2] + n[2] * 0.10
+                ];
+              } else if (item.type.startsWith("robot_")) {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.15,
+                  item.position[1] + n[1] * 0.15,
+                  item.position[2] + n[2] * 0.15
+                ];
+              } else if (item.type.includes("floor") || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.02,
+                  item.position[1] + n[1] * 0.02,
+                  item.position[2] + n[2] * 0.02
+                ];
+              }
+
+              let meshRadius = 0.20;
+              if (item.type === "wood_boat" || item.type.includes("boat")) {
+                meshRadius = 0.85;
+              } else if (item.type.includes("wall") || item.type.includes("window") || item.type.includes("door")) {
+                meshRadius = 0.26;
+              } else if (item.type.includes("floor") || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type.includes("roof") || item.type.includes("stairs") || item.type.includes("ladder")) {
+                meshRadius = 0.26;
+              } else if (item.type === "wood_chest") {
+                meshRadius = 0.18;
+              } else if (item.type.startsWith("robot_")) {
+                meshRadius = 0.25;
+              }
+
+              const dx = itemCenter[0] - pVec[0];
+              const dy = itemCenter[1] - pVec[1];
+              const dz = itemCenter[2] - pVec[2];
               const distToPlayer = Math.hypot(dx, dy, dz);
-              if (distToPlayer > maxDemolishReach) continue;
+              const itemReach = (item.type === "wood_boat" || item.type.includes("boat")) ? (maxDemolishReach + 0.65) : maxDemolishReach;
+              const effectiveDistToPlayer = Math.max(0, distToPlayer - Math.min(0.18, meshRadius * 0.6));
+              if (effectiveDistToPlayer > itemReach) continue;
+
+              // Forward orientation check: item must NOT be behind the player's view
+              const fwdDot = dx * camLookDir[0] + dy * camLookDir[1] + dz * camLookDir[2];
+              if (fwdDot < -0.20) continue;
 
               // Camera ray test
-              const vx = item.position[0] - eyePos[0];
-              const vy = item.position[1] - eyePos[1];
-              const vz = item.position[2] - eyePos[2];
+              const vx = itemCenter[0] - eyePos[0];
+              const vy = itemCenter[1] - eyePos[1];
+              const vz = itemCenter[2] - eyePos[2];
               const distToCam = Math.hypot(vx, vy, vz);
-              if (distToCam < 0.1) continue;
+              if (distToCam < 0.05) continue;
 
-              const projDist = vx * camLookDir[0] + vy * camLookDir[1] + vz * camLookDir[2];
-              if (projDist <= 0.2) continue; // Behind or right inside camera
+              const t_proj = vx * camLookDir[0] + vy * camLookDir[1] + vz * camLookDir[2];
+              if (t_proj <= 0.05) continue; // Behind camera
 
-              const perpDistSq = (vx - camLookDir[0] * projDist)**2 + (vy - camLookDir[1] * projDist)**2 + (vz - camLookDir[2] * projDist)**2;
-              const perpDist = Math.sqrt(perpDistSq);
-
-              const hitThreshold = (item.type.includes("floor") || item.type.includes("roof") || item.type.includes("wall")) ? 3.0 : 2.0;
-              if (perpDist > hitThreshold) continue;
+              const perpDistSq = (vx - camLookDir[0] * t_proj)**2 + (vy - camLookDir[1] * t_proj)**2 + (vz - camLookDir[2] * t_proj)**2;
+              const perpDist = Math.sqrt(Math.max(0, perpDistSq));
 
               const screenPos = projectWorldToScreen(
-                item.position,
+                itemCenter,
                 viewMatrix,
                 projMatrix,
                 window.innerWidth,
@@ -6958,48 +7040,41 @@ window.cloud3DProgram = cloud3DProgram;
               const sdx = screenPos.x - halfW;
               const sdy = screenPos.y - halfH;
               const sDist = Math.hypot(sdx, sdy);
-              if (sDist > maxScreenRadius) continue;
 
-              const score = sDist + perpDist * 60;
-              if (score < currentBestScore) {
-                currentBestScore = score;
-                currentBestDist = distToPlayer;
-                closestDemolishItem = item;
-                const rayHitX = eyePos[0] + camLookDir[0] * projDist;
-                const rayHitY = eyePos[1] + camLookDir[1] * projDist;
-                const rayHitZ = eyePos[2] + camLookDir[2] * projDist;
-                const offX = rayHitX - item.position[0];
-                const offY = rayHitY - item.position[1];
-                const offZ = rayHitZ - item.position[2];
-                const offDist = Math.hypot(offX, offY, offZ);
-                const maxRadius = (item.type.includes("floor") || item.type.includes("roof")) ? 2.5 : 1.8;
-                if (offDist > maxRadius && offDist > 0.001) {
-                  const s = maxRadius / offDist;
-                  bestAimHit = [
-                    item.position[0] + offX * s,
-                    item.position[1] + offY * s,
-                    item.position[2] + offZ * s
-                  ];
-                } else {
-                  bestAimHit = [rayHitX, rayHitY, rayHitZ];
-                }
+              // Angular radius of item mesh on screen (in pixels)
+              const meshPixels = Math.max(30, Math.min(85, (meshRadius / distToCam) * (window.innerHeight * 0.65)));
+
+              // Does the 3D crosshair at screen center hit the item's mesh/mass?
+              const isDirectMeshHit = perpDist <= meshRadius * 1.15;
+              const isScreenMeshHit = sDist <= meshPixels;
+
+              if (!isDirectMeshHit && !isScreenMeshHit) continue;
+              // Guard against off-crosshair peripheral objects
+              if (sDist > 110) continue;
+
+              // TRUE FIRST-HIT RAYCASTING & OCCLUSION:
+              // Calculate the physical entrance distance t_hit along the camera ray where the ray strikes the front surface
+              const t_hit = t_proj - Math.sqrt(Math.max(0, meshRadius * meshRadius - Math.min(meshRadius * meshRadius, perpDist * perpDist)));
+
+              // Priority for fixtures co-located with walls (doors/windows inside a wall frame)
+              let fixturePriority = 0;
+              if (item.type === "wood_door" || item.type === "wood_window") {
+                fixturePriority = -0.15;
               }
-            }
 
-            // Close-proximity fallback if player is right next to an item looking towards it
-            if (!closestDemolishItem) {
-              let minFallbackDist = Infinity;
-              for (let item of candidates) {
-                if (!item.active || item.isPreview || !item.position) continue;
-                if (item.type === "planet_core") continue;
-                if (!demolishableTypes.includes(item.type)) continue;
-                const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
-                if (reachInfo.valid && reachInfo.t < minFallbackDist) {
-                  minFallbackDist = reachInfo.t;
-                  closestDemolishItem = item;
-                  currentBestDist = reachInfo.t;
-                  bestAimHit = item.position;
-                }
+              // Direct 3D intersection on the object's mass is prioritized over loose peripheral hits
+              const hitBonus = isDirectMeshHit ? 0 : 0.20;
+
+              // Depth dominates completely: the front-most object along the camera ray is chosen first!
+              // Obscured objects behind are occluded because their t_hit is deeper.
+              // Tiny sDist weight (0.0008) acts only as a tie-breaker when two items are at the exact same depth (< 1cm).
+              const effectiveDepth = t_hit + hitBonus + fixturePriority + (sDist * 0.0008);
+
+              if (effectiveDepth < bestEffectiveDepth) {
+                bestEffectiveDepth = effectiveDepth;
+                closestDemolishItem = item;
+                bestItemCenter = itemCenter;
+                currentBestDist = distToPlayer;
               }
             }
 
@@ -7010,14 +7085,19 @@ window.cloud3DProgram = cloud3DProgram;
             let targetLabel = "";
 
             if (closestDemolishItem) {
-              aimTargetWorld = bestAimHit || closestDemolishItem.position;
+              // Magnetically snap directly onto the true 3D visual center of the model!
+              aimTargetWorld = bestItemCenter || [
+                closestDemolishItem.position[0],
+                closestDemolishItem.position[1],
+                closestDemolishItem.position[2]
+              ];
               isLocked = true;
               targetLabel = closestDemolishItem.type.toUpperCase().replace(/_/g, " ");
             } else {
-              // Free aim raymarch in demolish mode (same behavior as gun free aim)
-              let curD = 0.5;
-              const maxD = Math.min(maxDemolishReach, 12.0);
-              const step = 0.35;
+              // Free aim raymarch in demolish mode (keeps reticle right within demolish reach)
+              let curD = 0.1;
+              const maxD = Math.min(maxDemolishReach + 0.35, 1.8);
+              const step = 0.08;
               while (curD < maxD) {
                 const testP = [
                   eyePos[0] + camLookDir[0] * curD,
@@ -7041,10 +7121,11 @@ window.cloud3DProgram = cloud3DProgram;
                 curD += step;
               }
               if (!aimTargetWorld) {
+                const freeReach = Math.max(0.25, maxDemolishReach + 0.05);
                 aimTargetWorld = [
-                  eyePos[0] + camLookDir[0] * 5.0,
-                  eyePos[1] + camLookDir[1] * 5.0,
-                  eyePos[2] + camLookDir[2] * 5.0
+                  eyePos[0] + camLookDir[0] * freeReach,
+                  eyePos[1] + camLookDir[1] * freeReach,
+                  eyePos[2] + camLookDir[2] * freeReach
                 ];
               }
               isLocked = false;
@@ -7539,7 +7620,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const reachInfo = isTargetWithinReach(item.position, actionReachDistance);
                 if (reachInfo.valid) {
@@ -8001,6 +8082,37 @@ if (prompt._lastHTML !== _newHtml_6) {
                       hasBattery: false
                     });
                 }
+              } else if (activeInteractDoor && activeInteractDoor.isLocked) {
+                if (typeof World3DUI !== "undefined") { World3DUI.hideBoatUI(); World3DUI.hideMechRideUI(); }
+                chestHoldTimer = 0.0;
+                const dNorm = activeInteractDoor.normal || [0, 1, 0];
+                const doorTargetPos = [
+                  activeInteractDoor.position[0] + dNorm[0] * 0.12,
+                  activeInteractDoor.position[1] + dNorm[1] * 0.12,
+                  activeInteractDoor.position[2] + dNorm[2] * 0.12
+                ];
+                const screenPos = projectWorldToScreen(
+                  doorTargetPos,
+                  viewMatrix,
+                  projMatrix,
+                  window.innerWidth,
+                  window.innerHeight,
+                );
+                if (screenPos) {
+                  const actionName = "🔒 ประตูล็อคอยู่ (DOOR LOCKED)";
+                  if (prompt._lastText !== actionName) {
+                    prompt.textContent = actionName;
+                    prompt._lastText = actionName;
+                  }
+                  if (prompt.style.display !== "block") prompt.style.display = "block";
+                  const newT = `translate(${Math.round(screenPos.x)}px, ${Math.round(screenPos.y - 20 )}px) translate(-50%, -100%)`;
+                  if (prompt._lastT !== newT) {
+                    prompt.style.transform = newT;
+                    prompt._lastT = newT;
+                  }
+                } else {
+                  if (prompt.style.display !== "none") prompt.style.display = "none";
+                }
               } else if (activeInteractWindow) {
                 if (typeof World3DUI !== "undefined") { World3DUI.hideBoatUI(); World3DUI.hideMechRideUI(); }
                 chestHoldTimer = 0.0;
@@ -8200,9 +8312,9 @@ if (prompt._lastText !== _newText_2) {
           let minDistSq = Infinity;
           if (amphibians && amphibians.length > 0) {
             for (let npc of amphibians) {
-              if ((npc.type === 'meganeura' || npc.type === 'isopod') && !npc.ragdollEnabled) continue;
-              if (npc.type !== 'meganeura' && npc.type !== 'isopod' && npc.type !== 'human' && !isDevMode) continue;
-              if (npc.type !== 'meganeura' && npc.type !== 'isopod' && npc.ragdollEnabled) continue;
+              if ((npc.type === 'meganeura' || npc.type === 'isopod' || npc.type === 'obsidian_cube') && !npc.ragdollEnabled) continue;
+              if (npc.type !== 'meganeura' && npc.type !== 'isopod' && npc.type !== 'obsidian_cube' && npc.type !== 'human' && !isDevMode) continue;
+              if (npc.type !== 'meganeura' && npc.type !== 'isopod' && npc.type !== 'obsidian_cube' && npc.ragdollEnabled) continue;
 
               const pos = npc.ragdollPos || npc.position;
               if (!pos) continue;
@@ -8261,6 +8373,21 @@ if (npcPrompt._lastHTML !== _newHtml_9) {
 if (npcPrompt._lastHTML !== _newHtml_10) {
     npcPrompt.innerHTML = _newHtml_10;
     npcPrompt._lastHTML = _newHtml_10;
+}
+              } else if (closestNPCLocal.type === 'obsidian_cube') {
+                const _newHtml_obsidian = `
+                  <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                      <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <span>[${keyText}] เก็บศิลาออบซิเดียน (Pick up Obsidian Cube)</span>
+                  </span>
+                `;
+if (npcPrompt._lastHTML !== _newHtml_obsidian) {
+    npcPrompt.innerHTML = _newHtml_obsidian;
+    npcPrompt._lastHTML = _newHtml_obsidian;
 }
               } else {
                 const _newHtml_11 = `

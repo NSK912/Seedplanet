@@ -37,17 +37,17 @@
     const scale = 0.42 * (scaleMultiplier || 1.0);
     const phase = animPhase || 0;
 
-    // Levitation vertical floating bob
-    const levitateY = Math.sin(phase * 2.2) * 0.08;
+    // Levitation vertical floating bob (rests on ground if ragdoll/dead)
+    const levitateY = isRagdoll ? -0.25 : Math.sin(phase * 2.2) * 0.08;
 
     // Rotation around normal (Y axis) for mysterious hovering spin
-    const spinAngle = phase * 0.65;
+    const spinAngle = isRagdoll ? 0 : phase * 0.65;
     const cosS = Math.cos(spinAngle);
     const sinS = Math.sin(spinAngle);
 
     // Subtle tilting oscillation
-    const tiltX = Math.sin(phase * 1.3) * 0.06;
-    const tiltZ = Math.cos(phase * 1.7) * 0.06;
+    const tiltX = isRagdoll ? 0.35 : Math.sin(phase * 1.3) * 0.06;
+    const tiltZ = isRagdoll ? 0.15 : Math.cos(phase * 1.7) * 0.06;
 
     // Helper: transform local point with spin and hover
     const p = (x, y, z) => {
@@ -274,11 +274,17 @@
     immuneToArrows: true,
     name: "ศิลาออบซิเดียนลายทอง (Gilded Obsidian Cube)",
     icon: "🔶",
-    moveSpeed: 0.12,
-    disableRandomJitter: true,
+    moveSpeed: 0.25,
+    disableRandomJitter: false,
 
-    // Smooth floating navigation behavior
+    // Smooth floating navigation behavior using standard NPC movement system
     updateBehavior: function(c, deltaTime, seed, gRadius, wRadius, npcCaveData) {
+      if (c.ragdollEnabled || (c.hp !== undefined && c.hp <= 0)) {
+        const baseR = Math.max(gRadius, wRadius);
+        c.r = baseR + 0.12;
+        return;
+      }
+
       if (c.animPhase === undefined) c.animPhase = Math.random() * Math.PI * 2;
       c.animPhase += deltaTime * 1.6;
 
@@ -294,23 +300,6 @@
       // Smooth vertical lerp
       if (c.r === undefined) c.r = targetR;
       c.r += (targetR - c.r) * Math.min(1.0, deltaTime * 3.5);
-
-      // Floating wander drift: smooth slow turning
-      if (c.heading === undefined) c.heading = Math.random() * Math.PI * 2;
-      c.heading += Math.sin(c.animPhase * 0.4) * 0.6 * deltaTime;
-
-      // Drift forward slightly across sphere
-      const floatSpeed = 0.028 * deltaTime;
-      const sinHeading = Math.sin(c.heading);
-      const cosHeading = Math.cos(c.heading);
-
-      c.theta += cosHeading * floatSpeed;
-      c.phi += (sinHeading * floatSpeed) / Math.max(0.2, Math.sin(c.theta));
-
-      // Wrap coordinate ranges safely
-      if (c.theta < 0.05) { c.theta = 0.05; c.heading += Math.PI; }
-      if (c.theta > Math.PI - 0.05) { c.theta = Math.PI - 0.05; c.heading += Math.PI; }
-      c.phi = (c.phi + Math.PI * 2) % (Math.PI * 2);
 
       c.isSwimming = false;
     },

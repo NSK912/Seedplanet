@@ -300,7 +300,8 @@
     cState.inventory.push({ name, icon: icon || getResourceIcon(name), count });
   }
 
-  // Ensures every procedural house has a wood_chest inside for clone storage
+  // Ensures every procedural house has a wood_chest inside for clone storage,
+  // snapped directly on top of the house's wood floor using the building grid snap system.
   function ensureHouseChests() {
     const houses = (typeof window !== "undefined" && window.placedHouses && Array.isArray(window.placedHouses))
       ? window.placedHouses
@@ -312,11 +313,96 @@
       : ((typeof window !== "undefined" && window.collectibles && Array.isArray(window.collectibles)) ? window.collectibles : []);
     if (!colList) return;
 
-    let addedNewChest = false;
+    let modifiedChests = false;
 
     for (let hIdx = 0; hIdx < houses.length; hIdx++) {
       const house = houses[hIdx];
       if (!house) continue;
+
+      // Find all wood floors belonging to this house
+      const houseFloors = colList.filter(c => {
+        if (!c || !c.active || c.type !== "wood_floor") return false;
+        if (c.houseIndex !== undefined && c.houseIndex === hIdx) return true;
+        const dx = c.position[0] - house.x;
+        const dy = c.position[1] - house.y;
+        const dz = c.position[2] - house.z;
+        const maxRad = (house.radius || Math.max(house.totalW || 0.6, house.totalD || 0.6)) + 0.3;
+        return (dx * dx + dy * dy + dz * dz) <= maxRad * maxRad;
+      });
+
+      // Pick the best floor to snap the chest to (away from entrance door)
+      let targetFloor = null;
+      if (houseFloors.length > 0) {
+        if (house.entranceDoor) {
+          const ed = house.entranceDoor;
+          let maxDoorDistSq = -1;
+          for (const f of houseFloors) {
+            const fgx = f.gx !== undefined ? f.gx : 0;
+            const fgy = f.gy !== undefined ? f.gy : 0;
+            const dgx = fgx - ed.gx;
+            const dgy = fgy - ed.gy;
+            const distSq = dgx * dgx + dgy * dgy;
+            if (distSq > maxDoorDistSq) {
+              maxDoorDistSq = distSq;
+              targetFloor = f;
+            }
+          }
+        }
+        if (!targetFloor) {
+          targetFloor = houseFloors[0];
+        }
+      }
+
+      // Compute snapped position using the floor's grid snap and top surface
+      let chestPos, chestN, chestR, chestF;
+
+      if (targetFloor) {
+        // Use the existing grid snap logic on top of the wood floor!
+        const floorHH = (typeof window !== "undefined" && typeof window.getFloorThickness === "function")
+          ? window.getFloorThickness(targetFloor)
+          : (((typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05) + (targetFloor.size || 0.25) * 0.12);
+
+        const fP = targetFloor.position;
+        const fN = targetFloor.normal || [house.nx || 0, house.ny || 1, house.nz || 0];
+        const fR = targetFloor.R || house.R || [1, 0, 0];
+        const fF = targetFloor.F || house.F || [0, 0, 1];
+
+        // The top surface of this wood_floor is exactly: fP + fN * (floorHH / 2)
+        // With grid snap offset 0, 0 (centered on the floor tile)
+        const topOfFloor = floorHH / 2;
+        chestPos = [
+          fP[0] + fN[0] * topOfFloor,
+          fP[1] + fN[1] * topOfFloor,
+          fP[2] + fN[2] * topOfFloor
+        ];
+        chestN = fN;
+        chestR = fR;
+        chestF = fF;
+      } else {
+        // Fallback: full calculation of foundation stone + wood floor thickness
+        const hx = house.x, hy = house.y, hz = house.z;
+        const hR = house.R || [1, 0, 0];
+        const hF = house.F || [0, 0, 1];
+        const hN = [house.nx || 0, house.ny || 1, house.nz || 0];
+        const totalW = house.totalW || 0.6;
+        const totalD = house.totalD || 0.6;
+
+        const stoneH = 0.25 * 0.15; // 0.0375
+        const baseWfH = (typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05;
+        const actualWfThickness = baseWfH + 0.25 * 0.12; // 0.08
+        const floorTopElev = stoneH + actualWfThickness; // ~0.1175m
+
+        const cx = -totalW * 0.25;
+        const cy = -totalD * 0.25;
+        chestPos = [
+          hx + hR[0] * cx + hF[0] * cy + hN[0] * floorTopElev,
+          hy + hR[1] * cx + hF[1] * cy + hN[1] * floorTopElev,
+          hz + hR[2] * cx + hF[2] * cy + hN[2] * floorTopElev
+        ];
+        chestN = hN;
+        chestR = hR;
+        chestF = hF;
+      }
 
       let chest = house.chest;
       if (!chest || !chest.active) {
@@ -324,28 +410,12 @@
       }
 
       if (!chest || !chest.active) {
-        const hx = house.x, hy = house.y, hz = house.z;
-        const hR = house.R || [1, 0, 0];
-        const hF = house.F || [0, 0, 1];
-        const hN = [house.nx || 0, house.ny || 1, house.nz || 0];
-        const totalW = house.totalW || 0.6;
-        const totalD = house.totalD || 0.6;
-        const elev = 0.08;
-
-        const cx = -totalW * 0.25;
-        const cy = -totalD * 0.25;
-        const chestPos = [
-          hx + hR[0] * cx + hF[0] * cy + hN[0] * elev,
-          hy + hR[1] * cx + hF[1] * cy + hN[1] * elev,
-          hz + hR[2] * cx + hF[2] * cy + hN[2] * elev
-        ];
-
         chest = {
           type: "wood_chest",
           position: chestPos,
-          normal: hN,
-          R: hR,
-          F: hF,
+          normal: chestN,
+          R: chestR,
+          F: chestF,
           active: true,
           storage: Array(20).fill(null),
           isHouse: true,
@@ -355,7 +425,18 @@
           hideFromCompass: false
         };
         colList.push(chest);
-        addedNewChest = true;
+        modifiedChests = true;
+      } else {
+        // If chest exists but is sunken or misaligned, snap it up to the wood floor surface!
+        const cP = chest.position;
+        const distSq = (cP[0] - chestPos[0])**2 + (cP[1] - chestPos[1])**2 + (cP[2] - chestPos[2])**2;
+        if (distSq > 0.0004) { // more than 2cm difference (e.g. old sunken 0.08 vs 0.1175)
+          chest.position = chestPos;
+          chest.normal = chestN;
+          chest.R = chestR;
+          chest.F = chestF;
+          modifiedChests = true;
+        }
       }
 
       if (!chest.storage || !Array.isArray(chest.storage)) {
@@ -364,7 +445,7 @@
       house.chest = chest;
     }
 
-    if (addedNewChest) {
+    if (modifiedChests) {
       if (typeof refreshCollectiblesVBO === "function") {
         refreshCollectiblesVBO();
       }
@@ -633,8 +714,8 @@
     for (let i = 0; i < cState.inventory.length; i++) {
       const it = cState.inventory[i];
       if (!it) continue;
-      // Keep working tools (AXE, PICKAXE) and weapons/ammo (WOODEN_ARM_CANNON, ARROW) equipped
-      if (it.name === "AXE" || it.name === "PICKAXE" || it.name === "WOODEN_ARM_CANNON" || it.name === "ARM_CANNON" || it.name === "ARROW") continue;
+      // Keep working tools (AXE, PICKAXE) and weapons/ammo (WOODEN_ARM_CANNON, ARROW, IRON_BULLET) equipped
+      if (it.name === "AXE" || it.name === "PICKAXE" || it.name === "WOODEN_ARM_CANNON" || it.name === "ARM_CANNON" || it.name === "ARROW" || it.name === "IRON_BULLET") continue;
 
       const itemName = it.name;
       const count = it.count || 1;
@@ -1612,7 +1693,7 @@
           }
           
           const hasCannon = getCloneItemCount(cState, "WOODEN_ARM_CANNON") > 0 || getCloneItemCount(cState, "ARM_CANNON") > 0;
-          const arrowCount = getCloneItemCount(cState, "ARROW");
+          const arrowCount = getCloneItemCount(cState, "ARROW") + getCloneItemCount(cState, "IRON_BULLET");
           if (hasCannon && arrowCount > 0) {
             cState.equippedTool = "WOODEN_ARM_CANNON";
             cState.faceText = "(🪵🦾‿🦾)";
@@ -1636,7 +1717,11 @@
 
             if (cState.actionSwingTimer >= 0.75) {
               cState.actionSwingTimer = 0.0;
-              removeCloneItem(cState, "ARROW", 1);
+              if (getCloneItemCount(cState, "ARROW") > 0) {
+                removeCloneItem(cState, "ARROW", 1);
+              } else {
+                removeCloneItem(cState, "IRON_BULLET", 1);
+              }
               if (typeof playPlaceSound === "function") playPlaceSound();
 
               // Spawn arrow projectile from clone towards animal

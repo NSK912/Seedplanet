@@ -320,8 +320,8 @@ const CollisionCore = {
             
             const halfD = 0.025; // half wall thickness
 
-            let hasCoLocatedDoor = false;
-            let hasCoLocatedWindow = false;
+            let hasCoLocatedDoor = (other.type === "wood_door");
+            let hasCoLocatedWindow = (other.type === "wood_window");
             if (other.type === "wood_wall") {
               for (let d of itemsToCheck) {
                 if (d.active && (d.type === "wood_door" || d.type === "wood_window")) {
@@ -336,10 +336,15 @@ const CollisionCore = {
               }
             }
 
+            // Door opening is in center (|dx| < 0.065) - camera passes freely through doorway
+            if (hasCoLocatedDoor && Math.abs(dx) < 0.065) {
+              continue;
+            }
+
             let segments = [];
             if (hasCoLocatedDoor) {
-              segments.push({ cx: -0.1095, hw: 0.0405 });
-              segments.push({ cx: 0.1095, hw: 0.0405 });
+              segments.push({ cx: -0.12, hw: 0.03 });
+              segments.push({ cx: 0.12, hw: 0.03 });
             } else if (hasCoLocatedWindow) {
               if (dy >= 0.075 && dy < 0.185) {
                 segments.push({ cx: -0.1175, hw: 0.0325 });
@@ -368,7 +373,7 @@ const CollisionCore = {
               return true;
             }
           }
-        } else if (other.type === "wood_floor" || other.type === "thin_wood_floor") {
+        } else if (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") {
           const dx_vec = [
             p[0] - other.position[0],
             p[1] - other.position[1],
@@ -380,11 +385,12 @@ const CollisionCore = {
           const dy = dx_vec[0] * other.normal[0] + dx_vec[1] * other.normal[1] + dx_vec[2] * other.normal[2];
           
           const isStone = other.type === "stone_floor";
+          const isObsidianPad = other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item";
           const floorW = typeof other.width === "number" ? other.width : (isStone ? other.size * 12.0 : 0.3);
           const floorD = typeof other.depth === "number" ? other.depth : (isStone ? other.size * 12.0 : 0.3);
           const hw = floorW / 2;
           const hd = floorD / 2;
-          const h = isStone ? other.size * 0.15 : (other.type === "wood_floor" ? woodFloorHeight + 0.25 * 0.12 : 0.25 * 0.04);
+          const h = isObsidianPad ? 0.033 : (isStone ? other.size * 0.15 : (other.type === "wood_floor" ? woodFloorHeight + 0.25 * 0.12 : 0.25 * 0.04));
           
           const cushionW = hw + 0.1;
           const cushionD = hd + 0.1;
@@ -735,24 +741,31 @@ const CollisionCore = {
               
               const halfD = 0.025; // half wall thickness
 
-              let hasCoLocatedDoor = false;
-              let hasCoLocatedWindow = false;
-              for (let d of itemsToCheck) {
-                if (d.active && (d.type === "wood_door" || d.type === "wood_window")) {
-                  const ox = d.position[0] - other.position[0];
-                  const oy = d.position[1] - other.position[1];
-                  const oz = d.position[2] - other.position[2];
-                  if (ox*ox + oy*oy + oz*oz < 0.005) {
-                    if (d.type === "wood_door") hasCoLocatedDoor = true;
-                    if (d.type === "wood_window") hasCoLocatedWindow = true;
+              let hasCoLocatedDoor = (other.type === "wood_door");
+              let hasCoLocatedWindow = (other.type === "wood_window");
+              if (other.type === "wood_wall") {
+                for (let d of itemsToCheck) {
+                  if (d.active && (d.type === "wood_door" || d.type === "wood_window")) {
+                    const ox = d.position[0] - other.position[0];
+                    const oy = d.position[1] - other.position[1];
+                    const oz = d.position[2] - other.position[2];
+                    if (ox*ox + oy*oy + oz*oz < 0.005) {
+                      if (d.type === "wood_door") hasCoLocatedDoor = true;
+                      if (d.type === "wood_window") hasCoLocatedWindow = true;
+                    }
                   }
                 }
               }
 
+              // Door opening is in center (|dx| < 0.065) - camera passes freely through doorway
+              if (hasCoLocatedDoor && Math.abs(dx) < 0.065) {
+                continue;
+              }
+
               let segments = [];
               if (hasCoLocatedDoor) {
-                segments.push({ cx: -0.1095, hw: 0.0405 });
-                segments.push({ cx: 0.1095, hw: 0.0405 });
+                segments.push({ cx: -0.12, hw: 0.03 });
+                segments.push({ cx: 0.12, hw: 0.03 });
               } else if (hasCoLocatedWindow) {
                 if (dy >= 0.075 && dy < 0.185) {
                   segments.push({ cx: -0.1175, hw: 0.0325 });
@@ -781,7 +794,7 @@ const CollisionCore = {
                 }
               }
             }
-          } else if (other.type === "wood_floor" || other.type === "thin_wood_floor") {
+          } else if (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") {
             const dx_vec = [
               currentP[0] - other.position[0],
               currentP[1] - other.position[1],
@@ -793,11 +806,12 @@ const CollisionCore = {
             const dy = dx_vec[0] * other.normal[0] + dx_vec[1] * other.normal[1] + dx_vec[2] * other.normal[2];
             
             const isStone = other.type === "stone_floor";
+            const isObsidianPad = other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item";
             const floorW = typeof other.width === "number" ? other.width : (isStone ? other.size * 12.0 : 0.3);
             const floorD = typeof other.depth === "number" ? other.depth : (isStone ? other.size * 12.0 : 0.3);
             const hw = floorW / 2;
             const hd = floorD / 2;
-            const h = isStone ? other.size * 0.15 : (other.type === "wood_floor" ? woodFloorHeight + 0.25 * 0.12 : 0.25 * 0.04);
+            const h = isObsidianPad ? 0.033 : (isStone ? other.size * 0.15 : (other.type === "wood_floor" ? woodFloorHeight + 0.25 * 0.12 : 0.25 * 0.04));
             
             const cushionW = hw + 0.1;
             const cushionD = hd + 0.1;
@@ -1553,11 +1567,11 @@ const CollisionCore = {
             ];
             
             let segments = [];
+            let hasCoLocatedDoor = (other.type === "wood_door");
+            let hasCoLocatedWindow = (other.type === "wood_window");
             if (isRidingBoat) {
               segments.push({ cx: 0.0, hw: 0.15 });
             } else {
-              let hasCoLocatedDoor = false;
-              let hasCoLocatedWindow = false;
               for (let d of nearbyCollectibles) {
                 if (d.active && !d.isPreview) {
                   const ox = d.position[0] - other.position[0];
@@ -1570,8 +1584,8 @@ const CollisionCore = {
                 }
               }
               if (hasCoLocatedDoor) {
-                segments.push({ cx: -0.1095, hw: 0.0405 });
-                segments.push({ cx: 0.1095, hw: 0.0405 });
+                segments.push({ cx: -0.12, hw: 0.03 });
+                segments.push({ cx: 0.12, hw: 0.03 });
               } else if (hasCoLocatedWindow) {
                 const feetHeight = feetRadius - wallCenterRadius;
                 if (feetHeight >= 0.075 && feetHeight < 0.185) {
@@ -1607,6 +1621,11 @@ const CollisionCore = {
 
               const cur_dx = (curPt[0] - other.position[0]) * wallR[0] + (curPt[1] - other.position[1]) * wallR[1] + (curPt[2] - other.position[2]) * wallR[2];
               const cur_dz = (curPt[0] - other.position[0]) * wallF[0] + (curPt[1] - other.position[1]) * wallF[1] + (curPt[2] - other.position[2]) * wallF[2];
+
+              // If wall has a door and player is walking within doorway opening, do not block!
+              if (hasCoLocatedDoor && Math.abs(cur_dx) < 0.065) {
+                continue;
+              }
 
               const prev_dz = (prevPt[0] - other.position[0]) * wallF[0] + (prevPt[1] - other.position[1]) * wallF[1] + (prevPt[2] - other.position[2]) * wallF[2];
               const prev_dx = (prevPt[0] - other.position[0]) * wallR[0] + (prevPt[1] - other.position[1]) * wallR[1] + (prevPt[2] - other.position[2]) * wallR[2];
@@ -2002,112 +2021,61 @@ const CollisionCore = {
               const dx = dx_vec_x * wallR[0] + dx_vec_y * wallR[1] + dx_vec_z * wallR[2];
               const dz = dx_vec_x * wallF[0] + dx_vec_y * wallF[1] + dx_vec_z * wallF[2];
 
-              let blockedByPost = false;
-              let postSide = '';
-              let pushed = false;
-              let appliedTorque = 0.0;
-
-              const postRadius = 0.012;
-              const leftPostDx = dx - (-0.069);
-              const rightPostDx = dx - 0.069;
-              const collRad = postRadius + playerScale * 0.38;
-              
-              const leftDistSq = leftPostDx * leftPostDx + dz * dz;
-              if (leftDistSq < collRad * collRad) {
-                blockedByPost = true;
-                postSide = 'left';
-                const dist = Math.sqrt(leftDistSq) || 1.0;
-                const pen = collRad - dist;
-                const pushX = (leftPostDx / dist) * pen;
-                const pushZ = (dz / dist) * pen;
-                const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
-                P_new[0] += pushVec[0] / groundRadius;
-                P_new[1] += pushVec[1] / groundRadius;
-                P_new[2] += pushVec[2] / groundRadius;
-              }
-
-              const rightDistSq = rightPostDx * rightPostDx + dz * dz;
-              if (rightDistSq < collRad * collRad) {
-                blockedByPost = true;
-                postSide = 'right';
-                const dist = Math.sqrt(rightDistSq) || 1.0;
-                const pen = collRad - dist;
-                const pushX = (rightPostDx / dist) * pen;
-                const pushZ = (dz / dist) * pen;
-                const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
-                P_new[0] += pushVec[0] / groundRadius;
-                P_new[1] += pushVec[1] / groundRadius;
-                P_new[2] += pushVec[2] / groundRadius;
-              }
-
+              const isInsideDoorway = Math.abs(dx) < 0.065;
               const doorAngle = other.doorAngle || 0.0;
-              const leafLen = 0.126;
-              const leafThickness = 0.012;
-              const hingeOffset = -0.063;
-              
-              const hingeX = other.position[0] + wallR[0] * hingeOffset;
-              const hingeY = other.position[1] + wallR[1] * hingeOffset;
-              const hingeZ = other.position[2] + wallR[2] * hingeOffset;
-              
-              const p_rel_x = P_new[0] * groundRadius - hingeX;
-              const p_rel_y = P_new[1] * groundRadius - hingeY;
-              const p_rel_z = P_new[2] * groundRadius - hingeZ;
-              
-              const leafR = [
-                wallR[0] * Math.cos(doorAngle) + wallF[0] * Math.sin(doorAngle),
-                wallR[1] * Math.cos(doorAngle) + wallF[1] * Math.sin(doorAngle),
-                wallR[2] * Math.cos(doorAngle) + wallF[2] * Math.sin(doorAngle)
-              ];
-              const leafF = [
-                wallF[0] * Math.cos(doorAngle) - wallR[0] * Math.sin(doorAngle),
-                wallF[1] * Math.cos(doorAngle) - wallR[0] * Math.sin(doorAngle),
-                wallF[2] * Math.cos(doorAngle) - wallR[2] * Math.sin(doorAngle)
-              ];
-              
-              const leafX = p_rel_x * leafR[0] + p_rel_y * leafR[1] + p_rel_z * leafR[2];
-              const leafZ = p_rel_x * leafF[0] + p_rel_y * leafF[1] + p_rel_z * leafF[2];
-              
-              const colZ = leafThickness / 2 + playerScale * 0.38;
-              
-              if (leafX >= 0 && leafX <= leafLen) {
-                if (Math.abs(leafZ) < colZ) {
-                  const penZ = colZ - Math.abs(leafZ);
-                  const pushAmt = penZ * (Math.sign(leafZ) || 1);
-                  const pushVec = [leafF[0] * pushAmt, leafF[1] * pushAmt, leafF[2] * pushAmt];
-                  P_new[0] += pushVec[0] / groundRadius;
-                  P_new[1] += pushVec[1] / groundRadius;
-                  P_new[2] += pushVec[2] / groundRadius;
-                  
-                  const signPush = Math.sign(leafZ) || 1;
-                  appliedTorque = -signPush * (penZ * 8.0) * Math.max(0.1, leafX / leafLen);
-                  other.doorVel = (other.doorVel || 0.0) + appliedTorque;
-                  pushed = true;
-                }
-              } else if (leafX > leafLen && leafX <= leafLen + playerScale * 0.38) {
-                const dxTip = leafX - leafLen;
-                const distSq = dxTip * dxTip + leafZ * leafZ;
-                const limit = playerScale * 0.38;
-                if (distSq < limit * limit) {
-                  const dist = Math.sqrt(distSq) || 1e-5;
-                  const pen = limit - dist;
-                  const pushX = (dxTip / dist) * pen;
-                  const pushZ = (leafZ / dist) * pen;
-                  const pushVec = [
-                    leafR[0] * pushX + leafF[0] * pushZ,
-                    leafR[1] * pushX + leafF[1] * pushZ,
-                    leafR[2] * pushX + leafF[2] * pushZ
-                  ];
-                  P_new[0] += pushVec[0] / groundRadius;
-                  P_new[1] += pushVec[1] / groundRadius;
-                  P_new[2] += pushVec[2] / groundRadius;
-                  
-                  const signPush = Math.sign(leafZ) || 1;
-                  appliedTorque = -signPush * (pen * 8.0);
-                  other.doorVel = (other.doorVel || 0.0) + appliedTorque;
-                  pushed = true;
+              const isDoorOpen = Math.abs(doorAngle) > 0.4 || (other.doorTargetAngle !== undefined && Math.abs(other.doorTargetAngle) > 0.4);
+
+              // 1. Side post collisions (only block when player is walking into the outer frame/wall posts, NOT in the doorway)
+              if (!isInsideDoorway && Math.abs(dz) < 0.04) {
+                const postRadius = 0.012;
+                const leftPostDx = dx - (-0.076);
+                const rightPostDx = dx - 0.076;
+                const collRad = postRadius + playerScale * 0.38;
+
+                if (dx < 0) {
+                  const leftDistSq = leftPostDx * leftPostDx + dz * dz;
+                  if (leftDistSq < collRad * collRad) {
+                    const dist = Math.sqrt(leftDistSq) || 1.0;
+                    const pen = collRad - dist;
+                    const pushX = (leftPostDx / dist) * pen;
+                    const pushZ = (dz / dist) * pen;
+                    const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
+                    P_new[0] += pushVec[0] / groundRadius;
+                    P_new[1] += pushVec[1] / groundRadius;
+                    P_new[2] += pushVec[2] / groundRadius;
+                  }
+                } else {
+                  const rightDistSq = rightPostDx * rightPostDx + dz * dz;
+                  if (rightDistSq < collRad * collRad) {
+                    const dist = Math.sqrt(rightDistSq) || 1.0;
+                    const pen = collRad - dist;
+                    const pushX = (rightPostDx / dist) * pen;
+                    const pushZ = (dz / dist) * pen;
+                    const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
+                    P_new[0] += pushVec[0] / groundRadius;
+                    P_new[1] += pushVec[1] / groundRadius;
+                    P_new[2] += pushVec[2] / groundRadius;
+                  }
                 }
               }
-              
+
+              // 2. Door leaf interaction & collision
+              if (!isDoorOpen) {
+                // If player is walking towards / touching the closed door inside the doorway
+                if (isInsideDoorway && Math.abs(dz) < 0.10) {
+                  if (!other.isLocked) {
+                    // Auto swing open in walking direction!
+                    const openDir = (dz >= 0) ? -1.57 : 1.57;
+                    other.doorTargetAngle = openDir;
+                    other.doorOpenTimer = 1.0;
+                    if (Math.abs(other.doorAngle) < 0.4) {
+                      other.doorAngle = openDir * 0.45;
+                    }
+                    if (window._activeSwingingDoors) window._activeSwingingDoors.add(other);
+                  }
+                }
+              }
+
               const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
               P_new[0] /= pLenTemp;
               P_new[1] /= pLenTemp;

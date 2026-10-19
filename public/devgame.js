@@ -749,11 +749,31 @@ if (toggleControlsBtn && mainControls) {
       btn.innerHTML = `${icon} ${npc.type} #${index} 🚀`;
       
       btn.addEventListener("click", () => {
-        charTheta = npc.theta;
-        charPhi = npc.phi;
+        let targetTheta = npc.theta;
+        let targetPhi = npc.phi;
+
+        // Extract exact coordinates if NPC has a 3D position vector
+        const pos = (npc.ragdollEnabled && npc.ragdollPos && Array.isArray(npc.ragdollPos))
+          ? npc.ragdollPos
+          : (npc.position || null);
+
+        if (pos && Array.isArray(pos) && pos.length >= 3) {
+          const x = pos[0], y = pos[1], z = pos[2];
+          const r = Math.sqrt(x * x + y * y + z * z);
+          if (r > 0.001) {
+            targetTheta = Math.acos(Math.max(-1.0, Math.min(1.0, y / r)));
+            targetPhi = Math.atan2(z, x);
+          }
+        }
+
+        if (typeof targetTheta === 'number' && !isNaN(targetTheta)) charTheta = targetTheta;
+        if (typeof targetPhi === 'number' && !isNaN(targetPhi)) charPhi = targetPhi;
+
+        if (typeof playerCenterRadius !== 'undefined') playerCenterRadius = null;
         if (typeof playerVelocityX !== 'undefined') playerVelocityX = 0;
         if (typeof playerVelocityY !== 'undefined') playerVelocityY = 0;
         if (typeof playerVelocityZ !== 'undefined') playerVelocityZ = 0;
+
         if (typeof showNotice === "function") {
           showNotice(`🚀 วาร์ปไปหา ${npc.type} #${index} เรียบร้อย!`);
         } else if (typeof showNotification === "function") {

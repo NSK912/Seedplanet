@@ -11,6 +11,26 @@
   let currentSmoothAngle = 0;
   let isAngleInit = false;
 
+  // กลุ่มหมวดหมู่ของเข็มทิศ (Compass Groups)
+  // สร้างกลุ่ม 'แมพดาว' (planet_map) ที่จะไม่แสดงผลไอคอนใดๆ เลย
+  const COMPASS_GROUPS = {
+    planet_map: {
+      id: 'planet_map',
+      name: 'แมพดาว',
+      showIcons: false, // ไม่แสดงผลไอคอนใดๆ เลย
+      types: [
+        'wood_floor', 'thin_wood_floor', 'stone_floor',
+        'wood_wall', 'wood_window', 'wood_door', 'wood_roof',
+        'wood_stairs', 'folding_ladder', 'wood_wheel', 'boat_wing',
+        'electric_engine', 'wood_chest', 'chest', 'campfire',
+        'wood_boat', 'robot_stand', 'meganeura_item', 'isopod_item'
+      ]
+    }
+  };
+
+  // ล้าง Key เดิมออกทั้งหมดตามคำสั่ง
+  const CRAFTED_UTILITY_MAP = {};
+
   function initCompassUI() {
     compassCanvas = document.getElementById('compassCanvas');
     let container = document.getElementById('compassContainer');
@@ -263,48 +283,22 @@
 
         const markersToDraw = [];
 
-        // Exact metadata mapping for craftable placed utility objects and player-placed structures
-        const CRAFTED_UTILITY_MAP = {
-          'campfire': { icon: '🔥', label: 'Campfire', color: '#ff9100', priority: 90, itemType: 'CAMPFIRE' },
-          'wood_chest': { icon: '📦', label: 'Chest', color: '#dfb76c', priority: 80, itemType: 'WOOD_CHEST' },
-          'chest': { icon: '📦', label: 'Chest', color: '#dfb76c', priority: 80, itemType: 'WOOD_CHEST' },
-          'wood_boat': { icon: '🛶', label: 'Boat', color: '#40c4ff', priority: 70, itemType: 'WOOD_BOAT' },
-          'robot_stand': { icon: '🏗️', label: 'Robot Stand', color: '#ffb74d', priority: 75, itemType: 'ROBOT_STAND' },
-          'meganeura_item': { icon: '🦟', label: 'Meganeura', color: '#81c784', priority: 60, itemType: 'MEGANEURA' },
-          'isopod_item': { icon: '🦐', label: 'Isopod', color: '#ba68c8', priority: 60, itemType: 'ISOPOD' },
-          'stone_floor': { icon: '🧱', label: 'Stone Floor', color: '#b0bec5', priority: 65, itemType: 'STONE_FLOOR' },
-          'wood_floor': { icon: '🪵', label: 'Wood Floor', color: '#c29d62', priority: 50, itemType: 'WOOD_FLOOR' },
-          'thin_wood_floor': { icon: '🪵', label: 'Floor', color: '#c29d62', priority: 50, itemType: 'THIN_WOOD_FLOOR' },
-          'wood_stairs': { icon: '🪜', label: 'Stairs', color: '#c29d62', priority: 50, itemType: 'WOOD_STAIRS' },
-          'folding_ladder': { icon: '🪜', label: 'Ladder', color: '#90a4ae', priority: 50, itemType: 'FOLDING_LADDER' },
-          'wood_wall': { icon: '🪵', label: 'Wall', color: '#c29d62', priority: 50, itemType: 'WOOD_WALL' },
-          'wood_window': { icon: '🪟', label: 'Window', color: '#c29d62', priority: 50, itemType: 'WOOD_WINDOW' },
-          'wood_door': { icon: '🚪', label: 'Door', color: '#c29d62', priority: 50, itemType: 'WOOD_DOOR' },
-          'wood_roof': { icon: '🏠', label: 'Roof', color: '#c29d62', priority: 50, itemType: 'WOOD_ROOF' },
-          'wood_wheel': { icon: '⚙️', label: 'Wheel', color: '#c29d62', priority: 50, itemType: 'WOOD_WHEEL' },
-          'boat_wing': { icon: '🪽', label: 'Boat Wing', color: '#e2cfb0', priority: 55, itemType: 'BOAT_WING' },
-          'electric_engine': { icon: '🔋', label: 'Engine', color: '#40c4ff', priority: 60, itemType: 'ELECTRIC_ENGINE' }
-        };
-
         // Collect placed craftable structures in the scene
         const collectiblesList = (typeof window !== 'undefined' && window.collectibles) ? window.collectibles : ((typeof collectibles !== 'undefined') ? collectibles : []);
 
         for (let c of collectiblesList) {
           if (!c || c.active === false || c.isPreview || !c.position) continue;
           
-          // 1. Procedural/random world-generated houses, ruins, and random boats are hidden from compass
-          if (c.hideFromCompass || c.isHouse || c.isProceduralHouse || c.isRuin || c.isWorldGenerated || c.isRandomBoat) {
-            continue;
+          // 1. กลุ่มของ 'แมพดาว' (planet_map): ไม่แสดงผลไอคอนใดๆ เลย
+          if (COMPASS_GROUPS.planet_map && !COMPASS_GROUPS.planet_map.showIcons) {
+            if (COMPASS_GROUPS.planet_map.types.includes(c.type) || c.hideFromCompass || c.isHouse || c.isProceduralHouse || c.isRuin || c.isWorldGenerated || c.isRandomBoat) {
+              continue;
+            }
           }
 
-          // 2. Random boats in world without isPlayerPlaced flag must be skipped
-          if (c.type === 'wood_boat' && !c.isPlayerPlaced) {
-            continue;
-          }
-
-          // 3. Craftable and player placed items
+          // 2. ตรวจสอบจาก Utility Map (ล้าง key ออกทั้งหมดแล้ว)
           const utilMeta = CRAFTED_UTILITY_MAP[c.type];
-          if (utilMeta) {
+          if (utilMeta && utilMeta.show !== false) {
             const dx = c.position[0] - px;
             const dy = c.position[1] - py;
             const dz = c.position[2] - pz;
@@ -315,7 +309,7 @@
               icon: utilMeta.icon,
               label: utilMeta.label,
               color: utilMeta.color,
-              priority: utilMeta.priority,
+              priority: utilMeta.priority || 50,
               itemType: utilMeta.itemType,
               dist
             });
@@ -432,7 +426,8 @@
     initCompassUI,
     updateCompassHUD,
     addWaypoint,
-    removeWaypoint
+    removeWaypoint,
+    COMPASS_GROUPS
   };
   global.updateCompassHUD = updateCompassHUD;
 
