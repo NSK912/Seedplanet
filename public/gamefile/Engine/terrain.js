@@ -2233,13 +2233,32 @@
               L_up[2] * leafThickness,
           ];
 
-          // ไล่เฉดสีสุ่มของใบ
+          // ไล่เฉดสีสุ่มของใบ (รองรับต้นไม้พิเศษที่มีใบสีขาวและแดงสลับกัน)
           const shade = (prng() - 0.5) * 0.16;
-          const finalLeafColor = [
-            Math.max(0.04, Math.min(0.98, leafColor[0] + shade)),
-            Math.max(0.04, Math.min(0.98, leafColor[1] + shade * 0.7)),
-            Math.max(0.04, Math.min(0.98, leafColor[2] + shade * 0.4)),
-          ];
+          let finalLeafColor;
+          if (leafColor && leafColor.isWhiteRedAlternating) {
+            const isWhiteLeaf = ((i + Math.floor(Math.abs(seed))) % 2 === 0);
+            if (isWhiteLeaf) {
+              const wShade = shade * 0.45;
+              finalLeafColor = [
+                Math.max(0.04, Math.min(0.98, 0.94 + wShade)),
+                Math.max(0.04, Math.min(0.98, 0.94 + wShade)),
+                Math.max(0.04, Math.min(0.98, 0.96 + wShade)),
+              ];
+            } else {
+              finalLeafColor = [
+                Math.max(0.04, Math.min(0.98, 0.88 + shade)),
+                Math.max(0.04, Math.min(0.98, 0.10 + shade * 0.3)),
+                Math.max(0.04, Math.min(0.98, 0.12 + shade * 0.3)),
+              ];
+            }
+          } else {
+            finalLeafColor = [
+              Math.max(0.04, Math.min(0.98, leafColor[0] + shade)),
+              Math.max(0.04, Math.min(0.98, leafColor[1] + shade * 0.7)),
+              Math.max(0.04, Math.min(0.98, leafColor[2] + shade * 0.4)),
+            ];
+          }
 
           const bIdx = vertices.length / 3;
           vertices.push(v0[0], v0[1], v0[2]);
@@ -2645,6 +2664,7 @@
           if (forestDensity > -0.05) {
             
             const treeCount = Math.floor(Math.random() * 9) + 2; // 2 to 10 trees per zone
+            let clusterHasWhiteRedTree = false;
             for (let t = 0; t < treeCount; t++) {
                 await checkYield();
                 if (choppedTrees.includes(i * 1000 + t)) continue;
@@ -2702,10 +2722,14 @@
             const branchCount = 10 + Math.floor(branchCountNoise * 5); // 10 ถึง 14 กิ่งก้านใหญ่กระจายตัว 3D ทั่วลำต้น
             const numTrunkSegs = 3;
             
-            // เลือกสีของใบไม้แบบสุ่มตามโทนธรรมชาติ
+            // เลือกสีของใบไม้แบบสุ่มตามโทนธรรมชาติ (ต่อ 1 กลุ่มของต้นไม้ จะมี 1 ต้นที่มีใบสีขาวและแดงสลับกัน)
             const leafType = Math.random();
             let leafColor = [0.15, 0.48, 0.18]; // เขียวขจีปกติ
-            if (leafType > 0.8) {
+            if (!clusterHasWhiteRedTree) {
+              leafColor = [0.94, 0.12, 0.15];
+              leafColor.isWhiteRedAlternating = true;
+              clusterHasWhiteRedTree = true;
+            } else if (leafType > 0.8) {
               leafColor = [0.85, 0.42, 0.12]; // ส้มฤดูใบไม้ร่วงอบอุ่น
             } else if (leafType > 0.65) {
               leafColor = [0.42, 0.72, 0.15]; // เขียวอ่อนสว่างไสว
