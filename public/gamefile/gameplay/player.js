@@ -4873,7 +4873,7 @@ window.characterVertexShaderSource = `
                     // Scoop pointy tip
                     addWedge(wBladeMid, wBladeTip, 0.065 * itemScale, 0.01 * itemScale, 0.01 * itemScale, bladeColor);
                 }
-            } else if ((heldItem.name === "OBSIDIAN_FLUX" || heldItem.name === "OBSIDIAN_BALL") && typeof window.buildObsidianBallModel === "function") {
+            } else if ((heldItem.name === "OBSIDIAN_FLUX" || heldItem.name === "OBSIDIAN_FLUX") && typeof window.buildObsidianFluxModel === "function") {
                 const wHandleP1 = transformPt(axeHandleP1Rot);
                 const wHandleP2 = transformPt(axeHandleP2Rot);
                 const handPos = [
@@ -4881,7 +4881,7 @@ window.characterVertexShaderSource = `
                     (wHandleP1[1] + wHandleP2[1]) * 0.5,
                     (wHandleP1[2] + wHandleP2[2]) * 0.5
                 ];
-                window.buildObsidianBallModel(
+                window.buildObsidianFluxModel(
                     1234,
                     0,
                     false,

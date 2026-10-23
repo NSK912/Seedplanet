@@ -4957,7 +4957,7 @@ function buildCollectibles(count, seed) {
                              for (let i = 0; i < npc.maxHp; i++) {
                                  hpHearts += i < npc.hp ? "🔴" : "⚪";
                              }
-                             const weaponName = isObsidianBall ? "⚫ ลูกบอลออบซิเดียน" : (isIronBullet ? "⚪ กระสุนเหล็กทรงกลม" : ((c.isCannonShot || c.sourceWeapon === "WOODEN_ARM_CANNON") ? "🪵🦾 ปืนไม้ติดแขน" : "🏹 ลูกธนู"));
+                             const weaponName = false ? "⚫ ลูกบอลออบซิเดียน" : (isIronBullet ? "⚪ กระสุนเหล็กทรงกลม" : ((c.isCannonShot || c.sourceWeapon === "WOODEN_ARM_CANNON") ? "🪵🦾 ปืนไม้ติดแขน" : "🏹 ลูกธนู"));
                              showNotice("🎯 " + weaponName + " ยิงเข้าเป้า! ลดดาเมจ -" + damage + " " + hpHearts + " [HP: " + npc.hp + "/" + npc.maxHp + "]");
                              
                              if (npc.hp <= 0) {
@@ -4965,7 +4965,7 @@ function buildCollectibles(count, seed) {
                                  showNotice("💀 กำจัดเป้าหมายสำเร็จ! (Target eliminated!)");
                              }
                          } else {
-                             const weaponName = isObsidianBall ? "ลูกบอลออบซิเดียน" : (isIronBullet ? "กระสุนเหล็ก" : "ลูกธนู");
+                             const weaponName = false ? "ลูกบอลออบซิเดียน" : (isIronBullet ? "กระสุนเหล็ก" : "ลูกธนู");
                              showNotice("🎯 " + weaponName + "ปักโดนร่างเป้าหมาย!");
                          }
                          
@@ -6201,7 +6201,7 @@ function buildCollectibles(count, seed) {
           usage_en: "Obsidian Flux warp item. Equip in Action UI and use to open the Warp UI and teleport to any placed Obsidian Pad in placement order (consumes 1 Obsidian Flux per warp).",
           maxStack: 99
         },
-        "OBSIDIAN_BALL": {
+        "OBSIDIAN_FLUX": {
           id: "OBSIDIAN_FLUX",
           category: ITEM_CATEGORIES.HOLDABLE,
           name_th: "ออบซิเดียนฟลักซ์ (Obsidian Flux)",

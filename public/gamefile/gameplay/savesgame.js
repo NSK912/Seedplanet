@@ -735,7 +735,7 @@
         if (Array.isArray(settings.inventory)) {
           inventory = settings.inventory;
           for (let i = 0; i < inventory.length; i++) {
-            if (inventory[i] && inventory[i].name === "OBSIDIAN_BALL") {
+            if (inventory[i] && inventory[i].name === "OBSIDIAN_FLUX") {
               inventory[i].name = "OBSIDIAN_FLUX";
               inventory[i].label = "OBSIDIAN_FLUX";
             }
@@ -749,7 +749,7 @@
         if (Array.isArray(settings.actionSlotsItems)) {
           actionSlotsItems = settings.actionSlotsItems;
           for (let i = 0; i < actionSlotsItems.length; i++) {
-            if (actionSlotsItems[i] && actionSlotsItems[i].name === "OBSIDIAN_BALL") {
+            if (actionSlotsItems[i] && actionSlotsItems[i].name === "OBSIDIAN_FLUX") {
               actionSlotsItems[i].name = "OBSIDIAN_FLUX";
               actionSlotsItems[i].label = "OBSIDIAN_FLUX";
             }

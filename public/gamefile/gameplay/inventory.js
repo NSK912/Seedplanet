@@ -400,7 +400,7 @@
         if (registryKey === "isopod") registryKey = "isopod_item";
         if (registryKey === "obsidian_cube") registryKey = "obsidian_cube_item";
         if (registryKey === "obsidian_pad_warp" || registryKey === "obsidian_compass_pad") registryKey = "obsidian_pad_warp_item";
-        if (registryKey === "obsidian_flux" || registryKey === "obsidian_ball") registryKey = "obsidian_flux_item";
+        if (registryKey === "obsidian_flux" || registryKey === "obsidian_flux") registryKey = "obsidian_flux_item";
 
         const handler = !isExcluded && window.ItemRegistry && window.ItemRegistry[registryKey];
         if (handler && typeof handler.render === "function") {
@@ -506,7 +506,7 @@
           } else if (name === "ISOPOD") {
             scaleFactor = 2.0;
             mockItem.seed = 1234;
-          } else if (name === "OBSIDIAN_FLUX" || name === "OBSIDIAN_BALL") {
+          } else if (name === "OBSIDIAN_FLUX" || name === "OBSIDIAN_FLUX") {
             scaleFactor = 1.05;
             mockItem.isIconPreview = true;
           }
@@ -935,7 +935,7 @@
             const ny2 = ny * Math.cos(rx) - nz1 * Math.sin(rx);
             
             const dot = nx1 * 0.42 + ny2 * 0.84 + nz1 * 0.32;
-            const lightIntensity = (name === "OBSIDIAN_FLUX" || name === "OBSIDIAN_BALL") ? 1.0 : Math.max(0.0, dot);
+            const lightIntensity = (name === "OBSIDIAN_FLUX" || name === "OBSIDIAN_FLUX") ? 1.0 : Math.max(0.0, dot);
             
             ctx.fillStyle = shadeColor(face.color, lightIntensity);
             ctx.fill();
@@ -1229,7 +1229,7 @@
           const { source, index } = activeWarpFluxSource;
           const list = source === "action" ? actionSlotsItems : inventory;
           const slotItem = list && list[index];
-          if (slotItem && (slotItem.name === "OBSIDIAN_FLUX" || slotItem.name === "OBSIDIAN_BALL") && slotItem.count > 0) {
+          if (slotItem && (slotItem.name === "OBSIDIAN_FLUX" || slotItem.name === "OBSIDIAN_FLUX") && slotItem.count > 0) {
             if (slotItem.count > 1) {
               slotItem.count--;
             } else {
@@ -1247,7 +1247,7 @@
 
         if (typeof selectedActionSlotIndex === "number" && selectedActionSlotIndex >= 0 && actionSlotsItems[selectedActionSlotIndex]) {
           const s = actionSlotsItems[selectedActionSlotIndex];
-          if ((s.name === "OBSIDIAN_FLUX" || s.name === "OBSIDIAN_BALL") && s.count > 0) {
+          if ((s.name === "OBSIDIAN_FLUX" || s.name === "OBSIDIAN_FLUX") && s.count > 0) {
             if (s.count > 1) {
               s.count--;
             } else {
@@ -1263,7 +1263,7 @@
 
         for (let i = 0; i < actionSlotsItems.length; i++) {
           const s = actionSlotsItems[i];
-          if (s && (s.name === "OBSIDIAN_FLUX" || s.name === "OBSIDIAN_BALL") && s.count > 0) {
+          if (s && (s.name === "OBSIDIAN_FLUX" || s.name === "OBSIDIAN_FLUX") && s.count > 0) {
             if (s.count > 1) {
               s.count--;
             } else {
@@ -1279,7 +1279,7 @@
 
         for (let i = 0; i < inventory.length; i++) {
           const s = inventory[i];
-          if (s && (s.name === "OBSIDIAN_FLUX" || s.name === "OBSIDIAN_BALL") && s.count > 0) {
+          if (s && (s.name === "OBSIDIAN_FLUX" || s.name === "OBSIDIAN_FLUX") && s.count > 0) {
             if (s.count > 1) {
               s.count--;
             } else {
@@ -3362,7 +3362,7 @@ function cancelFloorPlacement() {
           activeItem = item;
           isUsingItem = true;
           arrowShotInCurrentAnim = false;
-        } else if (itemName === "OBSIDIAN_FLUX" || itemName === "OBSIDIAN_BALL") {
+        } else if (itemName === "OBSIDIAN_FLUX" || itemName === "OBSIDIAN_FLUX") {
           if (typeof isActionDown !== "undefined") {
             isActionDown = false;
           }
