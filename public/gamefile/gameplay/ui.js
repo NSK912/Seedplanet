@@ -5316,9 +5316,17 @@ window.addEventListener("keyup", (e) => {
           if (typeof window.exitMechCamera === "function") window.exitMechCamera();
           activeRidingBoat = null;
           activeRidingMech = null;
-        } else if (fallRagdollTimeout) {
-          clearTimeout(fallRagdollTimeout);
-          fallRagdollTimeout = null;
+        } else {
+          if (typeof resetChibiRagdollPhysics === "function") {
+            resetChibiRagdollPhysics();
+          }
+          if (typeof window !== "undefined" && window.chibiGlbModel && typeof window.chibiGlbModel._resetNodeTransforms === "function") {
+            window.chibiGlbModel._resetNodeTransforms();
+          }
+          if (fallRagdollTimeout) {
+            clearTimeout(fallRagdollTimeout);
+            fallRagdollTimeout = null;
+          }
         }
         const toggle = document.getElementById("ragdollToggle");
         if (toggle) {

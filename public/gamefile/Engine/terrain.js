@@ -116,11 +116,19 @@
       let boatRowTimer = 0.0;
       let playerSpeed = 0.005;
 
-      // Player HP state and functions
-      let playerHP = 10;
-      let playerMaxHP = 10;
+      // Player HP & Hunger state and functions
+      let playerHP = 5;
+      let playerMaxHP = 5;
+      let playerHunger = 5;
+      let playerMaxHunger = 5;
+      let playerHungerTimer = 0.0;
+      let playerStarvationTimer = 0.0;
       let playerDamageCooldown = 0.0;
       playerControlsLocked = false;
+      window.playerHP = playerHP;
+      window.playerMaxHP = playerMaxHP;
+      window.playerHunger = playerHunger;
+      window.playerMaxHunger = playerMaxHunger;
 
 
       // ============================================
@@ -2065,6 +2073,10 @@
         const cR = Math.max(0.0, Math.min(1.0, r));
         const cG = Math.max(0.0, Math.min(1.0, g));
         const cB = Math.max(0.0, Math.min(1.0, b));
+
+        if (typeof window !== "undefined" && window._disableTreeColorEncoding) {
+          return [cR, cG, cB];
+        }
         
         let swayWeightInt = Math.round(Math.max(0.0, Math.min(1.0, swayWeight)) * 100.0);
         if (isLeaf) {
@@ -2441,6 +2453,474 @@
         }
       }
 
+      // สร้างดอก/สมอฝ้ายโลโพลี (Low-Poly Cotton Boll & Calyx Bracts)
+      function buildCottonBollCluster(
+        center,
+        dirNorm,
+        bollRadius,
+        seed,
+        swayWeight,
+        vertices,
+        colors,
+        indices
+      ) {
+        let curSeed = seed;
+        function cRand() {
+          const x = Math.sin(curSeed++) * 10000;
+          return x - Math.floor(x);
+        }
+
+        // สร้างกรอบพิกัดตั้งฉากกับทิศทางก้านดอก (dirNorm)
+        let bx = 0, by = 0, bz = 0;
+        if (Math.abs(dirNorm[1]) < 0.9) {
+          bx = -dirNorm[2]; by = 0; bz = dirNorm[0];
+        } else {
+          bx = 1; by = 0; bz = 0;
+        }
+        const lenB = Math.sqrt(bx * bx + by * by + bz * bz) || 1;
+        const B1 = [bx / lenB, by / lenB, bz / lenB];
+        const B2 = [
+          dirNorm[1] * B1[2] - dirNorm[2] * B1[1],
+          dirNorm[2] * B1[0] - dirNorm[0] * B1[2],
+          dirNorm[0] * B1[1] - dirNorm[1] * B1[0]
+        ];
+
+        // Helper วาดทรงกลมโลโพลีที่เข้ารหัสสีลม (encodeTreeColor) สำหรับปุยฝ้าย
+        function addSwayLowPolyPuff(puffCenter, puffRad, segs, baseCol, noiseStr, puffSeed) {
+          const baseIdx = vertices.length / 3;
+          for (let lat = 0; lat <= segs; lat++) {
+            const theta = (lat / segs) * Math.PI;
+            const sinT = Math.sin(theta);
+            const cosT = Math.cos(theta);
+            for (let lon = 0; lon <= segs; lon++) {
+              const phi = (lon / segs) * Math.PI * 2;
+              const dx = sinT * Math.cos(phi);
+              const dy = cosT;
+              const dz = sinT * Math.sin(phi);
+
+              const nVal = typeof fbmNoise === "function"
+                ? fbmNoise(dx * 3.5, dy * 3.5, dz * 3.5, puffSeed, 2)
+                : (Math.sin(dx * 5 + dy * 7 + puffSeed) * 0.5);
+              const defR = puffRad * (1.0 + nVal * noiseStr);
+
+              const vx = puffCenter[0] + defR * dx;
+              const vy = puffCenter[1] + defR * dy;
+              const vz = puffCenter[2] + defR * dz;
+              vertices.push(vx, vy, vz);
+
+              const shade = (dx * 0.15 + dy * 0.25 + dz * 0.15) * 0.08;
+              const rawCol = [
+                Math.max(0.82, Math.min(1.0, baseCol[0] + shade)),
+                Math.max(0.82, Math.min(1.0, baseCol[1] + shade)),
+                Math.max(0.80, Math.min(0.99, baseCol[2] + shade))
+              ];
+              const enc = typeof encodeTreeColor === "function"
+                ? encodeTreeColor(rawCol, false, swayWeight)
+                : rawCol;
+              colors.push(enc[0], enc[1], enc[2]);
+            }
+          }
+          for (let lat = 0; lat < segs; lat++) {
+            for (let lon = 0; lon < segs; lon++) {
+              const a = baseIdx + lat * (segs + 1) + lon;
+              const b = a + segs + 1;
+              const c = a + 1;
+              const d = b + 1;
+              indices.push(a, b, c);
+              indices.push(c, b, d);
+            }
+          }
+        }
+
+        // 1. กลีบเลี้ยง/เปลือกสมอฝ้ายแห้งที่อ้าออก (Calyx Bracts / Husk) 4 แฉกใต้ปุยฝ้าย
+        const numBracts = 4;
+        const bractBase = [
+          center[0] - dirNorm[0] * (bollRadius * 0.28),
+          center[1] - dirNorm[1] * (bollRadius * 0.28),
+          center[2] - dirNorm[2] * (bollRadius * 0.28)
+        ];
+        for (let k = 0; k < numBracts; k++) {
+          const ang = (k / numBracts) * Math.PI * 2 + cRand() * 0.25;
+          const cosA = Math.cos(ang);
+          const sinA = Math.sin(ang);
+          const radOut = [
+            cosA * B1[0] + sinA * B2[0],
+            cosA * B1[1] + sinA * B2[1],
+            cosA * B1[2] + sinA * B2[2]
+          ];
+          const sideTan = [
+            -sinA * B1[0] + cosA * B2[0],
+            -sinA * B1[1] + cosA * B2[1],
+            -sinA * B1[2] + cosA * B2[2]
+          ];
+
+          const bractLen = bollRadius * 1.15;
+          const bractW = bollRadius * 0.48;
+          const v0 = bractBase;
+          const v1 = [
+            bractBase[0] + radOut[0] * (bractLen * 0.55) + dirNorm[0] * (bollRadius * 0.12) - sideTan[0] * bractW,
+            bractBase[1] + radOut[1] * (bractLen * 0.55) + dirNorm[1] * (bollRadius * 0.12) - sideTan[1] * bractW,
+            bractBase[2] + radOut[2] * (bractLen * 0.55) + dirNorm[2] * (bollRadius * 0.12) - sideTan[2] * bractW
+          ];
+          const v2 = [
+            bractBase[0] + radOut[0] * (bractLen * 0.55) + dirNorm[0] * (bollRadius * 0.12) + sideTan[0] * bractW,
+            bractBase[1] + radOut[1] * (bractLen * 0.55) + dirNorm[1] * (bollRadius * 0.12) + sideTan[1] * bractW,
+            bractBase[2] + radOut[2] * (bractLen * 0.55) + dirNorm[2] * (bollRadius * 0.12) + sideTan[2] * bractW
+          ];
+          const v3 = [
+            bractBase[0] + radOut[0] * bractLen + dirNorm[0] * (bollRadius * 0.45),
+            bractBase[1] + radOut[1] * bractLen + dirNorm[1] * (bollRadius * 0.45),
+            bractBase[2] + radOut[2] * bractLen + dirNorm[2] * (bollRadius * 0.45)
+          ];
+
+          const bractCol = (k % 2 === 0) ? [0.34, 0.25, 0.15] : [0.26, 0.36, 0.16];
+          const encBract = typeof encodeTreeColor === "function"
+            ? encodeTreeColor(bractCol, false, swayWeight)
+            : bractCol;
+
+          const bIdx = vertices.length / 3;
+          vertices.push(v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]);
+          colors.push(
+            encBract[0], encBract[1], encBract[2],
+            encBract[0], encBract[1], encBract[2],
+            encBract[0], encBract[1], encBract[2],
+            encBract[0], encBract[1], encBract[2]
+          );
+          indices.push(
+            bIdx, bIdx + 1, bIdx + 3,
+            bIdx, bIdx + 3, bIdx + 2,
+            bIdx, bIdx + 3, bIdx + 1,
+            bIdx, bIdx + 2, bIdx + 3
+          );
+        }
+
+        // 2. ก้อนปุยฝ้ายสีขาวฟูทรงโลโพลี (Fluffy White Cotton Lobes - 4 พูซ้อนกัน)
+        const whiteCoreCol = [0.97, 0.97, 0.95];
+        addSwayLowPolyPuff(
+          [
+            center[0] + dirNorm[0] * (bollRadius * 0.25),
+            center[1] + dirNorm[1] * (bollRadius * 0.25),
+            center[2] + dirNorm[2] * (bollRadius * 0.25)
+          ],
+          bollRadius * 0.72,
+          4,
+          whiteCoreCol,
+          0.22,
+          curSeed++
+        );
+
+        const numLobes = 3 + (Math.abs(Math.floor(seed)) % 2); // 3-4 พูปุยฝ้ายขาว
+        for (let l = 0; l < numLobes; l++) {
+          const lAng = (l / numLobes) * Math.PI * 2 + 0.4;
+          const cosL = Math.cos(lAng);
+          const sinL = Math.sin(lAng);
+          const lOff = bollRadius * 0.42;
+          const lobeCenter = [
+            center[0] + (cosL * B1[0] + sinL * B2[0]) * lOff + dirNorm[0] * (bollRadius * 0.12),
+            center[1] + (cosL * B1[1] + sinL * B2[1]) * lOff + dirNorm[1] * (bollRadius * 0.12),
+            center[2] + (cosL * B1[2] + sinL * B2[2]) * lOff + dirNorm[2] * (bollRadius * 0.12)
+          ];
+          const lobeCol = [
+            0.94 + cRand() * 0.05,
+            0.94 + cRand() * 0.05,
+            0.91 + cRand() * 0.06
+          ];
+          addSwayLowPolyPuff(
+            lobeCenter,
+            bollRadius * (0.62 + cRand() * 0.12),
+            4,
+            lobeCol,
+            0.26,
+            curSeed++
+          );
+        }
+      }
+
+      // สร้างต้นฝ้ายโลโพลี (Low-Poly Cotton Plant)
+      function buildCottonPlant(
+        wx,
+        wy,
+        wz,
+        nx,
+        ny,
+        nz,
+        R,
+        F,
+        N,
+        seed,
+        vertices,
+        colors,
+        indices
+      ) {
+        let curSeed = seed;
+        function prng() {
+          const x = Math.sin(curSeed++) * 10000;
+          return x - Math.floor(x);
+        }
+
+        // สัดส่วนพุ่มต้นฝ้ายโลโพลี (ย่อขนาดลงครึ่งหนึ่ง)
+        const scale = (0.085 + prng() * 0.032) * 0.5;
+        const stemHeight = scale * (2.2 + prng() * 0.7);
+        const baseRadius = scale * 0.14;
+        const plantYaw = prng() * Math.PI * 2;
+
+        const stemColor = [
+          0.35 + prng() * 0.05,
+          0.24 + prng() * 0.04,
+          0.14 + prng() * 0.03
+        ];
+        const leafBaseColor = [
+          0.14 + prng() * 0.05,
+          0.46 + prng() * 0.08,
+          0.16 + prng() * 0.04
+        ];
+
+        // Helper สร้างใบฝ้ายโลโพลี
+        function addCottonLeaf(origin, dirVec, leafSize, swayW) {
+          let sx = dirVec[1] * N[2] - dirVec[2] * N[1];
+          let sy = dirVec[2] * N[0] - dirVec[0] * N[2];
+          let sz = dirVec[0] * N[1] - dirVec[1] * N[0];
+          const lenS = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+          const L_side = [sx / lenS, sy / lenS, sz / lenS];
+          const L_up = [
+            dirVec[1] * L_side[2] - dirVec[2] * L_side[1],
+            dirVec[2] * L_side[0] - dirVec[0] * L_side[2],
+            dirVec[0] * L_side[1] - dirVec[1] * L_side[0]
+          ];
+
+          const leafLen = leafSize;
+          const leafW = leafSize * 0.72;
+          const arch = leafSize * 0.14;
+
+          const v0 = origin;
+          const v1 = [
+            origin[0] + dirVec[0] * (leafLen * 0.45) - L_side[0] * (leafW * 0.5) + L_up[0] * arch,
+            origin[1] + dirVec[1] * (leafLen * 0.45) - L_side[1] * (leafW * 0.5) + L_up[1] * arch,
+            origin[2] + dirVec[2] * (leafLen * 0.45) - L_side[2] * (leafW * 0.5) + L_up[2] * arch
+          ];
+          const v2 = [
+            origin[0] + dirVec[0] * (leafLen * 0.45) + L_side[0] * (leafW * 0.5) + L_up[0] * arch,
+            origin[1] + dirVec[1] * (leafLen * 0.45) + L_side[1] * (leafW * 0.5) + L_up[1] * arch,
+            origin[2] + dirVec[2] * (leafLen * 0.45) + L_side[2] * (leafW * 0.5) + L_up[2] * arch
+          ];
+          const v3 = [
+            origin[0] + dirVec[0] * leafLen - L_up[0] * (arch * 0.3),
+            origin[1] + dirVec[1] * leafLen - L_up[1] * (arch * 0.3),
+            origin[2] + dirVec[2] * leafLen - L_up[2] * (arch * 0.3)
+          ];
+
+          const shade = (prng() - 0.5) * 0.10;
+          const col = [
+            Math.max(0.05, Math.min(0.9, leafBaseColor[0] + shade)),
+            Math.max(0.15, Math.min(0.9, leafBaseColor[1] + shade)),
+            Math.max(0.05, Math.min(0.9, leafBaseColor[2] + shade * 0.5))
+          ];
+          const enc = typeof encodeTreeColor === "function"
+            ? encodeTreeColor(col, true, swayW)
+            : col;
+
+          const bIdx = vertices.length / 3;
+          vertices.push(v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]);
+          colors.push(
+            enc[0], enc[1], enc[2],
+            enc[0], enc[1], enc[2],
+            enc[0], enc[1], enc[2],
+            enc[0], enc[1], enc[2]
+          );
+          indices.push(
+            bIdx, bIdx + 1, bIdx + 3,
+            bIdx, bIdx + 3, bIdx + 2,
+            bIdx, bIdx + 3, bIdx + 1,
+            bIdx, bIdx + 2, bIdx + 3
+          );
+        }
+
+        // 1. สร้างลำต้นหลักของต้นฝ้าย (Main Stem - 3 ข้อปล้อง)
+        const numStemSegs = 3;
+        const stemPts = [[wx - N[0] * (scale * 0.08), wy - N[1] * (scale * 0.08), wz - N[2] * (scale * 0.08)]];
+        for (let s = 1; s <= numStemSegs; s++) {
+          const bendR = (prng() - 0.5) * 0.14 * scale;
+          const bendF = (prng() - 0.5) * 0.14 * scale;
+          const stepH = stemHeight / numStemSegs;
+          const prev = stemPts[s - 1];
+          const nextP = [
+            prev[0] + N[0] * stepH + R[0] * bendR + F[0] * bendF,
+            prev[1] + N[1] * stepH + R[1] * bendR + F[1] * bendF,
+            prev[2] + N[2] * stepH + R[2] * bendR + F[2] * bendF
+          ];
+          stemPts.push(nextP);
+
+          const r0 = baseRadius * (1.0 - 0.55 * ((s - 1) / numStemSegs));
+          const r1 = baseRadius * (1.0 - 0.55 * (s / numStemSegs));
+          const sway0 = ((s - 1) / numStemSegs) * 0.35;
+          const sway1 = (s / numStemSegs) * 0.35;
+
+          buildTaperedSegment(
+            prev,
+            nextP,
+            r0,
+            r1,
+            4,
+            stemColor,
+            vertices,
+            colors,
+            indices,
+            false,
+            sway0,
+            sway1
+          );
+        }
+
+        // ดอกฝ้ายปุยขาวบนยอดสุดของลำต้นหลัก
+        const bollBaseRadius = scale * (0.34 + prng() * 0.06);
+        buildCottonBollCluster(
+          stemPts[numStemSegs],
+          N,
+          bollBaseRadius,
+          curSeed + 101,
+          0.35,
+          vertices,
+          colors,
+          indices
+        );
+
+        // 2. แตกกิ่งก้านสาขา (4 - 5 กิ่ง) พร้อมใบฝ้ายและปุยฝ้ายสีขาวที่ปลายกิ่ง
+        const numBranches = 4 + Math.floor(prng() * 2); // 4 ถึง 5 กิ่ง
+        for (let b = 0; b < numBranches; b++) {
+          const frac = 0.28 + 0.62 * (b / (numBranches - 1 || 1));
+          const segF = frac * numStemSegs;
+          const sIdx = Math.min(numStemSegs - 1, Math.floor(segF));
+          const tSub = segF - sIdx;
+          const pA = stemPts[sIdx];
+          const pB = stemPts[sIdx + 1];
+
+          const bOrigin = [
+            pA[0] + (pB[0] - pA[0]) * tSub,
+            pA[1] + (pB[1] - pA[1]) * tSub,
+            pA[2] + (pB[2] - pA[2]) * tSub
+          ];
+          const originSway = frac * 0.35;
+
+          const bAngle = plantYaw + b * 2.399963 + (prng() - 0.5) * 0.35;
+          const bTilt = 0.42 + prng() * 0.32;
+          const rawDirX = Math.cos(bAngle) * R[0] + Math.sin(bAngle) * F[0] + bTilt * N[0];
+          const rawDirY = Math.cos(bAngle) * R[1] + Math.sin(bAngle) * F[1] + bTilt * N[1];
+          const rawDirZ = Math.cos(bAngle) * R[2] + Math.sin(bAngle) * F[2] + bTilt * N[2];
+          const lenBD = Math.sqrt(rawDirX * rawDirX + rawDirY * rawDirY + rawDirZ * rawDirZ) || 1;
+          const bDir = [rawDirX / lenBD, rawDirY / lenBD, rawDirZ / lenBD];
+
+          const bLen = scale * (0.95 + (1.0 - frac * 0.35) * 0.55);
+          const bMid = [
+            bOrigin[0] + bDir[0] * (bLen * 0.55),
+            bOrigin[1] + bDir[1] * (bLen * 0.55),
+            bOrigin[2] + bDir[2] * (bLen * 0.55)
+          ];
+          const tipDirX = bDir[0] + N[0] * 0.25;
+          const tipDirY = bDir[1] + N[1] * 0.25;
+          const tipDirZ = bDir[2] + N[2] * 0.25;
+          const lenTD = Math.sqrt(tipDirX * tipDirX + tipDirY * tipDirY + tipDirZ * tipDirZ) || 1;
+          const tipDir = [tipDirX / lenTD, tipDirY / lenTD, tipDirZ / lenTD];
+
+          const bTip = [
+            bMid[0] + tipDir[0] * (bLen * 0.48),
+            bMid[1] + tipDir[1] * (bLen * 0.48),
+            bMid[2] + tipDir[2] * (bLen * 0.48)
+          ];
+
+          const rBranchBase = baseRadius * 0.58;
+          const rBranchMid = baseRadius * 0.42;
+          const rBranchTip = baseRadius * 0.28;
+          const midSway = originSway + 0.12;
+          const tipSway = midSway + 0.12;
+
+          buildTaperedSegment(
+            bOrigin,
+            bMid,
+            rBranchBase,
+            rBranchMid,
+            4,
+            stemColor,
+            vertices,
+            colors,
+            indices,
+            false,
+            originSway,
+            midSway
+          );
+          buildTaperedSegment(
+            bMid,
+            bTip,
+            rBranchMid,
+            rBranchTip,
+            4,
+            stemColor,
+            vertices,
+            colors,
+            indices,
+            false,
+            midSway,
+            tipSway
+          );
+
+          // สร้างใบฝ้ายโลโพลี 2-3 ใบตามแนวกิ่ง
+          const numLeavesOnBranch = 2 + (b % 2);
+          for (let lf = 0; lf < numLeavesOnBranch; lf++) {
+            const lSide = (lf % 2 === 0) ? 1.0 : -1.0;
+            const lAng = bAngle + lSide * (0.75 + prng() * 0.35);
+            const lDirX = Math.cos(lAng) * R[0] + Math.sin(lAng) * F[0] + 0.18 * N[0];
+            const lDirY = Math.cos(lAng) * R[1] + Math.sin(lAng) * F[1] + 0.18 * N[1];
+            const lDirZ = Math.cos(lAng) * R[2] + Math.sin(lAng) * F[2] + 0.18 * N[2];
+            const lenLD = Math.sqrt(lDirX * lDirX + lDirY * lDirY + lDirZ * lDirZ) || 1;
+            const lOrigin = (lf === 0) ? bOrigin : bMid;
+            const lSway = (lf === 0) ? originSway : midSway;
+            addCottonLeaf(
+              lOrigin,
+              [lDirX / lenLD, lDirY / lenLD, lDirZ / lenLD],
+              scale * (0.52 + prng() * 0.18),
+              lSway
+            );
+          }
+
+          // สร้างปุยฝ้ายสีขาวโลโพลีที่ปลายกิ่งทุกกิ่ง
+          buildCottonBollCluster(
+            bTip,
+            tipDir,
+            bollBaseRadius * (0.88 + prng() * 0.18),
+            curSeed + b * 73,
+            tipSway,
+            vertices,
+            colors,
+            indices
+          );
+
+          // กิ่งล่างบางกิ่งมีสมอฝ้ายย่อยตรงข้อกลางกิ่งเพิ่มความพุ่มฟู
+          if (b % 2 === 0) {
+            const subAng = bAngle + 0.65;
+            const subDirX = Math.cos(subAng) * R[0] + Math.sin(subAng) * F[0] + 0.55 * N[0];
+            const subDirY = Math.cos(subAng) * R[1] + Math.sin(subAng) * F[1] + 0.55 * N[1];
+            const subDirZ = Math.cos(subAng) * R[2] + Math.sin(subAng) * F[2] + 0.55 * N[2];
+            const lenSub = Math.sqrt(subDirX * subDirX + subDirY * subDirY + subDirZ * subDirZ) || 1;
+            const subDir = [subDirX / lenSub, subDirY / lenSub, subDirZ / lenSub];
+            const subBollPos = [
+              bMid[0] + subDir[0] * (scale * 0.22),
+              bMid[1] + subDir[1] * (scale * 0.22),
+              bMid[2] + subDir[2] * (scale * 0.22)
+            ];
+            buildCottonBollCluster(
+              subBollPos,
+              subDir,
+              bollBaseRadius * 0.76,
+              curSeed + b * 137 + 19,
+              midSway,
+              vertices,
+              colors,
+              indices
+            );
+          }
+        }
+      }
+      window.buildCottonPlant = buildCottonPlant;
+
       class FastFloat32Array {
         constructor(cap) {
           this.data = new Float32Array(cap);
@@ -2529,6 +3009,7 @@
         window.choppedTrees = choppedTrees;
         window.destroyedRocks = destroyedRocks;
         const treePositions = [];
+        const treeGroupCenters = [];
 
         let lastYieldTime = performance.now();
         const checkYield = async () => {
@@ -2688,6 +3169,7 @@
             
             const treeCount = Math.floor(Math.random() * 9) + 2; // 2 to 10 trees per zone
             let clusterHasWhiteRedTree = false;
+            let groupSpawnedAnyTree = false;
             for (let t = 0; t < treeCount; t++) {
                 await checkYield();
                 Math.random = mulberry32(seed + i * 11235 + (t + 1) * 997);
@@ -2715,6 +3197,7 @@
 
                 // Skip tree if too close to a cave tunnel (prevents floating on top of cave openings)
                 if (isPositionInsideCave(localWx, localWy, localWz, 0.40)) continue;
+                groupSpawnedAnyTree = true;
 
                 // ============================================
                 // สร้างต้นไม้ (TREE) มี ลำต้น ราก กิ่งก้าน และใบ
@@ -3151,19 +3634,14 @@
                 1.1
               );
 
-              // ต้นไม้ที่มีใบสีขาวและแดง ให้มีผลแก้วมังกร (Dragon Fruit) ห้อย 1-2 ผลตามกิ่งไม้
+              // ต้นไม้ที่มีใบสีขาวและแดง ให้มีผลแก้วมังกร (Dragon Fruit) ยึดติดกับก้านเดิมที่มีอยู่โดยตรง (bp)
               if (leafColor && leafColor.isWhiteRedAlternating && targetFruitBranches.includes(bIdx)) {
-                const fruitScale = scale * 1.5;
-                const hangOffset = [
-                  bp[0] - tN[0] * (fruitScale * 0.35),
-                  bp[1] - tN[1] * (fruitScale * 0.35),
-                  bp[2] - tN[2] * (fruitScale * 0.35)
-                ];
                 treeFruitPositions.push({
-                  pos: hangOffset,
+                  pos: [bp[0], bp[1], bp[2]],
                   normal: [-tN[0], -tN[1], -tN[2]],
                   R: [tR[0], tR[1], tR[2]],
-                  F: [tF[0], tF[1], tF[2]]
+                  F: [tF[0], tF[1], tF[2]],
+                  swayWeight: 1.0
                 });
               }
             }
@@ -3200,7 +3678,10 @@
               trunkBaseRadius: trunkBaseRadius
             });
 
-            treePositions.push({ theta: treeTheta, phi: treePhi });
+            treePositions.push({ theta: treeTheta, phi: treePhi, wx: localWx, wy: localWy, wz: localWz });
+            }
+            if (groupSpawnedAnyTree) {
+              treeGroupCenters.push({ wx, wy, wz, nx, ny, nz, theta, phi });
             }
             
           } else {
@@ -3260,6 +3741,202 @@
               meshStart: startIdx,
               meshEnd: endIdx
             });
+          }
+        }
+
+        // ============================================
+        // สร้างกลุ่มพืชฝ้าย (COTTON PLANT GROUPS)
+        // - แยกกลุ่มออกจากกลุ่มต้นไม้ชัดเจน
+        // - จำนวนกลุ่มของต้นฝ้าย = ครึ่งหนึ่งของจำนวนกลุ่มต้นไม้ (50%)
+        // - ใน 1 กลุ่มจะมีต้นฝ้าย 1 ถึง 3 ต้น (โมเดลโลโพลี)
+        // ============================================
+        const numTreeGroups = treeGroupCenters.length;
+        const targetCottonGroups = numTreeGroups > 0 ? Math.max(1, Math.floor(numTreeGroups / 2)) : 0;
+        const cottonGroupCenters = [];
+        window.treeGroupCount = numTreeGroups;
+        window.cottonGroupCount = targetCottonGroups;
+
+        if (targetCottonGroups > 0 && !window.DISABLE_ENVIRONMENT) {
+          const minLandH = waterLevel * 0.15 + 0.02;
+          const baseTreeGroupDist = Math.min(3.2, Math.max(1.8, RADIUS * 0.24));
+          const baseTreeSingleDist = Math.min(2.0, Math.max(1.25, RADIUS * 0.15));
+          const baseCottonGroupDist = Math.min(2.4, Math.max(1.4, RADIUS * 0.18));
+
+          for (let g = 0; g < targetCottonGroups; g++) {
+            await checkYield();
+            let chosenGroup = null;
+
+            for (let attempt = 0; attempt < 80; attempt++) {
+              const candRng = mulberry32(seed + 55123 + g * 4999 + attempt * 313);
+              const u = candRng();
+              const v = candRng();
+              const cTheta = Math.acos(2 * u - 1);
+              const cPhi = 2 * Math.PI * v;
+
+              const cHeight = typeof getVisualHeightOnSphere === "function"
+                ? getVisualHeightOnSphere(cTheta, cPhi, seed)
+                : getHeightOnSphere(cTheta, cPhi, seed);
+
+              // ต้องอยู่บนบก และไม่สูงจนเป็นยอดเขาหิมะ
+              if (cHeight < minLandH || cHeight > 1.48) continue;
+
+              const cR = RADIUS + cHeight * HEIGHT_SCALE;
+              const cNx = Math.sin(cTheta) * Math.cos(cPhi);
+              const cNy = Math.cos(cTheta);
+              const cNz = Math.sin(cTheta) * Math.sin(cPhi);
+              const cWx = cR * cNx;
+              const cWy = cR * cNy;
+              const cWz = cR * cNz;
+
+              if (isPositionInsideCave(cWx, cWy, cWz, 0.45)) continue;
+
+              // ค่อยๆ ผ่อนปรนระยะห่างหากสุ่มหลายรอบในดาวขนาดเล็ก แต่ยังคงแยกจากกลุ่มต้นไม้เสมอ
+              const relax = attempt < 35 ? 1.0 : (attempt < 60 ? 0.72 : 0.50);
+              const minTreeGrpSq = (baseTreeGroupDist * relax) * (baseTreeGroupDist * relax);
+              const minTreePosSq = (baseTreeSingleDist * relax) * (baseTreeSingleDist * relax);
+              const minCottonGrpSq = (baseCottonGroupDist * relax) * (baseCottonGroupDist * relax);
+
+              let tooCloseToTreeGroup = false;
+              for (let tg = 0; tg < treeGroupCenters.length; tg++) {
+                const dx = cWx - treeGroupCenters[tg].wx;
+                const dy = cWy - treeGroupCenters[tg].wy;
+                const dz = cWz - treeGroupCenters[tg].wz;
+                if (dx * dx + dy * dy + dz * dz < minTreeGrpSq) {
+                  tooCloseToTreeGroup = true;
+                  break;
+                }
+              }
+              if (tooCloseToTreeGroup) continue;
+
+              let tooCloseToTree = false;
+              for (let tp = 0; tp < treePositions.length; tp++) {
+                const tPos = treePositions[tp];
+                if (tPos.wx !== undefined) {
+                  const dx = cWx - tPos.wx;
+                  const dy = cWy - tPos.wy;
+                  const dz = cWz - tPos.wz;
+                  if (dx * dx + dy * dy + dz * dz < minTreePosSq) {
+                    tooCloseToTree = true;
+                    break;
+                  }
+                }
+              }
+              if (tooCloseToTree) continue;
+
+              let tooCloseToOtherCotton = false;
+              for (let cg = 0; cg < cottonGroupCenters.length; cg++) {
+                const dx = cWx - cottonGroupCenters[cg].wx;
+                const dy = cWy - cottonGroupCenters[cg].wy;
+                const dz = cWz - cottonGroupCenters[cg].wz;
+                if (dx * dx + dy * dy + dz * dz < minCottonGrpSq) {
+                  tooCloseToOtherCotton = true;
+                  break;
+                }
+              }
+              if (tooCloseToOtherCotton) continue;
+
+              chosenGroup = { wx: cWx, wy: cWy, wz: cWz, nx: cNx, ny: cNy, nz: cNz, theta: cTheta, phi: cPhi };
+              break;
+            }
+
+            if (!chosenGroup) continue;
+            cottonGroupCenters.push(chosenGroup);
+
+            // สร้างกรอบพิกัดสัมผัส (R, F, N) ของกลุ่มต้นฝ้าย
+            let cRx, cRy, cRz;
+            if (Math.abs(chosenGroup.ny) < 0.9) {
+              cRx = -chosenGroup.nz; cRy = 0; cRz = chosenGroup.nx;
+            } else {
+              cRx = 1; cRy = 0; cRz = 0;
+            }
+            const lenCR = Math.sqrt(cRx * cRx + cRy * cRy + cRz * cRz) || 1;
+            cRx /= lenCR; cRy /= lenCR; cRz /= lenCR;
+            let cFx = cRy * chosenGroup.nz - cRz * chosenGroup.ny;
+            let cFy = cRz * chosenGroup.nx - cRx * chosenGroup.nz;
+            let cFz = cRx * chosenGroup.ny - cRy * chosenGroup.nx;
+            const lenCF = Math.sqrt(cFx * cFx + cFy * cFy + cFz * cFz) || 1;
+            cFx /= lenCF; cFy /= lenCF; cFz /= lenCF;
+
+            const grpR = [cRx, cRy, cRz];
+            const grpF = [cFx, cFy, cFz];
+
+            // 1 กลุ่มจะมี 1 ถึง 3 ต้น (1 + Math.floor(rng * 3))
+            const grpRng = mulberry32(seed + 88421 + g * 1777);
+            const cottonCountInGroup = 1 + Math.floor(grpRng() * 3);
+
+            for (let cIdx = 0; cIdx < cottonCountInGroup; cIdx++) {
+              await checkYield();
+              const plantSeed = seed + 99000 + g * 100 + cIdx * 17;
+
+              // จัดวางต้นฝ้ายในกลุ่มให้เกาะกลุ่มกันอย่างเป็นธรรมชาติ (ไม่ซ้อนทับกัน)
+              let offX = 0;
+              let offZ = 0;
+              if (cottonCountInGroup > 1) {
+                const ang = (cIdx / cottonCountInGroup) * Math.PI * 2 + (grpRng() - 0.5) * 0.55;
+                const rad = 0.24 + grpRng() * 0.34;
+                offX = Math.cos(ang) * rad;
+                offZ = Math.sin(ang) * rad;
+              } else {
+                offX = (grpRng() - 0.5) * 0.14;
+                offZ = (grpRng() - 0.5) * 0.14;
+              }
+
+              const rawPx = chosenGroup.wx + offX * grpR[0] + offZ * grpF[0];
+              const rawPy = chosenGroup.wy + offX * grpR[1] + offZ * grpF[1];
+              const rawPz = chosenGroup.wz + offX * grpR[2] + offZ * grpF[2];
+              const lenP = Math.sqrt(rawPx * rawPx + rawPy * rawPy + rawPz * rawPz) || 1;
+              const pNx = rawPx / lenP;
+              const pNy = rawPy / lenP;
+              const pNz = rawPz / lenP;
+
+              const pTheta = Math.acos(Math.max(-1.0, Math.min(1.0, pNy)));
+              const pPhi = Math.atan2(pNz, pNx);
+              const pH = typeof getVisualHeightOnSphere === "function"
+                ? getVisualHeightOnSphere(pTheta, pPhi, seed)
+                : getHeightOnSphere(pTheta, pPhi, seed);
+              if (pH < minLandH) continue;
+
+              const pSurfR = RADIUS + pH * HEIGHT_SCALE;
+              const pWx = pNx * pSurfR;
+              const pWy = pNy * pSurfR;
+              const pWz = pNz * pSurfR;
+
+              if (isPositionInsideCave(pWx, pWy, pWz, 0.30)) continue;
+
+              let pRx, pRy, pRz;
+              if (Math.abs(pNy) < 0.9) {
+                pRx = -pNz; pRy = 0; pRz = pNx;
+              } else {
+                pRx = 1; pRy = 0; pRz = 0;
+              }
+              const lenPR = Math.sqrt(pRx * pRx + pRy * pRy + pRz * pRz) || 1;
+              pRx /= lenPR; pRy /= lenPR; pRz /= lenPR;
+              const pFx = pRy * pNz - pRz * pNy;
+              const pFy = pRz * pNx - pRx * pNz;
+              const pFz = pRx * pNy - pRy * pNx;
+              const lenPF = Math.sqrt(pFx * pFx + pFy * pFy + pFz * pFz) || 1;
+              const pRVec = [pRx, pRy, pRz];
+              const pFVec = [pFx / lenPF, pFy / lenPF, pFz / lenPF];
+              const pNVec = [pNx, pNy, pNz];
+
+              const cottonId = 500000 + g * 10 + cIdx;
+              const cottonObj = {
+                id: cottonId,
+                type: "cotton_plant",
+                groupId: g,
+                layer: 0, // พุ่มฝ้ายเดินผ่านได้และเก็บได้ทันที (ไม่มีระบบกันชน)
+                noCollision: true,
+                isPassable: true,
+                normal: [pNx, pNy, pNz],
+                position: [pWx, pWy, pWz],
+                R: pRVec,
+                F: pFVec,
+                seed: plantSeed,
+                radius: 0.0
+              };
+              window.allDeterministicNatureObstacles.push(cottonObj);
+              natureObstacles.push(cottonObj);
+            }
           }
         }
 

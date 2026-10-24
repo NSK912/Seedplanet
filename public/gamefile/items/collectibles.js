@@ -5,9 +5,17 @@ window.collectibles = collectibles;
 
 function syncTreeAttachedFruits() {
   if (typeof window === "undefined") return;
-  const natureList = (window.natureObstacles && window.natureObstacles.length > 0)
-    ? window.natureObstacles
+  const rawNature = (window.natureObstacles && window.natureObstacles.length > 0)
+    ? window.natureObstacles.concat(window.allDeterministicNatureObstacles || [])
     : (window.allDeterministicNatureObstacles || []);
+  const seenIds = new Set();
+  const natureList = [];
+  for (let obs of rawNature) {
+    if (obs && obs.id && !seenIds.has(obs.id)) {
+      seenIds.add(obs.id);
+      natureList.push(obs);
+    }
+  }
   if (!natureList || natureList.length === 0) return;
 
   const colList = window.collectibles || [];
@@ -19,7 +27,8 @@ function syncTreeAttachedFruits() {
       for (let fIdx = 0; fIdx < obs.fruitPositions.length; fIdx++) {
         const fInfo = obs.fruitPositions[fIdx];
         const fruitId = "df_" + obs.id + "_" + fIdx;
-        if (!colList.some(c => c.fruitId === fruitId || (c.treeId === obs.id && c.fruitIdx === fIdx))) {
+        const existing = colList.find(c => c.fruitId === fruitId || (c.treeId === obs.id && c.fruitIdx === fIdx));
+        if (!existing) {
           colList.push({
             type: "dragon_fruit",
             position: [fInfo.pos[0], fInfo.pos[1], fInfo.pos[2]],
@@ -31,16 +40,49 @@ function syncTreeAttachedFruits() {
             seed: 1234 + obs.id * 10 + fIdx,
             color: [0.92, 0.14, 0.46],
             isAttachedToTree: true,
+            swayWeight: typeof fInfo.swayWeight === "number" ? fInfo.swayWeight : 1.0,
             treeId: obs.id,
             fruitIdx: fIdx,
             fruitId: fruitId,
             isDynamic: false
           });
+        } else if (existing.isAttachedToTree) {
+          existing.position = [fInfo.pos[0], fInfo.pos[1], fInfo.pos[2]];
+          if (fInfo.normal) existing.normal = [fInfo.normal[0], fInfo.normal[1], fInfo.normal[2]];
+          if (fInfo.R) existing.R = [fInfo.R[0], fInfo.R[1], fInfo.R[2]];
+          if (fInfo.F) existing.F = [fInfo.F[0], fInfo.F[1], fInfo.F[2]];
+          existing.swayWeight = typeof fInfo.swayWeight === "number" ? fInfo.swayWeight : 1.0;
         }
+      }
+    } else if (obs && obs.type === "cotton_plant") {
+      const cottonId = "cotton_" + obs.id;
+      const existing = colList.find(c => c.cottonId === cottonId);
+      if (!existing) {
+        colList.push({
+          type: "cotton_plant",
+          position: [obs.position[0], obs.position[1], obs.position[2]],
+          normal: obs.normal ? [obs.normal[0], obs.normal[1], obs.normal[2]] : [0, 1, 0],
+          R: obs.R ? [obs.R[0], obs.R[1], obs.R[2]] : [1, 0, 0],
+          F: obs.F ? [obs.F[0], obs.F[1], obs.F[2]] : [0, 0, 1],
+          active: true,
+          size: 0.06,
+          seed: typeof obs.seed === "number" ? obs.seed : (obs.id * 17.31),
+          color: [0.96, 0.96, 0.94],
+          cottonId: cottonId,
+          isDynamic: false
+        });
       }
     }
   }
+  for (let i = 0; i < colList.length; i++) {
+    if (!colList[i].worldKey) {
+      colList[i].worldKey = colList[i].cottonId || colList[i].fruitId || ("item_" + i);
+    }
+  }
   window.collectibles = colList;
+  if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.rebuild === "function") {
+    SpatialGrid.rebuild(colList);
+  }
   if (typeof refreshCollectiblesVBO === "function") {
     refreshCollectiblesVBO();
   }
@@ -49,6 +91,34 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
 
 // Initialize ItemRegistry
 window.ItemRegistry = window.ItemRegistry || window.ITEM_DEFINITIONS || {};
+
+// Register "cotton_plant" item 3D renderer
+window.ItemRegistry["cotton_plant"] = {
+  render: function(item, vertices, colors, indices, targetBuffer) {
+    if (typeof window.buildCottonPlant !== "function") return;
+    const p = item.position || [0, 0, 0];
+    const n = item.normal || [0, 1, 0];
+    const r = item.R || [1, 0, 0];
+    const f = item.F || [0, 0, 1];
+    const seed = typeof item.seed === "number" ? item.seed : 123.45;
+    const prevDisable = window._disableTreeColorEncoding;
+    if (targetBuffer === "preview") {
+      window._disableTreeColorEncoding = true;
+    }
+    try {
+      window.buildCottonPlant(
+        p[0], p[1], p[2],
+        n[0], n[1], n[2],
+        r, f, n,
+        seed,
+        vertices, colors, indices
+      );
+    } finally {
+      window._disableTreeColorEncoding = prevDisable;
+    }
+  }
+};
+window.ItemRegistry["COTTON_PLANT"] = window.ItemRegistry["cotton_plant"];
 
 // Register "log" item 3D renderer
 window.ItemRegistry["log"] = {
@@ -5409,7 +5479,7 @@ function buildCollectibles(count, seed) {
               }
           }
           
-          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore" || c.type === "dragon_fruit");
+          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore" || c.type === "dragon_fruit" || c.type === "cotton_plant");
           let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           if (c.type === "wood_boat" && !isInWater) {
              const cPos = c.position;
@@ -6076,6 +6146,17 @@ function buildCollectibles(count, seed) {
           healHP: 4,
           usage_th: "ถือในมือ/คลิกใช้ รับประทานเพื่อฟื้นฟูพลังชีวิตผู้เล่น HP +4 จุด (เก็บได้จากต้นไม้ใบไม้ขาว-แดง)",
           usage_en: "Hold or use to eat and restore 4 Player HP points (harvested from white-and-red leaved trees).",
+          maxStack: 99
+        },
+        "COTTON_PLANT": {
+          id: "COTTON_PLANT",
+          category: ITEM_CATEGORIES.NONE,
+          name_th: "ต้นฝ้าย",
+          name_en: "Cotton Plant",
+          icon: "☁️",
+          actionType: "RAW_MATERIAL",
+          usage_th: "พืชธรรมชาติ เก็บได้ทันทีจากกลุ่มต้นฝ้าย ใช้เป็นวัตถุดิบเส้นใยและสิ่งทอ",
+          usage_en: "Natural fiber plant harvested directly from cotton plant clusters.",
           maxStack: 99
         },
 

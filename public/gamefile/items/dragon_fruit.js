@@ -174,19 +174,34 @@ window.ItemRegistry["dragon_fruit"] = {
     const s = item.size || 0.04;
 
     const scale = s * 2.2;
-    // Elevate slightly so it rests nicely on the surface
+    // When attached to a tree branch, anchor the stem socket (y = -0.16) directly at the branch position p
+    // so pBottomStem (y = -0.22) embeds inside the existing branch with zero gap.
+    const liftDist = item.isAttachedToTree ? (scale * 0.16) : (s * 0.45);
     const elevatedPos = [
-      p[0] + n[0] * (s * 0.45),
-      p[1] + n[1] * (s * 0.45),
-      p[2] + n[2] * (s * 0.45),
+      p[0] + n[0] * liftDist,
+      p[1] + n[1] * liftDist,
+      p[2] + n[2] * liftDist,
     ];
+
+    const colorEncoder = item.isAttachedToTree
+      ? function(col) {
+          const cR = Math.max(0.0, Math.min(1.0, col[0]));
+          const cG = Math.max(0.0, Math.min(1.0, col[1]));
+          const cB = Math.max(0.0, Math.min(1.0, col[2]));
+          const swayWeight = typeof item.swayWeight === "number" ? item.swayWeight : 1.0;
+          const swayWeightInt = Math.round(Math.max(0.0, Math.min(1.0, swayWeight)) * 100.0);
+          const encoded = cB + (swayWeightInt + 10.0) * 2.0;
+          return [cR, cG, -encoded];
+        }
+      : null;
 
     window.buildDragonFruitModel(
       item.seed || 1234,
       scale,
       elevatedPos,
       r, n, f,
-      vertices, colors, indices
+      vertices, colors, indices,
+      colorEncoder
     );
   }
 };

@@ -477,18 +477,86 @@ window.characterVertexShaderSource = `
         
         hpContainer.innerHTML = "";
         
-        const totalSlots = playerMaxHP;
-        const filledSlots = playerHP;
+        // 5 ช่อง HP (สีแดง - อยู่ด้านล่างเนื่องจาก container ใช้ column-reverse)
+        const totalHpSlots = (typeof playerMaxHP === "number") ? playerMaxHP : 5;
+        const filledHpSlots = (typeof playerHP === "number") ? Math.max(0, playerHP) : 5;
         
-        for (let s = 0; s < totalSlots; s++) {
+        for (let s = 0; s < totalHpSlots; s++) {
           const slotDiv = document.createElement("div");
           slotDiv.className = "player-hp-slot-minimal";
-          if (s < filledSlots) {
+          if (s < filledHpSlots) {
             slotDiv.className += " filled";
           }
+          slotDiv.title = `HP: ${filledHpSlots}/${totalHpSlots}`;
           hpContainer.appendChild(slotDiv);
         }
+
+        // 5 ช่องความหิว (สีขาว - อยู่ด้านบนเหนือ HP)
+        const totalHungerSlots = (typeof playerMaxHunger === "number") ? playerMaxHunger : 5;
+        const filledHungerSlots = (typeof playerHunger === "number") ? Math.max(0, playerHunger) : 5;
+
+        for (let s = 0; s < totalHungerSlots; s++) {
+          const slotDiv = document.createElement("div");
+          slotDiv.className = "player-hunger-slot-minimal";
+          if (s === 0) {
+            slotDiv.className += " slot-divider"; // ช่องว่างแยกส่วนระหว่าง HP และค่าความหิว
+          }
+          if (s < filledHungerSlots) {
+            slotDiv.className += " filled";
+          }
+          slotDiv.title = `ความหิว (Hunger): ${filledHungerSlots}/${totalHungerSlots}`;
+          hpContainer.appendChild(slotDiv);
+        }
+
+        hpContainer.title = `HP: ${filledHpSlots}/${totalHpSlots} | ความหิว (Hunger): ${filledHungerSlots}/${totalHungerSlots}`;
       }
+      window.updatePlayerHPUI = updatePlayerHPUI;
+
+      // ระบบคำนวณค่าความหิวและผลกระทบต่อ HP (Hunger & Starvation System)
+      function updatePlayerHungerSystem(dt) {
+        if (typeof dt !== "number" || isNaN(dt) || dt <= 0 || dt > 1.0) return;
+        if (typeof playerControlsLocked !== "undefined" && playerControlsLocked && typeof playerHP !== "undefined" && playerHP <= 0) return;
+        if (typeof window.isBuildingPlanet !== "undefined" && window.isBuildingPlanet) return;
+
+        if (typeof playerHunger === "undefined") playerHunger = 5;
+        if (typeof playerMaxHunger === "undefined") playerMaxHunger = 5;
+        if (typeof playerHungerTimer === "undefined") playerHungerTimer = 0.0;
+        if (typeof playerStarvationTimer === "undefined") playerStarvationTimer = 0.0;
+
+        // 1 จุดใช้เวลา 2 นาที (120 วินาที) ในการลดลง
+        if (playerHunger > 0) {
+          playerHungerTimer += dt;
+          if (playerHungerTimer >= 120.0) {
+            playerHungerTimer -= 120.0;
+            playerHunger = Math.max(0, playerHunger - 1);
+            window.playerHunger = playerHunger;
+            updatePlayerHPUI();
+            if (playerHunger === 0) {
+              if (typeof showNotice === "function") {
+                showNotice("⚠️ ความหิวหมดลงแล้ว! คุณเริ่มอดอาหาร HP จะลดลงนาทีละ 1 จุด (Starving! Find food)");
+              }
+            } else {
+              if (typeof showNotice === "function") {
+                showNotice(`🍗 ค่าความหิวลดลงเหลือ ${playerHunger}/${playerMaxHunger} จุด`);
+              }
+            }
+          }
+        }
+
+        // เมื่อค่าหิวหมด (Hunger = 0) HP จะลดลง 1 นาที (60 วินาที) ลด 1 จุด
+        if (playerHunger <= 0 && typeof playerHP === "number" && playerHP > 0) {
+          playerStarvationTimer += dt;
+          if (playerStarvationTimer >= 60.0) {
+            playerStarvationTimer -= 60.0;
+            if (typeof damagePlayer === "function") {
+              damagePlayer(1, "หิวจัดจนเสียพลังชีวิต! (-1 HP จากความหิว)");
+            }
+          }
+        } else {
+          playerStarvationTimer = 0.0;
+        }
+      }
+      window.updatePlayerHungerSystem = updatePlayerHungerSystem;
 
       function project3DTo2D(pos3D, viewProj, width, height) {
         const x = pos3D[0], y = pos3D[1], z = pos3D[2];
@@ -622,10 +690,7 @@ window.characterVertexShaderSource = `
         }
         
         if (playerHP <= 0) {
-          triggerUnconscious();
-          if (customNotice) {
-            showNotice(`💀 ${customNotice}`);
-          }
+          triggerUnconscious(customNotice);
         } else {
           playerDamageCooldown = 1.5; // 1.5 seconds invincibility
           showNotice(customNotice || `⚠️ คุณถูกทำร้าย! HP: ${playerHP}/${playerMaxHP}`);
@@ -642,7 +707,11 @@ window.characterVertexShaderSource = `
       }
       window.applyPlayerFallDamage = applyPlayerFallDamage;
 
-      function triggerUnconscious() {
+      let isUnconsciousActive = false;
+
+      function triggerUnconscious(customNotice = null) {
+        if (isUnconsciousActive) return;
+        isUnconsciousActive = true;
         playerControlsLocked = true;
         setRagdoll(true);
         
@@ -653,6 +722,13 @@ window.characterVertexShaderSource = `
               amphibians[i].attachedToPlayer = false;
             }
           }
+        }
+
+        // บทลงโทษเมื่อหมดสติ: สุ่มทำลายไอเทมในกระเป๋า 1 ช่อง
+        if (typeof window.destroyRandomInventorySlotOnUnconscious === "function") {
+          window.destroyRandomInventorySlotOnUnconscious(customNotice);
+        } else if (typeof destroyRandomInventorySlotOnUnconscious === "function") {
+          destroyRandomInventorySlotOnUnconscious(customNotice);
         }
 
         // Wait 3 seconds in ragdoll mode before respawning (No black screen fade)
@@ -703,7 +779,12 @@ window.characterVertexShaderSource = `
           }
           
           playerHP = playerMaxHP;
+          playerHunger = playerMaxHunger;
+          playerHungerTimer = 0.0;
+          playerStarvationTimer = 0.0;
+          window.playerHunger = playerHunger;
           updatePlayerHPUI();
+          isUnconsciousActive = false;
           if (typeof window.warpPlayerToCoords === "function") {
             window.warpPlayerToCoords(charTheta, charPhi);
           } else {
@@ -719,6 +800,7 @@ window.characterVertexShaderSource = `
 
       // ระบบวาร์ปพิกัดตัวละคร (ใช้ระบบเดียวกับตอนสุ่มตื่นจากตอนที่หมดสติ)
       window.warpPlayerToCoords = function(targetTheta, targetPhi) {
+        isUnconsciousActive = false;
         charTheta = targetTheta;
         charPhi = targetPhi;
         playerDamageCooldown = 2.0;
@@ -744,6 +826,8 @@ window.characterVertexShaderSource = `
       let ragdollDiedOnSurface = false;
       let ragdollPos = [0, 0, 0];
       let ragdollVel = [0, 0, 0];
+      let ragdollQuat = [0, 0, 0, 1];
+      let ragdollAngVel = [0, 0, 0];
       let ragdollAxis = [1, 0, 0];
       let ragdollAngle = 0;
       let ragdollAngularSpeed = 0.1;
@@ -766,6 +850,570 @@ window.characterVertexShaderSource = `
         vkL: 0,
         vkR: 0,
       };
+
+      // =========================================================================
+      // 3D Quaternion & Rigid-Body Math Helpers for Free Unconstrained Ragdoll
+      // =========================================================================
+      function quatMultiply(a, b) {
+        const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+        const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+        return [
+          aw * bx + ax * bw + ay * bz - az * by,
+          aw * by - ax * bz + ay * bw + az * bx,
+          aw * bz + ax * by - ay * bx + az * bw,
+          aw * bw - ax * bx - ay * by - az * bz
+        ];
+      }
+
+      function matrix3ToQuat(R, N, F) {
+        const m00 = R[0], m01 = N[0], m02 = F[0];
+        const m10 = R[1], m11 = N[1], m12 = F[1];
+        const m20 = R[2], m21 = N[2], m22 = F[2];
+        const tr = m00 + m11 + m22;
+        let qx, qy, qz, qw;
+        if (tr > 0) {
+          const s = 0.5 / Math.sqrt(tr + 1.0);
+          qw = 0.25 / s;
+          qx = (m21 - m12) * s;
+          qy = (m02 - m20) * s;
+          qz = (m10 - m01) * s;
+        } else if ((m00 > m11) && (m00 > m22)) {
+          const s = 2.0 * Math.sqrt(1.0 + m00 - m11 - m22);
+          qw = (m21 - m12) / s;
+          qx = 0.25 * s;
+          qy = (m01 + m10) / s;
+          qz = (m02 + m20) / s;
+        } else if (m11 > m22) {
+          const s = 2.0 * Math.sqrt(1.0 + m11 - m00 - m22);
+          qw = (m02 - m20) / s;
+          qx = (m01 + m10) / s;
+          qy = 0.25 * s;
+          qz = (m12 + m21) / s;
+        } else {
+          const s = 2.0 * Math.sqrt(1.0 + m22 - m00 - m11);
+          qw = (m10 - m01) / s;
+          qx = (m02 + m20) / s;
+          qy = (m12 + m21) / s;
+          qz = 0.25 * s;
+        }
+        const len = Math.hypot(qx, qy, qz, qw) || 1;
+        return [qx / len, qy / len, qz / len, qw / len];
+      }
+
+      function quatToMatrix3(q) {
+        const x = q[0], y = q[1], z = q[2], w = q[3];
+        const x2 = x + x, y2 = y + y, z2 = z + z;
+        const xx = x * x2, xy = x * y2, xz = x * z2;
+        const yy = y * y2, yz = y * z2, zz = z * z2;
+        const wx = w * x2, wy = w * y2, wz = w * z2;
+
+        const R = [1 - (yy + zz), xy + wz, xz - wy];
+        const N = [xy - wz, 1 - (xx + zz), yz + wx];
+        const F = [xz + wy, yz - wx, 1 - (xx + yy)];
+        return { R, N, F };
+      }
+
+      function integrateQuat(q, w, dt) {
+        const len = Math.hypot(w[0], w[1], w[2]);
+        if (len < 1e-6) return q;
+        const halfAngle = len * dt * 0.5;
+        const sinH = Math.sin(halfAngle) / len;
+        const cosH = Math.cos(halfAngle);
+        const dq = [w[0] * sinH, w[1] * sinH, w[2] * sinH, cosH];
+        const nq = quatMultiply(dq, q);
+        const l = Math.hypot(nq[0], nq[1], nq[2], nq[3]) || 1;
+        return [nq[0] / l, nq[1] / l, nq[2] / l, nq[3] / l];
+      }
+
+      // =========================================================================
+      // Option 2: Realistic Full Procedural Bone Ragdoll for GLB Model
+      // Directly drives individual GLB Bone nodes (Hips, Spine02, Spine01, Spine, Neck,
+      // Head, LeftArm, LeftForeArm, RightArm, RightForeArm, LeftUpLeg, LeftLeg,
+      // RightUpLeg, RightLeg) per frame using spring-damper joint physics,
+      // momentum inertia, gravity droop, and multi-directional ground sprawl contact.
+      // =========================================================================
+      const chibiRagdollState = {
+        spine02: { pitch: 0, yaw: 0, roll: 0, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0, rp: 0, ry: 0, rr: 0 },
+        spine01: { pitch: 0, yaw: 0, roll: 0, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0, rp: 0, ry: 0, rr: 0 },
+        spine:   { pitch: 0, yaw: 0, roll: 0, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0, rp: 0, ry: 0, rr: 0 },
+        neck:    { pitch: 0, yaw: 0, roll: 0, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0, rp: 0, ry: 0, rr: 0 },
+        head:    { pitch: 0, yaw: 0, roll: 0, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0, rp: 0, ry: 0, rr: 0 },
+        leftArm:     { pitch: 0, yaw: 0, roll: -0.35, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: -0.55, rp: 0.25, ry: 0.15, rr: -0.65 },
+        leftForeArm: { flex: 0.2, vflex: 0, tflex: 0.55, rflex: 0.65 },
+        leftHand:    { pitch: 0.15, yaw: 0, roll: -0.15 },
+        rightArm:     { pitch: 0, yaw: 0, roll: 0.35, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0.55, rp: -0.30, ry: -0.15, rr: 0.70 },
+        rightForeArm: { flex: 0.2, vflex: 0, tflex: 0.55, rflex: 0.50 },
+        rightHand:    { pitch: 0.15, yaw: 0, roll: 0.15 },
+        leftUpLeg: { pitch: 0, yaw: 0, roll: 0.08, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: 0.05, rp: -0.45, ry: 0.18, rr: -0.05 },
+        leftLeg:   { kneeFlex: 0.2, vflex: 0, tflex: 0.65, rflex: 0.85 },
+        leftFoot:  { pitch: 0.15, yaw: 0, roll: -0.08 },
+        rightUpLeg: { pitch: 0, yaw: 0, roll: -0.08, vp: 0, vy: 0, vr: 0, tp: 0, ty: 0, tr: -0.05, rp: 0.12, ry: -0.22, rr: 0.05 },
+        rightLeg:   { kneeFlex: 0.2, vflex: 0, tflex: 0.40, rflex: 0.42 },
+        rightFoot:  { pitch: 0.15, yaw: 0, roll: 0.08 },
+        hipsOffset: [0, 0, 0],
+        hipsVel: [0, 0, 0],
+        isGrounded: false,
+        airTime: 0
+      };
+
+      function stepChibiJointSpring(curr, vel, target, stiffness, damping, dtSec) {
+        const force = -stiffness * (curr - target) - damping * vel;
+        const vNext = (vel + force * dtSec) * 0.992;
+        const posNext = curr + vNext * dtSec;
+        return { pos: posNext, vel: vNext };
+      }
+
+      function randomizeChibiCrumplePose(s, intensity = 1.0) {
+        // Generate asymmetric GTA IV-style crumpled resting offsets so limbs never look like a stiff symmetrical mannequin
+        const asymSign = Math.random() < 0.5 ? 1 : -1;
+        const spineTwist = (Math.random() - 0.5) * 0.22 * intensity;
+        const spineBend  = (Math.random() - 0.35) * 0.18 * intensity;
+        const spineSide  = (Math.random() - 0.5) * 0.16 * intensity;
+
+        s.spine02.rp = spineBend; s.spine02.ry = spineTwist * 0.6; s.spine02.rr = spineSide * 0.6;
+        s.spine01.rp = spineBend; s.spine01.ry = spineTwist * 0.8; s.spine01.rr = spineSide * 0.8;
+        s.spine.rp   = spineBend * 1.2; s.spine.ry = spineTwist; s.spine.rr = spineSide;
+        s.neck.rp    = (Math.random() - 0.4) * 0.25; s.neck.ry = asymSign * (0.15 + Math.random() * 0.20); s.neck.rr = -spineSide * 0.8;
+        s.head.rp    = (Math.random() - 0.4) * 0.30; s.head.ry = asymSign * (0.25 + Math.random() * 0.30); s.head.rr = (Math.random() - 0.5) * 0.20;
+
+        // Asymmetric arms: e.g., one flung out/upward, one bent across or beside torso
+        if (asymSign > 0) {
+          s.leftArm.rp  = -0.55 + (Math.random() - 0.5) * 0.50;
+          s.leftArm.rr  = -0.65 - Math.random() * 0.40;
+          s.leftArm.ry  = (Math.random() - 0.5) * 0.35;
+          s.leftForeArm.rflex = 0.55 + Math.random() * 0.65;
+
+          s.rightArm.rp = 0.35 + (Math.random() - 0.5) * 0.45;
+          s.rightArm.rr = 0.45 + Math.random() * 0.35;
+          s.rightArm.ry = (Math.random() - 0.5) * 0.35;
+          s.rightForeArm.rflex = 0.35 + Math.random() * 0.55;
+        } else {
+          s.leftArm.rp  = 0.35 + (Math.random() - 0.5) * 0.45;
+          s.leftArm.rr  = -0.45 - Math.random() * 0.35;
+          s.leftArm.ry  = (Math.random() - 0.5) * 0.35;
+          s.leftForeArm.rflex = 0.35 + Math.random() * 0.55;
+
+          s.rightArm.rp = -0.55 + (Math.random() - 0.5) * 0.50;
+          s.rightArm.rr = 0.65 + Math.random() * 0.40;
+          s.rightArm.ry = (Math.random() - 0.5) * 0.35;
+          s.rightForeArm.rflex = 0.55 + Math.random() * 0.65;
+        }
+
+        // Asymmetric legs: one knee bent more (recovery/crumple), other leg more extended/twisted
+        if (Math.random() < 0.5) {
+          // Left leg bent up, right leg more relaxed
+          s.leftUpLeg.rp  = -0.45 - Math.random() * 0.40; // negative rx swings thigh forward
+          s.leftUpLeg.rr  = 0.04 + (Math.random() - 0.5) * 0.12;
+          s.leftUpLeg.ry  = 0.15 + Math.random() * 0.25;
+          s.leftLeg.rflex = 0.70 + Math.random() * 0.55;
+
+          s.rightUpLeg.rp  = 0.05 + (Math.random() - 0.5) * 0.25;
+          s.rightUpLeg.rr  = -0.06 + (Math.random() - 0.5) * 0.12;
+          s.rightUpLeg.ry  = -0.15 - Math.random() * 0.20;
+          s.rightLeg.rflex = 0.25 + Math.random() * 0.30;
+        } else {
+          // Right leg bent up, left leg more relaxed
+          s.rightUpLeg.rp  = -0.45 - Math.random() * 0.40;
+          s.rightUpLeg.rr  = -0.04 + (Math.random() - 0.5) * 0.12;
+          s.rightUpLeg.ry  = -0.15 - Math.random() * 0.25;
+          s.rightLeg.rflex = 0.70 + Math.random() * 0.55;
+
+          s.leftUpLeg.rp  = 0.05 + (Math.random() - 0.5) * 0.25;
+          s.leftUpLeg.rr  = 0.06 + (Math.random() - 0.5) * 0.12;
+          s.leftUpLeg.ry  = 0.15 + Math.random() * 0.20;
+          s.leftLeg.rflex = 0.25 + Math.random() * 0.30;
+        }
+      }
+
+      function initChibiRagdollPhysics(phase = 0, isMoving = false, isSprinting = false) {
+        const s = chibiRagdollState;
+        const moveScale = isSprinting ? 1.4 : (isMoving ? 0.9 : 0.4);
+
+        randomizeChibiCrumplePose(s, 1.0);
+
+        // Initial velocity jolt on spine, neck, head (GTA IV stumble reaction)
+        s.spine02.pitch = 0; s.spine02.yaw = 0; s.spine02.roll = 0;
+        s.spine01.pitch = 0; s.spine01.yaw = 0; s.spine01.roll = 0;
+        s.spine.pitch   = 0; s.spine.yaw   = 0; s.spine.roll   = 0;
+        s.neck.pitch    = 0; s.neck.yaw    = 0; s.neck.roll    = 0;
+        s.head.pitch    = 0; s.head.yaw    = 0; s.head.roll    = 0;
+
+        s.spine02.vp = (Math.random() - 0.4) * 2.5 * moveScale;
+        s.spine02.vy = (Math.random() - 0.5) * 2.0;
+        s.spine02.vr = (Math.random() - 0.5) * 2.0;
+        s.spine01.vp = s.spine02.vp * 1.1; s.spine01.vy = s.spine02.vy; s.spine01.vr = s.spine02.vr;
+        s.spine.vp   = s.spine02.vp * 1.3; s.spine.vy   = s.spine02.vy * 1.2; s.spine.vr = s.spine02.vr * 1.2;
+        s.neck.vp    = (Math.random() - 0.4) * 3.5; s.neck.vy = (Math.random() - 0.5) * 3.0; s.neck.vr = (Math.random() - 0.5) * 2.5;
+        s.head.vp    = (Math.random() - 0.4) * 4.5; s.head.vy = (Math.random() - 0.5) * 3.5; s.head.vr = (Math.random() - 0.5) * 3.0;
+
+        const armSwing = Math.sin(phase) * 0.55 * moveScale;
+        s.leftArm.pitch = armSwing;
+        s.leftArm.yaw = 0;
+        s.leftArm.roll = -0.35;
+        s.leftArm.vp = (Math.cos(phase) * 3.0 + (Math.random() - 0.5) * 2.5) * moveScale;
+        s.leftArm.vy = (Math.random() - 0.5) * 2.5;
+        s.leftArm.vr = -2.5 - Math.random() * 2.0;
+        s.leftForeArm.flex = 0.25;
+        s.leftForeArm.vflex = 2.0 + Math.random() * 2.5;
+
+        s.rightArm.pitch = -armSwing;
+        s.rightArm.yaw = 0;
+        s.rightArm.roll = 0.35;
+        s.rightArm.vp = (-Math.cos(phase) * 3.0 + (Math.random() - 0.5) * 2.5) * moveScale;
+        s.rightArm.vy = (Math.random() - 0.5) * 2.5;
+        s.rightArm.vr = 2.5 + Math.random() * 2.0;
+        s.rightForeArm.flex = 0.25;
+        s.rightForeArm.vflex = 2.0 + Math.random() * 2.5;
+
+        const legSwing = Math.sin(phase + Math.PI) * 0.50 * moveScale;
+        s.leftUpLeg.pitch = legSwing;
+        s.leftUpLeg.yaw = 0;
+        s.leftUpLeg.roll = 0.08;
+        s.leftUpLeg.vp = (-legSwing * 3.0 - 1.5 * Math.random()) * moveScale;
+        s.leftUpLeg.vy = (Math.random() - 0.5) * 2.0;
+        s.leftUpLeg.vr = (Math.random() - 0.5) * 1.5;
+        s.leftLeg.kneeFlex = 0.20;
+        s.leftLeg.vflex = 2.5 + Math.random() * 3.0;
+
+        s.rightUpLeg.pitch = -legSwing;
+        s.rightUpLeg.yaw = 0;
+        s.rightUpLeg.roll = -0.08;
+        s.rightUpLeg.vp = (legSwing * 3.0 - 1.5 * Math.random()) * moveScale;
+        s.rightUpLeg.vy = (Math.random() - 0.5) * 2.0;
+        s.rightUpLeg.vr = (Math.random() - 0.5) * 1.5;
+        s.rightLeg.kneeFlex = 0.20;
+        s.rightLeg.vflex = 2.5 + Math.random() * 3.0;
+
+        s.hipsOffset = [0, 0, 0];
+        s.hipsVel = [0, 0, 0];
+        s.isGrounded = false;
+        s.airTime = 0;
+      }
+
+      function updateChibiRagdollPhysics(dt, hitSolid, impactDeltaV) {
+        const s = chibiRagdollState;
+        const wasGrounded = s.isGrounded;
+        s.isGrounded = !!hitSolid;
+        const dtSec = Math.min(0.05, Math.max(0.001, dt));
+        if (!hitSolid) {
+          s.airTime += dtSec;
+        } else {
+          s.airTime = 0;
+        }
+
+        // Current body orientation axes in world space:
+        const { R: charR, N: charUp, F: charFwd } = (typeof ragdollQuat !== "undefined" && ragdollQuat && ragdollQuat.length === 4)
+          ? quatToMatrix3(ragdollQuat)
+          : { R: [1, 0, 0], N: [0, 1, 0], F: [0, 0, 1] };
+
+        // World gravity direction (pointing straight down toward planet center)
+        const pLen = Math.hypot(ragdollPos[0], ragdollPos[1], ragdollPos[2]) || 1;
+        const gravWorld = [-ragdollPos[0] / pLen, -ragdollPos[1] / pLen, -ragdollPos[2] / pLen];
+
+        // Project world gravity into the character's local coordinate space:
+        // gx > 0: gravity pulls toward character's Right (+X)
+        // gy > 0: gravity pulls toward character's Head (+Y)
+        // gz > 0: gravity pulls toward character's Front (+Z)
+        const gx = gravWorld[0] * charR[0]   + gravWorld[1] * charR[1]   + gravWorld[2] * charR[2];
+        const gy = gravWorld[0] * charUp[0]  + gravWorld[1] * charUp[1]  + gravWorld[2] * charUp[2];
+        const gz = gravWorld[0] * charFwd[0] + gravWorld[1] * charFwd[1] + gravWorld[2] * charFwd[2];
+
+        // Linear & angular velocities projected into character local space
+        const vx = (ragdollVel && ragdollVel.length === 3) ? (ragdollVel[0] * charR[0]   + ragdollVel[1] * charR[1]   + ragdollVel[2] * charR[2]) : 0;
+        const vy = (ragdollVel && ragdollVel.length === 3) ? (ragdollVel[0] * charUp[0]  + ragdollVel[1] * charUp[1]  + ragdollVel[2] * charUp[2]) : 0;
+        const vz = (ragdollVel && ragdollVel.length === 3) ? (ragdollVel[0] * charFwd[0] + ragdollVel[1] * charFwd[1] + ragdollVel[2] * charFwd[2]) : 0;
+        const linSpeed = Math.hypot(vx, vy, vz);
+
+        const wx = (ragdollAngVel && ragdollAngVel.length === 3) ? (ragdollAngVel[0] * charR[0]   + ragdollAngVel[1] * charR[1]   + ragdollAngVel[2] * charR[2]) : 0;
+        const wy = (ragdollAngVel && ragdollAngVel.length === 3) ? (ragdollAngVel[0] * charUp[0]  + ragdollAngVel[1] * charUp[1]  + ragdollAngVel[2] * charUp[2]) : 0;
+        const wz = (ragdollAngVel && ragdollAngVel.length === 3) ? (ragdollAngVel[0] * charFwd[0] + ragdollAngVel[1] * charFwd[1] + ragdollAngVel[2] * charFwd[2]) : 0;
+        const rotSpeed = Math.hypot(wx, wy, wz);
+
+        // --- 1. GTA IV Ground Impact & Collision Whiplash Impulse ---
+        if (impactDeltaV && impactDeltaV.length === 3) {
+          const impMag = Math.hypot(impactDeltaV[0], impactDeltaV[1], impactDeltaV[2]);
+          if (impMag > 0.0015) {
+            const impX = impactDeltaV[0] * charR[0]   + impactDeltaV[1] * charR[1]   + impactDeltaV[2] * charR[2];
+            const impY = impactDeltaV[0] * charUp[0]  + impactDeltaV[1] * charUp[1]  + impactDeltaV[2] * charUp[2];
+            const impZ = impactDeltaV[0] * charFwd[0] + impactDeltaV[1] * charFwd[1] + impactDeltaV[2] * charFwd[2];
+
+            // Reshuffle resting crumple pose on strong impact so body folds naturally
+            if (impMag > 0.005 || (!wasGrounded && hitSolid)) {
+              randomizeChibiCrumplePose(s, Math.min(1.6, 0.8 + impMag * 35.0));
+            }
+
+            const whip = Math.min(18.0, impMag * 280.0);
+            // Torso & Head whiplash (opposite to pelvis acceleration)
+            s.spine02.vp -= impZ * 95.0;
+            s.spine02.vr += impX * 95.0;
+            s.spine01.vp -= impZ * 115.0;
+            s.spine01.vr += impX * 115.0;
+            s.spine.vp   -= impZ * 140.0;
+            s.spine.vr   += impX * 140.0;
+            s.neck.vp    -= impZ * 180.0;
+            s.neck.vr    += impX * 180.0;
+            s.head.vp    -= impZ * 220.0;
+            s.head.vr    += impX * 220.0;
+            s.head.vy    += (impX - impZ) * 120.0;
+
+            // Arms whip wildly from impact deceleration
+            s.leftArm.vp  -= impZ * 160.0 + (Math.random() - 0.5) * whip;
+            s.rightArm.vp -= impZ * 160.0 + (Math.random() - 0.5) * whip;
+            s.leftArm.vr  -= Math.abs(impY) * 130.0 + impX * 110.0;
+            s.rightArm.vr += Math.abs(impY) * 130.0 - impX * 110.0;
+            s.leftForeArm.vflex  += whip * (0.4 + Math.random() * 0.5);
+            s.rightForeArm.vflex += whip * (0.4 + Math.random() * 0.5);
+
+            // Legs & Knees buckle violently under axial/ground impact (GTA IV leg crumple!)
+            const axialBuckle = Math.max(0, impY) * 180.0 + impMag * 95.0;
+            s.leftUpLeg.vp  -= axialBuckle * (0.7 + Math.random() * 0.5) - impZ * 110.0;
+            s.rightUpLeg.vp -= axialBuckle * (0.7 + Math.random() * 0.5) - impZ * 110.0;
+            s.leftLeg.vflex  += axialBuckle * (0.9 + Math.random() * 0.6);
+            s.rightLeg.vflex += axialBuckle * (0.9 + Math.random() * 0.6);
+          }
+        }
+
+        // --- 2. Compute Dynamic Joint Targets (Mid-Air Euphoria Freefall vs Grounded Crumple) ---
+        if (!hitSolid) {
+          // === GTA IV MID-AIR FREEFALL / TUMBLE ===
+          // Rushing air relative to falling body (-vx, -vy, -vz) + centrifugal spin throw + asymmetric pedaling
+          const fallFactor = Math.min(1.5, linSpeed * 28.0 + rotSpeed * 2.5);
+          const windUp = Math.max(0, -vy * 22.0); // upward air rush when falling feet-first
+          const tAir = s.airTime * 9.5;
+
+          // Euphoria mid-air torso arch & twist reacting to spin
+          s.spine02.tp = gz * 0.16 - vz * 6.0 + Math.sin(tAir * 0.7) * 0.12 * fallFactor;
+          s.spine02.tr = -gx * 0.16 + vx * 6.0 + wz * 0.8;
+          s.spine02.ty = wy * 1.2;
+
+          s.spine01.tp = s.spine02.tp * 1.15;
+          s.spine01.tr = s.spine02.tr * 1.15;
+          s.spine01.ty = s.spine02.ty * 1.15;
+
+          s.spine.tp   = s.spine02.tp * 1.3;
+          s.spine.tr   = s.spine02.tr * 1.3;
+          s.spine.ty   = s.spine02.ty * 1.3;
+
+          s.neck.tp = gz * 0.25 - vz * 9.0 - windUp * 0.25;
+          s.neck.tr = -gx * 0.25 + vx * 9.0;
+          s.neck.ty = wy * 1.8 + Math.cos(tAir * 0.8) * 0.20 * fallFactor;
+
+          s.head.tp = gz * 0.30 - vz * 11.0 - windUp * 0.30;
+          s.head.tr = -gx * 0.30 + vx * 11.0;
+          s.head.ty = s.neck.ty * 1.3;
+
+          // Arms: Wind rush + centrifugal throw + Euphoria asymmetric windmilling in freefall
+          const armSpread = Math.min(1.05, 0.45 + windUp * 0.7 + rotSpeed * 3.5);
+          const windmillL = Math.sin(tAir) * 0.65 * fallFactor;
+          const windmillR = Math.cos(tAir * 1.1) * 0.65 * fallFactor;
+
+          s.leftArm.tp  = gz * 0.50 - vz * 14.0 + windmillL;
+          s.rightArm.tp = gz * 0.50 - vz * 14.0 + windmillR;
+          s.leftArm.tr  = -armSpread - gx * 0.25 + Math.cos(tAir * 0.9) * 0.25 * fallFactor;
+          s.rightArm.tr =  armSpread - gx * 0.25 + Math.sin(tAir * 0.9) * 0.25 * fallFactor;
+          s.leftArm.ty  = -wy * 1.5;
+          s.rightArm.ty = -wy * 1.5;
+
+          s.leftForeArm.tflex  = 0.45 + windUp * 0.4 + Math.max(0, windmillL) * 0.6;
+          s.rightForeArm.tflex = 0.45 + windUp * 0.4 + Math.max(0, windmillR) * 0.6;
+
+          // Legs: Euphoria freefall pedaling + knee bending + air drag
+          const pedalL = Math.sin(tAir * 1.15 + 1.2) * 0.55 * fallFactor;
+          const pedalR = Math.sin(tAir * 1.15 + 4.3) * 0.55 * fallFactor;
+
+          s.leftUpLeg.tp  = -gz * 0.35 + vz * 10.0 - windUp * 0.45 + pedalL;
+          s.rightUpLeg.tp = -gz * 0.35 + vz * 10.0 - windUp * 0.45 + pedalR;
+          s.leftUpLeg.tr  = 0.04 + gx * 0.20 - Math.min(0.25, rotSpeed * 1.2);
+          s.rightUpLeg.tr = -0.04 + gx * 0.20 + Math.min(0.25, rotSpeed * 1.2);
+          s.leftUpLeg.ty  = 0.12 * fallFactor;
+          s.rightUpLeg.ty = -0.12 * fallFactor;
+
+          s.leftLeg.tflex  = 0.40 + windUp * 0.55 + Math.max(0, -pedalL) * 0.85;
+          s.rightLeg.tflex = 0.40 + windUp * 0.55 + Math.max(0, -pedalR) * 0.85;
+        } else {
+          // === GROUNDED: ORGANIC ASYMMETRIC GTA IV CRUMPLE & GRAVITY DRAPE ===
+          // Combine the organic asymmetric resting pose (s.*.rp, ry, rr, rflex) with local gravity (gx, gz)
+          // so the character lies in a natural, bent-limb ragdoll sprawl while conforming to the terrain slope!
+          const slideFactor = Math.min(1.0, (linSpeed * 20.0 + rotSpeed * 2.0));
+
+          s.spine02.tp = s.spine02.rp + gz * 0.08;
+          s.spine02.ty = s.spine02.ry;
+          s.spine02.tr = s.spine02.rr - gx * 0.08;
+
+          s.spine01.tp = s.spine01.rp + gz * 0.08;
+          s.spine01.ty = s.spine01.ry;
+          s.spine01.tr = s.spine01.rr - gx * 0.08;
+
+          s.spine.tp   = s.spine.rp + gz * 0.10;
+          s.spine.ty   = s.spine.ry;
+          s.spine.tr   = s.spine.rr - gx * 0.10;
+
+          // Turn head to the side especially when face-down (gz > 0.25) so face rests on cheek
+          const headSideTurn = (gz > 0.25) ? (s.head.ry >= 0 ? 0.48 : -0.48) : s.head.ry;
+          s.neck.tp = s.neck.rp + gz * 0.12;
+          s.neck.ty = headSideTurn * 0.55;
+          s.neck.tr = s.neck.rr - gx * 0.12;
+
+          s.head.tp = s.head.rp + gz * 0.15;
+          s.head.ty = headSideTurn;
+          s.head.tr = s.head.rr - gx * 0.15;
+
+          // Sprawled asymmetric arms pulled onto ground surface by gravity
+          s.leftArm.tp  = s.leftArm.rp + gz * 0.25 - vz * 8.0 * slideFactor;
+          s.leftArm.ty  = s.leftArm.ry;
+          s.leftArm.tr  = Math.max(-1.15, Math.min(-0.15, s.leftArm.rr - gx * 0.25));
+          s.leftForeArm.tflex = s.leftForeArm.rflex;
+
+          s.rightArm.tp = s.rightArm.rp + gz * 0.25 - vz * 8.0 * slideFactor;
+          s.rightArm.ty = s.rightArm.ry;
+          s.rightArm.tr = Math.max(0.15, Math.min(1.15, s.rightArm.rr - gx * 0.25));
+          s.rightForeArm.tflex = s.rightForeArm.rflex;
+
+          // Asymmetric crumpled legs:
+          // Keep knees naturally bent (rflex) and thighs asymmetrically flexed (rp),
+          // while ensuring gravity pulls raised knees/feet down onto the ground surface!
+          const gravLegDrop = gz < 0 ? (-gz * 0.18) : (-gz * 0.05);
+          const latLegDrop  = gx * 0.22;
+
+          s.leftUpLeg.tp  = s.leftUpLeg.rp * (gz < -0.5 ? 0.45 : 0.85) + gravLegDrop;
+          s.leftUpLeg.ty  = s.leftUpLeg.ry;
+          s.leftUpLeg.tr  = 0.08 + s.leftUpLeg.rr + latLegDrop;
+          s.leftLeg.tflex = s.leftLeg.rflex;
+
+          s.rightUpLeg.tp  = s.rightUpLeg.rp * (gz < -0.5 ? 0.45 : 0.85) + gravLegDrop;
+          s.rightUpLeg.ty  = s.rightUpLeg.ry;
+          s.rightUpLeg.tr  = -0.08 + s.rightUpLeg.rr + latLegDrop;
+          s.rightLeg.tflex = s.rightLeg.rflex;
+        }
+
+        // --- 3. Loose Pendulum Spring-Damper Integration (Low Stiffness like GTA IV!) ---
+        const kTorso = hitSolid ? 10.0 : 6.5;
+        const dTorso = hitSolid ? 5.2  : 2.8;
+
+        let r;
+        r = stepChibiJointSpring(s.spine02.pitch, s.spine02.vp, s.spine02.tp, kTorso, dTorso, dtSec);
+        s.spine02.pitch = Math.max(-0.55, Math.min(0.65, r.pos)); s.spine02.vp = r.vel;
+        r = stepChibiJointSpring(s.spine02.yaw, s.spine02.vy, s.spine02.ty, kTorso, dTorso, dtSec);
+        s.spine02.yaw = Math.max(-0.45, Math.min(0.45, r.pos)); s.spine02.vy = r.vel;
+        r = stepChibiJointSpring(s.spine02.roll, s.spine02.vr, s.spine02.tr, kTorso, dTorso, dtSec);
+        s.spine02.roll = Math.max(-0.45, Math.min(0.45, r.pos)); s.spine02.vr = r.vel;
+
+        r = stepChibiJointSpring(s.spine01.pitch, s.spine01.vp, s.spine01.tp, kTorso, dTorso, dtSec);
+        s.spine01.pitch = Math.max(-0.55, Math.min(0.65, r.pos)); s.spine01.vp = r.vel;
+        r = stepChibiJointSpring(s.spine01.yaw, s.spine01.vy, s.spine01.ty, kTorso, dTorso, dtSec);
+        s.spine01.yaw = Math.max(-0.45, Math.min(0.45, r.pos)); s.spine01.vy = r.vel;
+        r = stepChibiJointSpring(s.spine01.roll, s.spine01.vr, s.spine01.tr, kTorso, dTorso, dtSec);
+        s.spine01.roll = Math.max(-0.45, Math.min(0.45, r.pos)); s.spine01.vr = r.vel;
+
+        r = stepChibiJointSpring(s.spine.pitch, s.spine.vp, s.spine.tp, kTorso, dTorso, dtSec);
+        s.spine.pitch = Math.max(-0.60, Math.min(0.70, r.pos)); s.spine.vp = r.vel;
+        r = stepChibiJointSpring(s.spine.yaw, s.spine.vy, s.spine.ty, kTorso, dTorso, dtSec);
+        s.spine.yaw = Math.max(-0.50, Math.min(0.50, r.pos)); s.spine.vy = r.vel;
+        r = stepChibiJointSpring(s.spine.roll, s.spine.vr, s.spine.tr, kTorso, dTorso, dtSec);
+        s.spine.roll = Math.max(-0.50, Math.min(0.50, r.pos)); s.spine.vr = r.vel;
+
+        r = stepChibiJointSpring(s.neck.pitch, s.neck.vp, s.neck.tp, kTorso * 0.85, dTorso * 0.85, dtSec);
+        s.neck.pitch = Math.max(-0.65, Math.min(0.75, r.pos)); s.neck.vp = r.vel;
+        r = stepChibiJointSpring(s.neck.yaw, s.neck.vy, s.neck.ty, kTorso * 0.85, dTorso * 0.85, dtSec);
+        s.neck.yaw = Math.max(-0.75, Math.min(0.75, r.pos)); s.neck.vy = r.vel;
+        r = stepChibiJointSpring(s.neck.roll, s.neck.vr, s.neck.tr, kTorso * 0.85, dTorso * 0.85, dtSec);
+        s.neck.roll = Math.max(-0.55, Math.min(0.55, r.pos)); s.neck.vr = r.vel;
+
+        r = stepChibiJointSpring(s.head.pitch, s.head.vp, s.head.tp, kTorso * 0.75, dTorso * 0.75, dtSec);
+        s.head.pitch = Math.max(-0.75, Math.min(0.85, r.pos)); s.head.vp = r.vel;
+        r = stepChibiJointSpring(s.head.yaw, s.head.vy, s.head.ty, kTorso * 0.75, dTorso * 0.75, dtSec);
+        s.head.yaw = Math.max(-0.95, Math.min(0.95, r.pos)); s.head.vy = r.vel;
+        r = stepChibiJointSpring(s.head.roll, s.head.vr, s.head.tr, kTorso * 0.75, dTorso * 0.75, dtSec);
+        s.head.roll = Math.max(-0.65, Math.min(0.65, r.pos)); s.head.vr = r.vel;
+
+        const kLimb = hitSolid ? 8.5 : 5.5;
+        const dLimb = hitSolid ? 4.8 : 2.4;
+
+        // Left Arm
+        r = stepChibiJointSpring(s.leftArm.pitch, s.leftArm.vp, s.leftArm.tp, kLimb, dLimb, dtSec);
+        s.leftArm.pitch = Math.max(-1.4, Math.min(1.4, r.pos)); s.leftArm.vp = r.vel;
+        r = stepChibiJointSpring(s.leftArm.roll, s.leftArm.vr, s.leftArm.tr, kLimb, dLimb, dtSec);
+        s.leftArm.roll = Math.max(-1.35, Math.min(0.25, r.pos)); s.leftArm.vr = r.vel;
+        r = stepChibiJointSpring(s.leftArm.yaw, s.leftArm.vy, s.leftArm.ty, kLimb, dLimb, dtSec);
+        s.leftArm.yaw = Math.max(-0.85, Math.min(0.85, r.pos)); s.leftArm.vy = r.vel;
+        r = stepChibiJointSpring(s.leftForeArm.flex, s.leftForeArm.vflex, s.leftForeArm.tflex, kLimb, dLimb, dtSec);
+        s.leftForeArm.flex = Math.max(0.05, Math.min(1.65, r.pos)); s.leftForeArm.vflex = r.vel;
+
+        // Right Arm
+        r = stepChibiJointSpring(s.rightArm.pitch, s.rightArm.vp, s.rightArm.tp, kLimb, dLimb, dtSec);
+        s.rightArm.pitch = Math.max(-1.4, Math.min(1.4, r.pos)); s.rightArm.vp = r.vel;
+        r = stepChibiJointSpring(s.rightArm.roll, s.rightArm.vr, s.rightArm.tr, kLimb, dLimb, dtSec);
+        s.rightArm.roll = Math.max(-0.25, Math.min(1.35, r.pos)); s.rightArm.vr = r.vel;
+        r = stepChibiJointSpring(s.rightArm.yaw, s.rightArm.vy, s.rightArm.ty, kLimb, dLimb, dtSec);
+        s.rightArm.yaw = Math.max(-0.85, Math.min(0.85, r.pos)); s.rightArm.vy = r.vel;
+        r = stepChibiJointSpring(s.rightForeArm.flex, s.rightForeArm.vflex, s.rightForeArm.tflex, kLimb, dLimb, dtSec);
+        s.rightForeArm.flex = Math.max(0.05, Math.min(1.65, r.pos)); s.rightForeArm.vflex = r.vel;
+
+        // Left Leg
+        r = stepChibiJointSpring(s.leftUpLeg.pitch, s.leftUpLeg.vp, s.leftUpLeg.tp, kLimb, dLimb, dtSec);
+        s.leftUpLeg.pitch = Math.max(-1.35, Math.min(0.95, r.pos)); s.leftUpLeg.vp = r.vel;
+        r = stepChibiJointSpring(s.leftUpLeg.roll, s.leftUpLeg.vr, s.leftUpLeg.tr, kLimb, dLimb, dtSec);
+        s.leftUpLeg.roll = Math.max(-0.45, Math.min(0.45, r.pos)); s.leftUpLeg.vr = r.vel;
+        r = stepChibiJointSpring(s.leftUpLeg.yaw, s.leftUpLeg.vy, s.leftUpLeg.ty, kLimb, dLimb, dtSec);
+        s.leftUpLeg.yaw = Math.max(-0.65, Math.min(0.65, r.pos)); s.leftUpLeg.vy = r.vel;
+        r = stepChibiJointSpring(s.leftLeg.kneeFlex, s.leftLeg.vflex, s.leftLeg.tflex, kLimb, dLimb, dtSec);
+        s.leftLeg.kneeFlex = Math.max(0.05, Math.min(1.85, r.pos)); s.leftLeg.vflex = r.vel;
+
+        // Right Leg
+        r = stepChibiJointSpring(s.rightUpLeg.pitch, s.rightUpLeg.vp, s.rightUpLeg.tp, kLimb, dLimb, dtSec);
+        s.rightUpLeg.pitch = Math.max(-1.35, Math.min(0.95, r.pos)); s.rightUpLeg.vp = r.vel;
+        r = stepChibiJointSpring(s.rightUpLeg.roll, s.rightUpLeg.vr, s.rightUpLeg.tr, kLimb, dLimb, dtSec);
+        s.rightUpLeg.roll = Math.max(-0.45, Math.min(0.45, r.pos)); s.rightUpLeg.vr = r.vel;
+        r = stepChibiJointSpring(s.rightUpLeg.yaw, s.rightUpLeg.vy, s.rightUpLeg.ty, kLimb, dLimb, dtSec);
+        s.rightUpLeg.yaw = Math.max(-0.65, Math.min(0.65, r.pos)); s.rightUpLeg.vy = r.vel;
+        r = stepChibiJointSpring(s.rightLeg.kneeFlex, s.rightLeg.vflex, s.rightLeg.tflex, kLimb, dLimb, dtSec);
+        s.rightLeg.kneeFlex = Math.max(0.05, Math.min(1.85, r.pos)); s.rightLeg.vflex = r.vel;
+      }
+
+      function resetChibiRagdollPhysics() {
+        const s = chibiRagdollState;
+        s.spine02.pitch = 0; s.spine02.yaw = 0; s.spine02.roll = 0; s.spine02.vp = 0; s.spine02.vy = 0; s.spine02.vr = 0;
+        s.spine01.pitch = 0; s.spine01.yaw = 0; s.spine01.roll = 0; s.spine01.vp = 0; s.spine01.vy = 0; s.spine01.vr = 0;
+        s.spine.pitch = 0; s.spine.yaw = 0; s.spine.roll = 0; s.spine.vp = 0; s.spine.vy = 0; s.spine.vr = 0;
+        s.neck.pitch = 0; s.neck.yaw = 0; s.neck.roll = 0; s.neck.vp = 0; s.neck.vy = 0; s.neck.vr = 0;
+        s.head.pitch = 0; s.head.yaw = 0; s.head.roll = 0; s.head.vp = 0; s.head.vy = 0; s.head.vr = 0;
+        s.leftArm.pitch = 0; s.leftArm.yaw = 0; s.leftArm.roll = -0.30; s.leftArm.vp = 0; s.leftArm.vy = 0; s.leftArm.vr = 0;
+        s.leftForeArm.flex = 0.15; s.leftForeArm.vflex = 0;
+        s.rightArm.pitch = 0; s.rightArm.yaw = 0; s.rightArm.roll = 0.30; s.rightArm.vp = 0; s.rightArm.vy = 0; s.rightArm.vr = 0;
+        s.rightForeArm.flex = 0.15; s.rightForeArm.vflex = 0;
+        s.leftUpLeg.pitch = 0; s.leftUpLeg.yaw = 0; s.leftUpLeg.roll = 0.08; s.leftUpLeg.vp = 0; s.leftUpLeg.vy = 0; s.leftUpLeg.vr = 0;
+        s.leftLeg.kneeFlex = 0.15; s.leftLeg.vflex = 0;
+        s.rightUpLeg.pitch = 0; s.rightUpLeg.yaw = 0; s.rightUpLeg.roll = -0.08; s.rightUpLeg.vp = 0; s.rightUpLeg.vy = 0; s.rightUpLeg.vr = 0;
+        s.rightLeg.kneeFlex = 0.15; s.rightLeg.vflex = 0;
+        s.isGrounded = false;
+        s.airTime = 0;
+        ragdollQuat = [0, 0, 0, 1];
+        ragdollAngVel = [0, 0, 0];
+      }
+
+      function getChibiRagdollBoneTransforms() {
+        const s = chibiRagdollState;
+        return {
+          Hips: [0, 0, 0],
+          Spine02: [s.spine02.pitch, s.spine02.yaw, s.spine02.roll],
+          Spine01: [s.spine01.pitch, s.spine01.yaw, s.spine01.roll],
+          Spine:   [s.spine.pitch, s.spine.yaw, s.spine.roll],
+          neck:    [s.neck.pitch, s.neck.yaw, s.neck.roll],
+          Head:    [s.head.pitch, s.head.yaw, s.head.roll],
+          LeftArm:     [s.leftArm.pitch, s.leftArm.yaw, s.leftArm.roll],
+          LeftForeArm: [s.leftForeArm.flex, 0, -s.leftForeArm.flex * 0.25],
+          LeftHand:    [0.12, 0, -0.12],
+          RightArm:     [s.rightArm.pitch, s.rightArm.yaw, s.rightArm.roll],
+          RightForeArm: [s.rightForeArm.flex, 0, s.rightForeArm.flex * 0.25],
+          RightHand:    [0.12, 0, 0.12],
+          LeftUpLeg:  [s.leftUpLeg.pitch, s.leftUpLeg.yaw, s.leftUpLeg.roll],
+          LeftLeg:    [s.leftLeg.kneeFlex, 0, 0],
+          LeftFoot:   [0.12, 0, 0],
+          RightUpLeg: [s.rightUpLeg.pitch, s.rightUpLeg.yaw, s.rightUpLeg.roll],
+          RightLeg:   [s.rightLeg.kneeFlex, 0, 0],
+          RightFoot:  [0.12, 0, 0]
+        };
+      }
 
       var RADIUS = 32.0;
       var HEIGHT_SCALE = 0.6 * Math.pow(32.0 / 8.0, 0.70);
@@ -1266,22 +1914,6 @@ window.characterVertexShaderSource = `
           rz_scaled[0] ** 2 + rz_scaled[1] ** 2 + rz_scaled[2] ** 2,
         ) || 1.0;
 
-        // Check if underwater to avoid huge pushes
-        const dist = Math.sqrt(px * px + py * py + pz * pz);
-        let inWater = false;
-        if (waterEnabled && dist > 0.001) {
-          const wRadius = typeof getWaterRadiusAt === "function"
-            ? getWaterRadiusAt(px, py, pz)
-            : RADIUS + waterLevel * 0.15;
-          inWater = dist < wRadius + 0.05;
-        }
-
-        // Zero push/launch velocity to collapse in-place, same as NPC
-        let push = 0.0;
-        let sidePush = 0.0;
-
-        ragdollVel = [0.0, 0.0, 0.0];
-
         const rx = [
           rx_scaled[0] / r_len,
           rx_scaled[1] / r_len,
@@ -1298,10 +1930,88 @@ window.characterVertexShaderSource = `
           rz_scaled[2] / rz_len,
         ];
 
+        // 1. Seed full 3D orientation quaternion from current body frame
+        ragdollQuat = matrix3ToQuat(rx, ry, rz);
+
+        // Check if underwater to avoid huge pushes
+        const dist = Math.sqrt(px * px + py * py + pz * pz);
+        let inWater = false;
+        if (waterEnabled && dist > 0.001) {
+          const wRadius = typeof getWaterRadiusAt === "function"
+            ? getWaterRadiusAt(px, py, pz)
+            : RADIUS + waterLevel * 0.15;
+          inWater = dist < wRadius + 0.05;
+        }
+
+        // 2. Inherit genuine movement momentum from locomotion
+        const isSprint = (typeof isSprinting !== "undefined" && isSprinting);
+        const isWalk = (typeof isWalking !== "undefined" && isWalking);
+        const curSpeed = isSprint ? (playerSpeed * 1.7) : (isWalk ? playerSpeed : 0.0);
+        const vertSpeed = (typeof window !== "undefined" && typeof window._ragdollInitialVerticalVel === "number" && !isNaN(window._ragdollInitialVerticalVel))
+          ? window._ragdollInitialVerticalVel
+          : ((typeof playerVerticalVel === "number" && !isNaN(playerVerticalVel)) ? playerVerticalVel : 0.0);
+        if (typeof window !== "undefined") {
+          window._ragdollInitialVerticalVel = null;
+        }
+
+        let vx = rz[0] * curSpeed + ry[0] * vertSpeed;
+        let vy = rz[1] * curSpeed + ry[1] * vertSpeed;
+        let vz = rz[2] * curSpeed + ry[2] * vertSpeed;
+
+        if (curSpeed > 0.002) {
+          // Moving: Trip/stumble and tumble forward with momentum!
+          const tumbleSpeed = 0.08 + curSpeed * 6.0;
+          const lateralTwist = (Math.random() - 0.5) * 0.05;
+          ragdollAngVel = [
+            rx[0] * tumbleSpeed + rz[0] * lateralTwist,
+            rx[1] * tumbleSpeed + rz[1] * lateralTwist,
+            rx[2] * tumbleSpeed + rz[2] * lateralTwist
+          ];
+        } else {
+          // Stationary collapse (e.g. fainting / pass out / dying / knock out)
+          // 35% fall backward on back, 40% buckle sideways (left/right hip), 25% slump forward
+          const choice = Math.random();
+          let dirX, dirZ, pitchTorque, rollTorque;
+          if (choice < 0.35) {
+            // Fall BACKWARD!
+            dirX = (Math.random() - 0.5) * 0.4;
+            dirZ = -0.7 - Math.random() * 0.5; // push backward along -Z
+            pitchTorque = -0.06 - Math.random() * 0.05; // negative pitch rotates backward!
+            rollTorque = (Math.random() - 0.5) * 0.03;
+          } else if (choice < 0.75) {
+            // Fall SIDEWAYS!
+            const sideSign = Math.random() < 0.5 ? -1 : 1;
+            dirX = sideSign * (0.8 + Math.random() * 0.4);
+            dirZ = (Math.random() - 0.5) * 0.4;
+            pitchTorque = (Math.random() - 0.5) * 0.03;
+            rollTorque = -sideSign * (0.06 + Math.random() * 0.05); // roll to side!
+          } else {
+            // Slump forward
+            dirX = (Math.random() - 0.5) * 0.4;
+            dirZ = 0.7 + Math.random() * 0.4;
+            pitchTorque = 0.06 + Math.random() * 0.05;
+            rollTorque = (Math.random() - 0.5) * 0.03;
+          }
+
+          const impulseSpeed = inWater ? 0.003 : 0.009;
+          vx += (rx[0] * dirX + rz[0] * dirZ) * impulseSpeed;
+          vy += (rx[1] * dirX + rz[1] * dirZ) * impulseSpeed;
+          vz += (rx[2] * dirX + rz[2] * dirZ) * impulseSpeed;
+
+          const yawTorque = (Math.random() - 0.5) * 0.04;
+          ragdollAngVel = [
+            rx[0] * pitchTorque + ry[0] * yawTorque + rz[0] * rollTorque,
+            rx[1] * pitchTorque + ry[1] * yawTorque + rz[1] * rollTorque,
+            rx[2] * pitchTorque + ry[2] * yawTorque + rz[2] * rollTorque
+          ];
+        }
+
+        ragdollVel = [vx, vy, vz];
+
+        // Maintain legacy variables for backwards compatibility
         ragdollAxis = [rx[0], rx[1], rx[2]];
         ragdollAngle = 0;
-        // Gentle tip-over speed to make character slide naturally onto shoulders/floor
-        ragdollAngularSpeed = inWater ? 0.02 : 0.03;
+        ragdollAngularSpeed = Math.hypot(ragdollAngVel[0], ragdollAngVel[1], ragdollAngVel[2]);
 
         ragdollLimbs = {
           aL: Math.sin(phase) * 0.8,
@@ -1321,6 +2031,10 @@ window.characterVertexShaderSource = `
           vkL: 0,
           vkR: 0,
         };
+
+        if (typeof initChibiRagdollPhysics === "function") {
+          initChibiRagdollPhysics(phase, (typeof isWalking !== "undefined" && isWalking), (typeof isSprinting !== "undefined" && isSprinting));
+        }
 
         ragdollBaseMatrix = [
           rx[0],
@@ -1405,6 +2119,7 @@ window.characterVertexShaderSource = `
       function updateRagdoll(dt) {
         if (!ragdollInitialized) return;
         const dtScale = dt / 0.016666;
+        let isRagdollOnGround = false;
 
         let immersion = 0.0;
         let depth = -1.0;
@@ -1413,6 +2128,11 @@ window.characterVertexShaderSource = `
           ragdollPos[0] ** 2 + ragdollPos[1] ** 2 + ragdollPos[2] ** 2,
         );
         if (r > 0.001) {
+          // Track highest point reached during ragdoll freefall
+          if (typeof window._ragdollHighestAirRadius !== "number" || r > window._ragdollHighestAirRadius) {
+            window._ragdollHighestAirRadius = r;
+          }
+
           const nx = ragdollPos[0] / r;
           const ny = ragdollPos[1] / r;
           const nz = ragdollPos[2] / r;
@@ -1421,10 +2141,15 @@ window.characterVertexShaderSource = `
             ? getTerrainSurfaceAndCeiling(nx, ny, nz, r)
             : { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getVisualHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, ny))), Math.atan2(nz, nx), (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
 
-          // Use Physics engine
-          Physics.applyGravity(ragdollVel, nx, ny, nz, dtScale);
-          Physics.applyFriction(ragdollVel, 0.98, dtScale);
-          ragdollAngularSpeed *= Math.pow(0.98, dtScale);
+          // Use Physics engine with realistic freefall gravity (no duplicate air friction)
+          Physics.applyGravity(ragdollVel, nx, ny, nz, dtScale, 0.00062);
+
+          // Light air drag on 3D angular rotation
+          if (ragdollAngVel && ragdollAngVel.length === 3) {
+            ragdollAngVel[0] *= Math.pow(0.993, dtScale);
+            ragdollAngVel[1] *= Math.pow(0.993, dtScale);
+            ragdollAngVel[2] *= Math.pow(0.993, dtScale);
+          }
 
           let wRadius = typeof getWaterRadiusAt === "function"
             ? getWaterRadiusAt(ragdollPos[0], ragdollPos[1], ragdollPos[2])
@@ -1448,14 +2173,16 @@ window.characterVertexShaderSource = `
           }
 
           const isNearSurface = ragdollDiedOnSurface;
-          // Smoothly interpolate friction based on immersion
-          // Sinking underwater should have a lot more resistance/drag than floating at surface
+          // Low aerodynamic air drag (0.996) in air so high falls accelerate realistically; strong drag in water
           const waterFriction = isNearSurface ? 0.85 : 0.78;
-          const friction = 0.98 * (1.0 - immersion) + waterFriction * immersion;
+          const friction = 0.996 * (1.0 - immersion) + waterFriction * immersion;
           Physics.applyFriction(ragdollVel, friction, dtScale);
-          ragdollAngularSpeed *= Math.pow(
-            0.98 * (1.0 - immersion) +
-            (isNearSurface ? 0.95 : 0.85) * immersion, dtScale);
+          if (ragdollAngVel && ragdollAngVel.length === 3) {
+            const waterAngDamp = Math.pow(0.92, dtScale);
+            ragdollAngVel[0] = ragdollAngVel[0] * (1.0 - immersion) + ragdollAngVel[0] * waterAngDamp * immersion;
+            ragdollAngVel[1] = ragdollAngVel[1] * (1.0 - immersion) + ragdollAngVel[1] * waterAngDamp * immersion;
+            ragdollAngVel[2] = ragdollAngVel[2] * (1.0 - immersion) + ragdollAngVel[2] * waterAngDamp * immersion;
+          }
 
           if (immersion > 0) {
             let buoyancyFactor = 0.0;
@@ -1467,13 +2194,13 @@ window.characterVertexShaderSource = `
                   immersion * (1.0 + (immersion - targetSubmersion) * 3.0);
                 if (buoyancyFactor < 0.1) buoyancyFactor = 0.1;
               } else {
-                // Deep underwater: sink slowly! (buoyancy close to gravity, e.g. 0.75 so it sinks very slowly)
+                // Deep underwater: sink slowly!
                 buoyancyFactor = 0.75 * immersion;
               }
             }
             Physics.applyBuoyancyForce(ragdollVel, nx, ny, nz, buoyancyFactor, dtScale);
 
-            // Gentle underwater drift and swaying to simulate fluid resistance/currents
+            // Gentle underwater drift and swaying
             const driftPhase = Date.now() * 0.001 * 2.0;
             const driftAmp = 0.0004 * immersion;
             let tx = -ny;
@@ -1487,10 +2214,8 @@ window.characterVertexShaderSource = `
               ragdollVel[1] += ty * Math.sin(driftPhase) * driftAmp;
               ragdollVel[2] += tz * Math.sin(driftPhase) * driftAmp;
             }
-            ragdollAngularSpeed +=
-              Math.sin(driftPhase * 1.5) * 0.001 * immersion;
 
-            // Apply vertical damping to completely kill oscillations / jitter for floating bodies at surface
+            // Apply vertical damping to kill oscillations for floating bodies at surface
             if (ragdollDiedOnSurface) {
               const v_radial =
                 ragdollVel[0] * nx + ragdollVel[1] * ny + ragdollVel[2] * nz;
@@ -1507,15 +2232,34 @@ window.characterVertexShaderSource = `
           }
         }
 
+        // 1. Integrate linear position
         ragdollPos[0] += ragdollVel[0] * dtScale;
         ragdollPos[1] += ragdollVel[1] * dtScale;
         ragdollPos[2] += ragdollVel[2] * dtScale;
 
-        ragdollAngle += ragdollAngularSpeed * dtScale;
-        if (Math.abs(ragdollAngle) > Math.PI * 0.5) {
-          ragdollAngle = Math.PI * 0.5 * Math.sign(ragdollAngle);
-          ragdollAngularSpeed *= 0.5;
+        // 2. Integrate unconstrained 3D angular rotation quaternion (Free 360-degree tumbling)
+        if (ragdollAngVel && ragdollAngVel.length === 3) {
+          ragdollQuat = integrateQuat(ragdollQuat, ragdollAngVel, dtScale);
         }
+
+        // Synchronize legacy helpers
+        const mCurr = quatToMatrix3(ragdollQuat);
+        ragdollBaseMatrix = [
+          mCurr.R[0], mCurr.R[1], mCurr.R[2], 0,
+          mCurr.N[0], mCurr.N[1], mCurr.N[2], 0,
+          mCurr.F[0], mCurr.F[1], mCurr.F[2], 0,
+          0, 0, 0, 1
+        ];
+        ragdollAngle = 0;
+        ragdollAxis = [mCurr.R[0], mCurr.R[1], mCurr.R[2]];
+        ragdollAngularSpeed = (ragdollAngVel && ragdollAngVel.length === 3)
+          ? Math.hypot(ragdollAngVel[0], ragdollAngVel[1], ragdollAngVel[2])
+          : 0.0;
+
+        // Save pre-collision velocity so we can compute exact 3D impact impulse (impactDeltaV)
+        const prevVx = ragdollVel[0];
+        const prevVy = ragdollVel[1];
+        const prevVz = ragdollVel[2];
 
         const distToCenter = Math.sqrt(
           ragdollPos[0] ** 2 + ragdollPos[1] ** 2 + ragdollPos[2] ** 2,
@@ -1528,50 +2272,37 @@ window.characterVertexShaderSource = `
           const theta = Math.acos(Math.max(-1.0, Math.min(1.0, uy)));
           const phi = Math.atan2(uz, ux);
           
-          const surfaceRadius = RADIUS + getVisualHeightOnSphere(theta, phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
+          let surfaceRadius = RADIUS + getVisualHeightOnSphere(theta, phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
+          if (typeof getFloorTopRadiusAt === "function") {
+            surfaceRadius = getFloorTopRadiusAt(ux, uy, uz, surfaceRadius);
+          }
           const caveData = typeof getTerrainSurfaceAndCeiling === "function"
             ? getTerrainSurfaceAndCeiling(ux, uy, uz, distToCenter)
             : { ground: surfaceRadius, insideTunnel: false, ceiling: Infinity };
 
-          // Dynamic collision radius based on rotation
-          // When standing (angle ~ 0), radius is 0.46 to keep legs above ground
-          // When lying flat (angle ~ PI/2), radius is 0.15 so body touches ground
-          const angleFactor = Math.abs(Math.cos(ragdollAngle));
-          const colRadius = playerScale * (0.15 + 0.43 * angleFactor);
+          // Dynamic collision radius based on 3D tilt relative to ground normal
+          // When standing upright, radius is 0.46 * playerScale
+          // When lying on back, stomach, or side, radius is 0.14 * playerScale
+          const cosTilt = Math.abs(mCurr.N[0] * ux + mCurr.N[1] * uy + mCurr.N[2] * uz);
+          const colRadius = playerScale * (0.14 + 0.32 * cosTilt);
           
           let target = distToCenter;
           let hitSolid = false;
+          let hitCeiling = false;
 
           if (caveData.insideTunnel) {
             if (distToCenter < caveData.ground + colRadius) {
               target = caveData.ground + colRadius;
               hitSolid = true;
-              const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
-              if (v_radial < 0) {
-                  ragdollVel[0] -= ux * v_radial;
-                  ragdollVel[1] -= uy * v_radial;
-                  ragdollVel[2] -= uz * v_radial;
-              }
             } else if (caveData.ceiling !== Infinity && distToCenter > caveData.ceiling - colRadius) {
               target = caveData.ceiling - colRadius;
               hitSolid = true;
-              const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
-              if (v_radial > 0) {
-                 ragdollVel[0] -= ux * v_radial;
-                 ragdollVel[1] -= uy * v_radial;
-                 ragdollVel[2] -= uz * v_radial;
-              }
+              hitCeiling = true;
             }
           } else {
             if (distToCenter < surfaceRadius + colRadius) {
               target = surfaceRadius + colRadius;
               hitSolid = true;
-              const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
-              if (v_radial < 0) {
-                  ragdollVel[0] -= ux * v_radial;
-                  ragdollVel[1] -= uy * v_radial;
-                  ragdollVel[2] -= uz * v_radial;
-              }
             }
           }
 
@@ -1580,24 +2311,39 @@ window.characterVertexShaderSource = `
           if (distToCenter < coreRadius + colRadius) {
             target = coreRadius + colRadius;
             hitSolid = true;
-            const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
-            if (v_radial < 0) {
-              ragdollVel[0] -= ux * v_radial;
-              ragdollVel[1] -= uy * v_radial;
-              ragdollVel[2] -= uz * v_radial;
+          }
+
+          if (!hitSolid && immersion < 0.05 && ragdollAngVel && ragdollAngVel.length === 3) {
+            // GTA IV Mid-Air Freefall Aerodynamics:
+            // Off-center air resistance & limb flailing imparts 3D tumbling torque while falling
+            const vDown = -(ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz);
+            if (vDown > 0.005) {
+              const aeroStrength = Math.min(0.012, (vDown - 0.005) * 0.22) * dtScale;
+              // Cross product between body axis mCurr.N and velocity gives aerodynamic pitch/roll instability
+              const aeroX = mCurr.N[1] * ragdollVel[2] - mCurr.N[2] * ragdollVel[1];
+              const aeroY = mCurr.N[2] * ragdollVel[0] - mCurr.N[0] * ragdollVel[2];
+              const aeroZ = mCurr.N[0] * ragdollVel[1] - mCurr.N[1] * ragdollVel[0];
+              const aeroLen = Math.hypot(aeroX, aeroY, aeroZ);
+              if (aeroLen > 0.0001) {
+                ragdollAngVel[0] += (aeroX / aeroLen) * aeroStrength;
+                ragdollAngVel[1] += (aeroY / aeroLen) * aeroStrength;
+                ragdollAngVel[2] += (aeroZ / aeroLen) * aeroStrength;
+              } else {
+                // If falling nearly straight along body axis, break symmetry so body pitches/rolls in freefall
+                ragdollAngVel[0] += (mCurr.R[0] * 0.7 + mCurr.F[0] * 0.5) * aeroStrength;
+                ragdollAngVel[1] += (mCurr.R[1] * 0.7 + mCurr.F[1] * 0.5) * aeroStrength;
+                ragdollAngVel[2] += (mCurr.R[2] * 0.7 + mCurr.F[2] * 0.5) * aeroStrength;
+              }
             }
           }
 
           if (hitSolid) {
+            isRagdollOnGround = !hitCeiling;
             ragdollPos[0] = ux * target;
             ragdollPos[1] = uy * target;
             ragdollPos[2] = uz * target;
 
-            // Ground friction
-            Physics.applyFriction(ragdollVel, 0.7, dtScale);
-            ragdollAngularSpeed *= Math.pow(0.7, dtScale);
-
-            // compute surface normal
+            // Compute terrain slope normal (snX, snY, snZ) BEFORE modifying velocity
             const getT = (t, p) => {
               const r =
                 RADIUS + getVisualHeightOnSphere(t, p, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE;
@@ -1624,19 +2370,27 @@ window.characterVertexShaderSource = `
                 snX = -snX;
                 snY = -snY;
                 snZ = -snZ;
-            }
-          } else {
+              }
+            } else {
               snX = ux;
               snY = uy;
               snZ = uz;
             }
+            if (hitCeiling) {
+              snX = -ux;
+              snY = -uy;
+              snZ = -uz;
+            }
 
-            const dot =
-              ragdollVel[0] * snX + ragdollVel[1] * snY + ragdollVel[2] * snZ;
+            // 1. Linear velocity collision, GTA IV impact bounce, & natural slope sliding
+            const dot = ragdollVel[0] * snX + ragdollVel[1] * snY + ragdollVel[2] * snZ;
+            const impactSpeed = dot < 0 ? -dot : 0;
+
             if (dot < 0) {
-              // Sinking bodies have zero bounciness on landing and settle gracefully
-              const bounciness = !ragdollDiedOnSurface ? 0.0 : 0.1;
-              const friction = !ragdollDiedOnSurface ? 0.9 : 0.95; // Less friction for more sliding
+              const bounciness = (!ragdollDiedOnSurface || impactSpeed < 0.0035)
+                ? 0.0
+                : Math.min(0.28, 0.15 + impactSpeed * 2.2);
+              const slideFriction = !ragdollDiedOnSurface ? 0.88 : 0.92;
 
               const vnX = snX * dot;
               const vnY = snY * dot;
@@ -1646,35 +2400,137 @@ window.characterVertexShaderSource = `
               const vtY = ragdollVel[1] - vnY;
               const vtZ = ragdollVel[2] - vnZ;
 
-              ragdollVel[0] = vtX * friction - vnX * bounciness;
-              ragdollVel[1] = vtY * friction - vnY * bounciness;
-              ragdollVel[2] = vtZ * friction - vnZ * bounciness;
+              ragdollVel[0] = vtX * slideFriction - vnX * bounciness;
+              ragdollVel[1] = vtY * slideFriction - vnY * bounciness;
+              ragdollVel[2] = vtZ * slideFriction - vnZ * bounciness;
+
+              // GTA IV Off-Center Ground Impact Buckling & Tumbling Torque:
+              // When slamming into the ground from a height, the off-center contact of legs/hips/shoulders
+              // converts vertical impact into violent 3D rotational tumbling and lateral deflection!
+              if (impactSpeed > 0.0045 && ragdollAngVel && ragdollAngVel.length === 3) {
+                const dN = mCurr.N[0] * snX + mCurr.N[1] * snY + mCurr.N[2] * snZ;
+                const buckleMag = Math.min(0.26, impactSpeed * (2.2 + 2.6 * Math.abs(dN)));
+                // Cross product sn x mCurr.N gives natural tilt axis; add asymmetric pitch/roll if nearly vertical
+                let bx = snY * mCurr.N[2] - snZ * mCurr.N[1];
+                let by = snZ * mCurr.N[0] - snX * mCurr.N[2];
+                let bz = snX * mCurr.N[1] - snY * mCurr.N[0];
+                const bLen = Math.hypot(bx, by, bz);
+                const randPitch = (Math.random() - 0.35) * 0.8;
+                const randRoll  = (Math.random() - 0.5) * 0.8;
+                if (bLen > 0.08) {
+                  bx = (bx / bLen) * (dN >= 0 ? 1 : -1) + mCurr.R[0] * randPitch * 0.35 + mCurr.F[0] * randRoll * 0.35;
+                  by = (by / bLen) * (dN >= 0 ? 1 : -1) + mCurr.R[1] * randPitch * 0.35 + mCurr.F[1] * randRoll * 0.35;
+                  bz = (bz / bLen) * (dN >= 0 ? 1 : -1) + mCurr.R[2] * randPitch * 0.35 + mCurr.F[2] * randRoll * 0.35;
+                } else {
+                  const pSign = Math.random() < 0.5 ? 1 : -1;
+                  const rSign = Math.random() < 0.5 ? 1 : -1;
+                  bx = mCurr.R[0] * pSign * 0.8 + mCurr.F[0] * rSign * 0.6;
+                  by = mCurr.R[1] * pSign * 0.8 + mCurr.F[1] * rSign * 0.6;
+                  bz = mCurr.R[2] * pSign * 0.8 + mCurr.F[2] * rSign * 0.6;
+                }
+                ragdollAngVel[0] += bx * buckleMag;
+                ragdollAngVel[1] += by * buckleMag;
+                ragdollAngVel[2] += bz * buckleMag;
+
+                // Lateral deflection kick from off-center leg/hip impact (sn x buckleAxis)
+                const deflX = snY * bz - snZ * by;
+                const deflY = snZ * bx - snX * bz;
+                const deflZ = snX * by - snY * bx;
+                const deflSpeed = Math.min(0.014, impactSpeed * 0.24);
+                ragdollVel[0] += deflX * deflSpeed;
+                ragdollVel[1] += deflY * deflSpeed;
+                ragdollVel[2] += deflZ * deflSpeed;
+              }
 
               const speedSq = vtX * vtX + vtY * vtY + vtZ * vtZ;
-              if (speedSq > 0.00001) {
-                const speed = Math.sqrt(speedSq);
-                ragdollAngularSpeed = speed * 1.5; // Rotate based on speed
-
-                // Axis is cross product of surface normal and velocity direction
-                let cX = snY * vtZ - snZ * vtY;
-                let cY = snZ * vtX - snX * vtZ;
-                let cZ = snX * vtY - snY * vtX;
-                const cLen = Math.sqrt(cX * cX + cY * cY + cZ * cZ);
-                if (cLen > 0.0001) {
-                  ragdollAxis = [cX / cLen, cY / cLen, cZ / cLen];
-            }
-          } else {
-                let normalizedAngle = Math.abs(ragdollAngle % Math.PI);
-                if (
-                  normalizedAngle < (Math.PI / 2) * 0.8 ||
-                  normalizedAngle > Math.PI - (Math.PI / 2) * 0.8
-                ) {
-                  ragdollAngularSpeed =
-                    0.05 * Math.sign(ragdollAngularSpeed || 1);
-                } else {
-                  ragdollAngularSpeed *= 0.5;
-                }
+              if (speedSq > 0.000004 && ragdollAngVel && ragdollAngVel.length === 3) {
+                // Ground contact imparts rolling torque from tangential slide
+                const rollTorque = 2.8;
+                ragdollAngVel[0] += (snY * vtZ - snZ * vtY) * rollTorque * dtScale * 0.25;
+                ragdollAngVel[1] += (snZ * vtX - snX * vtZ) * rollTorque * dtScale * 0.25;
+                ragdollAngVel[2] += (snX * vtY - snY * vtX) * rollTorque * dtScale * 0.25;
               }
+            } else {
+              Physics.applyFriction(ragdollVel, 0.90, dtScale);
+            }
+
+            // If this ragdoll was triggered by a high fall in mid-air, apply landing damage & recovery timer upon touchdown!
+            if (!hitCeiling && typeof window !== "undefined" && window._midAirFallRagdollActive) {
+              window._midAirFallRagdollActive = false;
+              const charScaleVal = (typeof playerScale === "number") ? playerScale : 0.22;
+              const scaleRatio = charScaleVal / 0.22;
+              const highR = (typeof window._ragdollHighestAirRadius === "number") ? window._ragdollHighestAirRadius : target;
+              const totalFallDist = Math.max(0, highR - target);
+              window._ragdollHighestAirRadius = target;
+              window._playerHighestAirRadius = null;
+
+              if (immersion < 0.3 && totalFallDist >= 1.8 * scaleRatio) {
+                let fallDamage = 1;
+                if (totalFallDist >= 7.5 * scaleRatio) fallDamage = 5;
+                else if (totalFallDist >= 5.0 * scaleRatio) fallDamage = 3;
+                else if (totalFallDist >= 3.0 * scaleRatio) fallDamage = 2;
+
+                if (typeof applyPlayerFallDamage === "function") {
+                  applyPlayerFallDamage(fallDamage, totalFallDist);
+                } else if (typeof window.applyPlayerFallDamage === "function") {
+                  window.applyPlayerFallDamage(fallDamage, totalFallDist);
+                }
+                const ragDuration = fallDamage >= 3 ? 2200 : 1600;
+                if (typeof triggerFallRagdoll === "function") {
+                  triggerFallRagdoll(ragDuration);
+                }
+              } else if (typeof triggerFallRagdoll === "function") {
+                triggerFallRagdoll(1200);
+              }
+              if (typeof playSplashSound === "function") {
+                playSplashSound(0.6);
+              }
+            } else if (!hitCeiling) {
+              window._ragdollHighestAirRadius = target;
+            }
+
+            // Prevent downward radial penetration into sphere (only if not bouncing upward)
+            const v_radial = ragdollVel[0] * ux + ragdollVel[1] * uy + ragdollVel[2] * uz;
+            if (!hitCeiling && v_radial < 0) {
+              ragdollVel[0] -= ux * v_radial;
+              ragdollVel[1] -= uy * v_radial;
+              ragdollVel[2] -= uz * v_radial;
+            } else if (hitCeiling && v_radial > 0) {
+              ragdollVel[0] -= ux * v_radial;
+              ragdollVel[1] -= uy * v_radial;
+              ragdollVel[2] -= uz * v_radial;
+            }
+
+            // 2. Gravitational Toppling & Slope-Alignment Torque:
+            // Pulls the body's spine axis (mCurr.N) flat onto the terrain slope (dN -> 0)
+            // If standing/tilting (dN > 0), gravity pulls the upper body down to the ground.
+            // If over-rotated so legs stick up in the air (dN < 0), gravity pulls the legs down to the ground!
+            if (!hitCeiling && ragdollAngVel && ragdollAngVel.length === 3) {
+              const dN = mCurr.N[0] * snX + mCurr.N[1] * snY + mCurr.N[2] * snZ;
+              // Cross product: sn x mCurr.N
+              let cx = snY * mCurr.N[2] - snZ * mCurr.N[1];
+              let cy = snZ * mCurr.N[0] - snX * mCurr.N[2];
+              let cz = snX * mCurr.N[1] - snY * mCurr.N[0];
+              const cLen = Math.hypot(cx, cy, cz);
+              if (cLen < 0.05 && Math.abs(dN) > 0.85) {
+                // Break upright dead-center equilibrium so body never balances upright on ground
+                cx = mCurr.R[0] * 0.15 + mCurr.F[0] * 0.10;
+                cy = mCurr.R[1] * 0.15 + mCurr.F[1] * 0.10;
+                cz = mCurr.R[2] * 0.15 + mCurr.F[2] * 0.10;
+              }
+
+              const alignStrength = 0.036 * dtScale;
+              ragdollAngVel[0] += dN * cx * alignStrength;
+              ragdollAngVel[1] += dN * cy * alignStrength;
+              ragdollAngVel[2] += dN * cz * alignStrength;
+
+              // Only apply strong rotational damping once the body lies flat on the slope (|dN| < 0.18).
+              // While still tipping over or dropping raised legs (|dN| >= 0.18), keep damping light so it never freezes mid-tilt!
+              const dampBase = Math.abs(dN) < 0.18 ? 0.80 : 0.945;
+              const angGroundFriction = Math.pow(dampBase, dtScale);
+              ragdollAngVel[0] *= angGroundFriction;
+              ragdollAngVel[1] *= angGroundFriction;
+              ragdollAngVel[2] *= angGroundFriction;
             }
           }
         }
@@ -1726,8 +2582,8 @@ window.characterVertexShaderSource = `
                   ragdollVel[0] -= sR[0] * dot * 1.5;
                   ragdollVel[1] -= sR[1] * dot * 1.5;
                   ragdollVel[2] -= sR[2] * dot * 1.5;
-            }
-          } else {
+                }
+              } else {
                 const sign = localZ > 0 ? 1 : -1;
                 ragdollPos[0] += sF[0] * sign * pushZ;
                 ragdollPos[1] += sF[1] * sign * pushZ;
@@ -1744,13 +2600,18 @@ window.characterVertexShaderSource = `
           }
         }
 
+        // Compute 3D velocity change from ground/obstacle impact for articulated bone whiplash
+        const impactDeltaV = [
+          ragdollVel[0] - prevVx,
+          ragdollVel[1] - prevVy,
+          ragdollVel[2] - prevVz
+        ];
+
         // Update limbs
         if (ragdollLimbs) {
-          const s = Math.abs(ragdollAngularSpeed) * 3.0;
           const updateLimb = (angle, vel, target, stiffness, damping) => {
             const force = (target - angle) * stiffness;
             let v = vel + force;
-            // Remove random jitter to make it floppy, lifeless, and prevent active-like animation twitching
             v *= damping;
             return { a: angle + v, v: v };
           };
@@ -1788,6 +2649,11 @@ window.characterVertexShaderSource = `
           r = updateLimb(ragdollLimbs.kR, ragdollLimbs.vkR, 0.15, 0.008, 0.9);
           ragdollLimbs.kR = Math.max(0, r.a);
           ragdollLimbs.vkR = r.v;
+        }
+
+        // Option 2: Step procedural GLB bone ragdoll physics simulation with full impact impulse
+        if (typeof updateChibiRagdollPhysics === "function") {
+          updateChibiRagdollPhysics(dt, isRagdollOnGround, impactDeltaV);
         }
       }
 
@@ -2516,7 +3382,7 @@ window.characterVertexShaderSource = `
         const isDevMixMode = !isClone && typeof window.devMixMode !== "undefined" && window.devMixMode;
         const isDevOverride = !isClone && !isDevMixMode && typeof window.devForceAnimation === "string" && window.devForceAnimation !== "Auto" && window.devForceAnimation !== "";
 
-        const isRagdoll = !isClone && typeof ragdollEnabled !== "undefined" && ragdollEnabled && typeof ragdollInitialized !== "undefined" && ragdollInitialized;
+        const isRagdoll = !isClone && typeof ragdollEnabled !== "undefined" && ragdollEnabled;
         if (!isRagdoll && typeof window.charRagdollTime !== "undefined") {
           window.charRagdollTime = 0;
         }
@@ -2528,7 +3394,7 @@ window.characterVertexShaderSource = `
         } else if (isDevMixMode && window.devMixLowerAnim) {
           lowerAnimName = window.devMixLowerAnim;
         } else if (isRagdoll) {
-          lowerAnimName = model.getAnimation("01a09186-787b-771f-b4ee-5b234572bcef") ? "01a09186-787b-771f-b4ee-5b234572bcef" : "Jump_with_Arms_Open";
+          lowerAnimName = "restpose";
         } else if (isRiding) {
           lowerAnimName = "01a090f9-e47a-7144-abc9-bc9fcc7af00e";
         } else if (inWater) {
@@ -2707,7 +3573,7 @@ window.characterVertexShaderSource = `
 
         // 7. Update Procedural Virtual Bone Hair Spring Physics before skinning
         if (!isClone && typeof updateChibiVirtualHair === "function") {
-          updateChibiVirtualHair(model, isMovingActive, isSprintingActive, phase, dt);
+          updateChibiVirtualHair(model, !isRagdoll && isMovingActive, !isRagdoll && isSprintingActive, isRagdoll ? 0 : phase, dt);
         }
 
         // 7.1 Update Hand Pose & Finger Controls (กำมือ, แบมือ, แยกนิ้ว)
@@ -2718,7 +3584,12 @@ window.characterVertexShaderSource = `
         // 8. Sample and Mesh Skinning
         let skinned = null;
 
-        if (isLayerMixing) {
+        if (isRagdoll && typeof getChibiRagdollBoneTransforms === "function" && typeof model.getSkinnedMeshRagdoll === "function") {
+          // Option 2: Full Realistic Procedural Bone Ragdoll for GLB Model
+          const bones = getChibiRagdollBoneTransforms();
+          skinned = model.getSkinnedMeshRagdoll(bones);
+        }
+        else if (isLayerMixing) {
           // Layered mixing: legs & locomotion stay on lowerAnim, upper body blends into upperAnim
           const hipsBlend = (upperAnimName === "Jump_with_Arms_Open") ? 0.0 : (isMovingActive ? 0.0 : 0.35);
 
@@ -2978,7 +3849,7 @@ window.characterVertexShaderSource = `
         if (!activeGl) return;
         if (typeof gl === "undefined" || !gl) gl = activeGl;
         const heldItem = (typeof window.getHeldItem === "function" ? window.getHeldItem() : (typeof getHeldItem === "function" ? getHeldItem() : null));
-        if (!heldItem || !window.chibiGlbModel || !window.chibiGlbModel.nodes) {
+        if (!heldItem || !window.chibiGlbModel || !window.chibiGlbModel.nodes || (typeof ragdollEnabled !== "undefined" && ragdollEnabled)) {
           equipIndicesLength = 0;
           return;
         }
@@ -3977,42 +4848,49 @@ window.characterVertexShaderSource = `
         let R_rot = null, N_rot = null, F_rot = null;
 
         if (ragdollEnabled && ragdollInitialized) {
-          const rx = ragdollAxis[0],
-            ry = ragdollAxis[1],
-            rz = ragdollAxis[2];
-          const angle = ragdollAngle;
-          const c = Math.cos(angle);
-          const s = Math.sin(angle);
-          const t = 1 - c;
+          if (typeof ragdollQuat !== "undefined" && ragdollQuat && ragdollQuat.length === 4) {
+            const m = quatToMatrix3(ragdollQuat);
+            R_rot = m.R;
+            N_rot = m.N;
+            F_rot = m.F;
+          } else {
+            const rx = ragdollAxis[0],
+              ry = ragdollAxis[1],
+              rz = ragdollAxis[2];
+            const angle = ragdollAngle;
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            const t = 1 - c;
 
-          const m00 = t * rx * rx + c;
-          const m01 = t * rx * ry - s * rz;
-          const m02 = t * rx * rz + s * ry;
+            const m00 = t * rx * rx + c;
+            const m01 = t * rx * ry - s * rz;
+            const m02 = t * rx * rz + s * ry;
 
-          const m10 = t * rx * ry + s * rz;
-          const m11 = t * ry * ry + c;
-          const m12 = t * ry * rz - s * rx;
+            const m10 = t * rx * ry + s * rz;
+            const m11 = t * ry * ry + c;
+            const m12 = t * ry * rz - s * rx;
 
-          const m20 = t * rx * rz - s * ry;
-          const m21 = t * ry * rz + s * rx;
-          const m22 = t * rz * rz + c;
+            const m20 = t * rx * rz - s * ry;
+            const m21 = t * ry * rz + s * rx;
+            const m22 = t * rz * rz + c;
 
-          const b = ragdollBaseMatrix;
-          R_rot = [
-            m00 * b[0] + m01 * b[1] + m02 * b[2],
-            m10 * b[0] + m11 * b[1] + m12 * b[2],
-            m20 * b[0] + m21 * b[1] + m22 * b[2],
-          ];
-          N_rot = [
-            m00 * b[4] + m01 * b[5] + m02 * b[6],
-            m10 * b[4] + m11 * b[5] + m12 * b[6],
-            m20 * b[4] + m21 * b[5] + m22 * b[6],
-          ];
-          F_rot = [
-            m00 * b[8] + m01 * b[9] + m02 * b[10],
-            m10 * b[8] + m11 * b[9] + m12 * b[10],
-            m20 * b[8] + m21 * b[9] + m22 * b[10],
-          ];
+            const b = ragdollBaseMatrix;
+            R_rot = [
+              m00 * b[0] + m01 * b[1] + m02 * b[2],
+              m10 * b[0] + m11 * b[1] + m12 * b[2],
+              m20 * b[0] + m21 * b[1] + m22 * b[2],
+            ];
+            N_rot = [
+              m00 * b[4] + m01 * b[5] + m02 * b[6],
+              m10 * b[4] + m11 * b[5] + m12 * b[6],
+              m20 * b[4] + m21 * b[5] + m22 * b[6],
+            ];
+            F_rot = [
+              m00 * b[8] + m01 * b[9] + m02 * b[10],
+              m10 * b[8] + m11 * b[9] + m12 * b[10],
+              m20 * b[8] + m21 * b[9] + m22 * b[10],
+            ];
+          }
 
           const rp = ragdollPos;
           const r_len = Math.sqrt(rp[0] ** 2 + rp[1] ** 2 + rp[2] ** 2);
@@ -5030,7 +5908,15 @@ window.characterVertexShaderSource = `
 
       function getCharacterMatrix() {
         if (ragdollEnabled && ragdollInitialized) {
-          if (typeof window !== "undefined" && window.characterModel === "chibi") {
+          const m = (typeof ragdollQuat !== "undefined" && ragdollQuat && ragdollQuat.length === 4)
+            ? quatToMatrix3(ragdollQuat)
+            : null;
+          let R_rot, N_rot, F_rot;
+          if (m) {
+            R_rot = m.R;
+            N_rot = m.N;
+            F_rot = m.F;
+          } else {
             const rx = (typeof ragdollAxis !== "undefined" && ragdollAxis && !isNaN(ragdollAxis[0])) ? ragdollAxis[0] : 1;
             const ry = (typeof ragdollAxis !== "undefined" && ragdollAxis && !isNaN(ragdollAxis[1])) ? ragdollAxis[1] : 0;
             const rz = (typeof ragdollAxis !== "undefined" && ragdollAxis && !isNaN(ragdollAxis[2])) ? ragdollAxis[2] : 0;
@@ -5055,22 +5941,24 @@ window.characterVertexShaderSource = `
               ? ragdollBaseMatrix
               : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
-            const R_rot = [
+            R_rot = [
               m00 * b[0] + m01 * b[1] + m02 * b[2],
               m10 * b[0] + m11 * b[1] + m12 * b[2],
               m20 * b[0] + m21 * b[1] + m22 * b[2],
             ];
-            const N_rot = [
+            N_rot = [
               m00 * b[4] + m01 * b[5] + m02 * b[6],
               m10 * b[4] + m11 * b[5] + m12 * b[6],
               m20 * b[4] + m21 * b[5] + m22 * b[6],
             ];
-            const F_rot = [
+            F_rot = [
               m00 * b[8] + m01 * b[9] + m02 * b[10],
               m10 * b[8] + m11 * b[9] + m12 * b[10],
               m20 * b[8] + m21 * b[9] + m22 * b[10],
             ];
+          }
 
+          if (typeof window !== "undefined" && window.characterModel === "chibi") {
             const rp = (typeof ragdollPos !== "undefined" && ragdollPos && !isNaN(ragdollPos[0])) ? ragdollPos : [0, 0, 0];
             const scale = (typeof playerScale === "number") ? playerScale : 1.0;
             return [
@@ -5216,27 +6104,15 @@ window.characterVertexShaderSource = `
         let finalR = [R[0], R[1], R[2]];
 
         if (ragdollEnabled) {
-          // Lay flat on back: Rotate -90 degrees around the right axis R
-          // So local Y (up) becomes -F (facing backward along ground), and local Z (forward/chest) becomes N (pointing away from planet)
-          finalN = [-F[0], -F[1], -F[2]];
-          finalF = [N[0], N[1], N[2]];
-
-          // Add a slight roll/twist to make the ragdoll look beautifully imperfect
-          const angleRoll = 0.35;
-          const cosRoll = Math.cos(angleRoll);
-          const sinRoll = Math.sin(angleRoll);
-
-          // rotate finalR and finalF around finalN:
-          const r0 = finalR[0] * cosRoll - finalF[0] * sinRoll;
-          const r1 = finalR[1] * cosRoll - finalF[1] * sinRoll;
-          const r2 = finalR[2] * cosRoll - finalF[2] * sinRoll;
-
-          const f0 = finalR[0] * sinRoll + finalF[0] * cosRoll;
-          const f1 = finalR[1] * sinRoll + finalF[1] * cosRoll;
-          const f2 = finalR[2] * sinRoll + finalF[2] * cosRoll;
-
-          finalR = [r0, r1, r2];
-          finalF = [f0, f1, f2];
+          if (typeof ragdollQuat !== "undefined" && ragdollQuat && ragdollQuat.length === 4) {
+            const m = quatToMatrix3(ragdollQuat);
+            finalR = [m.R[0], m.R[1], m.R[2]];
+            finalN = [m.N[0], m.N[1], m.N[2]];
+            finalF = [m.F[0], m.F[1], m.F[2]];
+          } else {
+            finalN = [-F[0], -F[1], -F[2]];
+            finalF = [N[0], N[1], N[2]];
+          }
         } else if (activeRidingBoat && activeRidingBoat.normal && activeRidingBoat.F && activeRidingBoat.R) {
           finalN = [activeRidingBoat.normal[0], activeRidingBoat.normal[1], activeRidingBoat.normal[2]];
           finalF = [activeRidingBoat.F[0], activeRidingBoat.F[1], activeRidingBoat.F[2]];
@@ -5659,7 +6535,8 @@ window.characterVertexShaderSource = `
                 if (!item.active) continue;
                 if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
-                const reachInfo = isTargetWithinReach(item.position, actionReachDistance);
+                const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
+                const reachInfo = isTargetWithinReach(item.position, checkDist);
                 if (reachInfo.valid) {
                   const distSq = reachInfo.perpSq;
                   if (distSq < bestDistSq) {
@@ -5700,6 +6577,7 @@ window.characterVertexShaderSource = `
               else if (item.type === "isopod_item") { icon = "🦐"; label = "ISOPOD"; }
               else if (item.type === "wooden_arm_cannon") { icon = "🪵🦾"; label = "WOODEN_ARM_CANNON"; }
               else if (item.type === "dragon_fruit") { icon = "🐉"; label = "DRAGON_FRUIT"; }
+              else if (item.type === "cotton_plant") { icon = "☁️"; label = "COTTON_PLANT"; }
               
               const itemData = {
                 icon: icon,

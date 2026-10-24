@@ -1801,6 +1801,22 @@
         border-color: #ff6666;
         box-shadow: 0 0 4px rgba(255, 51, 51, 0.7);
       }
+      .player-hunger-slot-minimal {
+        width: 14px;
+        height: 6px; /* rectangular slot */
+        background: rgba(255, 255, 255, 0.12); /* transparent white */
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+      }
+      .player-hunger-slot-minimal.slot-divider {
+        margin-bottom: 4px; /* subtle separation between white hunger and red hp */
+      }
+      .player-hunger-slot-minimal.filled {
+        background: #ffffff; /* solid bright white */
+        border-color: #ffffff;
+        box-shadow: 0 0 4px rgba(255, 255, 255, 0.85);
+      }
 
       /* Floating NPC HP UI Styles */
       .npc-hp-bar {

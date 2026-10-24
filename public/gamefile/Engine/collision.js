@@ -206,6 +206,7 @@ const CollisionCore = {
       const maxDistSq = maxColliderDistance * maxColliderDistance;
       
       for (let obs of obstacles) {
+        if (obs.type === "cotton_plant" || obs.noCollision || obs.isPassable) continue;
         if (mask !== undefined && obs.layer !== undefined && !(mask & obs.layer)) continue;
         if (!obs.position) continue;
         
@@ -608,6 +609,7 @@ const CollisionCore = {
         const maxDistLimit = typeof maxColliderDistance !== "undefined" ? maxColliderDistance : 20.0;
         const maxDistSq = maxDistLimit * maxDistLimit;
         for (let obs of obstacles) {
+          if (obs.type === "cotton_plant" || obs.noCollision || obs.isPassable) continue;
           if (mask !== undefined && obs.layer !== undefined && !(mask & obs.layer)) continue;
           if (!obs.position) continue;
           

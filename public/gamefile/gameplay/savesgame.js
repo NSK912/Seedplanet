@@ -152,6 +152,8 @@
             destroyedRocks: Array.isArray(destroyedRocks) ? destroyedRocks : (window.destroyedRocks || []),
             playerHP,
             playerMaxHP,
+            playerHunger: typeof playerHunger !== "undefined" ? playerHunger : 5,
+            playerMaxHunger: typeof playerMaxHunger !== "undefined" ? playerMaxHunger : 5,
             batteryStates: (typeof window.BatterySystem !== "undefined" && window.BatterySystem.exportState) ? window.BatterySystem.exportState() : null,
             collectiblesState: collectibles.filter(c => !c.isDynamic && !c.isPreview && !c.isPlayerPlaced && c.isWorldGenerated !== false).map((c) => c.active),
             removedWorldKeys: Array.from(new Set([
@@ -734,6 +736,7 @@
         // Player state
         if (Array.isArray(settings.inventory)) {
           inventory = settings.inventory;
+          window.inventory = inventory;
           for (let i = 0; i < inventory.length; i++) {
             if (inventory[i] && inventory[i].name === "OBSIDIAN_FLUX") {
               inventory[i].name = "OBSIDIAN_FLUX";
@@ -748,6 +751,7 @@
         }
         if (Array.isArray(settings.actionSlotsItems)) {
           actionSlotsItems = settings.actionSlotsItems;
+          window.actionSlotsItems = actionSlotsItems;
           for (let i = 0; i < actionSlotsItems.length; i++) {
             if (actionSlotsItems[i] && actionSlotsItems[i].name === "OBSIDIAN_FLUX") {
               actionSlotsItems[i].name = "OBSIDIAN_FLUX";
@@ -763,13 +767,31 @@
           charTheta = settings.charTheta;
         if (typeof settings.charPhi === "number") charPhi = settings.charPhi;
         
-        if (typeof settings.playerHP === "number") {
-          playerHP = settings.playerHP;
-          if (typeof updatePlayerHPUI === "function") updatePlayerHPUI();
-        }
         if (typeof settings.playerMaxHP === "number") {
-          playerMaxHP = settings.playerMaxHP;
+          playerMaxHP = Math.min(5, settings.playerMaxHP);
+        } else {
+          playerMaxHP = 5;
         }
+        if (typeof settings.playerHP === "number") {
+          playerHP = Math.min(playerMaxHP, settings.playerHP);
+        } else {
+          playerHP = playerMaxHP;
+        }
+        if (typeof settings.playerMaxHunger === "number") {
+          playerMaxHunger = settings.playerMaxHunger;
+        } else {
+          playerMaxHunger = 5;
+        }
+        if (typeof settings.playerHunger === "number") {
+          playerHunger = Math.min(playerMaxHunger, settings.playerHunger);
+        } else {
+          playerHunger = playerMaxHunger;
+        }
+        window.playerHP = playerHP;
+        window.playerMaxHP = playerMaxHP;
+        window.playerHunger = playerHunger;
+        window.playerMaxHunger = playerMaxHunger;
+        if (typeof updatePlayerHPUI === "function") updatePlayerHPUI();
         if (settings.collectedCount) {
           collectedCount = { ...settings.collectedCount };
         }

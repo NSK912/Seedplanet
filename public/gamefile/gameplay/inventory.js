@@ -13,6 +13,8 @@
       let actionSlotsItems = new Array(8).fill(null);
       let isMoveModeEnabled = false;
       let selectedActionSlotIndex = -1;
+      window.inventory = inventory;
+      window.actionSlotsItems = actionSlotsItems;
 
       // ============================================
       // ระบบพลังงานแบตเตอรี่หินเรืองแสง (Glow Battery Energy Points System)
@@ -274,6 +276,7 @@
         { name: "ISOPOD", icon: "🦐" },
         { name: "FRIED_BUG", icon: "🍤" },
         { name: "DRAGON_FRUIT", icon: "🐉" },
+        { name: "COTTON_PLANT", icon: "☁️" },
         { name: "SHOVEL", icon: "🥄" },
         { name: "ROBOT_STAND", icon: "🏗️" },
         { name: "ROBOT_COCKPIT", icon: "🤖" },
@@ -2307,7 +2310,7 @@
        const hitType = bestType;
        const hitIndex = bestIndex;
        
-       if (hitType === "tree" && obs.isWhiteRedTree && typeof collectibles !== "undefined" && Array.isArray(collectibles)) { for (let c of collectibles) { if (c && c.active !== false && c.isAttachedToTree && c.treeId === obs.id) { c.isAttachedToTree = false; c.isDynamic = true; c.vel = [(Math.random() - 0.5) * 0.005, -0.015, (Math.random() - 0.5) * 0.005]; c.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05]; c.spinSpeed = 0.02; } } if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true; }
+       if (hitType === "tree" && obs.isWhiteRedTree && typeof collectibles !== "undefined" && Array.isArray(collectibles)) { let detachedAny = false; for (let c of collectibles) { if (c && c.active !== false && c.isAttachedToTree && c.treeId === obs.id) { c.isAttachedToTree = false; c.isDynamic = true; c.vel = [(Math.random() - 0.5) * 0.005, -0.015, (Math.random() - 0.5) * 0.005]; c.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05]; c.spinSpeed = 0.02; detachedAny = true; } } if (detachedAny) { if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true; if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true; if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO(); } }
         if (toolType !== "HAND") { obs.hits = (obs.hits || 0) + 1; } else { obs.handHits = (obs.handHits || 0) + 1; }
        const requiredHits = 3;
        
@@ -3284,16 +3287,20 @@ function cancelFloorPlacement() {
         if (itemName === "DRAGON_FRUIT" || itemName === "dragon_fruit") {
           activeItem = item;
           isUsingItem = true;
-          if (playerHP < playerMaxHP) {
-            playerHP = Math.min(playerMaxHP, playerHP + 4);
+          if (playerHunger < playerMaxHunger || playerHP < playerMaxHP) {
+            playerHunger = Math.min(playerMaxHunger, (playerHunger || 0) + 2);
+            playerHP = Math.min(playerMaxHP, playerHP + 1);
+            playerHungerTimer = 0.0;
+            playerStarvationTimer = 0.0;
+            window.playerHunger = playerHunger;
             updatePlayerHPUI();
-            showNotice("กินแก้วมังกร! ฟื้นฟู HP 4 ช่อง (Ate dragon fruit! HP +4)");
+            showNotice("กินแก้วมังกร! ฟื้นฟูความหิว +2 ช่อง และ HP +1 ช่อง (Ate dragon fruit! Hunger +2, HP +1)");
             consumeItem("DRAGON_FRUIT", 1);
             if (source === "action") renderActionSlots();
             else renderInventory();
             if (typeof playCollectSound === "function") playCollectSound();
           } else {
-            showNotice("HP เต็มแล้ว! (HP is full!)");
+            showNotice("ค่าความหิวและ HP เต็มแล้ว! (Hunger & HP are full!)");
           }
           setTimeout(() => {
             isUsingItem = false;
@@ -3302,16 +3309,20 @@ function cancelFloorPlacement() {
         } else if (itemName === "FRIED_BUG") {
           activeItem = item;
           isUsingItem = true;
-          if (playerHP < playerMaxHP) {
-            playerHP = Math.min(playerMaxHP, playerHP + 5);
+          if (playerHunger < playerMaxHunger || playerHP < playerMaxHP) {
+            playerHunger = Math.min(playerMaxHunger, (playerHunger || 0) + 3);
+            playerHP = Math.min(playerMaxHP, playerHP + 2);
+            playerHungerTimer = 0.0;
+            playerStarvationTimer = 0.0;
+            window.playerHunger = playerHunger;
             updatePlayerHPUI();
-            showNotice("กินแมลงทอด! ฟื้นฟู HP 5 ช่อง (Ate fried bug! HP +5)");
+            showNotice("กินแมลงทอด! ฟื้นฟูความหิว +3 ช่อง และ HP +2 ช่อง (Ate fried bug! Hunger +3, HP +2)");
             consumeItem("FRIED_BUG", 1);
             if (source === "action") renderActionSlots();
             else renderInventory();
             if (typeof playCollectSound === "function") playCollectSound();
           } else {
-            showNotice("HP เต็มแล้ว! (HP is full!)");
+            showNotice("ค่าความหิวและ HP เต็มแล้ว! (Hunger & HP are full!)");
           }
           setTimeout(() => {
             isUsingItem = false;
@@ -3574,10 +3585,20 @@ function cancelFloorPlacement() {
       let _lastNoticeTime = 0;
 
       function showNotice(msg) {
-        // Essential gamepad connection and flight notices should always be displayed to players
-        const isEssentialNotice = typeof msg === "string" && (msg.includes("🎮") || msg.includes("🪽"));
+        // Essential gamepad connection, flight, damage, unconscious penalties, and status notices should always be displayed to players
+        const isEssentialNotice = typeof msg === "string" && (
+          msg.includes("🎮") ||
+          msg.includes("🪽") ||
+          msg.includes("💀") ||
+          msg.includes("หมดสติ") ||
+          msg.includes("Unconscious") ||
+          msg.includes("ทำลาย") ||
+          msg.includes("สูญเสีย") ||
+          msg.includes("ความหิว") ||
+          msg.includes("HP")
+        );
         if (!isDevMode && !isEssentialNotice) {
-          return; // ซ่อนการแจ้งเตือนทั้งหมดในโหมดเซฟ
+          return; // ซ่อนการแจ้งเตือนทั่วไปในโหมดเซฟ
         }
         const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
         if (msg === _lastNoticeMsg && now - _lastNoticeTime < 1500) {
@@ -5897,5 +5918,111 @@ function cancelFloorPlacement() {
           statusBadge.style.display = "none";
         }
       };
+
+      // ============================================
+      // ระบบบทลงโทษเมื่อหมดสติ (Unconscious Death Penalty)
+      // สุ่มทำลายไอเทมในกระเป๋า 1 ช่อง
+      // ============================================
+      function destroyRandomInventorySlotOnUnconscious(customNotice = null) {
+        // ค้นหาช่องในกระเป๋า (inventory) ทั้งหมดที่มีไอเทมอยู่
+        const occupiedBagSlots = [];
+        if (typeof inventory !== "undefined" && Array.isArray(inventory)) {
+          for (let i = 0; i < inventory.length; i++) {
+            if (inventory[i] !== null && inventory[i] !== undefined) {
+              occupiedBagSlots.push({ source: "inventory", index: i, item: inventory[i] });
+            }
+          }
+        }
+
+        let targetPool = occupiedBagSlots;
+        let chosenSource = "inventory";
+
+        // หากในกระเป๋าว่างเปล่า ไม่มีไอเทมเลย ให้ตรวจสอบช่องคีย์ลัด (actionSlotsItems) เผื่อผู้เล่นใส่ของไว้ที่คีย์ลัด
+        if (targetPool.length === 0 && typeof actionSlotsItems !== "undefined" && Array.isArray(actionSlotsItems)) {
+          const occupiedActionSlots = [];
+          for (let i = 0; i < actionSlotsItems.length; i++) {
+            if (actionSlotsItems[i] !== null && actionSlotsItems[i] !== undefined) {
+              occupiedActionSlots.push({ source: "action", index: i, item: actionSlotsItems[i] });
+            }
+          }
+          if (occupiedActionSlots.length > 0) {
+            targetPool = occupiedActionSlots;
+            chosenSource = "action";
+          }
+        }
+
+        const isEn = (typeof window.getGameLanguage === "function" && window.getGameLanguage() === "en") ||
+                     (window.gameLanguage === "en");
+
+        // ถ้าไม่มีไอเทมใดๆ เลย
+        if (targetPool.length === 0) {
+          const emptyMsg = isEn
+            ? (customNotice ? `💀 ${customNotice} (No items in bag to lose)` : "💀 Passed out, but had no items in bag to lose!")
+            : (customNotice ? `💀 ${customNotice} (ไม่มีไอเทมในกระเป๋าให้สูญเสีย)` : "💀 คุณหมดสติ! แต่ไม่มีไอเทมในกระเป๋าให้สูญเสีย");
+          if (typeof showNotice === "function") {
+            showNotice(emptyMsg);
+          }
+          return null;
+        }
+
+        // สุ่มเลือก 1 ช่องที่ถูกใช้งาน
+        const randIdx = Math.floor(Math.random() * targetPool.length);
+        const target = targetPool[randIdx];
+        const lostItem = target.item;
+        const targetIdx = target.index;
+        const targetSource = target.source;
+
+        // ทำลายไอเทมในช่องนั้นทิ้งทั้งหมด (1 ช่อง)
+        if (targetSource === "inventory") {
+          inventory[targetIdx] = null;
+        } else if (targetSource === "action") {
+          actionSlotsItems[targetIdx] = null;
+          if (typeof selectedActionSlotIndex !== "undefined" && selectedActionSlotIndex === targetIdx) {
+            selectedActionSlotIndex = -1;
+          }
+        }
+
+        // ยกเลิกการเลือกช่องถ้ากำลังเลือกช่องที่ถูกทำลาย
+        if (window.selectedInventorySlot && window.selectedInventorySlot.source === targetSource && window.selectedInventorySlot.index === targetIdx) {
+          window.selectedInventorySlot = null;
+        }
+
+        // รีเฟรช UI และบันทึกข้อมูล
+        if (typeof renderInventory === "function") renderInventory();
+        if (typeof renderActionSlots === "function") renderActionSlots();
+        if (typeof updateBadge === "function") updateBadge();
+        if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
+        if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
+        if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
+
+        // เล่นเสียงแจ้งเตือนการทำลาย / การกระแทก
+        if (typeof playRockHitSound === "function") {
+          playRockHitSound();
+        }
+
+        // แสดงข้อความแจ้งเตือนบทลงโทษ
+        const rawName = lostItem.name || lostItem.label || lostItem.type || "ITEM";
+        const itemDispName = (typeof getItemDisplayName === "function")
+          ? getItemDisplayName(rawName)
+          : (lostItem.label || rawName);
+        const countStr = (lostItem.count && lostItem.count > 1) ? ` x${lostItem.count}` : "";
+        const iconStr = lostItem.icon ? `${lostItem.icon} ` : "";
+        const locationText = (targetSource === "inventory")
+          ? (isEn ? "in bag" : "ในกระเป๋า")
+          : (isEn ? "on hotbar" : "ในช่องคีย์ลัด");
+
+        const penaltyNotice = isEn
+          ? `💀 Unconscious! Randomly destroyed ${iconStr}[${itemDispName}${countStr}] ${locationText} (1 slot)!`
+          : `💀 คุณหมดสติ! สุ่มทำลาย ${iconStr}[${itemDispName}${countStr}] ${locationText} 1 ช่อง!`;
+
+        if (typeof showNotice === "function") {
+          showNotice(penaltyNotice);
+        }
+
+        console.log(`[Penalty] Player became unconscious. Destroyed 1 slot (${targetSource} #${targetIdx}):`, lostItem);
+        return { lostItem, slotIndex: targetIdx, source: targetSource };
+      }
+      window.destroyRandomInventorySlotOnUnconscious = destroyRandomInventorySlotOnUnconscious;
+
 
 

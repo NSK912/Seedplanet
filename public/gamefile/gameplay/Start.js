@@ -183,8 +183,16 @@ function startGameWithSlot(loadedData, devMode = false) {
     savedCollectiblesState = null;
     window.savedCollectiblesState = null;
     window.savedRemovedWorldKeys = [];
-    playerHP = 10;
-    playerMaxHP = 10;
+    playerHP = 5;
+    playerMaxHP = 5;
+    playerHunger = 5;
+    playerMaxHunger = 5;
+    playerHungerTimer = 0.0;
+    playerStarvationTimer = 0.0;
+    window.playerHP = playerHP;
+    window.playerMaxHP = playerMaxHP;
+    window.playerHunger = playerHunger;
+    window.playerMaxHunger = playerMaxHunger;
     updatePlayerHPUI();
   }
 

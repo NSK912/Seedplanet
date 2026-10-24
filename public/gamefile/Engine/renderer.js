@@ -4404,6 +4404,11 @@ window.cloud3DProgram = cloud3DProgram;
           window.BatterySystem.update(dt);
         }
 
+        // Player Hunger & Starvation System Update
+        if (typeof window.updatePlayerHungerSystem === "function") {
+          window.updatePlayerHungerSystem(dt);
+        }
+
         // Gamepad Controller Polling & Update (Xbox & PlayStation)
         if (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.update === "function") {
           try {
@@ -5232,7 +5237,28 @@ window.cloud3DProgram = cloud3DProgram;
               playerVerticalVel = Physics.applyVerticalGravity(playerVerticalVel, 1.0, Physics.gravityAccel);
               playerCenterRadius += playerVerticalVel;
 
-              if (playerCenterRadius <= minGroundRadius) {
+              const minFallHeightForRagdoll = 1.8 * (charScale / 0.22);
+              const currentFallDist = (window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
+                ? Math.max(0, window._playerHighestAirRadius - playerCenterRadius)
+                : 0;
+
+              // GTA IV Mid-Air Euphoria Freefall Ragdoll:
+              // If the player has already fallen a significant height (>= minFallHeightForRagdoll) in mid-air,
+              // transition into active freefall ragdoll BEFORE hitting the ground so they tumble & flail in the air!
+              if (
+                !ragdollEnabled &&
+                playerCenterRadius > minGroundRadius + 0.22 * charScale &&
+                currentFallDist >= minFallHeightForRagdoll &&
+                playerVerticalVel <= -0.026 &&
+                (typeof currentSwimFactor === "undefined" || currentSwimFactor <= 0.3)
+              ) {
+                window._midAirFallRagdollActive = true;
+                window._ragdollHighestAirRadius = window._playerHighestAirRadius;
+                window._ragdollInitialVerticalVel = playerVerticalVel;
+                if (typeof setRagdoll === "function") {
+                  setRagdoll(true);
+                }
+              } else if (playerCenterRadius <= minGroundRadius) {
                 const impactVelocity = -playerVerticalVel;
                 const fallDistance = (window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
                   ? Math.max(0, window._playerHighestAirRadius - minGroundRadius)
@@ -5247,7 +5273,6 @@ window.cloud3DProgram = cloud3DProgram;
                 // Only trigger Fall Damage and Ragdoll if the character genuinely fell from a significant height:
                 // at least 1.8 units (~8-9 times the player's height) AND impactVelocity >= 0.030.
                 // Low drops (< 1.8 units, like jumping off a rock or running down a slope) will NEVER trigger Ragdoll or Damage!
-                const minFallHeightForRagdoll = 1.8 * (charScale / 0.22);
                 if (fallDistance >= minFallHeightForRagdoll && impactVelocity >= 0.030) {
                   const isInWater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.3);
                   if (!isInWater) {
@@ -5276,6 +5301,8 @@ window.cloud3DProgram = cloud3DProgram;
                       window.damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
                     }
 
+                    // Preserve downward impact velocity so initRagdoll slams & buckles into the ground!
+                    window._ragdollInitialVerticalVel = -impactVelocity;
                     const ragDuration = fallDamage >= 3 ? 2200 : 1500;
                     if (typeof triggerFallRagdoll === "function") {
                       triggerFallRagdoll(ragDuration);
@@ -7642,7 +7669,8 @@ if (prompt._lastHTML !== _newHtml_2) {
                 if (!item.active) continue;
                 if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
-                const reachInfo = isTargetWithinReach(item.position, actionReachDistance);
+                const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
+                const reachInfo = isTargetWithinReach(item.position, checkDist);
                 if (reachInfo.valid) {
                   const distSq = reachInfo.perpSq;
                   if (distSq < bestItemDistSq) {
@@ -10120,7 +10148,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1f(modelTimeLoc, leafAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
           gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
-          gl.uniform1f(modelSwayFactorLoc, 0.0);
+          gl.uniform1f(modelSwayFactorLoc, natureSway ? 1.0 : 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
           if (hasStaticCollectibles) {
@@ -10160,6 +10188,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
           }
 
+          gl.uniform1f(modelSwayFactorLoc, 0.0);
           if (hasDynamicCollectibles) {
             gl.bindBuffer(gl.ARRAY_BUFFER, dynamicCollectibleVertexBuffer);
             gl.enableVertexAttribArray(modelPosLoc);

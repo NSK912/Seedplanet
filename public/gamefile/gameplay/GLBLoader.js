@@ -202,6 +202,14 @@ window.GLBLoader = class GLBLoader {
             }
         });
 
+        // Fast lookup map for procedural full ragdoll bone nodes
+        this.boneNameToIndex = {};
+        this.nodes.forEach((n, i) => {
+            if (n && n.name) {
+                this.boneNameToIndex[n.name.toLowerCase()] = i;
+            }
+        });
+
         // Animations
         if (this.json.animations) {
             this.animations = this.json.animations.map(anim => {
@@ -2071,6 +2079,100 @@ window.GLBLoader = class GLBLoader {
                 n.rotation[0] = l.r[0]; n.rotation[1] = l.r[1]; n.rotation[2] = l.r[2]; n.rotation[3] = l.r[3];
                 n.scale[0] = l.s[0]; n.scale[1] = l.s[1]; n.scale[2] = l.s[2];
             }
+        }
+
+        return this._applySkinningAndFinalize();
+    }
+
+    _quatFromEuler(out, x, y, z) {
+        const c1 = Math.cos(x * 0.5), s1 = Math.sin(x * 0.5);
+        const c2 = Math.cos(y * 0.5), s2 = Math.sin(y * 0.5);
+        const c3 = Math.cos(z * 0.5), s3 = Math.sin(z * 0.5);
+        out[0] = s1 * c2 * c3 + c1 * s2 * s3;
+        out[1] = c1 * s2 * c3 - s1 * c2 * s3;
+        out[2] = c1 * c2 * s3 + s1 * s2 * c3;
+        out[3] = c1 * c2 * c3 - s1 * s2 * s3;
+    }
+
+    _quatMultiply(out, a, b) {
+        const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+        const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+        out[0] = aw * bx + ax * bw + ay * bz - az * by;
+        out[1] = aw * by - ax * bz + ay * bw + az * bx;
+        out[2] = aw * bz + ax * by - ay * bx + az * bw;
+        out[3] = aw * bw - ax * bx - ay * by - az * bz;
+    }
+
+    // =========================================================================
+    // Option 2: Full Realistic Procedural Bone Ragdoll for GLB Model
+    // Directly drives individual GLB Bone nodes (Hips, Spine, Neck, Head,
+    // Shoulders, UpperArms, ForeArms, Hands, UpLegs, Legs, Feet)
+    // =========================================================================
+    getSkinnedMeshRagdoll(ragdollBones) {
+        this._resetNodeTransforms();
+
+        if (ragdollBones && typeof ragdollBones === "object") {
+            const qOff = this._tmpQ0 || [0, 0, 0, 1];
+            const qRes = this._tmpQ1 || [0, 0, 0, 1];
+
+            // 1. Process hips translation if specified
+            if (ragdollBones.hipsTranslation && this.hipsNodeIndex !== -1 && this.nodes[this.hipsNodeIndex]) {
+                const hn = this.nodes[this.hipsNodeIndex];
+                hn.translation[0] = hn.baseTranslation[0] + (ragdollBones.hipsTranslation[0] || 0);
+                hn.translation[1] = hn.baseTranslation[1] + (ragdollBones.hipsTranslation[1] || 0);
+                hn.translation[2] = hn.baseTranslation[2] + (ragdollBones.hipsTranslation[2] || 0);
+            }
+
+            // 2. Process procedural bone rotations
+            for (const key in ragdollBones) {
+                if (key === "hipsTranslation") continue;
+                const rot = ragdollBones[key];
+                if (!rot) continue;
+
+                let nodeIdx = -1;
+                if (this.boneNameToIndex) {
+                    nodeIdx = this.boneNameToIndex[key.toLowerCase()];
+                }
+                if (nodeIdx === undefined || nodeIdx === -1) {
+                    nodeIdx = this.nodes.findIndex(n => n && n.name && n.name.toLowerCase() === key.toLowerCase());
+                }
+                if (nodeIdx !== -1 && this.nodes[nodeIdx]) {
+                    const node = this.nodes[nodeIdx];
+                    if (Array.isArray(rot) && rot.length === 4) {
+                        node.rotation[0] = rot[0];
+                        node.rotation[1] = rot[1];
+                        node.rotation[2] = rot[2];
+                        node.rotation[3] = rot[3];
+                    } else if (Array.isArray(rot) && rot.length === 3) {
+                        this._quatFromEuler(qOff, rot[0], rot[1], rot[2]);
+                        this._quatMultiply(qRes, node.baseRotation, qOff);
+                        node.rotation[0] = qRes[0];
+                        node.rotation[1] = qRes[1];
+                        node.rotation[2] = qRes[2];
+                        node.rotation[3] = qRes[3];
+                    } else if (typeof rot === "object") {
+                        const rx = rot.x || rot.pitch || 0;
+                        const ry = rot.y || rot.yaw || 0;
+                        const rz = rot.z || rot.roll || 0;
+                        this._quatFromEuler(qOff, rx, ry, rz);
+                        this._quatMultiply(qRes, node.baseRotation, qOff);
+                        node.rotation[0] = qRes[0];
+                        node.rotation[1] = qRes[1];
+                        node.rotation[2] = qRes[2];
+                        node.rotation[3] = qRes[3];
+                    }
+                }
+            }
+        }
+
+        // Automatic soft relaxed limp fingers for ragdoll
+        if (typeof this.setHandPose === "function") {
+            this.setHandPose({
+                rightCurl: 0.35,
+                leftCurl: 0.35,
+                rightSpread: 0.20,
+                leftSpread: 0.20
+            });
         }
 
         return this._applySkinningAndFinalize();
