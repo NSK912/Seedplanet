@@ -221,9 +221,12 @@
     return html;
   }
 
-  // Vector Title SVG Subtitle Renderer (SEEDPLANET Subtitle)
+  // Vector Title SVG Subtitle Renderer (Fixed Thai Game Title: ดาวแห่งเมล็ดพันธุ์)
   function getThaiTitleLogoSVG() {
-    return `<svg class="main-screen-thai-svg" viewBox="0 0 320 28" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMid meet" aria-label="SEEDPLANET">
+    const viewBoxW = 380;
+    const textContent = `<tspan fill="#ffffff">ดาวแห่ง</tspan><tspan fill="url(#seedianGoldGrad)">เมล็ดพันธุ์</tspan>`;
+
+    return `<svg class="main-screen-thai-svg" viewBox="0 0 ${viewBoxW} 28" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMid meet" aria-label="ดาวแห่งเมล็ดพันธุ์">
       <defs>
         <linearGradient id="seedianRedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#ff7b85" />
@@ -239,8 +242,8 @@
           <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.95" />
         </filter>
       </defs>
-      <text x="320" y="21" text-anchor="end" filter="url(#seedianGlow)" font-family="'Google Sans', sans-serif" font-size="16" font-weight="700" letter-spacing="0.14em">
-        <tspan fill="#ffffff">SEED</tspan><tspan fill="url(#seedianGoldGrad)">PLANET</tspan>
+      <text x="${viewBoxW}" y="21" text-anchor="end" filter="url(#seedianGlow)" font-family="'Google Sans', 'Prompt', 'Sarabun', sans-serif" font-size="16" font-weight="700" letter-spacing="0.1em">
+        ${textContent}
       </text>
     </svg>`;
   }

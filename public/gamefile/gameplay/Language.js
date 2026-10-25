@@ -975,6 +975,17 @@
     if (typeof window.renderMechStandUI === "function" && typeof window._lastActiveStand !== "undefined" && window._lastActiveStand) {
       window.renderMechStandUI(window._lastActiveStand, window._lastAttachedCollectibles);
     }
+
+    // Refresh start screen title SVG if present
+    const titleSvg = document.querySelector(".main-screen-thai-svg");
+    if (titleSvg && typeof window.getThaiTitleLogoSVG === "function") {
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = window.getThaiTitleLogoSVG();
+      const newSvg = tempDiv.firstElementChild;
+      if (newSvg) {
+        titleSvg.replaceWith(newSvg);
+      }
+    }
   }
 
   function setElementTextOrHTML(el, str) {
