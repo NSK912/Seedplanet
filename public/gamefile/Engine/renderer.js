@@ -144,7 +144,8 @@
 
                 vViewPos = mvPosition.xyz;
                 vWorldPos = pos;
-                vPositionLightSpace = uLightSpaceMatrix * vec4(pos, 1.0);
+                vec3 shadowPos = isGrass ? pos : (pos + aNormal * 0.015);
+                vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
                 vDist = length(mvPosition.xyz);
             }
         `;
@@ -185,18 +186,17 @@
                 float currentDepth = projCoords.z;
                 float cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
                 float slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-                float bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
+                float bias = clamp(0.00045 + 0.0010 * slope, 0.00045, 0.0020);
                 
                 vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1024.0);
+                float cmpDepth = currentDepth - bias;
                 float shadow = 0.0;
-
-                for (int x = -1; x <= 1; x++) {
-                    for (int y = -1; y <= 1; y++) {
-                        float pcfDepth = texture2D(uShadowMap, projCoords.xy + vec2(float(x), float(y)) * texelSize).r;
-                        shadow += (currentDepth - bias) > pcfDepth ? 0.0 : 1.0;
-                    }
-                }
-                shadow /= 9.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
+                shadow *= 0.2;
 
                 float distFromCenter = length(projCoords.xy - vec2(0.5));
                 float edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
@@ -214,13 +214,15 @@
                 // Diffuse
                 float diffuseVal = max(dot(normal, lightDir), 0.0);
                 
-                // Shadow
-                float shadow = calculateShadow(vPositionLightSpace, normalize(vWorldNormal), normalize(uLightDir));
-                if (diffuseVal <= 0.0) {
-                    shadow = 0.0;
+                // Shadow (skip texture lookups for grass and unlit back-faces)
+                float shadow = 0.0;
+                if (vIsGrass < 0.5 && diffuseVal > 0.001) {
+                    shadow = calculateShadow(vPositionLightSpace, normal, lightDir);
                 }
-                float lit = mix(0.3, 1.0, shadow);
-                float diffuse = diffuseVal * lit * 0.8 + 0.2;
+                vec3 radialUp = normalize(vWorldPos);
+                float hemi = clamp(dot(normal, radialUp) * 0.5 + 0.5, 0.0, 1.0);
+                float ambient = 0.22 + 0.06 * hemi;
+                float diffuse = ambient + diffuseVal * shadow * 0.72;
                 
                 // Specular
                 vec3 viewDir = normalize(uCameraPos - vWorldPos);
@@ -228,7 +230,7 @@
                 float spec = pow(max(dot(normal, halfDir), 0.0), 16.0) * 0.25 * shadow;
                 
                 // Fresnel
-                float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.15;
+                float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.15 * (0.15 + 0.85 * shadow);
                 
                 vec3 finalColor = vColor * diffuse + vec3(1.0) * spec + vec3(0.95, 0.97, 1.0) * fresnel;
                  if (vIsGrass > 0.5) {
@@ -574,15 +576,14 @@
                 float bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
                 
                 vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1024.0);
+                float cmpDepth = currentDepth - bias;
                 float shadow = 0.0;
-
-                for (int x = -1; x <= 1; x++) {
-                    for (int y = -1; y <= 1; y++) {
-                        float pcfDepth = texture2D(uShadowMap, projCoords.xy + vec2(float(x), float(y)) * texelSize).r;
-                        shadow += (currentDepth - bias) > pcfDepth ? 0.0 : 1.0;
-                    }
-                }
-                shadow /= 9.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
+                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
+                shadow *= 0.2;
 
                 float distFromCenter = length(projCoords.xy - vec2(0.5));
                 float edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
@@ -654,13 +655,12 @@
                     vec3 lightDir = normalize(uLightDir);
                     float diffuseVal = max(dot(normal, lightDir), 0.0);
                     
-                    // Shadow
-                    float shadow = calculateShadow(vPositionLightSpace, normal, lightDir);
-                    if (diffuseVal <= 0.0) {
-                        shadow = 0.0;
+                    // Shadow (skip texture lookups for unlit back-faces)
+                    float shadow = 0.0;
+                    if (diffuseVal > 0.001) {
+                        shadow = calculateShadow(vPositionLightSpace, normal, lightDir);
                     }
-                    float lit = mix(0.3, 1.0, shadow);
-                    float diffuse = diffuseVal * lit * 0.8 + 0.2;
+                    float diffuse = 0.24 + diffuseVal * shadow * 0.76;
                     finalColor = vColor * diffuse;
                 } else {
                     finalColor = vColor;
@@ -1188,7 +1188,8 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     
     out.viewPos = mvPosition.xyz;
     out.worldPos = pos;
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(pos, 1.0);
+    let shadowPos = select(pos + in.normal * 0.015, pos, isGrass > 0.5);
+    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
     out.dist = length(mvPosition.xyz);
     
     return out;
@@ -1205,19 +1206,19 @@ fn calculateShadow(lightSpacePos: vec4<f32>, normal: vec3<f32>, lightDir: vec3<f
     
     let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
     let slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-    let bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
+    let bias = clamp(0.00045 + 0.0010 * slope, 0.00045, 0.0020);
     
     var texelSize = uniforms.shadowTexelSize;
     if (texelSize.x <= 0.0) { texelSize = vec2<f32>(1.0 / 1024.0); }
     
+    let cmpDepth = projCoords.z - bias;
     var shadow = 0.0;
-    for (var x = -1; x <= 1; x++) {
-        for (var y = -1; y <= 1; y++) {
-            let offset = vec2<f32>(f32(x), f32(y)) * texelSize;
-            shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + offset, projCoords.z - bias);
-        }
-    }
-    shadow = shadow / 9.0;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x, -texelSize.y), cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x, -texelSize.y), cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  texelSize.y), cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  texelSize.y), cmpDepth);
+    shadow = shadow * 0.2;
     
     let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
     let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
@@ -1234,16 +1235,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let lightDir = normalize(uniforms.lightDir.xyz);
     let diffuseVal = max(dot(normal, lightDir), 0.0);
     
-    var shadow = calculateShadow(in.lightSpacePos, normalize(in.worldNormal), normalize(uniforms.lightDir.xyz));
-    if (diffuseVal <= 0.0) { shadow = 0.0; }
-    let lit = mix(0.3, 1.0, shadow);
-    let diffuse = diffuseVal * lit * 0.8 + 0.2;
+    var shadow = 0.0;
+    if (in.isGrass < 0.5 && diffuseVal > 0.001) {
+        shadow = calculateShadow(in.lightSpacePos, normal, lightDir);
+    }
+    let radialUp = normalize(in.worldPos);
+    let hemi = clamp(dot(normal, radialUp) * 0.5 + 0.5, 0.0, 1.0);
+    let ambient = 0.22 + 0.06 * hemi;
+    let diffuse = ambient + diffuseVal * shadow * 0.72;
     
     let viewDir = normalize(uniforms.cameraPos.xyz - in.worldPos);
     let halfDir = normalize(lightDir + viewDir);
     let spec = pow(max(dot(normal, halfDir), 0.0), 16.0) * 0.25 * shadow;
     
-    let fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.15;
+    let fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.15 * (0.15 + 0.85 * shadow);
     
     var finalColor = in.color * diffuse + vec3<f32>(1.0) * spec + vec3<f32>(0.95, 0.97, 1.0) * fresnel;
     if (in.isGrass > 0.5) {
@@ -2662,14 +2667,15 @@ fn calculateShadow(lightSpacePos : vec4<f32>, normal : vec3<f32>, lightDir : vec
     let slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
     let bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
     
+    let texelSize = uniforms.shadowTexelSize;
+    let cmpDepth = projCoords.z - bias;
     var shadow = 0.0;
-    for (var x = -1; x <= 1; x++) {
-        for (var y = -1; y <= 1; y++) {
-            let offset = vec2<f32>(f32(x), f32(y)) * uniforms.shadowTexelSize;
-            shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + offset, projCoords.z - bias);
-        }
-    }
-    shadow = shadow / 9.0;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x, -texelSize.y), cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x, -texelSize.y), cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  texelSize.y), cmpDepth);
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  texelSize.y), cmpDepth);
+    shadow = shadow * 0.2;
     
     let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
     let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
@@ -2703,10 +2709,11 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         let lightDir = normalize(uniforms.lightDir.xyz);
         let diffuseVal = max(dot(normal, lightDir), 0.0);
         
-        var shadow = calculateShadow(in.lightSpacePos, normal, lightDir);
-        if (diffuseVal <= 0.0) { shadow = 0.0; }
-        let lit = mix(0.3, 1.0, shadow);
-        let diffuse = diffuseVal * lit * 0.8 + 0.2;
+        var shadow = 0.0;
+        if (diffuseVal > 0.001) {
+            shadow = calculateShadow(in.lightSpacePos, normal, lightDir);
+        }
+        let diffuse = 0.24 + diffuseVal * shadow * 0.76;
         finalColor = in.color * diffuse;
     }
     
@@ -3082,13 +3089,15 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
 let isWebGPUReady = false; 
 
 // Setup canvases
-canvas = document.getElementById("mapCanvas"); // Primary Canvas (WebGPU)
-let glCanvas = document.getElementById("glCanvas"); // Secondary Canvas (WebGL Overlay)
+if (!canvas) canvas = document.getElementById("mapCanvas"); // Primary Canvas (WebGPU)
+if (typeof glCanvas === "undefined" || !glCanvas) glCanvas = document.getElementById("glCanvas"); // Secondary Canvas (WebGL Overlay)
 
 // Initialize WebGPU asynchronously
-Graphics.init(canvas, glCanvas).then(() => {
-  isWebGPUReady = Graphics.webgpu.ready;
-});
+if (canvas && Graphics && Graphics.init) {
+  Graphics.init(canvas, glCanvas).then(() => {
+    isWebGPUReady = Graphics.webgpu ? Graphics.webgpu.ready : false;
+  });
+}
 
 // Initialize WebGL synchronously (Legacy requirement)
 const initialAntialias = (typeof antialiasEnabled !== "undefined" && antialiasEnabled) || 
@@ -3096,109 +3105,114 @@ const initialAntialias = (typeof antialiasEnabled !== "undefined" && antialiasEn
                          (typeof window.fxaaEnabled !== "undefined" && window.fxaaEnabled) || 
                          (typeof taauEnabled !== "undefined" && taauEnabled) || 
                          (typeof window.taauEnabled !== "undefined" && window.taauEnabled);
-gl =
-  glCanvas.getContext("webgl2", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false }) ||
-  glCanvas.getContext("webgl", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false });
 
-if (!gl) {
-  // If overlay fails, try the primary canvas (legacy fallback path)
+if (!glCanvas) glCanvas = document.getElementById("glCanvas");
+if (!canvas) canvas = document.getElementById("mapCanvas");
+
+if (glCanvas) {
+  gl = glCanvas.getContext("webgl2", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false }) ||
+       glCanvas.getContext("webgl", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false });
+}
+if (!gl && canvas) {
   gl = canvas.getContext("webgl2", { antialias: initialAntialias, stencil: true }) ||
        canvas.getContext("webgl", { antialias: initialAntialias, stencil: true });
 }
 
-if (!gl) {
-  alert("เบราว์เซอร์ของคุณไม่รองรับ WebGL");
-}
+if (gl) {
+  Graphics.webgl.gl = gl;
+  if (typeof window !== "undefined") {
+    window.gl = gl;
+  }
+  if (typeof Graphics !== "undefined") {
+    Graphics.gl = gl;
+  }
+  isWebGL2 = gl instanceof WebGL2RenderingContext;
+  Graphics.webgl.isWebGL2 = isWebGL2;
+  supportUint32 = isWebGL2 || gl.getExtension("OES_element_index_uint");
 
-Graphics.webgl.gl = gl;
-if (typeof window !== "undefined") {
-  window.gl = gl;
-}
-if (typeof Graphics !== "undefined") {
-  Graphics.gl = gl;
-}
-isWebGL2 = gl instanceof WebGL2RenderingContext;
-Graphics.webgl.isWebGL2 = isWebGL2;
-supportUint32 = isWebGL2 || gl.getExtension("OES_element_index_uint");
+  Graphics.webgl.supportUint32 = supportUint32;
 
-Graphics.webgl.supportUint32 = supportUint32;
+  if (!gl._patchedForWebGPU) {
+      gl._patchedForWebGPU = true;
+      gl._activeAttributes = {};
+      gl._uniformValues = {};
+      gl._colorMask = [true, true, true, true];
+      gl._depthMask = true;
+      gl._cullFace = gl.BACK;
+      gl._frontFace = gl.CCW;
+      gl._cullEnabled = false;
+      gl._depthTest = false;
+      gl._stencilEnabled = false;
 
-if (!gl._patchedForWebGPU) {
-    gl._patchedForWebGPU = true;
-    gl._activeAttributes = {};
-    gl._uniformValues = {};
-    gl._colorMask = [true, true, true, true];
-    gl._depthMask = true;
-    gl._cullFace = gl.BACK;
-    gl._frontFace = gl.CCW;
-    gl._cullEnabled = false;
-    gl._depthTest = false;
-    gl._stencilEnabled = false;
+      const origColorMask = gl.colorMask;
+      gl.colorMask = function(r, g, b, a) { origColorMask.apply(this, arguments); gl._colorMask = [r, g, b, a]; };
+      const origDepthMask = gl.depthMask;
+      gl.depthMask = function(flag) { origDepthMask.apply(this, arguments); gl._depthMask = flag; };
+      const origEnable = gl.enable;
+      gl.enable = function(cap) { origEnable.apply(this, arguments); if (cap === gl.CULL_FACE) gl._cullEnabled = true; if (cap === gl.DEPTH_TEST) gl._depthTest = true; if (cap === gl.STENCIL_TEST) gl._stencilEnabled = true; };
+      const origDisable = gl.disable;
+      gl.disable = function(cap) { origDisable.apply(this, arguments); if (cap === gl.CULL_FACE) gl._cullEnabled = false; if (cap === gl.DEPTH_TEST) gl._depthTest = false; if (cap === gl.STENCIL_TEST) gl._stencilEnabled = false; };
+      const origCullFace = gl.cullFace;
+      gl.cullFace = function(mode) { origCullFace.apply(this, arguments); gl._cullFace = mode; };
+      const origFrontFace = gl.frontFace;
+      gl.frontFace = function(mode) { origFrontFace.apply(this, arguments); gl._frontFace = mode; };
 
-    const origColorMask = gl.colorMask;
-    gl.colorMask = function(r, g, b, a) { origColorMask.apply(this, arguments); gl._colorMask = [r, g, b, a]; };
-    const origDepthMask = gl.depthMask;
-    gl.depthMask = function(flag) { origDepthMask.apply(this, arguments); gl._depthMask = flag; };
-    const origEnable = gl.enable;
-    gl.enable = function(cap) { origEnable.apply(this, arguments); if (cap === gl.CULL_FACE) gl._cullEnabled = true; if (cap === gl.DEPTH_TEST) gl._depthTest = true; if (cap === gl.STENCIL_TEST) gl._stencilEnabled = true; };
-    const origDisable = gl.disable;
-    gl.disable = function(cap) { origDisable.apply(this, arguments); if (cap === gl.CULL_FACE) gl._cullEnabled = false; if (cap === gl.DEPTH_TEST) gl._depthTest = false; if (cap === gl.STENCIL_TEST) gl._stencilEnabled = false; };
-    const origCullFace = gl.cullFace;
-    gl.cullFace = function(mode) { origCullFace.apply(this, arguments); gl._cullFace = mode; };
-    const origFrontFace = gl.frontFace;
-    gl.frontFace = function(mode) { origFrontFace.apply(this, arguments); gl._frontFace = mode; };
+      const origGetAttribLocation = gl.getAttribLocation;
+      gl.getAttribLocation = function(prog, name) {
+          if (!prog) return -1;
+          if (!prog._attribLocCache) prog._attribLocCache = {};
+          if (prog._attribLocCache[name] !== undefined) return prog._attribLocCache[name];
+          const loc = origGetAttribLocation.call(this, prog, name);
+          if (!prog._attribNamesInv) prog._attribNamesInv = {};
+          prog._attribNamesInv[name] = loc;
+          prog._attribLocCache[name] = loc;
+          return loc;
+      };
 
-    const origGetAttribLocation = gl.getAttribLocation;
-    gl.getAttribLocation = function(prog, name) {
-        if (!prog) return -1;
-        if (!prog._attribLocCache) prog._attribLocCache = {};
-        if (prog._attribLocCache[name] !== undefined) return prog._attribLocCache[name];
-        const loc = origGetAttribLocation.call(this, prog, name);
-        if (!prog._attribNamesInv) prog._attribNamesInv = {};
-        prog._attribNamesInv[name] = loc;
-        prog._attribLocCache[name] = loc;
-        return loc;
-    };
+      const origGetUniformLocation = gl.getUniformLocation;
+      gl.getUniformLocation = function(prog, name) {
+          if (!prog) return null;
+          if (!prog._uniformLocCache) prog._uniformLocCache = {};
+          if (prog._uniformLocCache[name] !== undefined) return prog._uniformLocCache[name];
+          const loc = origGetUniformLocation.call(this, prog, name);
+          if (loc) { loc._name = name; loc._prog = prog; }
+          prog._uniformLocCache[name] = loc;
+          return loc;
+      };
 
-    const origGetUniformLocation = gl.getUniformLocation;
-    gl.getUniformLocation = function(prog, name) {
-        if (!prog) return null;
-        if (!prog._uniformLocCache) prog._uniformLocCache = {};
-        if (prog._uniformLocCache[name] !== undefined) return prog._uniformLocCache[name];
-        const loc = origGetUniformLocation.call(this, prog, name);
-        if (loc) { loc._name = name; loc._prog = prog; }
-        prog._uniformLocCache[name] = loc;
-        return loc;
-    };
+      const origUseProgram = gl.useProgram;
+      gl.useProgram = function(prog) {
+          origUseProgram.apply(this, arguments);
+          gl._currentProgram = prog;
+          if (prog === window.modelProgram) prog._name = 'model';
+          if (prog === window.charProgram) prog._name = 'char';
+          if (!prog._uniformValues) prog._uniformValues = {};
+      };
 
-    const origUseProgram = gl.useProgram;
-    gl.useProgram = function(prog) {
-        origUseProgram.apply(this, arguments);
-        gl._currentProgram = prog;
-        if (prog === window.modelProgram) prog._name = 'model';
-        if (prog === window.charProgram) prog._name = 'char';
-        if (!prog._uniformValues) prog._uniformValues = {};
-    };
+      function trackUniform(loc, value) {
+          if (loc && loc._name && loc._prog) loc._prog._uniformValues[loc._name] = value;
+      }
 
-    function trackUniform(loc, value) {
-        if (loc && loc._name && loc._prog) loc._prog._uniformValues[loc._name] = value;
-    }
-
-    const origUniform1f = gl.uniform1f; gl.uniform1f = function(loc, v0) { origUniform1f.apply(this, arguments); trackUniform(loc, [v0]); };
-    const origUniform2f = gl.uniform2f; gl.uniform2f = function(loc, v0, v1) { origUniform2f.apply(this, arguments); trackUniform(loc, [v0, v1]); };
-    const origUniform3f = gl.uniform3f; gl.uniform3f = function(loc, v0, v1, v2) { origUniform3f.apply(this, arguments); trackUniform(loc, [v0, v1, v2]); };
-    const origUniform1i = gl.uniform1i; gl.uniform1i = function(loc, v0) { origUniform1i.apply(this, arguments); trackUniform(loc, [v0]); };
-    const origUniform3fv = gl.uniform3fv; gl.uniform3fv = function(loc, v) { origUniform3fv.apply(this, arguments); trackUniform(loc, v); };
-    const origUniformMatrix4fv = gl.uniformMatrix4fv; gl.uniformMatrix4fv = function(loc, trans, v) { origUniformMatrix4fv.apply(this, arguments); trackUniform(loc, v); };
+      const origUniform1f = gl.uniform1f; gl.uniform1f = function(loc, v0) { origUniform1f.apply(this, arguments); trackUniform(loc, [v0]); };
+      const origUniform2f = gl.uniform2f; gl.uniform2f = function(loc, v0, v1) { origUniform2f.apply(this, arguments); trackUniform(loc, [v0, v1]); };
+      const origUniform3f = gl.uniform3f; gl.uniform3f = function(loc, v0, v1, v2) { origUniform3f.apply(this, arguments); trackUniform(loc, [v0, v1, v2]); };
+      const origUniform1i = gl.uniform1i; gl.uniform1i = function(loc, v0) { origUniform1i.apply(this, arguments); trackUniform(loc, [v0]); };
+      const origUniform3fv = gl.uniform3fv; gl.uniform3fv = function(loc, v) { origUniform3fv.apply(this, arguments); trackUniform(loc, v); };
+      const origUniformMatrix4fv = gl.uniformMatrix4fv; gl.uniformMatrix4fv = function(loc, trans, v) { origUniformMatrix4fv.apply(this, arguments); trackUniform(loc, v); };
+  }
 }
 
 
       function resizeCanvas() {
-        const w = Math.max(1, Math.round(window.innerWidth * renderScale));
-        const h = Math.max(1, Math.round(window.innerHeight * renderScale));
+        if (!canvas) canvas = document.getElementById("mapCanvas");
+        if (typeof glCanvas === "undefined" || !glCanvas) glCanvas = document.getElementById("glCanvas");
+        if (!canvas) return;
+        const scaleVal = (typeof renderScale === "number" ? renderScale : 1.0);
+        const w = Math.max(1, Math.round(window.innerWidth * scaleVal));
+        const h = Math.max(1, Math.round(window.innerHeight * scaleVal));
         canvas.width = w;
         canvas.height = h;
-        if (Graphics.webgpu.device && Graphics.webgpu.context) {
+        if (Graphics.webgpu && Graphics.webgpu.device && Graphics.webgpu.context) {
           const device = Graphics.webgpu.device;
           if (Graphics.webgpu.mainDepthTexture) Graphics.webgpu.mainDepthTexture.destroy();
           Graphics.webgpu.mainDepthTexture = device.createTexture({
@@ -3292,6 +3306,11 @@ if (!gl._patchedForWebGPU) {
         program,
         "uCameraPos",
       );
+      const terrainShadowsEnabledLoc = gl.getUniformLocation(program, "uShadowsEnabled");
+      const terrainLightSpaceLoc = gl.getUniformLocation(program, "uLightSpaceMatrix");
+      const terrainShadowMapLoc = gl.getUniformLocation(program, "uShadowMap");
+      const terrainShadowTexelSizeLoc = gl.getUniformLocation(program, "uShadowTexelSize");
+      const terrainWaterMaskLoc = gl.getUniformLocation(program, "uWaterMaskTex");
 
       // --- Model Program Setup ---
       const modelVS = createShader(modelVertexShaderSource, gl.VERTEX_SHADER);
@@ -3357,6 +3376,11 @@ if (!gl._patchedForWebGPU) {
         modelProgram,
         "uMaxRenderDist",
       );
+      const modelShadowsEnabledLoc = gl.getUniformLocation(modelProgram, "uShadowsEnabled");
+      const modelLightSpaceLoc = gl.getUniformLocation(modelProgram, "uLightSpaceMatrix");
+      const modelShadowMapLoc = gl.getUniformLocation(modelProgram, "uShadowMap");
+      const modelShadowTexelSizeLoc = gl.getUniformLocation(modelProgram, "uShadowTexelSize");
+      const modelWaterMaskLoc = gl.getUniformLocation(modelProgram, "uWaterMaskTex");
 
       let charLocalPosLoc, charColorLoc, charTexCoordLoc;
       let charMainTexLoc, charHasMainTexLoc;
@@ -3404,6 +3428,12 @@ if (!gl._patchedForWebGPU) {
         charProgram,
         "uWaterOpacity",
       );
+      const charShadowsEnabledLoc = gl.getUniformLocation(charProgram, "uShadowsEnabled");
+      const charLightSpaceLoc = gl.getUniformLocation(charProgram, "uLightSpaceMatrix");
+      const charShadowMapLoc = gl.getUniformLocation(charProgram, "uShadowMap");
+      const charShadowTexelSizeLoc = gl.getUniformLocation(charProgram, "uShadowTexelSize");
+      const charWaterMaskLoc = gl.getUniformLocation(charProgram, "uWaterMaskTex");
+      const charModelMatrixLoc = gl.getUniformLocation(charProgram, "uModelMatrix");
 
       if (typeof WaterSystem !== "undefined" && WaterSystem.init) {
         WaterSystem.init(gl, supportUint32);
@@ -4431,7 +4461,7 @@ window.cloud3DProgram = cloud3DProgram;
         
         let isPlacementItem = selectedItem && (
           (typeof isPlaceableItem === "function" ? isPlaceableItem(selectedItem.name) : (window.isPlaceableItem ? window.isPlaceableItem(selectedItem.name) : false)) ||
-          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "FOLDING_LADDER" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name.startsWith("ROBOT_")
+          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "FOLDING_LADDER" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "WOOD_BED" || selectedItem.name === "WOOD_TABLE" || selectedItem.name === "WOOD_CHAIR" || selectedItem.name.startsWith("ROBOT_")
         );
         
         // บังคับไม่ให้เข้าโหมดวางไอเทม ถ้านั่งอยู่บนเรือหรือหุ่นยนต์ หรือกำลังว่ายน้ำในกรณีบันไดพับ
@@ -6946,7 +6976,7 @@ window.cloud3DProgram = cloud3DProgram;
             const demolishableTypes = [
               "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
               "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
-              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed",
+              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table", "wood_chair",
               "meganeura_item", "isopod_item", "obsidian_pad_warp_item", "obsidian_compass_pad_item",
               "robot_stand", "robot_cockpit",
               "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
@@ -7005,8 +7035,8 @@ window.cloud3DProgram = cloud3DProgram;
                   item.position[1] + n[1] * 0.055,
                   item.position[2] + n[2] * 0.055
                 ];
-              } else if (item.type === "wood_bed") {
-                // Elevate visual center to center of bed mattress
+              } else if (item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair") {
+                // Elevate visual center to center of furniture mass
                 itemCenter = [
                   item.position[0] + n[0] * 0.05,
                   item.position[1] + n[1] * 0.05,
@@ -7051,7 +7081,7 @@ window.cloud3DProgram = cloud3DProgram;
                 meshRadius = 0.26;
               } else if (item.type.includes("floor") || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type.includes("roof") || item.type.includes("stairs") || item.type.includes("ladder")) {
                 meshRadius = 0.26;
-              } else if (item.type === "wood_chest") {
+              } else if (item.type === "wood_chest" || item.type === "wood_table" || item.type === "wood_chair") {
                 meshRadius = 0.18;
               } else if (item.type === "wood_bed") {
                 meshRadius = 0.25;
@@ -7148,7 +7178,7 @@ window.cloud3DProgram = cloud3DProgram;
                 closestDemolishItem.position[2]
               ];
               isLocked = true;
-              targetLabel = closestDemolishItem.type.toUpperCase().replace(/_/g, " ");
+              targetLabel = typeof getItemDisplayName === "function" ? getItemDisplayName(closestDemolishItem.type) : closestDemolishItem.type.toUpperCase().replace(/_/g, " ");
             } else {
               // Free aim raymarch in demolish mode (keeps reticle right within demolish reach)
               let curD = 0.1;
@@ -7235,35 +7265,78 @@ window.cloud3DProgram = cloud3DProgram;
                 window.innerHeight,
               );
               if (screenPos) {
-                let instructionsHTML = "";
-                const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
-                const attackBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
-                  ? window.GamepadController.getButtonLabel("attack") 
-                  : "L-Click";
-                const clickActionHold = isGp ? `กด [${attackBtn}] ค้าง` : "กดคลิกซ้ายค้าง";
-                const clickActionHoldEn = isGp ? `Hold [${attackBtn}]` : "Hold Left-click";
-                const clickActionSingle = isGp ? `กด [${attackBtn}]` : "คลิกซ้าย";
-                const clickActionSingleEn = isGp ? `Press [${attackBtn}]` : "Left-click";
+                const minimalHammerSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: -2px; margin-right: 4px;"><path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9"/><path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64"/><path d="m20 8-5 5"/></svg>`;
+                const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : (window.gameLanguage || "th");
+                const targetItemName = typeof getItemDisplayName === "function" ? getItemDisplayName(closestDemolishItem.type) : closestDemolishItem.type.toUpperCase().replace(/_/g, " ");
 
-                if (isStoneFloor) {
-                  instructionsHTML = `
-                    <strong>🔨 โหมดรื้อถอน (DEMOLISH MODE)</strong><br/>
-                    ${clickActionHold} เพื่อรื้อถอน STONE FLOOR<br/>
-                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">${clickActionHoldEn} to demolish STONE FLOOR</span>
-                  `;
+                const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+                const isTouchDev = (typeof devInputMode !== "undefined" && devInputMode === "touch");
+                const isTouchNative = (('ontouchstart' in window) && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+                const isTouchMode = isTouchDev || isTouchNative;
+
+                let actionBtnText = "L-Click";
+                if (isGp) {
+                  const attackBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                    ? window.GamepadController.getButtonLabel("attack") 
+                    : "Attack";
+                  actionBtnText = `[${attackBtn}]`;
+                } else if (isTouchMode) {
+                  actionBtnText = (curLang === "en") ? "Tap button" : "แตะปุ่ม";
                 } else {
-                  instructionsHTML = `
-                    <strong>🔨 โหมดรื้อถอน (DEMOLISH MODE)</strong><br/>
-                    ${clickActionSingle} เพื่อรื้อถอน ${closestDemolishItem.type.toUpperCase().replace(/_/g, " ")}<br/>
-                    <span style="font-size: 10px; opacity: 0.9; display: block; margin-top: 2px;">${clickActionSingleEn} to demolish ${closestDemolishItem.type.toUpperCase().replace(/_/g, " ")}</span>
-                  `;
+                  actionBtnText = (curLang === "en") ? "Left-Click" : "คลิกซ้าย";
                 }
+
+                let modeTitleText = typeof t === "function" ? t("demolish_mode_title") : (curLang === "en" ? "DEMOLISH MODE" : "โหมดรื้อถอน");
+                if (modeTitleText === "demolish_mode_title") {
+                  modeTitleText = (curLang === "en") ? "DEMOLISH MODE" : "โหมดรื้อถอน";
+                }
+
+                let actionInstructionText = "";
+                if (isStoneFloor) {
+                  if (typeof t === "function" && t("demolish_prompt_hold") !== "demolish_prompt_hold") {
+                    actionInstructionText = t("demolish_prompt_hold", { action: actionBtnText, item: targetItemName });
+                  } else if (curLang === "en") {
+                    actionInstructionText = `Hold ${actionBtnText} to demolish ${targetItemName}`;
+                  } else {
+                    actionInstructionText = `กด ${actionBtnText} ค้าง เพื่อรื้อถอน ${targetItemName}`;
+                  }
+                } else {
+                  if (typeof t === "function" && t("demolish_prompt_click") !== "demolish_prompt_click") {
+                    actionInstructionText = t("demolish_prompt_click", { action: actionBtnText, item: targetItemName });
+                  } else if (curLang === "en") {
+                    actionInstructionText = `Press ${actionBtnText} to demolish ${targetItemName}`;
+                  } else {
+                    actionInstructionText = `กด ${actionBtnText} เพื่อรื้อถอน ${targetItemName}`;
+                  }
+                }
+
+                if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
+                  modeTitleText = window.Seedian.toSeedian(modeTitleText);
+                  actionInstructionText = window.Seedian.toSeedian(actionInstructionText);
+                }
+
+                let distText = "";
+                if (typeof t === "function" && t("demolish_distance") !== "demolish_distance") {
+                  distText = t("demolish_distance", { dist: currentBestDist.toFixed(2) });
+                } else if (curLang === "en") {
+                  distText = `Distance: ${currentBestDist.toFixed(2)}m`;
+                } else {
+                  distText = `ระยะห่าง: ${currentBestDist.toFixed(2)}m`;
+                }
+                if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
+                  distText = window.Seedian.toSeedian(distText);
+                }
+
+                const instructionsHTML = `
+                  <strong>${minimalHammerSvg}${modeTitleText}</strong><br/>
+                  ${actionInstructionText}
+                `;
 
                 const _newHtml_1 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(220, 38, 38, 0.95); border: 1px solid #ff4d4d; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
                   ${isStoneFloor ? `<div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(255, 255, 255, 0.35); pointer-events: none; transition: width 0.05s ease-out;"></div>` : ""}
                   <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #ffffff;">
                     ${instructionsHTML}
-                    <span style="font-size: 9px; opacity: 0.8; display: block; margin-top: 4px;">ระยะห่าง / Distance: ${currentBestDist.toFixed(2)}m</span>
+                    <span style="font-size: 9px; opacity: 0.8; display: block; margin-top: 4px;">${distText}</span>
                   </div>
                 </div>`;
                 if (prompt._lastHTML !== _newHtml_1) {
@@ -7676,7 +7749,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -7892,14 +7965,41 @@ if (prompt._lastText !== _newText_1) {
                   }
 
                   const holdPercent = Math.min(100, Math.floor((chestHoldTimer / 0.8) * 100));
-                  const interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
-                    ? window.GamepadController.getButtonLabel("interact") 
-                    : "E";
+                  const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+                  const isTouchDev = (typeof devInputMode !== "undefined" && devInputMode === "touch");
+                  const isTouchNative = (('ontouchstart' in window) && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+                  const isTouchMode = isTouchDev || isTouchNative;
+                  const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : (window.gameLanguage || "th");
+
+                  let interactBtn = "E";
+                  if (isGp) {
+                    interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                      ? window.GamepadController.getButtonLabel("interact") 
+                      : "Interact";
+                  } else if (isTouchMode) {
+                    interactBtn = (curLang === "en") ? "Tap button" : "แตะปุ่ม";
+                  } else {
+                    interactBtn = "E";
+                  }
+
+                  const chestItemName = typeof getItemDisplayName === "function" ? getItemDisplayName(closestChest.type || "wood_chest") : "กล่องไม้";
+                  let chestPromptText = "";
+                  if (typeof t === "function" && t("prompt_open_chest") && t("prompt_open_chest") !== "prompt_open_chest") {
+                    chestPromptText = t("prompt_open_chest", { button: interactBtn, item: chestItemName });
+                  } else if (curLang === "en") {
+                    chestPromptText = `Hold [${interactBtn}] to open ${chestItemName}`;
+                  } else {
+                    chestPromptText = `กด [${interactBtn}] ค้าง เพื่อเปิด${chestItemName}`;
+                  }
+
+                  if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
+                    chestPromptText = window.Seedian.toSeedian(chestPromptText);
+                  }
+
                   const _newHtml_5 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #dfb76c;">
-                      กด [${interactBtn}] ค้าง เพื่อเปิดกล่องไม้<br/>
-                      (HOLD [${interactBtn}] TO OPEN CHEST)
+                      ${chestPromptText}
                     </div>
                   </div>`;
 if (prompt._lastHTML !== _newHtml_5) {
@@ -7938,14 +8038,40 @@ if (prompt._lastHTML !== _newHtml_5) {
                     campfireHoldTimer = 0.0;
                   }
                   const holdPercent = Math.min(100, Math.floor((campfireHoldTimer / 0.5) * 100));
-                  const interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
-                    ? window.GamepadController.getButtonLabel("interact") 
-                    : "E";
+                  const isGp = (typeof isCurrentlyGamepadMode === "function" ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+                  const isTouchDev = (typeof devInputMode !== "undefined" && devInputMode === "touch");
+                  const isTouchNative = (('ontouchstart' in window) && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+                  const isTouchMode = isTouchDev || isTouchNative;
+                  const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : (window.gameLanguage || "th");
+
+                  let interactBtn = "E";
+                  if (isGp) {
+                    interactBtn = (typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getButtonLabel === "function") 
+                      ? window.GamepadController.getButtonLabel("interact") 
+                      : "Interact";
+                  } else if (isTouchMode) {
+                    interactBtn = (curLang === "en") ? "Tap button" : "แตะปุ่ม";
+                  } else {
+                    interactBtn = "E";
+                  }
+
+                  let cookPromptText = "";
+                  if (typeof t === "function" && t("prompt_cook") && t("prompt_cook") !== "prompt_cook") {
+                    cookPromptText = t("prompt_cook", { button: interactBtn });
+                  } else if (curLang === "en") {
+                    cookPromptText = `Hold [${interactBtn}] to cook`;
+                  } else {
+                    cookPromptText = `กด [${interactBtn}] ค้าง เพื่อทำอาหาร`;
+                  }
+
+                  if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
+                    cookPromptText = window.Seedian.toSeedian(cookPromptText);
+                  }
+
                   const _newHtml_6 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 108, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
                     <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #df6c6c;">
-                      กด [${interactBtn}] ค้าง เพื่อทำอาหาร<br/>
-                      (HOLD [${interactBtn}] TO COOK)
+                      ${cookPromptText}
                     </div>
                   </div>`;
 if (prompt._lastHTML !== _newHtml_6) {
@@ -8670,8 +8796,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         let lightDistance = RADIUS + 8.0;
         let lightFarPlane = RADIUS * 2.5 + 8.0;
         if (cameraMode !== "planet" && cameraMode !== "sun") {
-            lightDistance = 30.0;
-            lightFarPlane = 60.0;
+            lightDistance = 12.0;
+            lightFarPlane = 24.0;
         }
         const lightEye = [
           shadowTargetX + finalLightDir[0] * lightDistance,
@@ -8838,8 +8964,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
           const bytesPerIndex = isUint32 ? 4 : 2;
 
-          if (collectibles && collectibles.length > 0 && typeof getVisibleIndexRanges === "function" && eyePos) {
-            const shadowRanges = getVisibleIndexRanges(collectibles, null, curObjectDist, eyePos);
+          const staticList = (typeof window !== "undefined" && window.staticCollectiblesList) ? window.staticCollectiblesList : collectibles;
+          if (staticList && staticList.length > 0 && typeof getVisibleIndexRanges === "function" && eyePos) {
+            const shadowRanges = getVisibleIndexRanges(staticList, null, curObjectDist, eyePos);
             for (let i = 0; i < shadowRanges.length; i++) {
               const range = shadowRanges[i];
               const count = range.end - range.start;
@@ -9289,7 +9416,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(program);
-          gl.uniform1f(gl.getUniformLocation(program, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(terrainShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
           gl.uniform1f(useLightingLoc, 1.0); // เปิดแสงเงาดิฟฟิวส์
           gl.uniform3fv(lightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
@@ -9303,13 +9430,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(program, "uLightSpaceMatrix"),
+            terrainLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(program, "uShadowMap"), 1);
-          gl.uniform2f(gl.getUniformLocation(program, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
-          gl.uniform1i(gl.getUniformLocation(program, "uWaterMaskTex"), 2);
+          gl.uniform1i(terrainShadowMapLoc, 1);
+          gl.uniform2f(terrainShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform1i(terrainWaterMaskLoc, 2);
 
           if (Graphics.mode === 'hybrid') { gl.colorMask(false, false, false, false); }
           if (typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawSurface) {
@@ -9377,19 +9504,19 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(charProgram);
-          gl.uniform1f(gl.getUniformLocation(charProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(charShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
 
           gl.uniformMatrix4fv(charProjLoc, false, setF32(f32_projMatrix, projMatrix));
           gl.uniform3fv(charLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniform3fv(charCameraPosLoc, setF32(f32_eyePos, eyePos));
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(charProgram, "uLightSpaceMatrix"),
+            charLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(charProgram, "uShadowMap"), 1);
-          gl.uniform2f(gl.getUniformLocation(charProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
-          gl.uniform1i(gl.getUniformLocation(charProgram, "uWaterMaskTex"), 2);
+          gl.uniform1i(charShadowMapLoc, 1);
+          gl.uniform2f(charShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform1i(charWaterMaskLoc, 2);
 
           gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * 0.15);
           gl.uniform3fv(charWaterColorLoc, setF32(f32_waterColor, waterColor));
@@ -9456,7 +9583,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               setF32(f32_charModelViewMatrix, charModelViewMatrix),
             );
             gl.uniformMatrix4fv(
-              gl.getUniformLocation(charProgram, "uModelMatrix"),
+              charModelMatrixLoc,
               false,
               setF32(f32_charModelMatrix, charModelMatrix),
             );
@@ -9485,7 +9612,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               eyePos,
               charProgram,
               charMVLoc,
-              charModelMatrixLoc: gl.getUniformLocation(charProgram, "uModelMatrix"),
+              charModelMatrixLoc,
               charPosLoc,
               charNormLoc,
               charColorLoc,
@@ -9754,6 +9881,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 // 2) Draw Mirrored Placed Cubes/Structures
                 if (cubeVertexBuffer && cubeIndicesLength > 0) {
                   gl.useProgram(modelProgram);
+                  gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+                  gl.uniform2f(gl.getUniformLocation(modelProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
                   gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
@@ -9939,7 +10068,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           cubeIndicesLength > 0
         ) {
           gl.useProgram(modelProgram);
-          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(modelShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
@@ -9952,13 +10081,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
+            modelLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
-          gl.uniform2f(gl.getUniformLocation(modelProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform1i(modelWaterMaskLoc, 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
@@ -10054,7 +10183,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             frustumCullingEnabled,
             frustumPlanes,
             natureObstacles,
-            natureGrassStartIndex
+            natureGrassStartIndex,
+            shadowMapEnabled,
+            shadowWidth: SHADOW_WIDTH,
+            shadowHeight: SHADOW_HEIGHT
           });
         }
 
@@ -10127,6 +10259,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(modelProgram);
+          gl.uniform1f(modelShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
@@ -10139,12 +10273,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
+            modelLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform1i(modelWaterMaskLoc, 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
@@ -10177,23 +10311,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
             const isUint32 = supportUint32 && collectibleIndicesLength > 65535;
-            if (frustumCullingEnabled && frustumPlanes) {
-              const ranges = getVisibleIndexRanges(collectibles, frustumPlanes);
-              const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
-              const bytesPerIndex = isUint32 ? 4 : 2;
-              for (let i = 0; i < ranges.length; i++) {
-                const range = ranges[i];
-                const count = range.end - range.start;
-                if (count > 0) {
-                  gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
-                }
-            }
-          } else {
-              if (isUint32) {
-                gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_INT, 0);
-              } else {
-                gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_SHORT, 0);
-              }
+            if (isUint32) {
+              gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_INT, 0);
+            } else {
+              gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_SHORT, 0);
             }
           }
 
@@ -10253,13 +10374,15 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.frontFace(gl.CW);
           gl.cullFace(gl.BACK);
           gl.useProgram(modelProgram);
+          gl.uniform1f(modelShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
 
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, modelViewMatrix));
           gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
-          gl.uniformMatrix4fv(gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"), false, setF32(f32_lightSpaceMatrix, lightSpaceMatrix));
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
+          gl.uniformMatrix4fv(modelLightSpaceLoc, false, setF32(f32_lightSpaceMatrix, lightSpaceMatrix));
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform1i(modelWaterMaskLoc, 2);
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
@@ -10313,13 +10436,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, equipModelViewMatrix));
           gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
+            modelLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
-          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), 0.0);
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform1i(modelWaterMaskLoc, 2);
+          gl.uniform1f(modelShadowsEnabledLoc, 0.0);
 
           // For local space vertices, prevent underwater fog unless player is actually underwater
           const isPlayerUnderwater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.5);
@@ -10377,6 +10500,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               0,
             );
           }
+          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
         }
 
         // วาดสัตว์ครึ่งบกครึ่งน้ำ (Amphibians)
@@ -10391,6 +10515,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(modelProgram);
+          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform2f(gl.getUniformLocation(modelProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,

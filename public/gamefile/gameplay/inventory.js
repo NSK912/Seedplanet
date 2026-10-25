@@ -273,6 +273,8 @@
         { name: "WOOD_ROOF", icon: "🛖" },
         { name: "WOOD_CHEST", icon: "📦" },
         { name: "WOOD_BED", icon: "🛏️" },
+        { name: "WOOD_TABLE", icon: "🪑" },
+        { name: "WOOD_CHAIR", icon: "🪑" },
         { name: "MEGANEURA", icon: "🦟" },
         { name: "ISOPOD", icon: "🦐" },
         { name: "FRIED_BUG", icon: "🍤" },
@@ -815,8 +817,10 @@
             targetSize = 0.90; // Give the boat maximum visibility inside the slot
           } else if (name === "BOAT_WING") {
             targetSize = 0.85;
-          } else if (name === "WOOD_BED") {
+          } else if (name === "WOOD_BED" || name === "WOOD_TABLE") {
             targetSize = 0.85;
+          } else if (name === "WOOD_CHAIR") {
+            targetSize = 0.82;
           } else if (name === "IRON_BULLET") {
             targetSize = 0.68;
           }
@@ -1018,7 +1022,7 @@
       }
       window.create3DIconCanvas = create3DIconCanvas;
 
-      // Pre-warm 3D icon cache for common collectibles including COTTON_PLANT and WOOD_BED during idle
+      // Pre-warm 3D icon cache for common collectibles including COTTON_PLANT, WOOD_BED, WOOD_TABLE, and WOOD_CHAIR during idle
       if (typeof window.requestIdleCallback === "function") {
         window.requestIdleCallback(() => {
           try {
@@ -1026,6 +1030,10 @@
             create3DIconCanvas("COTTON_PLANT", 38, 38);
             create3DIconCanvas("WOOD_BED", 48, 48);
             create3DIconCanvas("WOOD_BED", 38, 38);
+            create3DIconCanvas("WOOD_TABLE", 48, 48);
+            create3DIconCanvas("WOOD_TABLE", 38, 38);
+            create3DIconCanvas("WOOD_CHAIR", 48, 48);
+            create3DIconCanvas("WOOD_CHAIR", 38, 38);
           } catch (e) {}
         });
       } else {
@@ -1035,6 +1043,10 @@
             create3DIconCanvas("COTTON_PLANT", 38, 38);
             create3DIconCanvas("WOOD_BED", 48, 48);
             create3DIconCanvas("WOOD_BED", 38, 38);
+            create3DIconCanvas("WOOD_TABLE", 48, 48);
+            create3DIconCanvas("WOOD_TABLE", 38, 38);
+            create3DIconCanvas("WOOD_CHAIR", 48, 48);
+            create3DIconCanvas("WOOD_CHAIR", 38, 38);
           } catch (e) {}
         }, 150);
       }
@@ -2796,6 +2808,14 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.type = "wood_bed";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+        } else if (placingItemName === "WOOD_TABLE") {
+          floorPreviewCollectible.type = "wood_table";
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+        } else if (placingItemName === "WOOD_CHAIR") {
+          floorPreviewCollectible.type = "wood_chair";
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "MEGANEURA") {
           floorPreviewCollectible.type = "meganeura_item";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
@@ -2875,7 +2895,7 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "WOOD_BED" ? "wood_bed" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : ((placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "WOOD_BED" ? "wood_bed" : (placingItemName === "WOOD_TABLE" ? "wood_table" : (placingItemName === "WOOD_CHAIR" ? "wood_chair" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : ((placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))))))));
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -2891,7 +2911,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -3829,6 +3849,7 @@ function cancelFloorPlacement() {
       function renderCooking() {
         window.renderCooking = renderCooking;
         const list = document.getElementById("cookingList");
+        if (!list) return;
         list.innerHTML = "";
         
         COOKING_RECIPES.forEach(recipe => {
@@ -4039,6 +4060,20 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "COTTON_PLANT", icon: "☁️", count: 50, label: "ต้นฝ้าย (COTTON) x50" },
               { name: "LOG", icon: "🪵", count: 3, label: "ท่อนไม้ (LOG) x3" }
+            ]
+          },
+          {
+            id: "wood_table",
+            output: { name: "WOOD_TABLE", icon: "🪑", count: 1, label: "โต๊ะไม้ (WOODEN TABLE) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" }
+            ]
+          },
+          {
+            id: "wood_chair",
+            output: { name: "WOOD_CHAIR", icon: "🪑", count: 1, label: "เก้าอี้ไม้ (WOODEN CHAIR) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" }
             ]
           },
           {
@@ -4588,6 +4623,20 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "COTTON_PLANT", count: 50 },
               { name: "LOG", count: 3 }
+            ]
+          },
+          {
+            id: "wood_table",
+            output: { name: "WOOD_TABLE", icon: "🪑", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 1 }
+            ]
+          },
+          {
+            id: "wood_chair",
+            output: { name: "WOOD_CHAIR", icon: "🪑", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 1 }
             ]
           },
           {
@@ -5765,6 +5814,10 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_CHEST", icon: "📦", label: "WOOD_CHEST" };
         } else if (closestDemolishItem.type === "wood_bed") {
           itemData = { name: "WOOD_BED", icon: "🛏️", label: "WOOD_BED" };
+        } else if (closestDemolishItem.type === "wood_table") {
+          itemData = { name: "WOOD_TABLE", icon: "🪑", label: "WOOD_TABLE" };
+        } else if (closestDemolishItem.type === "wood_chair") {
+          itemData = { name: "WOOD_CHAIR", icon: "🪑", label: "WOOD_CHAIR" };
         } else if (closestDemolishItem.type === "meganeura_item") {
           itemData = { name: "MEGANEURA", icon: "🦟", label: "MEGANEURA" };
         } else if (closestDemolishItem.type === "isopod_item") {
@@ -5854,10 +5907,35 @@ function cancelFloorPlacement() {
             updateBadge();
             saveSettingsToLocalStorage();
             playCollectSound();
-            showNotice("รื้อถอน " + itemData.name + " แล้ว!");
+            const demItemDisp = typeof getItemDisplayName === "function" ? getItemDisplayName(itemData.name) : itemData.name;
+            const curDemLang = typeof getGameLanguage === "function" ? getGameLanguage() : "th";
+            let demResultText = "";
+            if (curDemLang === "en") {
+              demResultText = "Demolished " + demItemDisp + "!";
+            } else if (curDemLang === "seedian") {
+              const rawTxt = "รื้อถอน " + demItemDisp + " แล้ว!";
+              demResultText = (window.Seedian && typeof window.Seedian.toSeedian === "function")
+                ? window.Seedian.toSeedian(rawTxt)
+                : rawTxt;
+            } else {
+              demResultText = "รื้อถอน " + demItemDisp + " แล้ว!";
+            }
+            showNotice(demResultText);
             return true;
           } else {
-            showNotice("กระเป๋าเต็ม! ไม่สามารถรื้อถอนได้");
+            const curDemLang = typeof getGameLanguage === "function" ? getGameLanguage() : "th";
+            let fullText = "";
+            if (curDemLang === "en") {
+              fullText = "Inventory full! Cannot demolish.";
+            } else if (curDemLang === "seedian") {
+              const rawTxt = "กระเป๋าเต็ม! ไม่สามารถรื้อถอนได้";
+              fullText = (window.Seedian && typeof window.Seedian.toSeedian === "function")
+                ? window.Seedian.toSeedian(rawTxt)
+                : rawTxt;
+            } else {
+              fullText = "กระเป๋าเต็ม! ไม่สามารถรื้อถอนได้";
+            }
+            showNotice(fullText);
             return false;
           }
         }

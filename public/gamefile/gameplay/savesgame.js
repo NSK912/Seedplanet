@@ -175,7 +175,7 @@
               worldKey: c.worldKey,
               storage: c.storage
             })),
-            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isDynamic && !c.isWorldGenerated && !c.isProceduralHouse && !c.isHouse && !c.isRuin && (c.isPlayerPlaced || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "folding_ladder" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_roof" || c.type === "wood_chest" || c.type === "wood_bed" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "obsidian_pad_warp_item" || c.type === "obsidian_compass_pad_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine" || c.type === "boat_wing" || (typeof c.type === "string" && c.type.startsWith("robot_")))),
+            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isDynamic && !c.isWorldGenerated && !c.isProceduralHouse && !c.isHouse && !c.isRuin && (c.isPlayerPlaced || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "folding_ladder" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_roof" || c.type === "wood_chest" || c.type === "wood_bed" || c.type === "wood_table" || c.type === "wood_chair" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "obsidian_pad_warp_item" || c.type === "obsidian_compass_pad_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine" || c.type === "boat_wing" || (typeof c.type === "string" && c.type.startsWith("robot_")))),
             dynamicCollectibles: collectibles.filter(c => c.isDynamic && c.active && !c.isPreview),
             amphibiansState: amphibians.map((a) => ({
               theta: a.theta,
@@ -361,7 +361,10 @@
 
         // Planet parameters
         let loadedRadius = 32.0;
-        if (typeof settings.RADIUS === "number" && settings.RADIUS >= 32.0) {
+        if (typeof settings.RADIUS === "number" && settings.RADIUS >= 32.0 && typeof settings.radius === "number" && settings.radius >= 32.0 && settings.RADIUS !== settings.radius) {
+          // If one of them was explicitly overridden (e.g. radius vs DEFAULT_SETTINGS.RADIUS), prefer the non-default or radius
+          loadedRadius = settings.radius !== 32.0 ? settings.radius : settings.RADIUS;
+        } else if (typeof settings.RADIUS === "number" && settings.RADIUS >= 32.0) {
           loadedRadius = settings.RADIUS;
         } else if (typeof settings.radius === "number" && settings.radius >= 32.0) {
           loadedRadius = settings.radius;
@@ -380,10 +383,14 @@
           }
         }
 
-        if (typeof settings.currentGridSize === "number") {
+        const expectedGridSize = Math.max(100, Math.min(1600, Math.round(RADIUS * 12.5)));
+        if (typeof settings.currentGridSize === "number" && !(RADIUS > 32.0 && settings.currentGridSize === 400)) {
           currentGridSize = settings.currentGridSize;
         } else {
-          currentGridSize = Math.max(100, Math.min(1600, Math.round(RADIUS * 12.5)));
+          currentGridSize = expectedGridSize;
+        }
+        if (typeof window !== "undefined") {
+          window.currentGridSize = currentGridSize;
         }
 
         const input = document.getElementById("sizeInput");
@@ -1008,8 +1015,9 @@
             if (settingsObj) {
               if (settingsObj.RADIUS === 2.5 || settingsObj.RADIUS === 3.6 || settingsObj.RADIUS === 8.0) {
                 settingsObj.RADIUS = 32.0;
-              }
-              if (settingsObj.currentGridSize === 180 || settingsObj.currentGridSize === 1600 || settingsObj.currentGridSize === 500) {
+                settingsObj.radius = 32.0;
+                settingsObj.currentGridSize = 400;
+              } else if (settingsObj.currentGridSize === 180 || settingsObj.currentGridSize === 500) {
                 settingsObj.currentGridSize = 400;
               }
               delete settingsObj.tunnels3D;
@@ -1540,11 +1548,13 @@
             saveSettingsToLocalStorage();
 
             // Visual feedback
-            const originalText = btnRestore.innerHTML;
-            btnRestore.innerHTML = "🔄 คืนค่าเริ่มต้นเรียบร้อยแล้ว!";
+            const svgRotateIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>`;
+            const restoredText = typeof t === "function" ? t("defaults_restored") : "Defaults Restored!";
+            btnRestore.innerHTML = `${svgRotateIcon}<span data-i18n="defaults_restored">${restoredText}</span>`;
             btnRestore.style.color = "#34d399";
             setTimeout(() => {
-              btnRestore.innerHTML = originalText;
+              const defaultText = typeof t === "function" ? t("restore_defaults") : "Restore Defaults";
+              btnRestore.innerHTML = `${svgRotateIcon}<span data-i18n="restore_defaults">${defaultText}</span>`;
               btnRestore.style.color = "#fca5a5";
             }, 2000);
           });

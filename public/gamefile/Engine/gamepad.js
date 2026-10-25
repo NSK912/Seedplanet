@@ -2022,6 +2022,8 @@
           window.setGameLanguage("th", true);
         } else if (targetToClick.id === "langEnBtn" && typeof window.setGameLanguage === "function") {
           window.setGameLanguage("en", true);
+        } else if (targetToClick.id === "langJaBtn" && typeof window.setGameLanguage === "function") {
+          window.setGameLanguage("ja", true);
         }
 
         // Special UI Area transitions for start screen actions

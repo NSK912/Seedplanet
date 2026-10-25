@@ -45,6 +45,13 @@
       open_inventory: "เปิดกระเป๋า",
       close_inventory: "ปิดกระเป๋า",
       demolish_active_title: "ปิดโหมดรื้อถอน (คลิกเพื่อปิด)",
+      demolish_mode_title: "โหมดรื้อถอน",
+      demolish_prompt_hold: "กด {action} ค้าง เพื่อรื้อถอน {item}",
+      demolish_prompt_click: "กด {action} เพื่อรื้อถอน {item}",
+      demolish_distance: "ระยะห่าง: {dist}m",
+      prompt_open_chest: "กด [{button}] ค้าง เพื่อเปิด{item}",
+      prompt_cook: "กด [{button}] ค้าง เพื่อทำอาหาร",
+      touch_demolish: "รื้อถอน",
       toggle_fullscreen: "เปิด/ปิด เต็มจอ",
       fps_counter: "FPS: ",
 
@@ -52,6 +59,7 @@
       language_label: "ภาษา (Language)",
       lang_th: "ภาษาไทย",
       lang_en: "English",
+      lang_ja: "ภาษาญี่ปุ่น",
       lang_sd: "ภาษาซีเดียน (Seedian)",
       sfx_volume: "ระดับเสียงรวม",
       render_scale: "สเกลความละเอียดเรนเดอร์",
@@ -159,6 +167,9 @@
       item_WOOD_DOOR: "ประตูไม้",
       item_WOOD_ROOF: "หลังคาไม้",
       item_WOOD_CHEST: "กล่องไม้",
+      item_WOOD_BED: "เตียงไม้พร้อมฟูก",
+      item_WOOD_TABLE: "โต๊ะไม้",
+      item_WOOD_CHAIR: "เก้าอี้ไม้",
       item_MEGANEURA: "แมลงปอยักษ์",
       item_ISOPOD: "ไอโซพอด",
       item_FRIED_BUG: "แมลงทอด",
@@ -206,6 +217,15 @@
       mech_docked_notice: "⚙️ กลับเข้าสู่โหมดประกอบกับฐานตั้งแล้ว",
 
       // Settings & Toggles
+      binding_keyboard: "คีย์บอร์ด",
+      binding_gamepad: "จอยสติ๊ก",
+      touch_fly: "เร่งเครื่อง",
+      touch_swim_up: "ว่ายขึ้น",
+      touch_rotate: "หมุน",
+      touch_swim_down: "ดำน้ำ",
+      touch_interact: "สำรวจ / ขี่",
+      touch_dig_fill: "ขุด-ถม",
+      touch_attack_use: "โจมตี / ใช้",
       input_touch: "โหมดอินพุต: จอสัมผัส (Touch)",
       input_keyboard: "โหมดอินพุต: คีย์บอร์ด/เมาส์ (Keyboard/Mouse)",
       input_auto: "โหมดอินพุต: อัตโนมัติ (Auto)",
@@ -272,6 +292,13 @@
       open_inventory: "Open Inventory",
       close_inventory: "Close Inventory",
       demolish_active_title: "Demolish Mode Active (Click to Close)",
+      demolish_mode_title: "DEMOLISH MODE",
+      demolish_prompt_hold: "Hold {action} to demolish {item}",
+      demolish_prompt_click: "Press {action} to demolish {item}",
+      demolish_distance: "Distance: {dist}m",
+      prompt_open_chest: "Hold [{button}] to open {item}",
+      prompt_cook: "Hold [{button}] to cook",
+      touch_demolish: "Demolish",
       toggle_fullscreen: "Toggle Fullscreen",
       fps_counter: "FPS: ",
 
@@ -279,6 +306,7 @@
       language_label: "Language",
       lang_th: "Thai",
       lang_en: "English",
+      lang_ja: "Japanese",
       lang_sd: "Seedian",
       sfx_volume: "Master SFX Volume",
       render_scale: "Render Scale",
@@ -386,6 +414,9 @@
       item_WOOD_DOOR: "Wood Door",
       item_WOOD_ROOF: "Wooden Roof",
       item_WOOD_CHEST: "Wooden Chest",
+      item_WOOD_BED: "Wooden Bed with Mattress",
+      item_WOOD_TABLE: "Wooden Table",
+      item_WOOD_CHAIR: "Wooden Chair",
       item_MEGANEURA: "Meganeura",
       item_ISOPOD: "Giant Isopod",
       item_FRIED_BUG: "Fried Bug",
@@ -433,6 +464,15 @@
       mech_docked_notice: "⚙️ Docked to Robot Stand",
 
       // Settings & Toggles
+      binding_keyboard: "Keyboard",
+      binding_gamepad: "Gamepad",
+      touch_fly: "Fly / Throttle",
+      touch_swim_up: "Swim Up",
+      touch_rotate: "Rotate",
+      touch_swim_down: "Swim Down",
+      touch_interact: "Interact / Ride",
+      touch_dig_fill: "Dig / Fill",
+      touch_attack_use: "Attack / Use",
       input_touch: "Input Mode: Touch",
       input_keyboard: "Input Mode: Keyboard/Mouse",
       input_auto: "Input Mode: Auto",
@@ -455,6 +495,254 @@
       summon_success: "Spawned: Received",
       inventory_full: "Inventory Full!",
       chest_full: "Chest Full!"
+    },
+
+    ja: {
+      // General & Common
+      app_title: "SeedPlanet",
+      back: "戻る",
+      cancel: "キャンセル",
+      confirm: "確定",
+      delete: "削除",
+      delete_save: "セーブ削除",
+      confirm_delete: "本当に削除しますか？",
+      on: "オン",
+      off: "オフ",
+      low: "低",
+      medium: "中",
+      high: "高",
+      ultra: "ウルトラ",
+      loading: "読み込み中...",
+
+      // Start Screen
+      start_game: "ゲーム開始",
+      settings: "設定",
+      dev_mode: "開発者モード",
+      donate: "支援・寄付",
+
+      // Save Slots
+      select_save_slot: "📂 セーブデータ選択",
+      save_slot_n: "スロット {n}",
+      slot_empty: "[ 空き / 新規作成 ]",
+      slot_loaded: "[ セーブデータあり ]",
+      slot_empty_desc: "初期設定で新しい惑星を作成します",
+      slot_loaded_desc: "サイズ: {size} | シード: {seed} | 岩: {rock}, 枝: {branch}",
+      delete_save: "セーブ削除",
+      confirm_delete: "削除しますか？",
+
+      // Tabs & HUD Headers
+      tab_crafting: "クラフト",
+      tab_inventory: "インベントリ",
+      tab_items_list: "アイテム一覧",
+      tab_settings: "設定",
+      tab_cooking: "料理",
+      actions_label: "⚡ アクション",
+      open_inventory: "インベントリを開く",
+      close_inventory: "インベントリを閉じる",
+      demolish_active_title: "解体モード（クリックで終了）",
+      demolish_mode_title: "解体モード",
+      demolish_prompt_hold: "{action} 長押しで {item} を解体",
+      demolish_prompt_click: "{action} で {item} を解体",
+      demolish_distance: "距離: {dist}m",
+      prompt_open_chest: "[{button}] 長押しで {item} を開く",
+      prompt_cook: "[{button}] 長押しで調理する",
+      touch_demolish: "解体",
+      toggle_fullscreen: "全画面切り替え",
+      fps_counter: "FPS: ",
+
+      // Settings Modal
+      language_label: "言語 (Language)",
+      lang_th: "タイ語",
+      lang_en: "英語",
+      lang_ja: "日本語",
+      lang_sd: "シーディアン語",
+      sfx_volume: "効果音音量",
+      render_scale: "描画スケール",
+      fps_limit: "フレームレート制限",
+      mouse_sensitivity: "マウス感度",
+      rstick_sensitivity: "右スティック感度 (RS)",
+      screen_mode: "画面モード",
+      mode_windowed: "ウィンドウ",
+      mode_fullscreen: "フルスクリーン",
+      fps_display_toggle: "FPS表示",
+      shadow_quality: "影の品質",
+      fxaa_label: "FXAA (アンチエイリアス)",
+      fxaa_sub: "(輪郭のギザギザを軽減)",
+      taau_label: "FXAA (アンチエイリアス)",
+      taau_sub: "(輪郭のギザギザを軽減)",
+      key_bindings: "キー配置設定",
+      gamepad_bindings: "ゲームパッド設定",
+      restore_defaults: "初期設定に戻す",
+      defaults_restored: "🔄 初期設定を復元しました！",
+      main_menu: "メインメニューに戻る",
+
+      // Bottom Inventory Buttons
+      bottom_btn_action: "⚡ アクションUI",
+      bottom_btn_split: "スタック分割",
+      bottom_btn_destroy: "アイテム破棄",
+
+      // Key Bindings
+      key_move: "移動",
+      key_camera: "カメラ操作",
+      key_attack: "攻撃 / 配置",
+      key_terrainMod: "地形採掘 / 補正",
+      key_flightThrottle: "飛行加速",
+      key_flightPitch: "飛行ピッチ角",
+      key_interact: "調べる / 乗る",
+      key_rotate: "回転 / 浮上",
+      key_jump: "ジャンプ",
+      key_cancel: "キャンセル / 閉じる",
+      key_demolish: "クイックアクション / 解体",
+      key_bottomShortcut: "下部ショートカット",
+      key_inventory: "インベントリ / メニュー",
+      key_action1: "アクションスロット 1",
+      key_action2: "アクションスロット 2",
+      key_action3: "アクションスロット 3",
+      key_action4: "アクションスロット 4",
+      key_sprint: "ダッシュ / ブースト",
+      key_resetCam: "カメラリセット",
+      key_forward: "前進",
+      key_backward: "後退",
+      key_left: "左移動",
+      key_right: "右移動",
+      key_diveDown: "潜水",
+      key_diveUp: "浮上",
+      key_toggleMouse: "カーソル表示切り替え",
+      key_press_key: "キーを押してください...",
+
+      // Chest Overlay
+      chest_storage: "チェスト収納",
+      chest_take_all: "すべて取る",
+      your_inventory: "所持インベントリ",
+
+      // Crafting & Cooking
+      craft_button: "クラフト",
+      cook_button: "調理",
+      required_ingredients: "必要素材:",
+      insufficient_materials: "素材不足",
+
+      // Confirm Modals
+      destroy_item: "アイテムを破棄しますか？",
+      hold_delete: "長押しで削除",
+      antialias_title: "アンチエイリアス オン/オフ",
+      antialias_sub: "(再読み込みが必要)",
+      confirm_reload: "再読み込み",
+      kill_npc: "NPCを倒す",
+      unconscious_title: "気絶中...",
+
+      // Items
+      item_ROCK: "小石",
+      item_BIG_ROCK: "大きな岩",
+      item_IRON_ORE: "鉄鉱石",
+      item_GOLD_ORE: "金鉱石",
+      item_GLOW_ORE: "発光鉱石",
+      item_GLOW_BATTERY: "発光バッテリーロッド",
+      item_GLOW_BATTERY_EMPTY: "空の発光バッテリー",
+      item_BRANCH: "木の枝",
+      item_AXE: "斧",
+      item_PICKAXE: "ツルハシ",
+      item_LOG: "丸太",
+      item_BOW: "弓",
+      item_ARROW: "矢",
+      item_IRON_BULLET: "鉄の丸弾",
+      item_WOODEN_ARM_CANNON: "木製アームキャノン",
+      item_ARM_CANNON: "木製アームキャノン",
+      item_WOOD_FLOOR: "木の床",
+      item_THIN_WOOD_FLOOR: "薄い木の床",
+      item_STONE_FLOOR: "石の床",
+      item_WOOD_STAIRS: "木の階段",
+      item_FOLDING_LADDER: "折りたたみハシゴ",
+      item_CAMPFIRE: "焚き火",
+      item_WOOD_BOAT: "木製ボート",
+      item_WOOD_WHEEL: "木製車輪",
+      item_BOAT_WING: "ボートの翼",
+      item_ELECTRIC_ENGINE: "電動エンジン",
+      item_WOOD_WALL: "木の壁",
+      item_WOOD_WINDOW: "木の窓",
+      item_WOOD_DOOR: "木のドア",
+      item_WOOD_ROOF: "木の屋根",
+      item_WOOD_CHEST: "木製チェスト",
+      item_WOOD_BED: "マットレス付き木製ベッド",
+      item_WOOD_TABLE: "木製テーブル",
+      item_WOOD_CHAIR: "木製椅子",
+      item_MEGANEURA: "メガネウラ",
+      item_ISOPOD: "ダイオウグソクムシ",
+      item_FRIED_BUG: "昆虫の素揚げ",
+      item_DRAGON_FRUIT: "ドラゴンフルーツ",
+      item_SHOVEL: "スコップ",
+      item_ROBOT_STAND: "ロボット台座",
+      item_ROBOT_COCKPIT: "ロボットコクピット",
+      item_ROBOT_LEFT_ARM: "ロボット左腕",
+      item_ROBOT_RIGHT_ARM: "ロボット右腕",
+      item_ROBOT_LEFT_LEG: "ロボット左脚",
+      item_ROBOT_RIGHT_LEG: "ロボット右脚",
+      item_PLANET_CORE: "惑星のコア",
+      item_OBSIDIAN_CUBE: "黒曜石キューブ",
+      item_OBSIDIAN_PAD_WARP: "黒曜石ワープパッド",
+      item_OBSIDIAN_FLUX: "黒曜石フラックス",
+      warp_ui_title: "黒曜石フラックス",
+      warp_pad_prefix: "黒曜石パッド #",
+      no_warp_pads_notice: "🚫 この惑星にはまだワープパッドが配置されていません！",
+      max_warp_pads_notice: "🚫 ワープパッドは最大5個までしか配置できません！",
+
+      // Mech Stand System
+      robot_stand_title: "ロボット台座システム",
+      mech_stand_title: "ロボット台座システム",
+      mech_slot_equipped: "✔ 装着済み",
+      mech_slot_empty: "✚ 未装着",
+      mech_slot_empty_title: "空きスロット（クリックでパーツ装着）",
+      mech_slot_dismantle_title: "クリックで {part} を取り外す",
+      mech_part_cockpit: "コクピット",
+      mech_part_left_arm: "左腕",
+      mech_part_right_arm: "右腕",
+      mech_part_left_leg: "左脚",
+      mech_part_right_leg: "右脚",
+      mech_part_stand: "台座",
+      mech_part_core: "パワーコア",
+      mech_part_module: "モジュール",
+      mech_part_generic: "ロボットパーツ",
+      mech_cannot_remove_stand: "起動中は台座を取り外せません！",
+      mech_dismantle_success: "{part} を取り外しました！",
+      mech_inventory_full: "インベントリがいっぱいです！取り外せません",
+      mech_require_cockpit: "腕や脚の前にコクピットを装着してください！",
+      mech_no_parts_to_equip: "装着できるパーツがありません！",
+      mech_equip_success: "{part} を装着しました！",
+      mech_missing_parts_warn: "⚠️ ロボット未完成（不足: {missing}） — 操縦前に4パーツすべて組み立ててください",
+      mech_need_4_parts: "⚠️ 操縦前に4パーツ（左脚、右脚、左腕、右腕）すべてを組み立ててください！",
+      mech_docked_notice: "⚙️ ロボット台座にドッキング中",
+
+      // Settings & Toggles
+      binding_keyboard: "キーボード",
+      binding_gamepad: "ゲームパッド",
+      touch_fly: "飛行 / 加速",
+      touch_swim_up: "浮上",
+      touch_rotate: "回転",
+      touch_swim_down: "潜水",
+      touch_interact: "調べる / 乗る",
+      touch_dig_fill: "掘る / 埋める",
+      touch_attack_use: "攻撃 / 使用",
+      input_touch: "入力モード: タッチ",
+      input_keyboard: "入力モード: キーボード/マウス",
+      input_auto: "入力モード: 自動",
+      toggle_hitboxes: "ヒットボックス表示",
+      frustum_culling: "視界外描画カリング",
+      cave_water: "洞窟の水面",
+      action_reach: "アクション届く範囲を表示",
+      water: "水面描画",
+      render_dist_limit: "描画距離制限",
+      atmosphere: "大気エフェクト",
+      god_rays: "ゴッドレイ（光線）",
+      space_sky: "宇宙の空",
+      clouds: "雲",
+      ragdoll_mode: "ラグドール物理",
+      grass_toggle: "草の描画",
+
+      // Dynamic Notices
+      craft_success: "クラフト完了",
+      cook_success: "調理完了",
+      summon_success: "生成完了",
+      inventory_full: "インベントリがいっぱいです！",
+      chest_full: "チェストがいっぱいです！"
     }
   };
 
@@ -484,14 +772,14 @@
     const savedOpts = localStorage.getItem("seedplanet_options_config");
     if (savedOpts) {
       const parsed = JSON.parse(savedOpts);
-      if (parsed && (parsed.language === "th" || parsed.language === "en" || parsed.language === "seedian")) {
+      if (parsed && (parsed.language === "th" || parsed.language === "en" || parsed.language === "seedian" || parsed.language === "ja")) {
         currentLang = parsed.language;
       }
     } else {
       const savedSettings = localStorage.getItem("seedplanet_settings");
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        if (parsed && (parsed.language === "th" || parsed.language === "en" || parsed.language === "seedian")) {
+        if (parsed && (parsed.language === "th" || parsed.language === "en" || parsed.language === "seedian" || parsed.language === "ja")) {
           currentLang = parsed.language;
         }
       }
@@ -514,15 +802,15 @@
         return text;
       };
       DICTIONARY.seedian = {};
-      const sourceDict = DICTIONARY.en || DICTIONARY.th;
+      const sourceDict = DICTIONARY.th || DICTIONARY.en;
       for (const [k, v] of Object.entries(sourceDict)) {
         if (typeof v === "string") {
           DICTIONARY.seedian[k] = toSeedianFn(v);
         }
       }
-      // Ensure keys from TH that might not be in EN are also translated
-      if (DICTIONARY.th) {
-        for (const [k, v] of Object.entries(DICTIONARY.th)) {
+      // Ensure keys from EN that might not be in TH are also translated
+      if (DICTIONARY.en) {
+        for (const [k, v] of Object.entries(DICTIONARY.en)) {
           if (!DICTIONARY.seedian[k] && typeof v === "string") {
             DICTIONARY.seedian[k] = toSeedianFn(v);
           }
@@ -530,6 +818,7 @@
       }
       DICTIONARY.seedian.lang_th = "ภาษาไทย";
       DICTIONARY.seedian.lang_en = "English";
+      DICTIONARY.seedian.lang_ja = "日本語";
       DICTIONARY.seedian.lang_sd = toSeedianFn("ภาษาซีเดียน") + " (Seedian)";
     }
 
@@ -550,6 +839,7 @@
       const def = window.getItemDefinition(itemName);
       if (def) {
         if (curLang === "th") return def.name_th || def.name_en;
+        if (curLang === "ja") return def.name_ja || def.name_en || def.name_th;
         if (curLang === "seedian") {
           const baseName = def.name_th || def.name_en;
           return (window.Seedian && typeof window.Seedian.toSeedian === "function")
@@ -618,6 +908,7 @@
     // Update Language Buttons styling in Settings
     const langThBtn = document.getElementById("langThBtn");
     const langEnBtn = document.getElementById("langEnBtn");
+    const langJaBtn = document.getElementById("langJaBtn");
     const langSdBtn = document.getElementById("langSdBtn");
 
     const activeStyle = {
@@ -644,6 +935,7 @@
 
     applyStyle(langThBtn, currentLang === "th");
     applyStyle(langEnBtn, currentLang === "en");
+    applyStyle(langJaBtn, currentLang === "ja");
     applyStyle(langSdBtn, currentLang === "seedian");
 
     // Re-render dynamic components if functions exist
@@ -677,6 +969,9 @@
     if (typeof window.updateShadowMapUI === "function") {
       window.updateShadowMapUI();
     }
+    if (typeof window.syncInputDeviceSettingsUI === "function") {
+      window.syncInputDeviceSettingsUI();
+    }
     if (typeof window.renderMechStandUI === "function" && typeof window._lastActiveStand !== "undefined" && window._lastActiveStand) {
       window.renderMechStandUI(window._lastActiveStand, window._lastAttachedCollectibles);
     }
@@ -693,7 +988,7 @@
   }
 
   function setGameLanguage(lang, save = true) {
-    if (lang !== "th" && lang !== "en" && lang !== "seedian") return;
+    if (lang !== "th" && lang !== "en" && lang !== "seedian" && lang !== "ja") return;
     currentLang = lang;
     window.gameLanguage = currentLang;
 
@@ -727,12 +1022,16 @@
     // Hook up language buttons
     const langThBtn = document.getElementById("langThBtn");
     const langEnBtn = document.getElementById("langEnBtn");
+    const langJaBtn = document.getElementById("langJaBtn");
     const langSdBtn = document.getElementById("langSdBtn");
     if (langThBtn) {
       langThBtn.addEventListener("click", () => setGameLanguage("th", true));
     }
     if (langEnBtn) {
       langEnBtn.addEventListener("click", () => setGameLanguage("en", true));
+    }
+    if (langJaBtn) {
+      langJaBtn.addEventListener("click", () => setGameLanguage("ja", true));
     }
     if (langSdBtn) {
       langSdBtn.removeAttribute("title");

@@ -186,7 +186,9 @@
         opts.modelProgram._treeLocs = {
           uLightSpaceLoc: gl.getUniformLocation(opts.modelProgram, "uLightSpaceMatrix"),
           uShadowMapLoc: gl.getUniformLocation(opts.modelProgram, "uShadowMap"),
-          uWaterMaskLoc: gl.getUniformLocation(opts.modelProgram, "uWaterMaskTex")
+          uWaterMaskLoc: gl.getUniformLocation(opts.modelProgram, "uWaterMaskTex"),
+          uShadowsEnabledLoc: gl.getUniformLocation(opts.modelProgram, "uShadowsEnabled"),
+          uShadowTexelSizeLoc: gl.getUniformLocation(opts.modelProgram, "uShadowTexelSize")
         };
       }
       const locs = opts.modelProgram._treeLocs;
@@ -195,6 +197,14 @@
       }
       if (locs.uShadowMapLoc) gl.uniform1i(locs.uShadowMapLoc, 1);
       if (locs.uWaterMaskLoc) gl.uniform1i(locs.uWaterMaskLoc, 2);
+      if (locs.uShadowsEnabledLoc) {
+        gl.uniform1f(locs.uShadowsEnabledLoc, 0.0);
+      }
+      if (locs.uShadowTexelSizeLoc) {
+        const sw = opts.shadowWidth || global.SHADOW_WIDTH || 1024;
+        const sh = opts.shadowHeight || global.SHADOW_HEIGHT || 1024;
+        gl.uniform2f(locs.uShadowTexelSizeLoc, 1.0 / sw, 1.0 / sh);
+      }
     }
 
     if (opts.modelWaterRadiusLoc && opts.RADIUS !== undefined && opts.waterLevel !== undefined) {

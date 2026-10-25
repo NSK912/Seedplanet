@@ -748,6 +748,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 English
               </button>
               <button
+                id="langJaBtn"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+              >
+                日本語
+              </button>
+              <button
                 id="langSdBtn"
                 class="game-ui"
                 style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
@@ -1127,7 +1134,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                     <line x1="18" y1="12" x2="18.01" y2="12"></line>
                     <line x1="7" y1="16" x2="17" y2="16"></line>
                   </svg>
-                  <span>คีย์บอร์ด</span>
+                  <span data-i18n="binding_keyboard">คีย์บอร์ด</span>
                 </button>
                 <button
                   id="btnBindingModeGp"
@@ -1141,7 +1148,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                     <line x1="18" y1="11" x2="18.01" y2="11"></line>
                     <rect x="2" y="6" width="20" height="12" rx="2"></rect>
                   </svg>
-                  <span>จอยสติ๊ก</span>
+                  <span data-i18n="binding_gamepad">จอยสติ๊ก</span>
                 </button>
               </div>
             </div>
@@ -1166,7 +1173,6 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           >
             <button
               id="btnRestoreDefaults"
-              data-i18n="restore_defaults"
               onmouseover="this.style.background = 'rgba(239, 68, 68, 0.25)'"
               onmouseout="this.style.background = 'rgba(239, 68, 68, 0.1)'"
              class="game-ui" style="width: 100%;
@@ -1178,12 +1184,18 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'Google Sans', sans-serif;
                 cursor: pointer;
                 transition: all 0.2s;
-                font-weight: bold;">
-              คืนค่าเริ่มต้น
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0;">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+              <span data-i18n="restore_defaults">คืนค่าเริ่มต้น</span>
             </button>
             <button
               id="btnExitToMenu"
-              data-i18n="main_menu"
               onmouseover="this.style.background = 'rgba(223, 183, 108, 0.25)'"
               onmouseout="this.style.background = 'rgba(223, 183, 108, 0.1)'"
              class="game-ui" style="width: 100%;
@@ -1195,8 +1207,17 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 font-family: 'Google Sans', sans-serif;
                 cursor: pointer;
                 transition: all 0.2s;
-                font-weight: bold;">
-              กลับไปหน้าเริ่มเกม
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0;">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span data-i18n="main_menu">กลับไปหน้าเริ่มเกม</span>
             </button>
           </div>
         </div>
@@ -2213,7 +2234,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <span class="touch-btn-label">ขุด-ถม/ขวา</span>
         </div>
         <div class="touch-btn game-ui" id="btnTouchLeftClick">
-          <div class="touch-btn-icon">
+          <div class="touch-btn-icon" id="btnTouchLCIcon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline>
               <line x1="13" y1="19" x2="19" y2="13"></line>
@@ -2837,12 +2858,12 @@ window.addEventListener("keyup", (e) => {
             
             if (active) {
               invToggleEl.classList.add("demolish-active");
-              invToggleEl.title = "ปิดโหมดรื้อถอน (Demolish Mode Active - Click to Close)";
+              invToggleEl.title = (typeof t === "function") ? t("demolish_active_title") : "ปิดโหมดรื้อถอน";
               if (normalContent) normalContent.style.display = "none";
               if (demolishContent) demolishContent.style.display = "flex";
             } else {
               invToggleEl.classList.remove("demolish-active");
-              invToggleEl.title = "เปิดกระเป๋า (Inventory)";
+              invToggleEl.title = (typeof t === "function") ? t("open_inventory") : "เปิดกระเป๋า";
               if (normalContent) normalContent.style.display = "flex";
               if (demolishContent) demolishContent.style.display = "none";
             }
@@ -3462,8 +3483,14 @@ window.addEventListener("keyup", (e) => {
         const valLabel = document.getElementById("shadowMapQualityVal");
         if (slider && valLabel) {
           slider.value = shadowMapQuality;
-          const labels = ["Off", "Low", "Medium", "High", "Ultra"];
-          valLabel.textContent = labels[shadowMapQuality] || "Medium";
+          const tr = typeof t === "function" ? t : (k => k);
+          const labels = [tr("off"), tr("low"), tr("medium"), tr("high"), tr("ultra")];
+          const textVal = labels[shadowMapQuality] || tr("medium");
+          if (typeof setElementTextOrHTML === "function") {
+            setElementTextOrHTML(valLabel, textVal);
+          } else {
+            valLabel.textContent = textVal;
+          }
         }
       }
 
@@ -4087,12 +4114,13 @@ window.addEventListener("keyup", (e) => {
         const isGp = (typeof isCurrentlyGamepadMode === 'function' ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
         const gpBrand = (window.GamepadController && typeof window.GamepadController.getBrand === 'function') ? window.GamepadController.getBrand() : 'xbox';
 
-        if (inWater !== lastInWaterState || hasActionReach !== lastHasActionReach || isWingBoat !== window._lastIsWingBoatState || isGp !== window._lastIsGpState || gpBrand !== window._lastGpBrandState) {
+        if (inWater !== lastInWaterState || hasActionReach !== lastHasActionReach || isWingBoat !== window._lastIsWingBoatState || isGp !== window._lastIsGpState || gpBrand !== window._lastGpBrandState || isDemolish !== window._lastIsDemolishTouchState) {
           lastInWaterState = inWater;
           lastHasActionReach = hasActionReach;
           window._lastIsWingBoatState = isWingBoat;
           window._lastIsGpState = isGp;
           window._lastGpBrandState = gpBrand;
+          window._lastIsDemolishTouchState = isDemolish;
 
           const btnQKey = document.querySelector("#btnTouchQ .touch-btn-key");
           const btnQLabel = document.querySelector("#btnTouchQ .touch-btn-label");
@@ -4104,18 +4132,29 @@ window.addEventListener("keyup", (e) => {
           const btnLCLabel = document.querySelector("#btnTouchLeftClick .touch-btn-label");
           const btnQIcon = document.getElementById("btnTouchQIcon");
           const btnEIcon = document.getElementById("btnTouchEIcon");
+          const btnLCIcon = document.getElementById("btnTouchLCIcon");
 
           const gpCtrl = window.GamepadController;
+          const tr = typeof t === "function" ? t : (k => k);
+          const setBtnLabel = (el, key) => {
+            if (!el) return;
+            const textVal = tr(key);
+            if (typeof setElementTextOrHTML === "function") {
+              setElementTextOrHTML(el, textVal);
+            } else {
+              el.textContent = textVal;
+            }
+          };
 
           if (isGp && gpCtrl && typeof gpCtrl.getButtonLabel === 'function') {
             // Controller Brand UI Buttons (PlayStation: L1/R1/L2/R2, Xbox: LB/RB/LT/RT, Switch: L/R/ZL/ZR)
             if (isWingBoat) {
               if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("flightThrottle");
-              if (btnQLabel) btnQLabel.textContent = "เร่งเครื่อง/Fly";
+              setBtnLabel(btnQLabel, "touch_fly");
               if (btnQIcon) btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
             } else if (inWater) {
               if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("swimUp");
-              if (btnQLabel) btnQLabel.textContent = "ว่ายขึ้น/Up";
+              setBtnLabel(btnQLabel, "touch_swim_up");
               if (btnQIcon) {
                 btnQIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4126,7 +4165,7 @@ window.addEventListener("keyup", (e) => {
               }
             } else {
               if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("rotate");
-              if (btnQLabel) btnQLabel.textContent = "หมุน/Rotate";
+              setBtnLabel(btnQLabel, "touch_rotate");
               if (btnQIcon) {
                 btnQIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4138,7 +4177,7 @@ window.addEventListener("keyup", (e) => {
 
             if (inWater && !hasActionReach) {
               if (btnEKey) btnEKey.textContent = gpCtrl.getButtonLabel("swimDown");
-              if (btnELabel) btnELabel.textContent = "ดำน้ำ/Down";
+              setBtnLabel(btnELabel, "touch_swim_down");
               if (btnEIcon) {
                 btnEIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4149,7 +4188,7 @@ window.addEventListener("keyup", (e) => {
               }
             } else {
               if (btnEKey) btnEKey.textContent = gpCtrl.getButtonLabel("interact");
-              if (btnELabel) btnELabel.textContent = "สำรวจ/ขี่";
+              setBtnLabel(btnELabel, "touch_interact");
               if (btnEIcon) {
                 btnEIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4160,20 +4199,43 @@ window.addEventListener("keyup", (e) => {
             }
 
             if (btnRCKey) btnRCKey.textContent = gpCtrl.getButtonLabel("dig");
-            if (btnRCLabel) btnRCLabel.textContent = "ขุด-ถม/ดิน";
+            setBtnLabel(btnRCLabel, "touch_dig_fill");
             if (btnLCKey) btnLCKey.textContent = gpCtrl.getButtonLabel("attack");
-            if (btnLCLabel) btnLCLabel.textContent = "โจมตี-ใช้";
+            if (isDemolish) {
+              setBtnLabel(btnLCLabel, "touch_demolish");
+              if (btnLCIcon) {
+                btnLCIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9"/>
+                    <path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64"/>
+                    <path d="m20 8-5 5"/>
+                  </svg>
+                `;
+              }
+            } else {
+              setBtnLabel(btnLCLabel, "touch_attack_use");
+              if (btnLCIcon) {
+                btnLCIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline>
+                    <line x1="13" y1="19" x2="19" y2="13"></line>
+                    <line x1="16" y1="20" x2="20" y2="16"></line>
+                    <line x1="19" y1="21" x2="21" y2="19"></line>
+                  </svg>
+                `;
+              }
+            }
           } else {
             // Standard Keyboard / Mouse Buttons
             if (isWingBoat) {
               if (btnQKey) btnQKey.textContent = "Shift";
-              if (btnQLabel) btnQLabel.textContent = "บิน/Fly";
+              setBtnLabel(btnQLabel, "touch_fly");
               if (btnQIcon) {
                 btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
               }
             } else if (inWater) {
               if (btnQKey) btnQKey.textContent = "Shift";
-              if (btnQLabel) btnQLabel.textContent = "ว่ายขึ้น/Up";
+              setBtnLabel(btnQLabel, "touch_swim_up");
               if (btnQIcon) {
                 btnQIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4184,7 +4246,7 @@ window.addEventListener("keyup", (e) => {
               }
             } else {
               if (btnQKey) btnQKey.textContent = "Q";
-              if (btnQLabel) btnQLabel.textContent = "หมุน/Rotate";
+              setBtnLabel(btnQLabel, "touch_rotate");
               if (btnQIcon) {
                 btnQIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4196,7 +4258,7 @@ window.addEventListener("keyup", (e) => {
 
             if (inWater && !hasActionReach) {
               if (btnEKey) btnEKey.textContent = "Z";
-              if (btnELabel) btnELabel.textContent = "ดำน้ำ/Down";
+              setBtnLabel(btnELabel, "touch_swim_down");
               if (btnEIcon) {
                 btnEIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4207,7 +4269,7 @@ window.addEventListener("keyup", (e) => {
               }
             } else {
               if (btnEKey) btnEKey.textContent = "E";
-              if (btnELabel) btnELabel.textContent = "เก็บ/คุย";
+              setBtnLabel(btnELabel, "touch_interact");
               if (btnEIcon) {
                 btnEIcon.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4218,9 +4280,32 @@ window.addEventListener("keyup", (e) => {
             }
 
             if (btnRCKey) btnRCKey.textContent = "R-Click";
-            if (btnRCLabel) btnRCLabel.textContent = "ขุด-ถม/ขวา";
+            setBtnLabel(btnRCLabel, "touch_dig_fill");
             if (btnLCKey) btnLCKey.textContent = "L-Click";
-            if (btnLCLabel) btnLCLabel.textContent = "ตี-ใช้/ซ้าย";
+            if (isDemolish) {
+              setBtnLabel(btnLCLabel, "touch_demolish");
+              if (btnLCIcon) {
+                btnLCIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9"/>
+                    <path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64"/>
+                    <path d="m20 8-5 5"/>
+                  </svg>
+                `;
+              }
+            } else {
+              setBtnLabel(btnLCLabel, "touch_attack_use");
+              if (btnLCIcon) {
+                btnLCIcon.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline>
+                    <line x1="13" y1="19" x2="19" y2="13"></line>
+                    <line x1="16" y1="20" x2="20" y2="16"></line>
+                    <line x1="19" y1="21" x2="21" y2="19"></line>
+                  </svg>
+                `;
+              }
+            }
           }
         }
       }
@@ -4377,11 +4462,23 @@ window.addEventListener("keyup", (e) => {
 
         sizeInput.value = val;
         sizeDisplay.textContent = val + " x " + val;
-        currentGridSize = val;
         
-        RADIUS = val / 50.0;
+        const newRadius = Math.max(32.0, Math.min(160.0, val / 12.5));
+        if (typeof window.updatePlanetRadiusAndHeightScale === "function") {
+          window.updatePlanetRadiusAndHeightScale(newRadius);
+        } else {
+          RADIUS = newRadius;
+          HEIGHT_SCALE = 0.6 * Math.pow(newRadius / 8.0, 0.7);
+          if (typeof window !== "undefined") {
+            window.RADIUS = RADIUS;
+            window.HEIGHT_SCALE = HEIGHT_SCALE;
+          }
+        }
+        currentGridSize = val;
+        if (typeof window !== "undefined") window.currentGridSize = val;
         if (radiusInput) radiusInput.value = RADIUS.toFixed(2);
         if (radiusDisplay) radiusDisplay.textContent = RADIUS.toFixed(2);
+        if (typeof updateRadiusButtonStates === "function") updateRadiusButtonStates();
 
         buildPlanet(currentGridSize, globalSeed);
         console.log(

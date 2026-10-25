@@ -85,8 +85,9 @@ function startGameWithSlot(loadedData, devMode = false) {
   if (loadedData) {
     if (loadedData.RADIUS === 2.5 || loadedData.RADIUS === 3.6 || loadedData.RADIUS === 8.0) {
       loadedData.RADIUS = 32.0;
-    }
-    if (loadedData.currentGridSize === 180 || loadedData.currentGridSize === 1600 || loadedData.currentGridSize === 500) {
+      loadedData.radius = 32.0;
+      loadedData.currentGridSize = 400;
+    } else if (loadedData.currentGridSize === 180 || loadedData.currentGridSize === 500) {
       loadedData.currentGridSize = 400;
     }
   }
@@ -199,7 +200,7 @@ function startGameWithSlot(loadedData, devMode = false) {
   window.isBuildingPlanet = true;
 
   // 2. ประยุกต์ใช้การตั้งค่า โดยส่งพารามิเตอร์ตัวที่ 3 (rebuildPlanet = false) เพื่อไม่ให้สร้างซ้ำซ้อน
-  const settingsToApply = loadedData ? loadedData : { ...DEFAULT_SETTINGS, globalSeed: globalSeed, currentGridSize: currentGridSize, radius: RADIUS };
+  const settingsToApply = loadedData ? loadedData : { ...DEFAULT_SETTINGS, globalSeed: globalSeed, currentGridSize: currentGridSize, RADIUS: RADIUS, radius: RADIUS };
   applySettings(settingsToApply, false, false);
 
   // 3. สร้างดวงดาวแบบ Asynchronous พร้อมแสดงผล Loading Progress (สไตล์ AAA)

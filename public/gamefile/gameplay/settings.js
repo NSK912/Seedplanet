@@ -184,9 +184,13 @@ function syncInputDeviceSettingsUI() {
         ? window.GamepadController.getBrand() 
         : ((window.GamepadController && window.GamepadController.isPlayStation) ? "playstation" : "xbox");
       const rStickText = brand === "playstation" ? "ความไวอนาล็อกขวา (R-Stick / R3)" : (brand === "switch" ? "ความไวอนาล็อกขวา (R-Stick)" : "ความไวอนาล็อกขวา (RS / R3)");
-      mouseLabel.textContent = typeof t === "function" ? t("rstick_sensitivity") : rStickText;
+      const val = typeof t === "function" ? t("rstick_sensitivity") : rStickText;
+      if (typeof setElementTextOrHTML === "function") setElementTextOrHTML(mouseLabel, val);
+      else mouseLabel.textContent = val;
     } else {
-      mouseLabel.textContent = typeof t === "function" ? t("mouse_sensitivity") : "ความไวเมาส์";
+      const val = typeof t === "function" ? t("mouse_sensitivity") : "ความไวเมาส์";
+      if (typeof setElementTextOrHTML === "function") setElementTextOrHTML(mouseLabel, val);
+      else mouseLabel.textContent = val;
     }
   }
 
@@ -195,9 +199,13 @@ function syncInputDeviceSettingsUI() {
   if (headerLabel) {
     if (isGp) {
       const cName = window.GamepadController ? window.GamepadController.controllerName : "Gamepad";
-      headerLabel.textContent = typeof t === "function" ? t("gamepad_bindings") : `ตั้งค่าปุ่มจอย (${cName})`;
+      const val = typeof t === "function" ? t("gamepad_bindings") : `ตั้งค่าปุ่มจอย (${cName})`;
+      if (typeof setElementTextOrHTML === "function") setElementTextOrHTML(headerLabel, val);
+      else headerLabel.textContent = val;
     } else {
-      headerLabel.textContent = typeof t === "function" ? t("key_bindings") : "ตั้งค่าปุ่มควบคุม";
+      const val = typeof t === "function" ? t("key_bindings") : "ตั้งค่าปุ่มควบคุม";
+      if (typeof setElementTextOrHTML === "function") setElementTextOrHTML(headerLabel, val);
+      else headerLabel.textContent = val;
     }
   }
 
@@ -272,7 +280,8 @@ function renderKeyBindingsUI() {
     let html = "";
     for (const item of gpBindings) {
       const isFixed = !!item.fixed;
-      const btnText = isFixed ? item.fixedBtn : getGamepadButtonName(currentGamepadBindings[item.id] !== undefined ? currentGamepadBindings[item.id] : DEFAULT_GAMEPAD_BINDINGS[item.id], brand);
+      const rawBtnText = isFixed ? item.fixedBtn : getGamepadButtonName(currentGamepadBindings[item.id] !== undefined ? currentGamepadBindings[item.id] : DEFAULT_GAMEPAD_BINDINGS[item.id], brand);
+      const btnText = (typeof getGameLanguage === "function" && getGameLanguage() === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(rawBtnText) : rawBtnText;
       const itemLabel = (typeof t === "function") ? t("key_" + item.id) : item.label;
       html += `
         <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 5px 8px; border: 1px solid rgba(223, 183, 108, 0.15); border-radius: 0px; transition: all 0.2s;">

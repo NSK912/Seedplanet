@@ -94,7 +94,23 @@
     "ทำอาหาร": "COOKING",
     "บันทึก": "SAVE",
     "ตั้งค่าปุ่มควบคุม": "KEY BINDINGS",
-    "คืนค่าเริ่มต้น": "RESTORE DEFAULTS"
+    "คืนค่าเริ่มต้น": "RESTORE DEFAULTS",
+    "คีย์บอร์ด": "KEYBOARD",
+    "จอยสติ๊ก": "GAMEPAD",
+    "โหมดอินพุต": "INPUT MODE",
+    "กลับไปหน้าเริ่มเกม": "MAIN MENU",
+    "คืนค่าเริ่มต้นเรียบร้อยแล้ว!": "DEFAULTS RESTORED!",
+    "เร่งเครื่อง": "THROTTLE",
+    "ว่ายขึ้น": "SWIM UP",
+    "หมุน": "ROTATE",
+    "ดำน้ำ": "SWIM DOWN",
+    "สำรวจ": "INTERACT",
+    "ขุด-ถม": "DIG FILL",
+    "โจมตี": "ATTACK",
+    "ลบเซฟ": "DELETE SAVE",
+    "ยืนยันลบ?": "CONFIRM DELETE",
+    "เลือกข้อมูลเซฟ": "SELECT SAVE SLOT",
+    "เซฟช่องที่": "SAVE SLOT"
   };
 
   function convertThaiToPhoneticEnglish(text) {
