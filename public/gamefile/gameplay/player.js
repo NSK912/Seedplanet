@@ -30,7 +30,7 @@ window.characterVertexShaderSource = `
                 vec4 worldPos = uModelMatrix * vec4(aPosition, 1.0);
                 vWorldNormal = normalize(mat3(uModelMatrix) * aNormal);
                 vWorldPos = worldPos.xyz;
-                vPositionLightSpace = uLightSpaceMatrix * worldPos;
+                vPositionLightSpace = uLightSpaceMatrix * vec4(worldPos.xyz + vWorldNormal * 0.004, 1.0);
                             }
         `;
 
@@ -65,35 +65,7 @@ window.characterVertexShaderSource = `
                 return length(pa - ba*h);
             }
 
-            float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
-                if (uShadowsEnabled < 0.5) return 1.0;
-                vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-                projCoords = projCoords * 0.5 + 0.5;
-                
-                if (projCoords.z > 1.0 || projCoords.z < 0.0) return 1.0;
-                if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
-
-                float currentDepth = projCoords.z;
-                float cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-                float slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-                float bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
-                
-                vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1024.0);
-                float shadow = 0.0;
-
-                for (int x = -1; x <= 1; x++) {
-                    for (int y = -1; y <= 1; y++) {
-                        float pcfDepth = texture2D(uShadowMap, projCoords.xy + vec2(float(x), float(y)) * texelSize).r;
-                        shadow += (currentDepth - bias) > pcfDepth ? 0.0 : 1.0;
-                    }
-                }
-                shadow /= 9.0;
-
-                float distFromCenter = length(projCoords.xy - vec2(0.5));
-                float edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
-
-                return mix(1.0, shadow, edgeFade);
-            }
+            /*__SHARED_SHADOW_GLSL__*/
 
             void main() {
                 vec3 normal = normalize(vWorldNormal);
@@ -103,9 +75,10 @@ window.characterVertexShaderSource = `
                 float diffuseVal = max(dot(normal, lightDir), 0.0);
                 
                 // Shadow
-                float shadow = calculateShadow(vPositionLightSpace, normalize(vWorldNormal), normalize(uLightDir));
-                if (diffuseVal <= 0.0) {
-                    shadow = 0.0;
+                float planetHorizon = smoothstep(-0.08, 0.06, dot(normalize(vWorldPos), lightDir));
+                float shadow = 0.0;
+                if (diffuseVal > 0.001 && planetHorizon > 0.001) {
+                    shadow = calculateShadow(vPositionLightSpace, normal, lightDir) * planetHorizon;
                 }
                 float lit = mix(0.3, 1.0, shadow);
                 float diffuse = diffuseVal * lit * 0.75 + 0.25;

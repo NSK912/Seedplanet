@@ -138,6 +138,12 @@ window.ItemRegistry["wood_wall"] = {
           const dz = oP[2] - queryP[2];
           if (dx*dx + dy*dy + dz*dz > 3.0) continue;
 
+          // 1. Lower structural walls (below roof base) should NEVER be trimmed by roofs above them!
+          const elevDiff = (p[0] - oP[0]) * n[0] + (p[1] - oP[1]) * n[1] + (p[2] - oP[2]) * n[2];
+          if (elevDiff < -0.05) {
+            continue;
+          }
+
           const oR = other.R || [1,0,0];
           const oF = other.F || [0,0,1];
           const oN = other.normal || [0,1,0];
@@ -155,6 +161,12 @@ window.ItemRegistry["wood_wall"] = {
             oR[1] * cosOA + oF[1] * sinOA,
             oR[2] * cosOA + oF[2] * sinOA
           ];
+
+          // 2. Only trim upper walls that are perpendicular to the roof ridge (Gable walls)
+          const dotWallR_roofR = Math.abs(wallR[0] * roofR[0] + wallR[1] * roofR[1] + wallR[2] * roofR[2]);
+          if (dotWallR_roofR > 0.707) {
+            continue;
+          }
               
           const roofW = 0.30;
           const roofD = 0.30;
@@ -205,7 +217,7 @@ window.ItemRegistry["wood_wall"] = {
               }
 
               if (Math.abs(u) <= roofW * 0.5 + 0.045 && v >= -roofD * 0.5 - 0.035 && v <= vLimitMax + 0.035) {
-                maxH = Math.max(0, t_hit);
+                maxH = Math.min(defaultMax, Math.max(0, t_hit + 0.010));
               }
             }
           }
@@ -222,14 +234,11 @@ window.ItemRegistry["wood_wall"] = {
       const hd = d / 2;
       
       let r_ = rotR, u_ = rotU, f_ = rotF;
-      let hl_ = hl, hr_ = hr;
+      let isFlipped = false;
       if (r_ && u_ && f_) {
         const det = (r_[1]*u_[2] - r_[2]*u_[1])*f_[0] + (r_[2]*u_[0] - r_[0]*u_[2])*f_[1] + (r_[0]*u_[1] - r_[1]*u_[0])*f_[2];
         if (det < 0) {
-          r_ = [-r_[0], -r_[1], -r_[2]];
-          const tmp = hl_;
-          hl_ = hr_;
-          hr_ = tmp;
+          isFlipped = true;
         }
       }
       
@@ -238,10 +247,10 @@ window.ItemRegistry["wood_wall"] = {
         [hw, 0, -hd],
         [hw, 0, hd],
         [-hw, 0, hd],
-        [-hw, hl_, -hd],
-        [hw, hr_, -hd],
-        [hw, hr_, hd],
-        [-hw, hl_, hd],
+        [-hw, hl, -hd],
+        [hw, hr, -hd],
+        [hw, hr, hd],
+        [-hw, hl, hd],
       ];
       const baseIdx = outVertices.length / 3;
       for (let i = 0; i < 8; i++) {
@@ -252,7 +261,14 @@ window.ItemRegistry["wood_wall"] = {
          outVertices.push(bottomCenter[0]+rx, bottomCenter[1]+ry, bottomCenter[2]+rz);
          outColors.push(color[0], color[1], color[2]);
       }
-      const cubeIndices = [
+      const cubeIndices = isFlipped ? [
+        0, 1, 2, 0, 2, 3, // bottom
+        4, 6, 5, 4, 7, 6, // top
+        0, 5, 1, 0, 4, 5, // back
+        2, 7, 3, 2, 6, 7, // front
+        0, 3, 7, 0, 7, 4, // left
+        1, 6, 2, 1, 5, 6  // right
+      ] : [
         0, 2, 1, 0, 3, 2, // bottom (CW outward)
         4, 5, 6, 4, 6, 7, // top (CW outward)
         0, 1, 5, 0, 5, 4, // back (CW outward)
@@ -265,47 +281,120 @@ window.ItemRegistry["wood_wall"] = {
       }
     }
 
-    // 1) Bottom horizontal support beam
-    if (hasCoLocatedDoor) {
-      // Left bottom stump: width 0.081, centered at t = -0.1095
-      const leftStumpCenter = [
-        p[0] - wallR[0] * 0.1095 + n[0] * 0.01,
-        p[1] - wallR[1] * 0.1095 + n[1] * 0.01,
-        p[2] - wallR[2] * 0.1095 + n[2] * 0.01
-      ];
-      addBox(leftStumpCenter, 0.081, 0.02, 0.025, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
-
-      // Right bottom stump: width 0.081, centered at t = 0.1095
-      const rightStumpCenter = [
-        p[0] + wallR[0] * 0.1095 + n[0] * 0.01,
-        p[1] + wallR[1] * 0.1095 + n[1] * 0.01,
-        p[2] + wallR[2] * 0.1095 + n[2] * 0.01
-      ];
-      addBox(rightStumpCenter, 0.081, 0.02, 0.025, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
-    } else if (!isWindow) {
-      const bottomBeamCenter = [
-        p[0] + n[0] * 0.01,
-        p[1] + n[1] * 0.01,
-        p[2] + n[2] * 0.01
-      ];
-      addBox(bottomBeamCenter, 0.3, 0.02, 0.025, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
-    }
-
-    // 2) Top horizontal support beam (only if wall is untrimmed at top)
+    const beamDarkColor = [rCol * 0.8, gCol * 0.8, bCol * 0.8];
     const topTrimLeft = getTrimHeight(-0.15, 0.25);
     const topTrimRight = getTrimHeight(0.15, 0.25);
     const topTrimMid = getTrimHeight(0.0, 0.25);
+
+    if (!isWindow || item.isPreview) {
+      // 1) Bottom horizontal support beam & doorway stumps (non-overlapping width 0.300, raised 1mm above floor top to prevent Z-fighting)
+      if (hasCoLocatedDoor) {
+        // Left bottom stump: width 0.060, centered at t = -0.120 (meets door post at t = -0.090 cleanly)
+        const leftStumpCenter = [
+          p[0] - wallR[0] * 0.120 + n[0] * 0.0115,
+          p[1] - wallR[1] * 0.120 + n[1] * 0.0115,
+          p[2] - wallR[2] * 0.120 + n[2] * 0.0115
+        ];
+        addBox(leftStumpCenter, 0.060, 0.021, 0.028, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+
+        // Right bottom stump: width 0.060, centered at t = +0.120 (meets door post at t = +0.090 cleanly)
+        const rightStumpCenter = [
+          p[0] + wallR[0] * 0.120 + n[0] * 0.0115,
+          p[1] + wallR[1] * 0.120 + n[1] * 0.0115,
+          p[2] + wallR[2] * 0.120 + n[2] * 0.0115
+        ];
+        addBox(rightStumpCenter, 0.060, 0.021, 0.028, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+
+        // Internal recessed floor-joint tongues under left/right wall segments only (hidden inside wall/floor)
+        const leftTongueCenter = [
+          p[0] - wallR[0] * 0.120 - n[0] * 0.003,
+          p[1] - wallR[1] * 0.120 - n[1] * 0.003,
+          p[2] - wallR[2] * 0.120 - n[2] * 0.003
+        ];
+        addBox(leftTongueCenter, 0.056, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+
+        const rightTongueCenter = [
+          p[0] + wallR[0] * 0.120 - n[0] * 0.003,
+          p[1] + wallR[1] * 0.120 - n[1] * 0.003,
+          p[2] + wallR[2] * 0.120 - n[2] * 0.003
+        ];
+        addBox(rightTongueCenter, 0.056, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+      } else {
+        // Full-width bottom sill beam (width 0.300, spans n = 0.001 to 0.022 so it never Z-fights with floor at n = 0.000 or adjacent walls)
+        const bottomBeamCenter = [
+          p[0] + n[0] * 0.0115,
+          p[1] + n[1] * 0.0115,
+          p[2] + n[2] * 0.0115
+        ];
+        addBox(bottomBeamCenter, 0.300, 0.021, 0.028, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+
+        // Internal recessed floor-joint tongue (depth 0.018 hidden strictly inside the 0.024 wall thickness)
+        const bottomTongueCenter = [
+          p[0] - n[0] * 0.003,
+          p[1] - n[1] * 0.003,
+          p[2] - n[2] * 0.003
+        ];
+        addBox(bottomTongueCenter, 0.296, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+      }
+
+      // 1.5) Internal Corner End-Seals at t = -0.15 and t = +0.15 (0.020 x 0.020 hidden inside 0.024 planks so zero Z-fighting, while sealing 90-degree corners)
+      if (topTrimLeft > 0.010) {
+        const leftCornerBottom = [
+          p[0] - wallR[0] * 0.15 + n[0] * 0.002,
+          p[1] - wallR[1] * 0.15 + n[1] * 0.002,
+          p[2] - wallR[2] * 0.15 + n[2] * 0.002
+        ];
+        const leftPostHIn = Math.max(0, getTrimHeight(-0.140, 0.246) - 0.004);
+        const leftPostHOut = Math.max(0, Math.min(0.246, topTrimLeft) - 0.004);
+        addCustomBox(leftCornerBottom, 0.020, 0.020, leftPostHOut, leftPostHIn, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+      }
+      if (topTrimRight > 0.010) {
+        const rightCornerBottom = [
+          p[0] + wallR[0] * 0.15 + n[0] * 0.002,
+          p[1] + wallR[1] * 0.15 + n[1] * 0.002,
+          p[2] + wallR[2] * 0.15 + n[2] * 0.002
+        ];
+        const rightPostHIn = Math.max(0, getTrimHeight(0.140, 0.246) - 0.004);
+        const rightPostHOut = Math.max(0, Math.min(0.246, topTrimRight) - 0.004);
+        addCustomBox(rightCornerBottom, 0.020, 0.020, rightPostHIn, rightPostHOut, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+      }
+    }
+
+    // 2) Top horizontal support beam (only if wall is untrimmed at top)
     const hasTopBeam = !isWindow && (topTrimLeft >= 0.245 && topTrimRight >= 0.245 && topTrimMid >= 0.245);
 
     if (hasTopBeam) {
-      const bHL = Math.min(0.02, Math.max(0, topTrimLeft - 0.23));
-      const bHR = Math.min(0.02, Math.max(0, topTrimRight - 0.23));
-      const beamBottom = [
-        p[0] + n[0] * 0.23,
-        p[1] + n[1] * 0.23,
-        p[2] + n[2] * 0.23
-      ];
-      addCustomBox(beamBottom, 0.3, 0.025, bHL, bHR, [rCol * 0.8, gCol * 0.8, bCol * 0.8], wallR, n, wallF, vertices, colors, indices);
+      const bHL = Math.min(0.021, Math.max(0, topTrimLeft - 0.228));
+      const bHR = Math.min(0.021, Math.max(0, topTrimRight - 0.228));
+      if (hasCoLocatedDoor) {
+        const leftBeamBottom = [
+          p[0] - wallR[0] * 0.120 + n[0] * 0.228,
+          p[1] - wallR[1] * 0.120 + n[1] * 0.228,
+          p[2] - wallR[2] * 0.120 + n[2] * 0.228
+        ];
+        addCustomBox(leftBeamBottom, 0.060, 0.028, bHL, bHL, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        const rightBeamBottom = [
+          p[0] + wallR[0] * 0.120 + n[0] * 0.228,
+          p[1] + wallR[1] * 0.120 + n[1] * 0.228,
+          p[2] + wallR[2] * 0.120 + n[2] * 0.228
+        ];
+        addCustomBox(rightBeamBottom, 0.060, 0.028, bHR, bHR, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+      } else {
+        const beamBottom = [
+          p[0] + n[0] * 0.228,
+          p[1] + n[1] * 0.228,
+          p[2] + n[2] * 0.228
+        ];
+        addCustomBox(beamBottom, 0.300, 0.028, bHL, bHR, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+
+        // Internal recessed ceiling-joint tongue (seals top wall-ceiling seam against light leaks without Z-fighting)
+        const topTongueCenter = [
+          p[0] + n[0] * 0.249,
+          p[1] + n[1] * 0.249,
+          p[2] + n[2] * 0.249
+        ];
+        addBox(topTongueCenter, 0.296, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+      }
     }
 
     // 3) Vertical planks (only for wood_wall, wood_window has no background planks)
@@ -317,7 +406,11 @@ window.ItemRegistry["wood_wall"] = {
         return x - Math.floor(x);
       }
 
-      const maxPlankH = hasTopBeam ? 0.21 : 0.23;
+      const plankBaseY = 0.022;
+      const maxPlankH = (hasTopBeam ? 0.228 : 0.250) - plankBaseY;
+      const plankThick = 0.024;
+      const plankW = 0.060;
+      const halfPlankW = 0.030;
 
       for (let i = 0; i < numPlanks; i++) {
         if (hasCoLocatedDoor && (i === 1 || i === 2 || i === 3)) {
@@ -338,22 +431,22 @@ window.ItemRegistry["wood_wall"] = {
         if (hasCoLocatedWindow && (i === 1 || i === 2 || i === 3)) {
           // For co-located window middle planks: draw bottom and top parts, leaving a gap in the middle
           const bottomPlankCenter = [
-            p[0] + wallR[0] * t + n[0] * 0.05,
-            p[1] + wallR[1] * t + n[1] * 0.05,
-            p[2] + wallR[2] * t + n[2] * 0.05
+            p[0] + wallR[0] * t + n[0] * 0.0485,
+            p[1] + wallR[1] * t + n[1] * 0.0485,
+            p[2] + wallR[2] * t + n[2] * 0.0485
           ];
-          addBox(bottomPlankCenter, 0.062, 0.06, 0.015, plankColor, wallR, n, wallF, vertices, colors, indices);
+          addBox(bottomPlankCenter, plankW, 0.053, plankThick, plankColor, wallR, n, wallF, vertices, colors, indices);
 
-          if (hLeft > 0.17 || hRight > 0.17 || hMid > 0.17) {
-            const topMaxH = hasTopBeam ? 0.06 : 0.08;
-            const topHL = Math.min(topMaxH, Math.max(0, hLeft - 0.17));
-            const topHR = Math.min(topMaxH, Math.max(0, hRight - 0.17));
+          if (hLeft > 0.175 || hRight > 0.175 || hMid > 0.175) {
+            const topMaxH = (hasTopBeam ? 0.228 : 0.250) - 0.175;
+            const topHL = Math.min(topMaxH, Math.max(0, hLeft - 0.175));
+            const topHR = Math.min(topMaxH, Math.max(0, hRight - 0.175));
             const topPlankBottom = [
-              p[0] + wallR[0] * t + n[0] * 0.17,
-              p[1] + wallR[1] * t + n[1] * 0.17,
-              p[2] + wallR[2] * t + n[2] * 0.17
+              p[0] + wallR[0] * t + n[0] * 0.175,
+              p[1] + wallR[1] * t + n[1] * 0.175,
+              p[2] + wallR[2] * t + n[2] * 0.175
             ];
-            addCustomBox(topPlankBottom, 0.062, 0.015, topHL, topHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+            addCustomBox(topPlankBottom, plankW, plankThick, topHL, topHR, plankColor, wallR, n, wallF, vertices, colors, indices);
           }
         } else {
           // Standard solid vertical plank
@@ -362,54 +455,38 @@ window.ItemRegistry["wood_wall"] = {
 
           if (isPeak || isValley) {
             // Draw as two half-width planks meeting at apex hMid
-            const pHL = Math.min(maxPlankH, Math.max(0, hLeft - 0.02));
-            const pHM = Math.min(maxPlankH, Math.max(0, hMid - 0.02));
-            const pHR = Math.min(maxPlankH, Math.max(0, hRight - 0.02));
+            const pHL = Math.min(maxPlankH, Math.max(0, hLeft - plankBaseY));
+            const pHM = Math.min(maxPlankH, Math.max(0, hMid - plankBaseY));
+            const pHR = Math.min(maxPlankH, Math.max(0, hRight - plankBaseY));
 
             if (pHL > 0.001 || pHM > 0.001) {
               const leftCenter = [
-                p[0] + wallR[0] * (t - 0.015) + n[0] * 0.02,
-                p[1] + wallR[1] * (t - 0.015) + n[1] * 0.02,
-                p[2] + wallR[2] * (t - 0.015) + n[2] * 0.02
+                p[0] + wallR[0] * (t - 0.015) + n[0] * plankBaseY,
+                p[1] + wallR[1] * (t - 0.015) + n[1] * plankBaseY,
+                p[2] + wallR[2] * (t - 0.015) + n[2] * plankBaseY
               ];
-              addCustomBox(leftCenter, 0.031, 0.015, pHL, pHM, plankColor, wallR, n, wallF, vertices, colors, indices);
+              addCustomBox(leftCenter, halfPlankW, plankThick, pHL, pHM, plankColor, wallR, n, wallF, vertices, colors, indices);
             }
 
             if (pHM > 0.001 || pHR > 0.001) {
               const rightCenter = [
-                p[0] + wallR[0] * (t + 0.015) + n[0] * 0.02,
-                p[1] + wallR[1] * (t + 0.015) + n[1] * 0.02,
-                p[2] + wallR[2] * (t + 0.015) + n[2] * 0.02
+                p[0] + wallR[0] * (t + 0.015) + n[0] * plankBaseY,
+                p[1] + wallR[1] * (t + 0.015) + n[1] * plankBaseY,
+                p[2] + wallR[2] * (t + 0.015) + n[2] * plankBaseY
               ];
-              addCustomBox(rightCenter, 0.031, 0.015, pHM, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
+              addCustomBox(rightCenter, halfPlankW, plankThick, pHM, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
             }
           } else {
             // Standard single continuous plank
-            if (hLeft > 0.02 || hRight > 0.02) {
-              const pHL = Math.min(maxPlankH, Math.max(0, hLeft - 0.02));
-              const pHR = Math.min(maxPlankH, Math.max(0, hRight - 0.02));
+            if (hLeft > plankBaseY || hRight > plankBaseY) {
+              const pHL = Math.min(maxPlankH, Math.max(0, hLeft - plankBaseY));
+              const pHR = Math.min(maxPlankH, Math.max(0, hRight - plankBaseY));
               const plankBottom = [
-                p[0] + wallR[0] * t + n[0] * 0.02,
-                p[1] + wallR[1] * t + n[1] * 0.02,
-                p[2] + wallR[2] * t + n[2] * 0.02
+                p[0] + wallR[0] * t + n[0] * plankBaseY,
+                p[1] + wallR[1] * t + n[1] * plankBaseY,
+                p[2] + wallR[2] * t + n[2] * plankBaseY
               ];
-              addCustomBox(plankBottom, 0.062, 0.015, pHL, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
-            }
-          }
-
-          // Draw a diagonal brace on the wall to make it look even more beautiful and structured!
-          if (i === 2 && !item.isPreview) {
-            // Add a small decorative cross brace on the center plank
-            const hBraceLeft = getTrimHeight(-0.11, 0.25);
-            const hBraceRight = getTrimHeight(0.11, 0.25);
-            if (hBraceLeft > 0.22 && hBraceRight > 0.22) {
-              const braceColor = [rCol * 0.7, gCol * 0.7, bCol * 0.7];
-              const braceCenter = [
-                p[0] + n[0] * 0.125,
-                p[1] + n[1] * 0.125,
-                p[2] + n[2] * 0.125
-              ];
-              addBox(braceCenter, 0.22, 0.02, 0.01, braceColor, wallR, n, wallF, vertices, colors, indices);
+              addCustomBox(plankBottom, plankW, plankThick, pHL, pHR, plankColor, wallR, n, wallF, vertices, colors, indices);
             }
           }
         }
@@ -476,8 +553,8 @@ window.ItemRegistry["wood_wall"] = {
         wallF[1] * Math.cos(A) - wallR[1] * Math.sin(A),
         wallF[2] * Math.cos(A) - wallR[2] * Math.sin(A)
       ];
-      addBox(leftShutterCenter, 0.085, 0.075, 0.012, shutterColor, R_left, n, F_left, vertices, colors, indices);
-      addBox(leftShutterCenter, 0.065, 0.055, 0.015, darkAccent, R_left, n, F_left, vertices, colors, indices);
+      addBox(leftShutterCenter, 0.087, 0.082, 0.014, shutterColor, R_left, n, F_left, vertices, colors, indices);
+      addBox(leftShutterCenter, 0.065, 0.060, 0.016, darkAccent, R_left, n, F_left, vertices, colors, indices);
 
       // 2) Right Shutter: hinged at t = 0.085
       const t_right_rot = 0.085 - 0.0425 * Math.cos(A);
@@ -497,8 +574,8 @@ window.ItemRegistry["wood_wall"] = {
         wallF[1] * Math.cos(A) + wallR[1] * Math.sin(A),
         wallF[2] * Math.cos(A) + wallR[2] * Math.sin(A)
       ];
-      addBox(rightShutterCenter, 0.085, 0.075, 0.012, shutterColor, R_right, n, F_right, vertices, colors, indices);
-      addBox(rightShutterCenter, 0.065, 0.055, 0.015, darkAccent, R_right, n, F_right, vertices, colors, indices);
+      addBox(rightShutterCenter, 0.087, 0.082, 0.014, shutterColor, R_right, n, F_right, vertices, colors, indices);
+      addBox(rightShutterCenter, 0.065, 0.060, 0.016, darkAccent, R_right, n, F_right, vertices, colors, indices);
 
       // Draw tiny brass handles (only if not a preview)
       if (!item.isPreview) {

@@ -30,11 +30,68 @@ window.ItemRegistry["wood_floor"] = {
       const col = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
       addBox(p, w, h, d, col, r, n, f, vertices, colors, indices);
     } else {
+      const isThin = (item.type === "thin_wood_floor");
+      let effW = w;
+      let effD = d;
+      let effH = h;
+      let baseP = p;
+
+      if (isThin) {
+        let hasLeftN = false, hasRightN = false, hasBackN = false, hasFrontN = false;
+        const allCollectibles = (typeof window !== "undefined" && window.collectibles) ? window.collectibles : [];
+        const colLen = allCollectibles.length;
+        if (item._extCache && item._extColLen === colLen) {
+          hasLeftN = item._extCache[0];
+          hasRightN = item._extCache[1];
+          hasBackN = item._extCache[2];
+          hasFrontN = item._extCache[3];
+        } else {
+          for (let k = 0; k < colLen; k++) {
+            const other = allCollectibles[k];
+            if (!other || !other.active || other === item || other.isPreview) continue;
+            if (other.type !== "thin_wood_floor" && other.type !== "wood_floor") continue;
+            const oP = other.position;
+            if (!oP) continue;
+            const dx = oP[0] - p[0], dy = oP[1] - p[1], dz = oP[2] - p[2];
+            if (dx * dx + dy * dy + dz * dz > 0.20) continue;
+            const dN = dx * n[0] + dy * n[1] + dz * n[2];
+            if (Math.abs(dN) > 0.05) continue;
+            const dR = dx * r[0] + dy * r[1] + dz * r[2];
+            const dF = dx * f[0] + dy * f[1] + dz * f[2];
+            if (Math.abs(dF) < 0.08) {
+              if (dR > -0.36 && dR < -0.24) hasLeftN = true;
+              else if (dR > 0.24 && dR < 0.36) hasRightN = true;
+            }
+            if (Math.abs(dR) < 0.08) {
+              if (dF > -0.36 && dF < -0.24) hasBackN = true;
+              else if (dF > 0.24 && dF < 0.36) hasFrontN = true;
+            }
+          }
+          item._extCache = [hasLeftN, hasRightN, hasBackN, hasFrontN];
+          item._extColLen = colLen;
+        }
+        const extL = hasLeftN ? 0.0 : 0.016;
+        const extR = hasRightN ? 0.0 : 0.016;
+        const extB = hasBackN ? 0.0 : 0.016;
+        const extF = hasFrontN ? 0.0 : 0.016;
+        effW = w + extL + extR;
+        effD = d + extB + extF;
+        effH = Math.max(h, 0.018);
+        const offR = (extR - extL) * 0.5;
+        const offF = (extF - extB) * 0.5;
+        const offN = (effH - h) * 0.5;
+        baseP = [
+          p[0] + r[0] * offR + f[0] * offF + n[0] * offN,
+          p[1] + r[1] * offR + f[1] * offF + n[1] * offN,
+          p[2] + r[2] * offR + f[2] * offF + n[2] * offN
+        ];
+      }
+
       // Placed wood floor - render individual planks with wood grain shades
       const numPlanks = Math.max(1, Math.round((w / (item.size * 1.2)) * 4));
-      const pw = w / numPlanks;
-      const gap = 0.0; // no gap between planks
+      const pw = effW / numPlanks;
       const plankW = pw;
+      const plankD = effD;
             
       // Seed-based stable pseudo-random generator
       const seedVal = item.seed || (item.position[0] * 123.4 + item.position[2] * 56.7);
@@ -44,13 +101,23 @@ window.ItemRegistry["wood_floor"] = {
       }
             
       const baseColor = item.color || [0.65, 0.45, 0.25];
+
+      // Internal recessed sub-floor core (seals plank seams against light leaks without touching outer surfaces)
+      const coreH = Math.max(0.008, effH * 0.65);
+      const coreCenter = [
+        baseP[0] - n[0] * (effH * 0.1),
+        baseP[1] - n[1] * (effH * 0.1),
+        baseP[2] - n[2] * (effH * 0.1)
+      ];
+      const coreColor = [baseColor[0] * 0.7, baseColor[1] * 0.7, baseColor[2] * 0.7];
+      addBox(coreCenter, Math.max(0.01, effW - 0.004), coreH, Math.max(0.01, effD - 0.004), coreColor, r, n, f, vertices, colors, indices);
             
       for (let i = 0; i < numPlanks; i++) {
-        const t = -w / 2 + pw / 2 + i * pw;
+        const t = -effW / 2 + pw / 2 + i * pw;
         const plankCenter = [
-          p[0] + r[0] * t,
-          p[1] + r[1] * t,
-          p[2] + r[2] * t
+          baseP[0] + r[0] * t,
+          baseP[1] + r[1] * t,
+          baseP[2] + r[2] * t
         ];
                 
         const shadeNoise = pRand(seedVal + i * 17.3);
@@ -60,8 +127,8 @@ window.ItemRegistry["wood_floor"] = {
         const bCol = baseColor[2] * (0.85 + shadeNoise * 0.3);
         const plankColor = [rCol, gCol, bCol];
                 
-        // Draw individual plank board
-        addBox(plankCenter, plankW, h, d, plankColor, r, n, f, vertices, colors, indices);
+        // Draw individual plank board (exact non-overlapping width & depth prevents Z-fighting shimmer)
+        addBox(plankCenter, plankW, effH, plankD, plankColor, r, n, f, vertices, colors, indices);
                 
         // Add dark wood grain lines on top of the plank
         const numGrainLines = 2;
@@ -69,16 +136,16 @@ window.ItemRegistry["wood_floor"] = {
           const grainNoiseX = pRand(seedVal + i * 31.4 + j * 45.1);
           const grainNoiseL = pRand(seedVal + i * 19.8 + j * 73.2);
           const grainW = 0.005; 
-          const grainH = h * 1.05; 
-          const grainD = d * (0.3 + grainNoiseL * 0.6); 
+          const grainH = 0.0024; 
+          const grainD = effD * (0.3 + grainNoiseL * 0.6); 
                     
           const grainT = (grainNoiseX - 0.5) * (plankW * 0.65);
-          const grainOffsetF = (pRand(seedVal + j * 91.3) - 0.5) * (d - grainD);
+          const grainOffsetF = (pRand(seedVal + j * 91.3) - 0.5) * (effD - grainD);
                     
           const grainCenter = [
-            plankCenter[0] + r[0] * grainT + f[0] * grainOffsetF,
-            plankCenter[1] + r[1] * grainT + f[1] * grainOffsetF,
-            plankCenter[2] + r[2] * grainT + f[2] * grainOffsetF
+            plankCenter[0] + r[0] * grainT + f[0] * grainOffsetF + n[0] * (effH * 0.5 + 0.0012),
+            plankCenter[1] + r[1] * grainT + f[1] * grainOffsetF + n[1] * (effH * 0.5 + 0.0012),
+            plankCenter[2] + r[2] * grainT + f[2] * grainOffsetF + n[2] * (effH * 0.5 + 0.0012)
           ];
                     
           // Dark brown color for the grain lines

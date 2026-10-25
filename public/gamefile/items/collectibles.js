@@ -776,10 +776,10 @@ function buildCollectibles(count, seed) {
           const roofStyle = Math.random() > 0.3 ? "gable" : "flat";
           const roofAxis = Math.random() > 0.5 ? "X" : "Y";
           
-          const isPerfect = Math.random() < 0.4;
-          const missingWallProb = isPerfect ? 0 : 0.15;
-          const missingRoofProb = isPerfect ? 0 : 0.20;
-          const missingFloorProb = isPerfect ? 0 : 0.08;
+          const isPerfect = true;
+          const missingWallProb = 0;
+          const missingRoofProb = 0;
+          const missingFloorProb = 0;
           
           const cells = [];
           for (let gx = 0; gx < gridX; gx++) {
@@ -872,7 +872,7 @@ function buildCollectibles(count, seed) {
                
                if (c.hasRoof && c.hasFloor) {
                  if (roofStyle === "flat") {
-                   const roofHeight = floorCenterHeight + 0.25;
+                   const roofHeight = wallBaseHeight + 0.25;
                    const roofPos = [
                      localPos[0] + nx*roofHeight,
                      localPos[1] + ny*roofHeight,
@@ -1476,10 +1476,11 @@ function buildCollectibles(count, seed) {
         const hd = d / 2;
         
         let r = right, u = up, f = forward;
+        let isFlipped = false;
         if (r && u && f) {
           const det = (r[1]*u[2] - r[2]*u[1])*f[0] + (r[2]*u[0] - r[0]*u[2])*f[1] + (r[0]*u[1] - r[1]*u[0])*f[2];
           if (det < 0) {
-            r = [-r[0], -r[1], -r[2]];
+            isFlipped = true;
           }
         }
 
@@ -1494,13 +1495,20 @@ function buildCollectibles(count, seed) {
           [-hw, hh, hd],
         ];
         
-        const cubeIndices = [
+        const cubeIndices = isFlipped ? [
+          0, 1, 2, 0, 2, 3, // bottom
+          4, 6, 5, 4, 7, 6, // top
+          0, 5, 1, 0, 4, 5, // back
+          2, 7, 3, 2, 6, 7, // front
+          0, 3, 7, 0, 7, 4, // left
+          1, 6, 2, 1, 5, 6  // right
+        ] : [
           0, 2, 1, 0, 3, 2, // bottom (CW outward)
           4, 5, 6, 4, 6, 7, // top (CW outward)
           0, 1, 5, 0, 5, 4, // back (CW outward)
           2, 3, 7, 2, 7, 6, // front (CW outward)
           0, 7, 3, 0, 4, 7, // left (CW outward)
-          1, 2, 6, 1, 6, 5, // right (CW outward)
+          1, 2, 6, 1, 6, 5  // right (CW outward)
         ];
         
         const baseIdx = outVertices.length / 3;
@@ -1733,7 +1741,7 @@ function buildCollectibles(count, seed) {
       }
 
       function refreshCollectiblesVBO(targetBuffer = 'all') {
-        if (targetBuffer === 'all') {
+        if (targetBuffer === 'all' || targetBuffer === 'place' || targetBuffer === 'demolish') {
           refreshCollectiblesVBO('main');
           refreshCollectiblesVBO('dynamic');
           return;
@@ -1808,7 +1816,7 @@ function buildCollectibles(count, seed) {
           if (handler && typeof handler.render === "function") {
             handler.render(item, vertices, colors, indices, targetBuffer);
           }
-          if (targetBuffer === 'dynamic') {
+          if (targetBuffer === 'main' || targetBuffer === 'dynamic') {
             item.meshStart = startIdx;
             item.meshEnd = indices.length;
             if (indices.length > startIdx) {
@@ -1817,14 +1825,22 @@ function buildCollectibles(count, seed) {
           }
         }
 
-        if (targetBuffer === 'dynamic') {
+        if (targetBuffer === 'main') {
+          window.staticCollectiblesList = activeProcessedItems;
+        } else if (targetBuffer === 'dynamic') {
           window.dynamicCollectiblesList = activeProcessedItems;
         }
 
         if (indices.length === 0) {
-          if (targetBuffer === 'main') collectibleIndicesLength = 0;
-          else if (targetBuffer === 'dynamic') dynamicCollectibleIndicesLength = 0;
-          else previewIndicesLength = 0;
+          if (targetBuffer === 'main') {
+            collectibleIndicesLength = 0;
+            window.staticCollectiblesList = [];
+          } else if (targetBuffer === 'dynamic') {
+            dynamicCollectibleIndicesLength = 0;
+            window.dynamicCollectiblesList = [];
+          } else {
+            previewIndicesLength = 0;
+          }
           return;
         }
 

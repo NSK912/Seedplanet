@@ -1448,9 +1448,10 @@
             vy = y2 - y0,
             vz = z2 - z0;
 
-          let nx = uy * vz - uz * vy;
-          let ny = uz * vx - ux * vz;
-          let nz = ux * vy - uy * vx;
+          // Face normal for Clockwise front faces (matching gl.frontFace(gl.CW)): v x u
+          let nx = uz * vy - uy * vz;
+          let ny = ux * vz - uz * vx;
+          let nz = uy * vx - ux * vy;
 
           const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
           if (len > 0.0001) {

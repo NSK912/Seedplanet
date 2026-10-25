@@ -10,17 +10,25 @@
     const hh = h / 2;
     const hd = d / 2;
     let r = right || [1, 0, 0], u = up || [0, 1, 0], f = forward || [0, 0, 1];
+    let isFlipped = false;
     if (r && u && f) {
       const det = (r[1]*u[2] - r[2]*u[1])*f[0] + (r[2]*u[0] - r[0]*u[2])*f[1] + (r[0]*u[1] - r[1]*u[0])*f[2];
       if (det < 0) {
-        r = [-r[0], -r[1], -r[2]];
+        isFlipped = true;
       }
     }
     const cubeVerts = [
       [-hw, -hh, -hd], [hw, -hh, -hd], [hw, -hh, hd], [-hw, -hh, hd],
       [-hw, hh, -hd], [hw, hh, -hd], [hw, hh, hd], [-hw, hh, hd]
     ];
-    const cubeIndices = [
+    const cubeIndices = isFlipped ? [
+      0, 1, 2, 0, 2, 3,
+      4, 6, 5, 4, 7, 6,
+      0, 5, 1, 0, 4, 5,
+      2, 7, 3, 2, 6, 7,
+      0, 3, 7, 0, 7, 4,
+      1, 6, 2, 1, 5, 6
+    ] : [
       0, 2, 1, 0, 3, 2,
       4, 5, 6, 4, 6, 7,
       0, 1, 5, 0, 5, 4,

@@ -144,7 +144,7 @@
 
                 vViewPos = mvPosition.xyz;
                 vWorldPos = pos;
-                vec3 shadowPos = isGrass ? pos : (pos + aNormal * 0.015);
+                vec3 shadowPos = pos + normalize(vWorldNormal) * (isGrass ? 0.0 : 0.0055);
                 vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
                 vDist = length(mvPosition.xyz);
             }
@@ -175,6 +175,7 @@
             uniform float uShadowsEnabled;
             uniform vec2 uShadowTexelSize;
 
+            ${window.SHARED_SHADOW_GLSL = `
             float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
                 if (uShadowsEnabled < 0.5) return 1.0;
                 vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
@@ -183,26 +184,122 @@
                 if (projCoords.z > 1.0 || projCoords.z < 0.0) return 1.0;
                 if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
 
+                float borderDist = max(abs(projCoords.x - 0.5), abs(projCoords.y - 0.5));
+                float edgeFade = 1.0 - smoothstep(0.45, 0.495, borderDist);
+                if (edgeFade <= 0.001) return 1.0;
+
+                vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1536.0);
                 float currentDepth = projCoords.z;
                 float cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-                float slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-                float bias = clamp(0.00045 + 0.0010 * slope, 0.00045, 0.0020);
-                
-                vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1024.0);
+                float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+                float tanTheta = min(2.2, sinTheta / max(cosTheta, 0.20));
+                float bias = 0.00012 + 0.00018 * tanTheta;
                 float cmpDepth = currentDepth - bias;
-                float shadow = 0.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
-                shadow *= 0.2;
 
-                float distFromCenter = length(projCoords.xy - vec2(0.5));
-                float edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
+                vec2 res = 1.0 / texelSize;
+                vec2 st = projCoords.xy * res;
+                vec2 baseIdx = floor(st);
+                vec2 f = fract(st);
+                vec2 centerUv = (baseIdx + 0.5) * texelSize;
 
+                // Quality 1 (Low): 9-tap 3x3 Quadratic B-Spline with 5-tap Early-Out
+                if (uShadowsEnabled < 1.5) {
+                    float s11 = step(cmpDepth, texture2D(uShadowMap, centerUv).r);
+                    float s00 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-texelSize.x, -texelSize.y)).r);
+                    float s20 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( texelSize.x, -texelSize.y)).r);
+                    float s02 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-texelSize.x,  texelSize.y)).r);
+                    float s22 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( texelSize.x,  texelSize.y)).r);
+                    float earlySum = s11 + s00 + s20 + s02 + s22;
+                    if (earlySum > 4.99) return 1.0;
+                    if (earlySum < 0.01) return 1.0 - edgeFade;
+
+                    float s10 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,         -texelSize.y)).r);
+                    float s01 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-texelSize.x,  0.0        )).r);
+                    float s21 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( texelSize.x,  0.0        )).r);
+                    float s12 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,          texelSize.y)).r);
+
+                    vec3 wx = vec3(
+                        0.5 * (1.0 - f.x) * (1.0 - f.x),
+                        0.75 - (f.x - 0.5) * (f.x - 0.5),
+                        0.5 * f.x * f.x
+                    );
+                    vec3 wy = vec3(
+                        0.5 * (1.0 - f.y) * (1.0 - f.y),
+                        0.75 - (f.y - 0.5) * (f.y - 0.5),
+                        0.5 * f.y * f.y
+                    );
+                    float row0 = wx.x * s00 + wx.y * s10 + wx.z * s20;
+                    float row1 = wx.x * s01 + wx.y * s11 + wx.z * s21;
+                    float row2 = wx.x * s02 + wx.y * s12 + wx.z * s22;
+                    float shadow = wy.x * row0 + wy.y * row1 + wy.z * row2;
+                    return mix(1.0, shadow, edgeFade);
+                }
+
+                // Quality 2-4 (Medium / High / Ultra): Wide 5x5 Convolved B-Spline with 9-tap Perimeter+Center Early-Out
+                vec2 t1 = texelSize;
+                vec2 t2 = texelSize * 2.0;
+
+                float c00   = step(cmpDepth, texture2D(uShadowMap, centerUv).r);
+                float cm2m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x, -t2.y)).r);
+                float c0m2  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,  -t2.y)).r);
+                float cp2m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x, -t2.y)).r);
+                float cm20  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x,  0.0 )).r);
+                float cp20  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x,  0.0 )).r);
+                float cm2p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x,  t2.y)).r);
+                float c0p2  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,   t2.y)).r);
+                float cp2p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x,  t2.y)).r);
+
+                float earlySum9 = c00 + cm2m2 + c0m2 + cp2m2 + cm20 + cp20 + cm2p2 + c0p2 + cp2p2;
+                if (earlySum9 > 8.99) return 1.0;
+                if (earlySum9 < 0.01) return 1.0 - edgeFade;
+
+                float cm1m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x, -t2.y)).r);
+                float cp1m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x, -t2.y)).r);
+
+                float cm2m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x, -t1.y)).r);
+                float cm1m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x, -t1.y)).r);
+                float c0m1  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,  -t1.y)).r);
+                float cp1m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x, -t1.y)).r);
+                float cp2m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x, -t1.y)).r);
+
+                float cm10  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x,  0.0 )).r);
+                float cp10  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x,  0.0 )).r);
+
+                float cm2p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x,  t1.y)).r);
+                float cm1p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x,  t1.y)).r);
+                float c0p1  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,   t1.y)).r);
+                float cp1p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x,  t1.y)).r);
+                float cp2p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x,  t1.y)).r);
+
+                float cm1p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x,  t2.y)).r);
+                float cp1p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x,  t2.y)).r);
+
+                vec2 u = 1.0 - f;
+                vec2 b_m1 = 0.5 * u * u;
+                vec2 b_0  = 0.75 - (f - 0.5) * (f - 0.5);
+                vec2 b_p1 = 0.5 * f * f;
+
+                // Convolve 3x3 Quadratic B-Spline with [alpha, 1 - 2*alpha, alpha] box kernel
+                // Quality 2 -> alpha = 0.16, Quality 3 -> alpha = 0.25, Quality 4 -> alpha = 0.3333 (full 3-texel box * B2)
+                float alpha = clamp(0.07 + (uShadowsEnabled - 1.0) * 0.088, 0.15, 0.3333);
+                float centerW = 1.0 - 2.0 * alpha;
+
+                vec2 wm2 = alpha * b_m1;
+                vec2 wm1 = centerW * b_m1 + alpha * b_0;
+                vec2 w0  = alpha * (b_m1 + b_p1) + centerW * b_0;
+                vec2 wp1 = alpha * b_0 + centerW * b_p1;
+                vec2 wp2 = alpha * b_p1;
+
+                float r_m2 = wm2.x * cm2m2 + wm1.x * cm1m2 + w0.x * c0m2 + wp1.x * cp1m2 + wp2.x * cp2m2;
+                float r_m1 = wm2.x * cm2m1 + wm1.x * cm1m1 + w0.x * c0m1 + wp1.x * cp1m1 + wp2.x * cp2m1;
+                float r_0  = wm2.x * cm20  + wm1.x * cm10  + w0.x * c00  + wp1.x * cp10  + wp2.x * cp20;
+                float r_p1 = wm2.x * cm2p1 + wm1.x * cm1p1 + w0.x * c0p1 + wp1.x * cp1p1 + wp2.x * cp2p1;
+                float r_p2 = wm2.x * cm2p2 + wm1.x * cm1p2 + w0.x * c0p2 + wp1.x * cp1p2 + wp2.x * cp2p2;
+
+                float shadow = wm2.y * r_m2 + wm1.y * r_m1 + w0.y * r_0 + wp1.y * r_p1 + wp2.y * r_p2;
                 return mix(1.0, shadow, edgeFade);
             }
+            `}
 
             void main() {
                 if (uRenderDistEnabled > 0.5 && vDist > uMaxRenderDist) {
@@ -210,16 +307,19 @@
                 }
                 vec3 normal = normalize(vWorldNormal);
                 vec3 lightDir = normalize(uLightDir);
+                vec3 radialUp = normalize(vWorldPos);
                 
-                // Diffuse
-                float diffuseVal = max(dot(normal, lightDir), 0.0);
+                // Diffuse with smooth grazing-angle terminator to prevent oblique shadow artifacts
+                float rawDiffuse = max(dot(normal, lightDir), 0.0);
+                float grazingTerminator = smoothstep(0.01, 0.12, rawDiffuse);
+                float planetHorizon = smoothstep(-0.08, 0.06, dot(radialUp, lightDir));
+                float diffuseVal = rawDiffuse * grazingTerminator;
                 
                 // Shadow (skip texture lookups for grass and unlit back-faces)
                 float shadow = 0.0;
-                if (vIsGrass < 0.5 && diffuseVal > 0.001) {
-                    shadow = calculateShadow(vPositionLightSpace, normal, lightDir);
+                if (vIsGrass < 0.5 && diffuseVal > 0.001 && planetHorizon > 0.001) {
+                    shadow = calculateShadow(vPositionLightSpace, normal, lightDir) * planetHorizon;
                 }
-                vec3 radialUp = normalize(vWorldPos);
                 float hemi = clamp(dot(normal, radialUp) * 0.5 + 0.5, 0.0, 1.0);
                 float ambient = 0.22 + 0.06 * hemi;
                 float diffuse = ambient + diffuseVal * shadow * 0.72;
@@ -562,34 +662,7 @@
             uniform float uShadowsEnabled;
             uniform vec2 uShadowTexelSize;
 
-            float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
-                if (uShadowsEnabled < 0.5) return 1.0;
-                vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-                projCoords = projCoords * 0.5 + 0.5;
-                
-                if (projCoords.z > 1.0 || projCoords.z < 0.0) return 1.0;
-                if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
-
-                float currentDepth = projCoords.z;
-                float cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-                float slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-                float bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
-                
-                vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1024.0);
-                float cmpDepth = currentDepth - bias;
-                float shadow = 0.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x, -texelSize.y)).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2(-texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
-                shadow += cmpDepth > texture2D(uShadowMap, projCoords.xy + vec2( texelSize.x,  texelSize.y)).r ? 0.0 : 1.0;
-                shadow *= 0.2;
-
-                float distFromCenter = length(projCoords.xy - vec2(0.5));
-                float edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
-
-                return mix(1.0, shadow, edgeFade);
-            }
+            ${window.SHARED_SHADOW_GLSL}
 
             void main() {
                 // Hole cutting or cave clipping
@@ -1188,15 +1261,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     
     out.viewPos = mvPosition.xyz;
     out.worldPos = pos;
-    let shadowPos = select(pos + in.normal * 0.015, pos, isGrass > 0.5);
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
+    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(pos, 1.0);
     out.dist = length(mvPosition.xyz);
     
     return out;
 }
 
+${window.sharedShadowWGSL = (enableExpr) => `
 fn calculateShadow(lightSpacePos: vec4<f32>, normal: vec3<f32>, lightDir: vec3<f32>) -> f32 {
-    if (uniforms.params.w < 0.5) { return 1.0; }
+    if (${enableExpr} < 0.5) { return 1.0; }
     var projCoords = lightSpacePos.xyz / lightSpacePos.w;
     projCoords = projCoords * 0.5 + vec3<f32>(0.5);
     projCoords.y = 1.0 - projCoords.y;
@@ -1205,25 +1278,30 @@ fn calculateShadow(lightSpacePos: vec4<f32>, normal: vec3<f32>, lightDir: vec3<f
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) { return 1.0; }
     
     let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-    let slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-    let bias = clamp(0.00045 + 0.0010 * slope, 0.00045, 0.0020);
+    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+    let tanTheta = min(3.0, sinTheta / max(cosTheta, 0.15));
+    let bias = 0.00038 + 0.00065 * tanTheta;
     
     var texelSize = uniforms.shadowTexelSize;
-    if (texelSize.x <= 0.0) { texelSize = vec2<f32>(1.0 / 1024.0); }
+    if (texelSize.x <= 0.0) { texelSize = vec2<f32>(1.0 / 1536.0); }
     
     let cmpDepth = projCoords.z - bias;
     var shadow = 0.0;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x, -texelSize.y), cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x, -texelSize.y), cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  texelSize.y), cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  texelSize.y), cmpDepth);
-    shadow = shadow * 0.2;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth) * 0.25;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  0.0), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  0.0), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0, -texelSize.y), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0,  texelSize.y), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x, -texelSize.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x, -texelSize.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  texelSize.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  texelSize.y), cmpDepth) * 0.0625;
     
     let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
     let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
     return mix(1.0, shadow, edgeFade);
 }
+`("uniforms.params.w")}
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -1233,7 +1311,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     let normal = normalize(in.worldNormal);
     let lightDir = normalize(uniforms.lightDir.xyz);
-    let diffuseVal = max(dot(normal, lightDir), 0.0);
+    let rawDiffuse = max(dot(normal, lightDir), 0.0);
+    let grazingTerminator = smoothstep(0.01, 0.12, rawDiffuse);
+    let diffuseVal = rawDiffuse * grazingTerminator;
     
     var shadow = 0.0;
     if (in.isGrass < 0.5 && diffuseVal > 0.001) {
@@ -1405,35 +1485,7 @@ fn distToSegment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
     return length(pa - ba*h);
 }
 
-fn calculateShadow(lightSpacePos: vec4<f32>, normal: vec3<f32>, lightDir: vec3<f32>) -> f32 {
-    if (uniforms.params.z < 0.5) { return 1.0; }
-    var projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords = projCoords * 0.5 + vec3<f32>(0.5);
-    projCoords.y = 1.0 - projCoords.y;
-    
-    if (projCoords.z > 1.0 || projCoords.z < 0.0) { return 1.0; }
-    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) { return 1.0; }
-    
-    let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-    let slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-    let bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
-    
-    var texelSize = uniforms.shadowTexelSize;
-    if (texelSize.x <= 0.0) { texelSize = vec2<f32>(1.0 / 1024.0); }
-    
-    var shadow = 0.0;
-    for (var x = -1; x <= 1; x++) {
-        for (var y = -1; y <= 1; y++) {
-            let offset = vec2<f32>(f32(x), f32(y)) * texelSize;
-            shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + offset, projCoords.z - bias);
-        }
-    }
-    shadow = shadow / 9.0;
-    
-    let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
-    let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
-    return mix(1.0, shadow, edgeFade);
-}
+${window.sharedShadowWGSL("uniforms.params.z")}
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -2653,35 +2705,7 @@ fn vs_main(in : VertexInput) -> VertexOutput {
     return out;
 }
 
-fn calculateShadow(lightSpacePos : vec4<f32>, normal : vec3<f32>, lightDir : vec3<f32>) -> f32 {
-    if (uniforms.params.w < 0.5) { return 1.0; }
-    
-    var projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords = projCoords * 0.5 + vec3<f32>(0.5, 0.5, 0.5); // convert to 0-1 range
-    projCoords.y = 1.0 - projCoords.y; // Flip Y for WebGPU shadow map lookup
-    
-    if (projCoords.z > 1.0 || projCoords.z < 0.0) { return 1.0; }
-    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) { return 1.0; }
-    
-    let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-    let slope = sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) / max(cosTheta, 0.05);
-    let bias = clamp(0.0005 + 0.0012 * slope, 0.0005, 0.0022);
-    
-    let texelSize = uniforms.shadowTexelSize;
-    let cmpDepth = projCoords.z - bias;
-    var shadow = 0.0;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x, -texelSize.y), cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x, -texelSize.y), cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  texelSize.y), cmpDepth);
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  texelSize.y), cmpDepth);
-    shadow = shadow * 0.2;
-    
-    let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
-    let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
-    
-    return mix(1.0, shadow, edgeFade);
-}
+${window.sharedShadowWGSL("uniforms.params.w")}
 
 @fragment
 fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
@@ -3386,6 +3410,12 @@ if (gl) {
       let charMainTexLoc, charHasMainTexLoc;
       let charFaceTexLoc, charUseFaceTexLoc;
 
+      if (typeof window.characterFragmentShaderSource === "string") {
+        window.characterFragmentShaderSource = window.characterFragmentShaderSource.replace(
+          "/*__SHARED_SHADOW_GLSL__*/",
+          window.SHARED_SHADOW_GLSL
+        );
+      }
       const charVS = createShader(
         window.characterVertexShaderSource,
         gl.VERTEX_SHADER,
@@ -3637,12 +3667,10 @@ window.cloud3DProgram = cloud3DProgram;
       
       function computeShadowMapSize() {
         if (typeof shadowMapQuality === "number" && shadowMapQuality > 0) {
-          if (shadowMapQuality === 1) return 1024; // Low: 1024x1024
-          if (shadowMapQuality === 2) return 2048; // Medium: 2048x2048
-          if (shadowMapQuality === 3) return 2048; // High: 2048x2048
-          if (shadowMapQuality >= 4) return 4096; // Ultra: 4096x4096
+          if (shadowMapQuality === 1) return 1024; // Low: 1024x1024 (3x3 B-Spline)
+          return 1536; // Medium / High / Ultra: 1536x1536 with progressive Wide 5x5 Convolved B-Spline smoothing
         }
-        return 1024;
+        return 1536;
       }
       let SHADOW_WIDTH = computeShadowMapSize();
       let SHADOW_HEIGHT = computeShadowMapSize();
@@ -3699,15 +3727,15 @@ window.cloud3DProgram = cloud3DProgram;
           0,
         );
 
-        // Dummy color texture to ensure framebuffer completeness on all platforms
+        // Allocate 1x1 fallback color texture in WebGL2 (pure depth-only pass for maximum FPS)
         dummyColorTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, dummyColorTex);
         gl.texImage2D(
           gl.TEXTURE_2D,
           0,
           gl.RGBA,
-          SHADOW_WIDTH,
-          SHADOW_HEIGHT,
+          isWebGL2 ? 1 : SHADOW_WIDTH,
+          isWebGL2 ? 1 : SHADOW_HEIGHT,
           0,
           gl.RGBA,
           gl.UNSIGNED_BYTE,
@@ -3715,13 +3743,18 @@ window.cloud3DProgram = cloud3DProgram;
         );
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.framebufferTexture2D(
-          gl.FRAMEBUFFER,
-          gl.COLOR_ATTACHMENT0,
-          gl.TEXTURE_2D,
-          dummyColorTex,
-          0,
-        );
+        if (isWebGL2 && typeof gl.drawBuffers === "function") {
+          gl.drawBuffers([gl.NONE]);
+          gl.readBuffer(gl.NONE);
+        } else {
+          gl.framebufferTexture2D(
+            gl.FRAMEBUFFER,
+            gl.COLOR_ATTACHMENT0,
+            gl.TEXTURE_2D,
+            dummyColorTex,
+            0,
+          );
+        }
 
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         if (status !== gl.FRAMEBUFFER_COMPLETE) {
@@ -3762,21 +3795,20 @@ window.cloud3DProgram = cloud3DProgram;
             gl.UNSIGNED_INT,
             null,
           );
-        }
-
-        if (dummyColorTex) {
-          gl.bindTexture(gl.TEXTURE_2D, dummyColorTex);
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.RGBA,
-            SHADOW_WIDTH,
-            SHADOW_HEIGHT,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            null,
-          );
+          if (dummyColorTex) {
+            gl.bindTexture(gl.TEXTURE_2D, dummyColorTex);
+            gl.texImage2D(
+              gl.TEXTURE_2D,
+              0,
+              gl.RGBA,
+              SHADOW_WIDTH,
+              SHADOW_HEIGHT,
+              0,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              null,
+            );
+          }
         }
       };
 
@@ -8790,22 +8822,51 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const dz = eyePos[2] - pz;
           camPlayerDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
-        let orthoSize = Math.min(22.0, Math.max(5.0, Math.min(curObjectDist + 2.0, camPlayerDist * 0.5 + 2.5)));
+        const snappedCamDist = Math.round(camPlayerDist * 0.5) * 2.0;
+        let orthoSize = Math.min(24.0, Math.max(16.0, Math.min(curObjectDist, snappedCamDist + 8.0)));
+
+        let lightDistance = Math.max(RADIUS + 8.0, 20.0);
+        let lightFarPlane = Math.max(RADIUS * 2.5 + 8.0, 48.0);
+        if (cameraMode !== "planet" && cameraMode !== "sun") {
+            orthoSize = Math.min(12.5, Math.max(5.8, Math.min(curObjectDist, snappedCamDist + 3.2)));
+            lightDistance = 10.0;
+            lightFarPlane = 20.0;
+        }
+        const lightUp =
+          Math.abs(finalLightDir[1]) > 0.99 ? [0.0, 0.0, 1.0] : [0.0, 1.0, 0.0];
+
+        // Snap shadow camera target to light-space texel grid so shadows stay 100% rock-steady when walking
+        {
+          const fzx = finalLightDir[0], fzy = finalLightDir[1], fzz = finalLightDir[2];
+          let rxx = lightUp[1] * fzz - lightUp[2] * fzy;
+          let rxy = lightUp[2] * fzx - lightUp[0] * fzz;
+          let rxz = lightUp[0] * fzy - lightUp[1] * fzx;
+          const rLen = Math.hypot(rxx, rxy, rxz) || 1.0;
+          rxx /= rLen; rxy /= rLen; rxz /= rLen;
+          const uyx = fzy * rxz - fzz * rxy;
+          const uyy = fzz * rxx - fzx * rxz;
+          const uyz = fzx * rxy - fzy * rxx;
+
+          const texelWorldSize = (orthoSize * 2.0) / Math.max(1024, SHADOW_WIDTH);
+          let lx = shadowTargetX * rxx + shadowTargetY * rxy + shadowTargetZ * rxz;
+          let ly = shadowTargetX * uyx + shadowTargetY * uyy + shadowTargetZ * uyz;
+          let lz = shadowTargetX * fzx + shadowTargetY * fzy + shadowTargetZ * fzz;
+
+          lx = Math.floor(lx / texelWorldSize) * texelWorldSize;
+          ly = Math.floor(ly / texelWorldSize) * texelWorldSize;
+          lz = Math.floor(lz / (texelWorldSize * 4.0)) * (texelWorldSize * 4.0);
+
+          shadowTargetX = rxx * lx + uyx * ly + fzx * lz;
+          shadowTargetY = rxy * lx + uyy * ly + fzy * lz;
+          shadowTargetZ = rxz * lx + uyz * ly + fzz * lz;
+        }
 
         const lightTarget = [shadowTargetX, shadowTargetY, shadowTargetZ];
-        let lightDistance = RADIUS + 8.0;
-        let lightFarPlane = RADIUS * 2.5 + 8.0;
-        if (cameraMode !== "planet" && cameraMode !== "sun") {
-            lightDistance = 12.0;
-            lightFarPlane = 24.0;
-        }
         const lightEye = [
           shadowTargetX + finalLightDir[0] * lightDistance,
           shadowTargetY + finalLightDir[1] * lightDistance,
           shadowTargetZ + finalLightDir[2] * lightDistance,
         ];
-        const lightUp =
-          Math.abs(finalLightDir[1]) > 0.99 ? [0.0, 0.0, 1.0] : [0.0, 1.0, 0.0];
         const lightViewMatrix = createLookAt(lightEye, lightTarget, lightUp);
         const lightProjMatrix = createOrtho(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.1, lightFarPlane);
         const lightSpaceMatrix = multiplyMatrices(
@@ -8825,8 +8886,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         if (shadowMapEnabled) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
           gl.viewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-          gl.clearColor(1.0, 1.0, 1.0, 1.0);
-          gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+          if (isWebGL2) {
+            gl.clear(gl.DEPTH_BUFFER_BIT);
+          } else {
+            gl.clearColor(1.0, 1.0, 1.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+          }
 
           gl.enable(gl.DEPTH_TEST);
           gl.disable(gl.BLEND);
@@ -8841,21 +8906,6 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         gl.uniform1f(depthTimeLoc, leafAnimTime);
         gl.uniform1f(depthPlanetRadiusLoc, RADIUS);
         gl.uniform1f(depthWaterRadiusLoc, RADIUS + waterLevel * 0.15);
-
-        // Terrain to depth
-        if (typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawSurfaceDepth) {
-          SurfaceSystem.drawSurfaceDepth(gl, {
-            vertexBuffer,
-            indexBuffer,
-            indicesLength,
-            supportUint32,
-            depthSwayFactorLoc,
-            depthWaterSwayFactorLoc,
-            depthModelLoc,
-            depthPosLoc,
-            createIdentity
-          });
-        }
 
         // Cubes to depth (Cull by object render distance)
         if (cubeVertexBuffer && cubeIndexBuffer && cubeIndicesLength > 0) {
@@ -8964,24 +9014,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
           const bytesPerIndex = isUint32 ? 4 : 2;
 
-          const staticList = (typeof window !== "undefined" && window.staticCollectiblesList) ? window.staticCollectiblesList : collectibles;
-          if (staticList && staticList.length > 0 && typeof getVisibleIndexRanges === "function" && eyePos) {
-            const shadowRanges = getVisibleIndexRanges(staticList, null, curObjectDist, eyePos);
-            for (let i = 0; i < shadowRanges.length; i++) {
-              const range = shadowRanges[i];
-              const count = range.end - range.start;
-              if (count > 0) {
-                gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
-              }
-            }
-          } else {
-            gl.drawElements(
-              gl.TRIANGLES,
-              collectibleIndicesLength,
-              type,
-              0,
-            );
-          }
+          gl.drawElements(
+            gl.TRIANGLES,
+            collectibleIndicesLength,
+            type,
+            0,
+          );
         }
 
         // Dynamic Collectibles to depth (Cull by object render distance)
@@ -9003,26 +9041,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dynamicCollectibleIndexBuffer);
           const isUint32 = supportUint32 && dynamicCollectibleIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
-          const bytesPerIndex = isUint32 ? 4 : 2;
 
-          const dynList = (typeof dynamicCollectiblesList !== "undefined" && dynamicCollectiblesList) ? dynamicCollectiblesList : (window.dynamicCollectiblesList || []);
-          if (dynList && dynList.length > 0 && typeof getVisibleIndexRanges === "function" && eyePos) {
-            const shadowRanges = getVisibleIndexRanges(dynList, null, curObjectDist, eyePos);
-            for (let i = 0; i < shadowRanges.length; i++) {
-              const range = shadowRanges[i];
-              const count = range.end - range.start;
-              if (count > 0) {
-                gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
-              }
-            }
-          } else {
-            gl.drawElements(
-              gl.TRIANGLES,
-              dynamicCollectibleIndicesLength,
-              type,
-              0,
-            );
-          }
+          gl.drawElements(
+            gl.TRIANGLES,
+            dynamicCollectibleIndicesLength,
+            type,
+            0,
+          );
         }
 
         if (activeRidingBoat && typeof drawDedicatedActiveBoatShadow === "function") {
@@ -9415,8 +9440,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.frontFace(gl.CW);
           gl.cullFace(gl.BACK);
 
+          const activeShadowMode = shadowMapEnabled ? (typeof shadowMapQuality === "number" && shadowMapQuality > 0 ? shadowMapQuality : 2.0) : 0.0;
           gl.useProgram(program);
-          gl.uniform1f(terrainShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(terrainShadowsEnabledLoc, activeShadowMode);
           gl.uniform1f(useLightingLoc, 1.0); // เปิดแสงเงาดิฟฟิวส์
           gl.uniform3fv(lightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
@@ -9491,6 +9517,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         }
         const minSpringDistToHide = 0.08 * (typeof playerScale !== "undefined" ? (playerScale / 0.22) : 1.0);
         const hideCharacter = (springDistance < minSpringDistToHide);
+        const activeShadowQualityVal = shadowMapEnabled ? (typeof shadowMapQuality === "number" && shadowMapQuality > 0 ? shadowMapQuality : 2.0) : 0.0;
         if (
           charProgram &&
           charVertexBuffer &&
@@ -9504,7 +9531,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(charProgram);
-          gl.uniform1f(charShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(charShadowsEnabledLoc, activeShadowQualityVal);
 
           gl.uniformMatrix4fv(charProjLoc, false, setF32(f32_projMatrix, projMatrix));
           gl.uniform3fv(charLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
@@ -9797,7 +9824,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
                 // 1) Draw Mirrored Player
                 gl.useProgram(charProgram);
-                gl.uniform1f(gl.getUniformLocation(charProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+                gl.uniform1f(charShadowsEnabledLoc, activeShadowQualityVal);
                 gl.uniformMatrix4fv(
                   charMVLoc,
                   false,
@@ -9881,8 +9908,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 // 2) Draw Mirrored Placed Cubes/Structures
                 if (cubeVertexBuffer && cubeIndicesLength > 0) {
                   gl.useProgram(modelProgram);
-                  gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
-                  gl.uniform2f(gl.getUniformLocation(modelProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+                  gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
+                  gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
                   gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
@@ -10068,7 +10095,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           cubeIndicesLength > 0
         ) {
           gl.useProgram(modelProgram);
-          gl.uniform1f(modelShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
@@ -10259,7 +10286,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(modelProgram);
-          gl.uniform1f(modelShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
           gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
@@ -10374,7 +10401,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.frontFace(gl.CW);
           gl.cullFace(gl.BACK);
           gl.useProgram(modelProgram);
-          gl.uniform1f(modelShadowsEnabledLoc, shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
           gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
 
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
@@ -10500,7 +10527,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               0,
             );
           }
-          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
+          gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
         }
 
         // วาดสัตว์ครึ่งบกครึ่งน้ำ (Amphibians)
@@ -10515,8 +10542,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(modelProgram);
-          gl.uniform1f(gl.getUniformLocation(modelProgram, "uShadowsEnabled"), shadowMapEnabled ? 1.0 : 0.0);
-          gl.uniform2f(gl.getUniformLocation(modelProgram, "uShadowTexelSize"), 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,

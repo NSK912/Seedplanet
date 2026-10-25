@@ -2849,6 +2849,11 @@ function cancelFloorPlacement() {
         floorPreviewCollectible.isProceduralHouse = false;
         floorPreviewCollectible.isRuin = false;
 
+        if (floorPreviewCollectible.position) floorPreviewCollectible.position = [...floorPreviewCollectible.position];
+        if (floorPreviewCollectible.normal) floorPreviewCollectible.normal = [...floorPreviewCollectible.normal];
+        if (floorPreviewCollectible.R) floorPreviewCollectible.R = [...floorPreviewCollectible.R];
+        if (floorPreviewCollectible.F) floorPreviewCollectible.F = [...floorPreviewCollectible.F];
+
         // Avoid duplicate push when floorPreviewCollectible was already pushed in collectibles.js,
         // and ensure the newly placed structure is always appended at the end in chronological order
         const existingPreviewIdx = collectibles.indexOf(floorPreviewCollectible);
