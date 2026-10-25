@@ -2462,13 +2462,16 @@
         swayWeight,
         vertices,
         colors,
-        indices
+        indices,
+        isPreview
       ) {
         let curSeed = seed;
         function cRand() {
           const x = Math.sin(curSeed++) * 10000;
           return x - Math.floor(x);
         }
+
+        const isPreviewMode = isPreview || (window._disableTreeColorEncoding === true);
 
         // สร้างกรอบพิกัดตั้งฉากกับทิศทางก้านดอก (dirNorm)
         let bx = 0, by = 0, bz = 0;
@@ -2485,45 +2488,46 @@
           dirNorm[0] * B1[1] - dirNorm[1] * B1[0]
         ];
 
-        // Helper วาดทรงกลมโลโพลีที่เข้ารหัสสีลม (encodeTreeColor) สำหรับปุยฝ้าย
-        function addSwayLowPolyPuff(puffCenter, puffRad, segs, baseCol, noiseStr, puffSeed) {
+        // Helper วาดก้อนปุยฝ้าย 3 มิตินูนฟู (Volumetric 3D Low-Poly Puff Sphere)
+        // ใช้ latSegs=3 และ lonSegs=6 (หรือ 5 ในพรีวิว) พร้อมผูกเข้ากับแกนสัมผัส (B1, dirNorm, B2)
+        // เพื่อให้เป็นก้อนทรงกลม 3D นูนฟูทุกมุมมอง ไม่แบนเป็นแผ่น 2D อีกต่อไป
+        function addSwayLowPolyPuff(puffCenter, puffRad, latSegs, lonSegs, baseCol, noiseStr, puffSeed) {
           const baseIdx = vertices.length / 3;
-          for (let lat = 0; lat <= segs; lat++) {
-            const theta = (lat / segs) * Math.PI;
+          for (let lat = 0; lat <= latSegs; lat++) {
+            const theta = (lat / latSegs) * Math.PI;
             const sinT = Math.sin(theta);
             const cosT = Math.cos(theta);
-            for (let lon = 0; lon <= segs; lon++) {
-              const phi = (lon / segs) * Math.PI * 2;
+            for (let lon = 0; lon <= lonSegs; lon++) {
+              const phi = (lon / lonSegs) * Math.PI * 2;
               const dx = sinT * Math.cos(phi);
               const dy = cosT;
               const dz = sinT * Math.sin(phi);
 
-              const nVal = typeof fbmNoise === "function"
-                ? fbmNoise(dx * 3.5, dy * 3.5, dz * 3.5, puffSeed, 2)
-                : (Math.sin(dx * 5 + dy * 7 + puffSeed) * 0.5);
+              const nVal = Math.sin(dx * 3.8 + dy * 4.2 + puffSeed) * 0.14 + Math.cos(dz * 4.0 + puffSeed * 1.5) * 0.08;
               const defR = puffRad * (1.0 + nVal * noiseStr);
 
-              const vx = puffCenter[0] + defR * dx;
-              const vy = puffCenter[1] + defR * dy;
-              const vz = puffCenter[2] + defR * dz;
+              // แปลงพิกัดเข้าสู่ระบบแกน 3D ท้องถิ่น (B1, dirNorm, B2) เพื่อสร้างความนูนฟูรอบทิศทาง 3 มิติอย่างแท้จริง
+              const vx = puffCenter[0] + defR * (dx * B1[0] + dy * dirNorm[0] + dz * B2[0]);
+              const vy = puffCenter[1] + defR * (dx * B1[1] + dy * dirNorm[1] + dz * B2[1]);
+              const vz = puffCenter[2] + defR * (dx * B1[2] + dy * dirNorm[2] + dz * B2[2]);
               vertices.push(vx, vy, vz);
 
-              const shade = (dx * 0.15 + dy * 0.25 + dz * 0.15) * 0.08;
+              const shade = (dx * 0.12 + dy * 0.22 + dz * 0.12) * 0.08;
               const rawCol = [
-                Math.max(0.82, Math.min(1.0, baseCol[0] + shade)),
-                Math.max(0.82, Math.min(1.0, baseCol[1] + shade)),
-                Math.max(0.80, Math.min(0.99, baseCol[2] + shade))
+                Math.max(0.85, Math.min(1.0, baseCol[0] + shade)),
+                Math.max(0.85, Math.min(1.0, baseCol[1] + shade)),
+                Math.max(0.82, Math.min(0.99, baseCol[2] + shade))
               ];
-              const enc = typeof encodeTreeColor === "function"
+              const enc = (typeof encodeTreeColor === "function" && !isPreviewMode)
                 ? encodeTreeColor(rawCol, false, swayWeight)
                 : rawCol;
               colors.push(enc[0], enc[1], enc[2]);
             }
           }
-          for (let lat = 0; lat < segs; lat++) {
-            for (let lon = 0; lon < segs; lon++) {
-              const a = baseIdx + lat * (segs + 1) + lon;
-              const b = a + segs + 1;
+          for (let lat = 0; lat < latSegs; lat++) {
+            for (let lon = 0; lon < lonSegs; lon++) {
+              const a = baseIdx + lat * (lonSegs + 1) + lon;
+              const b = a + lonSegs + 1;
               const c = a + 1;
               const d = b + 1;
               indices.push(a, b, c);
@@ -2554,8 +2558,8 @@
             -sinA * B1[2] + cosA * B2[2]
           ];
 
-          const bractLen = bollRadius * 1.15;
-          const bractW = bollRadius * 0.48;
+          const bractLen = bollRadius * 1.05;
+          const bractW = bollRadius * 0.42;
           const v0 = bractBase;
           const v1 = [
             bractBase[0] + radOut[0] * (bractLen * 0.55) + dirNorm[0] * (bollRadius * 0.12) - sideTan[0] * bractW,
@@ -2564,17 +2568,17 @@
           ];
           const v2 = [
             bractBase[0] + radOut[0] * (bractLen * 0.55) + dirNorm[0] * (bollRadius * 0.12) + sideTan[0] * bractW,
-            bractBase[1] + radOut[1] * (bractLen * 0.55) + dirNorm[1] * (bollRadius * 0.12) + sideTan[1] * bractW,
+            bractBase[1] + radOut[1] * (bractLen * 0.55) + dirNorm[1] * (bollRadius * 0.12) + sideTan[0] * bractW,
             bractBase[2] + radOut[2] * (bractLen * 0.55) + dirNorm[2] * (bollRadius * 0.12) + sideTan[2] * bractW
           ];
           const v3 = [
-            bractBase[0] + radOut[0] * bractLen + dirNorm[0] * (bollRadius * 0.45),
-            bractBase[1] + radOut[1] * bractLen + dirNorm[1] * (bollRadius * 0.45),
-            bractBase[2] + radOut[2] * bractLen + dirNorm[2] * (bollRadius * 0.45)
+            bractBase[0] + radOut[0] * bractLen + dirNorm[0] * (bollRadius * 0.40),
+            bractBase[1] + radOut[1] * bractLen + dirNorm[0] * (bollRadius * 0.40),
+            bractBase[2] + radOut[2] * bractLen + dirNorm[2] * (bollRadius * 0.40)
           ];
 
           const bractCol = (k % 2 === 0) ? [0.34, 0.25, 0.15] : [0.26, 0.36, 0.16];
-          const encBract = typeof encodeTreeColor === "function"
+          const encBract = (typeof encodeTreeColor === "function" && !isPreviewMode)
             ? encodeTreeColor(bractCol, false, swayWeight)
             : bractCol;
 
@@ -2594,46 +2598,22 @@
           );
         }
 
-        // 2. ก้อนปุยฝ้ายสีขาวฟูทรงโลโพลี (Fluffy White Cotton Lobes - 4 พูซ้อนกัน)
-        const whiteCoreCol = [0.97, 0.97, 0.95];
+        // 2. ก้อนปุยฝ้ายสีขาวฟูทรง 3D โลโพลี (Volumetric 3D Fluffy White Cotton Boll)
+        // ใช้โครงสร้างโมเดลทรงกลม 3D นูนฟูแบบเดียวกัน 100% ทั้งบนแมพและในไอคอน
+        const whiteCoreCol = [0.98, 0.98, 0.96];
         addSwayLowPolyPuff(
           [
-            center[0] + dirNorm[0] * (bollRadius * 0.25),
-            center[1] + dirNorm[1] * (bollRadius * 0.25),
-            center[2] + dirNorm[2] * (bollRadius * 0.25)
+            center[0] + dirNorm[0] * (bollRadius * 0.38),
+            center[1] + dirNorm[1] * (bollRadius * 0.38),
+            center[2] + dirNorm[2] * (bollRadius * 0.38)
           ],
-          bollRadius * 0.72,
-          4,
+          bollRadius * 1.05,
+          3,
+          6,
           whiteCoreCol,
-          0.22,
+          0.20,
           curSeed++
         );
-
-        const numLobes = 3 + (Math.abs(Math.floor(seed)) % 2); // 3-4 พูปุยฝ้ายขาว
-        for (let l = 0; l < numLobes; l++) {
-          const lAng = (l / numLobes) * Math.PI * 2 + 0.4;
-          const cosL = Math.cos(lAng);
-          const sinL = Math.sin(lAng);
-          const lOff = bollRadius * 0.42;
-          const lobeCenter = [
-            center[0] + (cosL * B1[0] + sinL * B2[0]) * lOff + dirNorm[0] * (bollRadius * 0.12),
-            center[1] + (cosL * B1[1] + sinL * B2[1]) * lOff + dirNorm[1] * (bollRadius * 0.12),
-            center[2] + (cosL * B1[2] + sinL * B2[2]) * lOff + dirNorm[2] * (bollRadius * 0.12)
-          ];
-          const lobeCol = [
-            0.94 + cRand() * 0.05,
-            0.94 + cRand() * 0.05,
-            0.91 + cRand() * 0.06
-          ];
-          addSwayLowPolyPuff(
-            lobeCenter,
-            bollRadius * (0.62 + cRand() * 0.12),
-            4,
-            lobeCol,
-            0.26,
-            curSeed++
-          );
-        }
       }
 
       // สร้างต้นฝ้ายโลโพลี (Low-Poly Cotton Plant)
@@ -2650,13 +2630,16 @@
         seed,
         vertices,
         colors,
-        indices
+        indices,
+        isPreview
       ) {
         let curSeed = seed;
         function prng() {
           const x = Math.sin(curSeed++) * 10000;
           return x - Math.floor(x);
         }
+
+        const isPreviewMode = isPreview || (window._disableTreeColorEncoding === true);
 
         // สัดส่วนพุ่มต้นฝ้ายโลโพลี (ย่อขนาดลงครึ่งหนึ่ง)
         const scale = (0.085 + prng() * 0.032) * 0.5;
@@ -2781,13 +2764,14 @@
           0.35,
           vertices,
           colors,
-          indices
+          indices,
+          isPreviewMode
         );
 
-        // 2. แตกกิ่งก้านสาขา (4 - 5 กิ่ง) พร้อมใบฝ้ายและปุยฝ้ายสีขาวที่ปลายกิ่ง
-        const numBranches = 4 + Math.floor(prng() * 2); // 4 ถึง 5 กิ่ง
+        // 2. แตกกิ่งก้านสาขา (3 กิ่ง) พร้อมใบฝ้ายและปุยฝ้ายสีขาวที่ปลายกิ่ง (โครงสร้างโลโพลีคล่องตัว ไม่หนักเครื่อง)
+        const numBranches = 3;
         for (let b = 0; b < numBranches; b++) {
-          const frac = 0.28 + 0.62 * (b / (numBranches - 1 || 1));
+          const frac = 0.32 + 0.58 * (b / (numBranches - 1 || 1));
           const segF = frac * numStemSegs;
           const sIdx = Math.min(numStemSegs - 1, Math.floor(segF));
           const tSub = segF - sIdx;
@@ -2862,9 +2846,8 @@
             tipSway
           );
 
-          // สร้างใบฝ้ายโลโพลี 2-3 ใบตามแนวกิ่ง
-          const numLeavesOnBranch = 2 + (b % 2);
-          for (let lf = 0; lf < numLeavesOnBranch; lf++) {
+          // สร้างใบฝ้ายโลโพลี 2 ใบตามแนวกิ่ง
+          for (let lf = 0; lf < 2; lf++) {
             const lSide = (lf % 2 === 0) ? 1.0 : -1.0;
             const lAng = bAngle + lSide * (0.75 + prng() * 0.35);
             const lDirX = Math.cos(lAng) * R[0] + Math.sin(lAng) * F[0] + 0.18 * N[0];
@@ -2876,47 +2859,23 @@
             addCottonLeaf(
               lOrigin,
               [lDirX / lenLD, lDirY / lenLD, lDirZ / lenLD],
-              scale * (0.52 + prng() * 0.18),
+              scale * (0.50 + prng() * 0.15),
               lSway
             );
           }
 
-          // สร้างปุยฝ้ายสีขาวโลโพลีที่ปลายกิ่งทุกกิ่ง
+          // สร้างปุยฝ้ายสีขาวโลโพลีที่ปลายกิ่ง
           buildCottonBollCluster(
             bTip,
             tipDir,
-            bollBaseRadius * (0.88 + prng() * 0.18),
+            bollBaseRadius * (0.88 + prng() * 0.15),
             curSeed + b * 73,
             tipSway,
             vertices,
             colors,
-            indices
+            indices,
+            isPreviewMode
           );
-
-          // กิ่งล่างบางกิ่งมีสมอฝ้ายย่อยตรงข้อกลางกิ่งเพิ่มความพุ่มฟู
-          if (b % 2 === 0) {
-            const subAng = bAngle + 0.65;
-            const subDirX = Math.cos(subAng) * R[0] + Math.sin(subAng) * F[0] + 0.55 * N[0];
-            const subDirY = Math.cos(subAng) * R[1] + Math.sin(subAng) * F[1] + 0.55 * N[1];
-            const subDirZ = Math.cos(subAng) * R[2] + Math.sin(subAng) * F[2] + 0.55 * N[2];
-            const lenSub = Math.sqrt(subDirX * subDirX + subDirY * subDirY + subDirZ * subDirZ) || 1;
-            const subDir = [subDirX / lenSub, subDirY / lenSub, subDirZ / lenSub];
-            const subBollPos = [
-              bMid[0] + subDir[0] * (scale * 0.22),
-              bMid[1] + subDir[1] * (scale * 0.22),
-              bMid[2] + subDir[2] * (scale * 0.22)
-            ];
-            buildCottonBollCluster(
-              subBollPos,
-              subDir,
-              bollBaseRadius * 0.76,
-              curSeed + b * 137 + 19,
-              midSway,
-              vertices,
-              colors,
-              indices
-            );
-          }
         }
       }
       window.buildCottonPlant = buildCottonPlant;

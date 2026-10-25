@@ -6946,7 +6946,7 @@ window.cloud3DProgram = cloud3DProgram;
             const demolishableTypes = [
               "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
               "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
-              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest",
+              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed",
               "meganeura_item", "isopod_item", "obsidian_pad_warp_item", "obsidian_compass_pad_item",
               "robot_stand", "robot_cockpit",
               "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
@@ -7005,6 +7005,13 @@ window.cloud3DProgram = cloud3DProgram;
                   item.position[1] + n[1] * 0.055,
                   item.position[2] + n[2] * 0.055
                 ];
+              } else if (item.type === "wood_bed") {
+                // Elevate visual center to center of bed mattress
+                itemCenter = [
+                  item.position[0] + n[0] * 0.05,
+                  item.position[1] + n[1] * 0.05,
+                  item.position[2] + n[2] * 0.05
+                ];
               } else if (item.type === "campfire") {
                 itemCenter = [
                   item.position[0] + n[0] * 0.06,
@@ -7046,6 +7053,8 @@ window.cloud3DProgram = cloud3DProgram;
                 meshRadius = 0.26;
               } else if (item.type === "wood_chest") {
                 meshRadius = 0.18;
+              } else if (item.type === "wood_bed") {
+                meshRadius = 0.25;
               } else if (item.type.startsWith("robot_")) {
                 meshRadius = 0.25;
               }
@@ -7667,7 +7676,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);

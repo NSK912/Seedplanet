@@ -966,20 +966,26 @@ if (toggleControlsBtn && mainControls) {
       btn.style.textAlign = "left";
       btn.style.display = "block";
       
-      const icon = npc.type === 'human' ? '👨' : (npc.type === 'meganeura' ? '🪰' : (npc.type === 'obsidian_cube' ? '🔶' : '🦎'));
+      const icon = npc.type === 'human' ? '👨' : (npc.type === 'meganeura' ? '🪰' : (npc.type === 'obsidian_cube' ? '🔶' : (npc.type === 'placoderm' ? '🐟' : '🦎')));
       btn.innerHTML = `${icon} ${npc.type} #${index} 🚀`;
       
       btn.addEventListener("click", () => {
+        if (typeof window.getNPCTransform === "function") {
+          const tf = window.getNPCTransform(npc);
+          if (tf) {
+            npc.position = tf.pos;
+            npc.N = tf.N;
+            npc.F = tf.F;
+            npc.R = tf.R;
+          }
+        }
+
         let targetTheta = npc.theta;
         let targetPhi = npc.phi;
 
-        // Extract exact coordinates if NPC has a 3D position vector
-        const pos = (npc.ragdollEnabled && npc.ragdollPos && Array.isArray(npc.ragdollPos))
-          ? npc.ragdollPos
-          : (npc.position || null);
-
-        if (pos && Array.isArray(pos) && pos.length >= 3) {
-          const x = pos[0], y = pos[1], z = pos[2];
+        // Only extract from ragdollPos when NPC is in ragdoll state; otherwise npc.theta & npc.phi are authoritative
+        if (npc.ragdollEnabled && npc.ragdollPos && Array.isArray(npc.ragdollPos) && npc.ragdollPos.length >= 3) {
+          const x = npc.ragdollPos[0], y = npc.ragdollPos[1], z = npc.ragdollPos[2];
           const r = Math.sqrt(x * x + y * y + z * z);
           if (r > 0.001) {
             targetTheta = Math.acos(Math.max(-1.0, Math.min(1.0, y / r)));
@@ -990,7 +996,7 @@ if (toggleControlsBtn && mainControls) {
         if (typeof targetTheta === 'number' && !isNaN(targetTheta)) charTheta = targetTheta;
         if (typeof targetPhi === 'number' && !isNaN(targetPhi)) charPhi = targetPhi;
 
-        if (typeof playerCenterRadius !== 'undefined') playerCenterRadius = null;
+        if (typeof playerCenterRadius !== 'undefined') playerCenterRadius = (npc.r && npc.isSwimming) ? npc.r : null;
         if (typeof playerVelocityX !== 'undefined') playerVelocityX = 0;
         if (typeof playerVelocityY !== 'undefined') playerVelocityY = 0;
         if (typeof playerVelocityZ !== 'undefined') playerVelocityZ = 0;

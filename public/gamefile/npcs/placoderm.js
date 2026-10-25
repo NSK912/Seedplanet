@@ -599,94 +599,120 @@ window.NpcRegistry["placoderm"] = {
     const ignorePlayer = (typeof window !== "undefined" && window.npcIgnorePlayer);
 
     const isWaterDisabled = (typeof waterEnabled !== "undefined" && !waterEnabled);
-    const isOnGround = isWaterDisabled || !wRadius || (wRadius <= 0) || (gRadius > wRadius - 0.02) || (c.r > wRadius + 0.03);
+    const curRad = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+    const curHS = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(curRad / 8.0, 0.70));
+    const curWLevel = typeof waterLevel !== 'undefined' ? waterLevel : 1.0;
+    const baseWaterR = curRad + curWLevel * (curHS * 0.25);
+    const trueWRadius = (!isWaterDisabled && ((wRadius && wRadius > 0) || gRadius < baseWaterR)) ? ((wRadius && wRadius > 0) ? wRadius : baseWaterR) : 0;
 
-    if (isOnGround) {
-      // Placoderm strictly lives in water: try to relocate to valid ocean water immediately
-      let relocated = false;
-      const wR_target = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15;
-      if (!isWaterDisabled && wR_target > RADIUS + 0.01) {
-        for (let tries = 0; tries < 40; tries++) {
-          const testT = Math.random() * Math.PI;
-          const testP = Math.random() * Math.PI * 2;
-          const testH = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(testT, testP, seed) : 0;
-          const testGR = RADIUS + testH * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6);
-          if (testGR < wR_target - 0.02) {
-            c.theta = testT;
-            c.phi = testP;
-            c.r = Math.max(testGR + 0.04, wR_target - 0.04);
-            c.isSwimming = true;
-            relocated = true;
-            break;
-          }
+    // Helper to find the heading direction toward the deepest nearby ocean water
+    const findDeepestWaterHeading = () => {
+      const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+      let bestH = Infinity;
+      let bestAng = (c.heading + Math.PI) % (Math.PI * 2);
+      const lookDist = 0.045;
+      const sinT = Math.max(0.1, Math.sin(c.theta));
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const tT = Math.max(0.05, Math.min(Math.PI - 0.05, c.theta - Math.cos(ang) * lookDist));
+        const tP = c.phi + (Math.sin(ang) * lookDist) / sinT;
+        const hVal = sampleH(tT, tP, seed);
+        if (hVal < bestH) {
+          bestH = hVal;
+          bestAng = ang;
+        }
+      }
+      while (bestAng > Math.PI) bestAng -= Math.PI * 2;
+      while (bestAng < -Math.PI) bestAng += Math.PI * 2;
+      return { heading: bestAng, bestGR: curRad + bestH * curHS };
+    };
+
+    const isOnDryLand = isWaterDisabled || !trueWRadius || (gRadius >= trueWRadius - 0.01);
+
+    if (isOnDryLand) {
+      // Only if water still exists nearby (e.g. slightly pushed onto beach edge), slide back into adjacent deep water instead of vanishing!
+      if (!isWaterDisabled && trueWRadius > 0) {
+        const deepInfo = findDeepestWaterHeading();
+        if (deepInfo.bestGR < trueWRadius - 0.04) {
+          const sinT = Math.max(0.1, Math.sin(c.theta));
+          const pushStep = 0.35 * deltaTime / curRad;
+          c.theta = Math.max(0.05, Math.min(Math.PI - 0.05, c.theta - Math.cos(deepInfo.heading) * pushStep));
+          c.phi = (c.phi + (Math.sin(deepInfo.heading) * pushStep) / sinT + Math.PI * 2) % (Math.PI * 2);
+          c.heading = deepInfo.heading;
+          c.isSwimming = true;
+          c.r = Math.max(deepInfo.bestGR + 0.04, trueWRadius - 0.05);
+          return;
         }
       }
 
-      if (!relocated) {
-        // Stranded on dry land without water access: Placoderm flops toward water
+      // Truly stranded on dry land (e.g. terrain raised under it or water disabled): Placoderm flops on land without teleporting away
+      c.isSwimming = false;
+      c.moveSpeed = 0.0;
+      c.walkBlend = 0.0;
+      c.isChasing = false;
+      c.isTurningFromShore = false;
+      if (c.r < gRadius + 0.04) {
+        c.r = gRadius + 0.04;
+        c.heading += Math.sin(c.animPhase * 3.0) * deltaTime * 0.5; // Natural flopping back and forth on land
+      } else if (c.r > gRadius + 0.05) {
+        c.r -= 0.6 * deltaTime;
+      }
+      if (npcCaveData && npcCaveData.insideTunnel && npcCaveData.ceiling !== Infinity) {
+        const maxAllowedR = npcCaveData.ceiling - 0.05;
+        if (c.r > maxAllowedR) {
+          c.r = maxAllowedR;
+        }
+      }
+      c.animPhase += deltaTime * 1.8; // Heavy slow flopping animation on land
+      c.diveDepth = 0.0;
+      c.targetDiveDepth = 0.0;
+
+      // Placoderm is out of water on the ground: HP continuously decreases until it dies
+      const suffocateDmgRate = 1.2; // ~10 seconds from full health (12 HP) to death
+      c.hp -= suffocateDmgRate * deltaTime;
+
+      if (c.hp <= 0) {
+        c.hp = 0;
+        c.ragdollEnabled = true;
         c.isSwimming = false;
         c.moveSpeed = 0.0;
         c.walkBlend = 0.0;
-        c.isChasing = false;
-        c.isTurningFromShore = false;
-        if (c.r < gRadius + 0.04) {
-          c.r = gRadius + 0.04;
-          c.heading += Math.sin(c.animPhase * 3.0) * deltaTime * 0.5; // Natural flopping back and forth on land
-        } else if (c.r > gRadius + 0.05) {
-          c.r -= 0.6 * deltaTime;
-        }
-        if (npcCaveData && npcCaveData.insideTunnel && npcCaveData.ceiling !== Infinity) {
-          const maxAllowedR = npcCaveData.ceiling - 0.05;
-          if (c.r > maxAllowedR) {
-            c.r = maxAllowedR;
-          }
-        }
-        c.animPhase += deltaTime * 1.8; // Heavy slow flopping animation on land
-        c.diveDepth = 0.0;
-        c.targetDiveDepth = 0.0;
-
-        // Placoderm is out of water on the ground: HP continuously decreases until it dies
-        const suffocateDmgRate = 1.2; // ~10 seconds from full health (12 HP) to death
-        c.hp -= suffocateDmgRate * deltaTime;
-
-        if (c.hp <= 0) {
-          c.hp = 0;
-          c.ragdollEnabled = true;
-          c.isSwimming = false;
-          c.moveSpeed = 0.0;
-          c.walkBlend = 0.0;
-          const sinT = Math.sin(c.theta);
-          const cosT = Math.cos(c.theta);
-          const sinP = Math.sin(c.phi);
-          const cosP = Math.cos(c.phi);
-          const N_init = [sinT * cosP, cosT, sinT * sinP];
-          c.ragdollPos = [
-            N_init[0] * c.r,
-            N_init[1] * c.r,
-            N_init[2] * c.r
-          ];
-          c.position = [c.ragdollPos[0], c.ragdollPos[1], c.ragdollPos[2]];
-          c.ragdollVel = [0, 0, 0];
-          c.ragdollAxis = c.ragdollAxis && Array.isArray(c.ragdollAxis) && c.ragdollAxis.length >= 3 ? c.ragdollAxis : [0, 1, 0];
-          c.ragdollAngle = Math.PI * 0.48; // Lies flat on its side when dead on land
-          c.ragdollAngularSpeed = 0;
-          c.ragdollInitialized = true;
-          c.ragdollAsleep = false;
-          c.diedOnSurface = true;
-          return;
-        }
+        const sinT = Math.sin(c.theta);
+        const cosT = Math.cos(c.theta);
+        const sinP = Math.sin(c.phi);
+        const cosP = Math.cos(c.phi);
+        const N_init = [sinT * cosP, cosT, sinT * sinP];
+        c.ragdollPos = [
+          N_init[0] * c.r,
+          N_init[1] * c.r,
+          N_init[2] * c.r
+        ];
+        c.position = [c.ragdollPos[0], c.ragdollPos[1], c.ragdollPos[2]];
+        c.ragdollVel = [0, 0, 0];
+        c.ragdollAxis = c.ragdollAxis && Array.isArray(c.ragdollAxis) && c.ragdollAxis.length >= 3 ? c.ragdollAxis : [0, 1, 0];
+        c.ragdollAngle = Math.PI * 0.48; // Lies flat on its side when dead on land
+        c.ragdollAngularSpeed = 0;
+        c.ragdollInitialized = true;
+        c.ragdollAsleep = false;
+        c.diedOnSurface = true;
+        return;
       }
     } else {
       // In ocean / water: Active apex predator swimming
       c.isSwimming = true;
+      c.walkBlend = 1.0;
+      c.isIdle = false;
 
       // Check if player is actually in the water (swimming, diving, but NOT driving a vehicle)
       const pR_est = Math.sqrt(px * px + py * py + pz * pz);
-      const pwRadius = (typeof getWaterRadiusAt === "function") ? getWaterRadiusAt(px, py, pz, false) : wRadius;
-      const isPlayerInWater = !isDriving && (pR_est < pwRadius + 0.04 && (typeof currentSwimFactor !== "undefined" ? currentSwimFactor > 0.05 : true));
+      const pwRadius = (typeof getWaterRadiusAt === "function") ? getWaterRadiusAt(px, py, pz, false) : trueWRadius;
+      const isPlayerInWater = !isDriving && pwRadius > 0 && (pR_est < pwRadius + 0.04 && (typeof currentSwimFactor !== "undefined" ? currentSwimFactor > 0.05 : true));
 
-      // Aggressive predator behavior: Only chases player when the player is in water and NOT driving!
-      if (distToPlayer < 12.0 && isPlayerInWater && !isDriving && !ignorePlayer) {
+      // If in very shallow water near shore, prioritize turning back to deep water even if player is nearby
+      const isTooShallowForChase = (gRadius > trueWRadius - 0.045);
+
+      // Aggressive predator behavior: Only chases player when the player is in deep enough water and NOT driving!
+      if (distToPlayer < 12.0 && isPlayerInWater && !isTooShallowForChase && !isDriving && !ignorePlayer) {
         c.isChasing = true;
         c.isTurningFromShore = false;
         c.moveSpeed = 0.46; // Fast, powerful swim speed when pursuing
@@ -715,7 +741,7 @@ window.NpcRegistry["placoderm"] = {
         c.animPhase += deltaTime * 2.8;
 
         // Depth tracking: match player's depth while keeping within water boundaries
-        const targetR = Math.max(gRadius + 0.05, Math.min(wRadius - 0.04, pR_est));
+        const targetR = Math.max(gRadius + 0.05, Math.min(trueWRadius - 0.04, pR_est));
         if (c.r < targetR) {
           c.r = Math.min(targetR, c.r + 0.35 * deltaTime);
         } else if (c.r > targetR) {
@@ -743,21 +769,22 @@ window.NpcRegistry["placoderm"] = {
         c.isChasing = false;
         c.moveSpeed = 0.22; // Smooth, stately cruising speed
 
-        // Shore avoidance: When hitting shallow waters near the shore, smoothly turn around 180 deg towards the deep ocean
-        if (gRadius > wRadius - 0.16) {
-          if (!c.isTurningFromShore) {
+        // Shore avoidance: When hitting shallow waters near the shore, steer smoothly toward the deepest ocean gradient
+        if (gRadius > trueWRadius - 0.055) {
+          if (!c.isTurningFromShore || c.shoreRecheckTimer === undefined || c.shoreRecheckTimer <= 0) {
             c.isTurningFromShore = true;
-            // Turn around 180 degrees with slight random variance to head straight back out to sea
-            c.shoreTurnTarget = c.heading + Math.PI + (Math.random() - 0.5) * 0.4;
-            while (c.shoreTurnTarget > Math.PI) c.shoreTurnTarget -= Math.PI * 2;
-            while (c.shoreTurnTarget < -Math.PI) c.shoreTurnTarget += Math.PI * 2;
+            c.shoreRecheckTimer = 0.6;
+            const deepInfo = findDeepestWaterHeading();
+            c.shoreTurnTarget = deepInfo.heading;
+          } else {
+            c.shoreRecheckTimer -= deltaTime;
           }
 
           let shoreDiff = c.shoreTurnTarget - c.heading;
           while (shoreDiff > Math.PI) shoreDiff -= Math.PI * 2;
           while (shoreDiff < -Math.PI) shoreDiff += Math.PI * 2;
 
-          const shoreTurnSpeed = 2.2 * deltaTime;
+          const shoreTurnSpeed = 3.2 * deltaTime;
           if (Math.abs(shoreDiff) <= shoreTurnSpeed) {
             c.heading = c.shoreTurnTarget;
           } else {
@@ -802,7 +829,7 @@ window.NpcRegistry["placoderm"] = {
         c.diveTimer = 9.0 + Math.random() * 8.0;
         // Placoderms love patrolling mid-to-deep ocean waters
         if (Math.random() < 0.7) {
-          const maxDive = Math.max(0.0, wRadius - 0.06 - (gRadius + 0.06));
+          const maxDive = Math.max(0.0, trueWRadius - 0.06 - (gRadius + 0.06));
           c.targetDiveDepth = (0.25 + Math.random() * 0.65) * maxDive;
         } else {
           c.targetDiveDepth = 0.02; // Near water surface
@@ -816,12 +843,16 @@ window.NpcRegistry["placoderm"] = {
         c.diveDepth = Math.max(c.targetDiveDepth, c.diveDepth - diveRate);
       }
 
-      let targetR = wRadius - 0.05 - c.diveDepth;
-      if (npcCaveData.insideTunnel && npcCaveData.ceiling !== Infinity) {
+      let targetR = Math.max(gRadius + 0.04, trueWRadius - 0.05 - c.diveDepth);
+      if (npcCaveData && npcCaveData.insideTunnel && npcCaveData.ceiling !== Infinity) {
         targetR = Math.min(targetR, npcCaveData.ceiling - 0.05);
       }
 
-      if (c.r < targetR) {
+      if (c.r < gRadius + 0.04) {
+        c.r = gRadius + 0.04;
+      } else if (c.r > trueWRadius - 0.03) {
+        c.r = trueWRadius - 0.03;
+      } else if (c.r < targetR) {
         c.r = Math.min(targetR, c.r + 0.25 * deltaTime);
       } else if (c.r > targetR) {
         c.r = Math.max(targetR, c.r - 0.25 * deltaTime);

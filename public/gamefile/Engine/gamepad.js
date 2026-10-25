@@ -1907,6 +1907,23 @@
             window.lastHoveredSlot = { slotEl: target, source, index, item };
           }
         }
+        if (target.classList.contains("crafting-recipe-card")) {
+          window._selectedCraftingCard = target;
+          window._selectedCraftingRecipeId = target.dataset.recipeId || null;
+          window._activeTouchCraftingCard = target;
+          window._activeTouchRecipeId = target.dataset.recipeId || null;
+          document.querySelectorAll("#craftingList .crafting-recipe-card").forEach(c => {
+            if (c !== target) {
+              c.classList.remove("crafting-card-selected");
+              c.classList.remove("touch-preview-active");
+            }
+          });
+        }
+        if (target.classList.contains("crafting-recipe-card") || this.getCurrentActiveTabName() === "crafting") {
+          if (typeof window.startCraftingPreviewLoop === "function") {
+            window.startCraftingPreviewLoop();
+          }
+        }
       }
     },
 

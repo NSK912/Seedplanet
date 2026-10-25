@@ -272,6 +272,7 @@
         { name: "WOOD_DOOR", icon: "🚪" },
         { name: "WOOD_ROOF", icon: "🛖" },
         { name: "WOOD_CHEST", icon: "📦" },
+        { name: "WOOD_BED", icon: "🛏️" },
         { name: "MEGANEURA", icon: "🦟" },
         { name: "ISOPOD", icon: "🦐" },
         { name: "FRIED_BUG", icon: "🍤" },
@@ -291,8 +292,9 @@
 
       const icon3DCache = new Map();
 
-      function create3DIconCanvas(item, width, height) {
+      function create3DIconCanvas(item, width, height, options = null) {
         if (!item) return null;
+        const isInteractivePreview = !!(options && options.interactivePreview);
         let name = "";
         if (typeof item === "string") {
           name = item.toUpperCase();
@@ -325,7 +327,7 @@
 
         const cacheKey = `${name}_${width}_${height}_${dpr}${stateKey}`;
         
-        if (icon3DCache.has(cacheKey)) {
+        if (!isInteractivePreview && icon3DCache.has(cacheKey)) {
           const cachedSrc = icon3DCache.get(cacheKey);
           const img = document.createElement("img");
           img.src = cachedSrc;
@@ -375,13 +377,13 @@
 
               vertices.push(center[0] + radius * dx, center[1] + radius * dy, center[2] + radius * dz);
 
-              const lightDot = Math.max(0.28, dx * 0.35 + dy * 0.75 + dz * 0.55);
-              const spec = Math.pow(Math.max(0, dy * 0.65 + dz * 0.7), 6) * 0.4;
+              // Subtle forged-metal facet variation so rotation around Y is clearly visible
+              const facetTone = 0.92 + 0.08 * Math.cos(phi * 2.0 + theta * 1.5);
 
               colors.push(
-                Math.min(1.0, color[0] * lightDot + spec),
-                Math.min(1.0, color[1] * lightDot + spec),
-                Math.min(1.0, color[2] * lightDot + spec)
+                Math.min(1.0, color[0] * facetTone),
+                Math.min(1.0, color[1] * facetTone),
+                Math.min(1.0, color[2] * facetTone)
               );
             }
           }
@@ -493,8 +495,9 @@
             mockItem.type = "wood_roof";
             mockItem.size = 0.25;
             mockItem.angle = 0.0;
-          } else if (name === "WOOD_CHEST") {
+          } else if (name === "WOOD_CHEST" || name === "WOOD_BED") {
             scaleFactor = 1.1;
+            mockItem.type = name.toLowerCase();
           } else if (name === "CAMPFIRE") {
             scaleFactor = 1.15;
           } else if (name === "WOOD_BOAT") {
@@ -512,6 +515,9 @@
           } else if (name === "OBSIDIAN_FLUX" || name === "OBSIDIAN_FLUX") {
             scaleFactor = 1.05;
             mockItem.isIconPreview = true;
+          } else if (name === "COTTON_PLANT") {
+            scaleFactor = 1.25;
+            mockItem.seed = 98765;
           }
 
           try {
@@ -646,7 +652,7 @@
             scaleFactor = 1.35;
             const ironColor = [0.78, 0.81, 0.86];
             // Render a single clean, perfectly smooth round metallic bullet sphere
-            buildSphereMesh([0, 0, 0], 0.28, 18, 24, ironColor, rawVertices, rawColors, rawIndices);
+            buildSphereMesh([0, 0, 0], 0.26, 12, 16, ironColor, rawVertices, rawColors, rawIndices);
           } else if (name === "WOODEN_ARM_CANNON" || name === "ARM_CANNON") {
             scaleFactor = 1.2;
             const woodColor = [0.55, 0.38, 0.22];
@@ -809,6 +815,10 @@
             targetSize = 0.90; // Give the boat maximum visibility inside the slot
           } else if (name === "BOAT_WING") {
             targetSize = 0.85;
+          } else if (name === "WOOD_BED") {
+            targetSize = 0.85;
+          } else if (name === "IRON_BULLET") {
+            targetSize = 0.68;
           }
           
           const scale = maxDim > 0.0001 ? (targetSize / maxDim) : 1.0;
@@ -837,39 +847,80 @@
           const idx1 = rawIndices[i+1];
           const idx2 = rawIndices[i+2];
           
-          const rVal = rawColors[idx0 * 3];
-          const gVal = rawColors[idx0 * 3 + 1];
-          const bVal = rawColors[idx0 * 3 + 2];
-          
-          function rgbToHex(rVal, gVal, bVal) {
-            const hex = (x) => {
-              const h = Math.max(0, Math.min(255, Math.floor(x * 255))).toString(16);
-              return h.length === 1 ? "0" + h : h;
-            };
-            return "#" + hex(rVal) + hex(gVal) + hex(bVal);
+          const rVal = (rawColors[idx0 * 3] * 255) | 0;
+          const gVal = (rawColors[idx0 * 3 + 1] * 255) | 0;
+          const bVal = (rawColors[idx0 * 3 + 2] * 255) | 0;
+
+          const v0 = vertices[idx0];
+          const v1 = vertices[idx1];
+          const v2 = vertices[idx2 !== undefined ? idx2 : idx0];
+          let fnx = 0, fny = 1, fnz = 0;
+          if (v0 && v1 && v2) {
+            // addBox uses CW outward winding, so (v2 - v0) x (v1 - v0) points outward
+            const ux = v2[0] - v0[0], uy = v2[1] - v0[1], uz = v2[2] - v0[2];
+            const vx = v1[0] - v0[0], vy = v1[1] - v0[1], vz = v1[2] - v0[2];
+            fnx = uy * vz - uz * vy;
+            fny = uz * vx - ux * vz;
+            fnz = ux * vy - uy * vx;
+            const len = Math.hypot(fnx, fny, fnz) || 1;
+            fnx /= len;
+            fny /= len;
+            fnz /= len;
           }
           
           faces.push({
             indices: [idx0, idx1, idx2],
-            color: rgbToHex(rVal, gVal, bVal)
+            depthIndices: [idx0, idx1, idx2],
+            r: rVal,
+            g: gVal,
+            b: bVal,
+            nx: fnx,
+            ny: fny,
+            nz: fnz,
+            avgZ: 0
           });
+        }
+
+        // Pair consecutive triangles that form a rectangular box quad so both halves sort at the exact same quad center
+        for (let i = 0; i + 1 < faces.length; i++) {
+          const fA = faces[i];
+          const fB = faces[i + 1];
+          const dotN = fA.nx * fB.nx + fA.ny * fB.ny + fA.nz * fB.nz;
+          if (dotN > 0.999 && fA.r === fB.r && fA.g === fB.g && fA.b === fB.b) {
+            const combined = [fA.indices[0], fA.indices[1], fA.indices[2]];
+            for (let k = 0; k < 3; k++) {
+              const idx = fB.indices[k];
+              if (combined.indexOf(idx) === -1) combined.push(idx);
+            }
+            if (combined.length === 4) {
+              fA.depthIndices = combined;
+              fB.depthIndices = combined;
+              i++; // Advance past this quad pair
+            }
+          }
         }
         
         const ctx = canvas.getContext("2d");
-        let startTime = Date.now() + Math.random() * 5000;
-        let autoRotateSpeed = 1.0;
+        const projected = new Array(vertices.length);
+        for (let i = 0; i < vertices.length; i++) {
+          projected[i] = { x: 0, y: 0, z: 0 };
+        }
+        // Negative Rx (~-30 deg) tilts the top of the 3D model (+Y) towards the camera (-Z)
+        // so the icon is viewed from an angled top-down perspective instead of from underneath
+        const fixedRx = -0.52;
+        const cosRx = Math.cos(fixedRx);
+        const sinRx = Math.sin(fixedRx);
+        const DEFAULT_PREVIEW_ANGLE = 2.45;
+        const isFlux = (name === "OBSIDIAN_FLUX");
+        const isBullet = (name === "IRON_BULLET");
         
-        function drawFrame() {
-
-          
+        function drawFrame(customAngleY) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           
-          const time = 2.0; // fixed angle for static preview
+          const ry = (typeof customAngleY === "number") ? customAngleY : DEFAULT_PREVIEW_ANGLE;
+          const cosRy = Math.cos(ry);
+          const sinRy = Math.sin(ry);
           
-          const ry = time;
-          const rx = 0.45 + Math.sin(time * 0.5) * 0.1;
-          
-          const projected = [];
           const cx = canvas.width / 2;
           const cy = canvas.height / 2 + yOffset * dpr;
           const screenScale = Math.min(canvas.width, canvas.height) * 1.0 * scaleFactor;
@@ -880,93 +931,77 @@
             const y = v[1];
             const z = v[2];
             
-            const x1 = x * Math.cos(ry) - z * Math.sin(ry);
-            const z1 = x * Math.sin(ry) + z * Math.cos(ry);
+            const x1 = x * cosRy - z * sinRy;
+            const z1 = x * sinRy + z * cosRy;
             
-            const y2 = y * Math.cos(rx) - z1 * Math.sin(rx);
-            const z2 = y * Math.sin(rx) + z1 * Math.cos(rx);
+            const y2 = y * cosRx - z1 * sinRx;
+            const z2 = y * sinRx + z1 * cosRx;
             
-            const sx = cx + x1 * screenScale;
-            const sy = cy - y2 * screenScale;
-            
-            projected.push({ x: sx, y: sy, z: z2 });
+            const proj = projected[i];
+            proj.x = cx + x1 * screenScale;
+            proj.y = cy - y2 * screenScale;
+            proj.z = z2;
           }
           
-          const sortedFaces = faces.map((face, index) => {
-            let avgZ = 0;
-            face.indices.forEach(idx => {
-              avgZ += projected[idx].z;
-            });
-            avgZ /= face.indices.length;
-            return { face, avgZ, index };
-          });
+          for (let i = 0; i < faces.length; i++) {
+            const face = faces[i];
+            const dInd = face.depthIndices;
+            let sumZ = 0;
+            for (let k = 0; k < dInd.length; k++) {
+              sumZ += projected[dInd[k]].z;
+            }
+            const nz1 = face.nx * sinRy + face.nz * cosRy;
+            const nz2 = face.ny * sinRx + nz1 * cosRx;
+            face.avgZ = (sumZ / dInd.length) + nz2 * 0.015;
+          }
           
-          sortedFaces.sort((a, b) => b.avgZ - a.avgZ);
+          faces.sort((a, b) => b.avgZ - a.avgZ);
           
-          sortedFaces.forEach(({ face }) => {
+          for (let i = 0; i < faces.length; i++) {
+            const face = faces[i];
+            const ind = face.indices;
+            
             ctx.beginPath();
-            const p0 = projected[face.indices[0]];
+            const p0 = projected[ind[0]];
             ctx.moveTo(p0.x, p0.y);
-            for (let i = 1; i < face.indices.length; i++) {
-              const p = projected[face.indices[i]];
+            for (let k = 1; k < ind.length; k++) {
+              const p = projected[ind[k]];
               ctx.lineTo(p.x, p.y);
             }
             ctx.closePath();
             
-            const v0 = vertices[face.indices[0]];
-            const v1 = vertices[face.indices[1]];
-            const v2 = vertices[face.indices[2] || face.indices[0]];
+            const nx1 = face.nx * cosRy - face.nz * sinRy;
+            const nz1 = face.nx * sinRy + face.nz * cosRy;
             
-            const ux = v1[0] - v0[0];
-            const uy = v1[1] - v0[1];
-            const uz = v1[2] - v0[2];
+            // Light from top (+Y), front (-Z), and slightly left (-X)
+            const dot = -nx1 * 0.32 + face.ny * 0.78 - nz1 * 0.48;
+            const lightIntensity = isFlux ? 1.0 : (dot > 0 ? dot : 0);
+            const factor = (isBullet ? 0.38 : 0.45) + lightIntensity * (isBullet ? 0.62 : 0.55);
+            const spec = isBullet && dot > 0 ? Math.pow(dot, 6) * 58 : 0;
             
-            const vx = v2[0] - v0[0];
-            const vy = v2[1] - v0[1];
-            const vz = v2[2] - v0[2];
+            const sr = Math.min(255, (face.r * factor + spec) | 0);
+            const sg = Math.min(255, (face.g * factor + spec) | 0);
+            const sb = Math.min(255, (face.b * factor + spec) | 0);
             
-            let nx = uy * vz - uz * vy;
-            let ny = uz * vx - ux * vz;
-            let nz = ux * vy - uy * vx;
-            const len = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
-            nx /= len;
-            ny /= len;
-            nz /= len;
-            
-            const nx1 = nx * Math.cos(ry) - nz * Math.sin(ry);
-            const nz1 = nx * Math.sin(ry) + nz * Math.cos(ry);
-            const ny2 = ny * Math.cos(rx) - nz1 * Math.sin(rx);
-            
-            const dot = nx1 * 0.42 + ny2 * 0.84 + nz1 * 0.32;
-            const lightIntensity = (name === "OBSIDIAN_FLUX" || name === "OBSIDIAN_FLUX") ? 1.0 : Math.max(0.0, dot);
-            
-            ctx.fillStyle = shadeColor(face.color, lightIntensity);
+            const rgbStr = "rgb(" + sr + "," + sg + "," + sb + ")";
+            ctx.fillStyle = rgbStr;
             ctx.fill();
-          });
-          
-        }
-        
-        function shadeColor(colorStr, intensity) {
-          if (colorStr.startsWith("rgba")) return colorStr;
-          
-          let hex = colorStr.replace("#", "");
-          if (hex.length === 3) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            if (isBullet) {
+              ctx.strokeStyle = rgbStr;
+              ctx.lineWidth = 0.65;
+              ctx.stroke();
+            }
           }
-          
-          const r = parseInt(hex.substring(0, 2), 16);
-          const g = parseInt(hex.substring(2, 4), 16);
-          const b = parseInt(hex.substring(4, 6), 16);
-          
-          const factor = 0.45 + intensity * 0.55;
-          const sr = Math.min(255, Math.floor(r * factor));
-          const sg = Math.min(255, Math.floor(g * factor));
-          const sb = Math.min(255, Math.floor(b * factor));
-          
-          return `rgb(${sr}, ${sg}, ${sb})`;
         }
         
-        drawFrame();
+        drawFrame(DEFAULT_PREVIEW_ANGLE);
+        if (isInteractivePreview) {
+          canvas._drawAtAngle = drawFrame;
+          canvas._previewAngle = DEFAULT_PREVIEW_ANGLE;
+          canvas._defaultAngle = DEFAULT_PREVIEW_ANGLE;
+          return canvas;
+        }
+
         try {
           const dataUrl = canvas.toDataURL();
           icon3DCache.set(cacheKey, dataUrl);
@@ -982,6 +1017,27 @@
         }
       }
       window.create3DIconCanvas = create3DIconCanvas;
+
+      // Pre-warm 3D icon cache for common collectibles including COTTON_PLANT and WOOD_BED during idle
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(() => {
+          try {
+            create3DIconCanvas("COTTON_PLANT", 48, 48);
+            create3DIconCanvas("COTTON_PLANT", 38, 38);
+            create3DIconCanvas("WOOD_BED", 48, 48);
+            create3DIconCanvas("WOOD_BED", 38, 38);
+          } catch (e) {}
+        });
+      } else {
+        setTimeout(() => {
+          try {
+            create3DIconCanvas("COTTON_PLANT", 48, 48);
+            create3DIconCanvas("COTTON_PLANT", 38, 38);
+            create3DIconCanvas("WOOD_BED", 48, 48);
+            create3DIconCanvas("WOOD_BED", 38, 38);
+          } catch (e) {}
+        }, 150);
+      }
 
       let activeTab = "inventory";
       window.getActiveTab = () => activeTab;
@@ -2547,6 +2603,8 @@ function cancelFloorPlacement() {
         if (floorPreviewCollectible.isValidPlacement === false) {
            if (floorPreviewCollectible.type === "folding_ladder") {
              showNotice("ส่วนหัวและท้ายของบันไดต้องติดพื้นทั้ง 2 ด้าน และห้ามวางบนน้ำ! (Both ends must touch ground and cannot be placed on water)");
+           } else if (floorPreviewCollectible.type === "wood_bed" || placingItemName === "WOOD_BED") {
+             showNotice("🛏️ เตียงไม้ต้องวางบนพื้นไม้เท่านั้น! (Bed can only be placed on wooden floors)");
            } else {
              showNotice("พื้นที่ไม่เหมาะสมสำหรับการวาง! (Invalid placement)");
            }
@@ -2734,6 +2792,10 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           floorPreviewCollectible.storage = Array(20).fill(null);
+        } else if (placingItemName === "WOOD_BED") {
+          floorPreviewCollectible.type = "wood_bed";
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "MEGANEURA") {
           floorPreviewCollectible.type = "meganeura_item";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
@@ -2813,7 +2875,7 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : ((placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "WOOD_BED" ? "wood_bed" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : ((placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))))));
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -2829,7 +2891,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -3664,19 +3726,26 @@ function cancelFloorPlacement() {
         }, 2500);
       }
 
+      function isItemMatch(item, targetName) {
+        if (!item) return false;
+        if (item.name === targetName || item.label === targetName) return true;
+        if ((targetName === "COTTON" || targetName === "COTTON_PLANT") && (item.name === "COTTON_PLANT" || item.name === "COTTON" || item.label === "COTTON_PLANT" || item.label === "COTTON")) return true;
+        return false;
+      }
+
       function getItemCount(name) {
         let total = 0;
         // Check inventory (unlocked slots)
         for (let i = 0; i < UNLOCKED_SLOTS; i++) {
           const item = inventory[i];
-          if (item && (item.name === name || item.label === name)) {
+          if (isItemMatch(item, name)) {
             total += item.count || 1;
           }
         }
         // Check action slots
         for (let i = 0; i < actionSlotsItems.length; i++) {
           const item = actionSlotsItems[i];
-          if (item && (item.name === name || item.label === name)) {
+          if (isItemMatch(item, name)) {
             total += item.count || 1;
           }
         }
@@ -3690,7 +3759,7 @@ function cancelFloorPlacement() {
         for (let i = 0; i < UNLOCKED_SLOTS; i++) {
           if (remaining <= 0) break;
           const item = inventory[i];
-          if (item && (item.name === name || item.label === name)) {
+          if (isItemMatch(item, name)) {
             if (item.count > remaining) {
               item.count -= remaining;
               remaining = 0;
@@ -3705,7 +3774,7 @@ function cancelFloorPlacement() {
         for (let i = 0; i < actionSlotsItems.length; i++) {
           if (remaining <= 0) break;
           const item = actionSlotsItems[i];
-          if (item && (item.name === name || item.label === name)) {
+          if (isItemMatch(item, name)) {
             if (item.count > remaining) {
               item.count -= remaining;
               remaining = 0;
@@ -3965,6 +4034,14 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "wood_bed",
+            output: { name: "WOOD_BED", icon: "🛏️", count: 1, label: "เตียงไม้พร้อมฟูก (WOODEN BED) x1" },
+            ingredients: [
+              { name: "COTTON_PLANT", icon: "☁️", count: 50, label: "ต้นฝ้าย (COTTON) x50" },
+              { name: "LOG", icon: "🪵", count: 3, label: "ท่อนไม้ (LOG) x3" }
+            ]
+          },
+          {
             id: "shovel",
             output: { name: "SHOVEL", icon: "🥄", count: 1, label: "พลั่ว (SHOVEL) x1" },
             ingredients: [
@@ -4167,8 +4244,30 @@ function cancelFloorPlacement() {
           }
         ];
 
-        CRAFTING_RECIPES.forEach(recipe => {
+        if (!document.getElementById("craftingCardPreviewStyles")) {
+          const st = document.createElement("style");
+          st.id = "craftingCardPreviewStyles";
+          st.textContent = `
+            .crafting-recipe-card {
+              cursor: pointer;
+              transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            }
+            .crafting-recipe-card.crafting-card-selected,
+            .crafting-recipe-card.touch-preview-active,
+            .crafting-recipe-card.gamepad-focused {
+              border-color: #dfb76c !important;
+              background: rgba(223, 183, 108, 0.08) !important;
+              box-shadow: 0 0 14px rgba(223, 183, 108, 0.35) !important;
+            }
+          `;
+          document.head.appendChild(st);
+        }
+
+        CRAFTING_RECIPES.forEach((recipe, recipeIdx) => {
           const card = document.createElement("div");
+          card.className = "crafting-recipe-card";
+          card.dataset.recipeId = recipe.id;
+          card.dataset.recipeIndex = String(recipeIdx);
           card.style.background = "rgba(255, 255, 255, 0.03)";
           card.style.border = "1px solid rgba(255, 255, 255, 0.08)";
           card.style.borderRadius = "0px";
@@ -4193,11 +4292,58 @@ function cancelFloorPlacement() {
           itemIcon.style.display = "inline-flex";
           itemIcon.style.alignItems = "center";
           itemIcon.style.justifyContent = "center";
-          const canvas3D = create3DIconCanvas(recipe.output, 40, 40);
+          // Only the main output icon uses interactivePreview: true so it can rotate continuously!
+          const canvas3D = create3DIconCanvas(recipe.output, 40, 40, { interactivePreview: true });
           if (canvas3D) {
             itemIcon.appendChild(canvas3D);
+            card._mainIconCanvas = canvas3D;
           } else {
             itemIcon.textContent = recipe.output.icon;
+          }
+
+          // Click (Mouse) & Tap (Touchscreen) support: clicking or tapping a crafting card selects it and activates its 3D main icon rotation preview
+          const selectCardForPreview = () => {
+            window._selectedCraftingCard = card;
+            window._selectedCraftingRecipeId = recipe.id;
+            window._activeTouchCraftingCard = card;
+            window._activeTouchRecipeId = recipe.id;
+
+            const allCards = craftingList.querySelectorAll(".crafting-recipe-card");
+            allCards.forEach(c => {
+              if (c === card) {
+                c.classList.add("crafting-card-selected");
+                c.classList.add("touch-preview-active");
+              } else {
+                c.classList.remove("crafting-card-selected");
+                c.classList.remove("touch-preview-active");
+                c.classList.remove("gamepad-focused");
+              }
+            });
+
+            // Sync with GamepadController index so gamepad focus doesn't stay stuck on a different card
+            if (window.GamepadController && window.GamepadController.uiNav) {
+              window.GamepadController.uiNav.area = "cards";
+              window.GamepadController.uiNav.index = recipeIdx;
+              if (window.isUsingGamepad) {
+                card.classList.add("gamepad-focused");
+              }
+            }
+
+            if (typeof window.startCraftingPreviewLoop === "function") {
+              window.startCraftingPreviewLoop();
+            }
+          };
+
+          card.addEventListener("mousedown", selectCardForPreview);
+          card.addEventListener("click", selectCardForPreview);
+          card.addEventListener("touchstart", selectCardForPreview, { passive: true });
+          card.addEventListener("pointerdown", selectCardForPreview, { passive: true });
+
+          if (window._selectedCraftingRecipeId === recipe.id || window._activeTouchRecipeId === recipe.id) {
+            window._selectedCraftingCard = card;
+            window._activeTouchCraftingCard = card;
+            card.classList.add("crafting-card-selected");
+            card.classList.add("touch-preview-active");
           }
 
           const itemName = document.createElement("span");
@@ -4321,6 +4467,7 @@ function cancelFloorPlacement() {
             };
             
             btn.onclick = () => {
+              selectCardForPreview();
               craftItem(recipe.id);
             };
           } else {
@@ -4340,9 +4487,83 @@ function cancelFloorPlacement() {
           card.appendChild(btn);
           craftingList.appendChild(card);
         });
+        if (typeof window.startCraftingPreviewLoop === "function") {
+          window.startCraftingPreviewLoop();
+        }
         if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
       window.renderCrafting = renderCrafting;
+
+      // Continuous 3D main icon preview rotation loop for Crafting Tab (Mouse click, Touchscreen tap, and Gamepad focus)
+      (function setupCraftingMainIconPreviewLoop() {
+        let isLoopRunning = false;
+        let lastFrameTime = 0;
+        // Moderately slow right-to-left rotation speed (~1.35 rad/sec, ~4.6s per full 360° turn)
+        const ROTATE_SPEED_RAD_PER_SEC = 1.35;
+
+        function isCraftingVisible() {
+          const craftingList = document.getElementById("craftingList");
+          if (!craftingList || craftingList.style.display === "none") return false;
+          const invOverlay = document.getElementById("inventoryOverlay");
+          const craftOverlay = document.getElementById("craftingOverlay");
+          const isOpen = (invOverlay && invOverlay.classList.contains("open")) || (craftOverlay && craftOverlay.classList.contains("open"));
+          return !!isOpen;
+        }
+
+        function tick(now) {
+          if (!isCraftingVisible()) {
+            isLoopRunning = false;
+            return;
+          }
+
+          const dt = lastFrameTime ? Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000)) : 0.016;
+          lastFrameTime = now;
+
+          const craftingList = document.getElementById("craftingList");
+          if (craftingList) {
+            const cards = craftingList.querySelectorAll(".crafting-recipe-card");
+            const isGamepadMode = !!(window.isUsingGamepad || window.isGamepadUINavActive);
+            const hasAnyGamepadFocusedCard = !!craftingList.querySelector(".crafting-recipe-card.gamepad-focused");
+            const hasAnySelectedCard = !!craftingList.querySelector(".crafting-recipe-card.crafting-card-selected, .crafting-recipe-card.touch-preview-active");
+
+            for (let i = 0; i < cards.length; i++) {
+              const card = cards[i];
+              const canvas = card._mainIconCanvas;
+              if (!canvas || typeof canvas._drawAtAngle !== "function") continue;
+
+              const isClickOrTouchSelected = (
+                window._selectedCraftingCard === card ||
+                window._activeTouchCraftingCard === card ||
+                card.classList.contains("crafting-card-selected") ||
+                card.classList.contains("touch-preview-active")
+              );
+              const isGamepadActive = card.classList.contains("gamepad-focused") || (isGamepadMode && !hasAnyGamepadFocusedCard && !hasAnySelectedCard && i === 0);
+
+              if (isClickOrTouchSelected || isGamepadActive) {
+                // Rotate from right to left (decreasing ry moves the front surface from right to left)
+                const baseAngle = typeof canvas._defaultAngle === "number" ? canvas._defaultAngle : 2.45;
+                canvas._previewAngle = (typeof canvas._previewAngle === "number" ? canvas._previewAngle : baseAngle) - ROTATE_SPEED_RAD_PER_SEC * dt;
+                canvas._drawAtAngle(canvas._previewAngle);
+                canvas._wasRotating = true;
+              } else if (canvas._wasRotating) {
+                // Smoothly reset back to default static preview angle when no longer selected/focused
+                canvas._previewAngle = typeof canvas._defaultAngle === "number" ? canvas._defaultAngle : 2.45;
+                canvas._drawAtAngle(canvas._previewAngle);
+                canvas._wasRotating = false;
+              }
+            }
+          }
+
+          requestAnimationFrame(tick);
+        }
+
+        window.startCraftingPreviewLoop = function() {
+          if (isLoopRunning) return;
+          isLoopRunning = true;
+          lastFrameTime = performance.now();
+          requestAnimationFrame(tick);
+        };
+      })();
 
       function craftItem(recipeId) {
         const CRAFTING_RECIPES = [
@@ -4359,6 +4580,14 @@ function cancelFloorPlacement() {
             output: { name: "WOOD_CHEST", icon: "📦", count: 1 },
             ingredients: [
               { name: "LOG", count: 2 }
+            ]
+          },
+          {
+            id: "wood_bed",
+            output: { name: "WOOD_BED", icon: "🛏️", count: 1 },
+            ingredients: [
+              { name: "COTTON_PLANT", count: 50 },
+              { name: "LOG", count: 3 }
             ]
           },
           {
@@ -5534,6 +5763,8 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_ROOF", icon: "🛖", label: "WOOD_ROOF" };
         } else if (closestDemolishItem.type === "wood_chest") {
           itemData = { name: "WOOD_CHEST", icon: "📦", label: "WOOD_CHEST" };
+        } else if (closestDemolishItem.type === "wood_bed") {
+          itemData = { name: "WOOD_BED", icon: "🛏️", label: "WOOD_BED" };
         } else if (closestDemolishItem.type === "meganeura_item") {
           itemData = { name: "MEGANEURA", icon: "🦟", label: "MEGANEURA" };
         } else if (closestDemolishItem.type === "isopod_item") {

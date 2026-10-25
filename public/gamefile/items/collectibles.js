@@ -54,7 +54,7 @@ function syncTreeAttachedFruits() {
           existing.swayWeight = typeof fInfo.swayWeight === "number" ? fInfo.swayWeight : 1.0;
         }
       }
-    } else if (obs && obs.type === "cotton_plant") {
+    } else if (obs && obs.type === "cotton_plant" && obs.active !== false) {
       const cottonId = "cotton_" + obs.id;
       const existing = colList.find(c => c.cottonId === cottonId);
       if (!existing) {
@@ -111,7 +111,8 @@ window.ItemRegistry["cotton_plant"] = {
         n[0], n[1], n[2],
         r, f, n,
         seed,
-        vertices, colors, indices
+        vertices, colors, indices,
+        targetBuffer === "preview" || !!item.isIconPreview
       );
     } finally {
       window._disableTreeColorEncoding = prevDisable;
@@ -2160,7 +2161,7 @@ function buildCollectibles(count, seed) {
         const isInventoryOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
         if (isPlacingFloor && !isInventoryOpen) {
           const placingItemName = floorPlacementInfo && floorPlacementInfo.item ? floorPlacementInfo.item.name : "";
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD" ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor")))))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "WOOD_BED" ? "wood_bed" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD" ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))))));
 
           if (!floorPreviewCollectible || floorPreviewCollectible.type !== typeToPlace) {
             // Remove mismatched preview if it exists
@@ -2184,7 +2185,7 @@ function buildCollectibles(count, seed) {
             };
             collectibles.push(floorPreviewCollectible);
             floorPreviewCollectible = collectibles[collectibles.length - 1];
-            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof" || typeToPlace === "folding_ladder") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -2243,7 +2244,7 @@ function buildCollectibles(count, seed) {
 
           // Set a close forward offset in actual meters (using actionReachDistance with a minimum safety fallback to prevent clipping)
           const baseOffset = typeToPlace === "campfire" ? 0.20 : 0.35;
-          const forwardOffset = (typeToPlace === "campfire" || typeToPlace === "wood_chest" || typeToPlace.startsWith("robot_")) 
+          const forwardOffset = (typeToPlace === "campfire" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace.startsWith("robot_")) 
             ? Math.max(baseOffset, actionReachDistance) 
             : baseOffset; 
           const playerPt = [nx * groundRadius, ny * groundRadius, nz * groundRadius];
@@ -2289,9 +2290,9 @@ function buildCollectibles(count, seed) {
           const slopePhi = Math.abs(h2 - previewHeight) * dhScale;
           const slopeVal = Math.sqrt(slopeTheta*slopeTheta + slopePhi*slopePhi);
           
-          // Valid placement if not on water and not too steep (Stone Floor is valid everywhere)
+          // Valid placement if not on water and not too steep (Stone Floor is valid everywhere, Wood Bed requires wooden floor)
           const maxSlope = typeToPlace === "campfire" ? 2.0 : 0.8;
-          floorPreviewCollectible.isValidPlacement = (typeToPlace === "stone_floor") ? true : (!isUnderWater && (slopeVal < maxSlope));
+          floorPreviewCollectible.isValidPlacement = (typeToPlace === "wood_bed") ? false : ((typeToPlace === "stone_floor") ? true : (!isUnderWater && (slopeVal < maxSlope)));
           
           const previewEast = [-Math.sin(previewPhi), 0, Math.cos(previewPhi)];
           const previewNorth = [-Math.cos(previewTheta) * Math.cos(previewPhi), Math.sin(previewTheta), -Math.cos(previewTheta) * Math.sin(previewPhi)];
@@ -2329,7 +2330,7 @@ function buildCollectibles(count, seed) {
           let pN = [pnx, pny, pnz];
 
           // "ลอยสูงจากพื้นเสมอ" -> float slightly above the ground at the preview location
-          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12)));
+          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12)));
           let bob = typeToPlace === "campfire" ? 0.005 : (Math.sin(Date.now() * 0.003) * 0.01 + bobAmt); 
           if (typeToPlace === "robot_cockpit") bob = 0.14;
           else if (typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") bob = 0.14;
@@ -4279,7 +4280,7 @@ function buildCollectibles(count, seed) {
                 }
               }
             }
-          } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
+          } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
             // Direct wall snap for wood_window and wood_door
             if (typeToPlace === "wood_window" || typeToPlace === "wood_door") {
               let nearestWall = null;
@@ -4337,7 +4338,10 @@ function buildCollectibles(count, seed) {
             let nearestDist = Infinity;
             if (!isSnapped) {
               for (let other of collectibles) {
-                if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
+                const isAllowedFloor = (typeToPlace === "wood_bed")
+                  ? (other.type === "wood_floor" || other.type === "thin_wood_floor")
+                  : (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor");
+                if (other.active && isAllowedFloor && !other.isPreview) {
                   const dx = other.position[0] - targetPos[0];
                   const dy = other.position[1] - targetPos[1];
                   const dz = other.position[2] - targetPos[2];
@@ -4350,7 +4354,7 @@ function buildCollectibles(count, seed) {
               }
             }
 
-            const maxFloorDist = (typeToPlace === "thin_wood_floor" || typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") ? 2.5 : 0.6;
+            const maxFloorDist = (typeToPlace === "thin_wood_floor" || typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") ? 2.5 : (typeToPlace === "wood_bed" ? 1.2 : 0.6);
             if (nearestFloor && nearestDist < maxFloorDist) {
                 const sR = nearestFloor.R || [1, 0, 0];
                 const sF = nearestFloor.F || [0, 0, 1];
@@ -4366,15 +4370,16 @@ function buildCollectibles(count, seed) {
                 const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
 
                 // If within expanded wood_floor bounds (generous snapping)
-                let snapBound = (typeToPlace === "thin_wood_floor" && (nearestFloor.type === "thin_wood_floor" || nearestFloor.type === "wood_floor")) ? 0.65 : 0.35;
+                let snapBound = (typeToPlace === "thin_wood_floor" && (nearestFloor.type === "thin_wood_floor" || nearestFloor.type === "wood_floor")) ? 0.65 : (typeToPlace === "wood_bed" ? 0.45 : 0.35);
                 if (Math.abs(localX) <= snapBound && Math.abs(localZ) <= snapBound) {
                     // Snap localX and localZ to 0.15 grid (-0.15, 0.0, 0.15)
                     let gridX = Math.round(localX / 0.15);
                     let gridZ = Math.round(localZ / 0.15);
 
                     // Prevent center and corner placement for walls to avoid overlapping side-by-side, unless placing on thin_wood_floor which allows center placement, or if placing thin_wood_floor itself.
-                    if (typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
-                        floorPreviewCollectible.isValidPlacement = true;
+                    if (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
+                        const isWoodFloor = (nearestFloor.type === "wood_floor" || nearestFloor.type === "thin_wood_floor");
+                        let validPlace = (typeToPlace === "wood_bed") ? isWoodFloor : true;
                         floorPreviewCollectible.size = 0.25;
 
                         let floorHH = 0;
@@ -4388,15 +4393,184 @@ function buildCollectibles(count, seed) {
                         else if (typeToPlace === "robot_stand") floatOffset = 0.0;
                         else if (typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") floatOffset = 0.002;
                         else if (typeToPlace.startsWith("robot_")) floatOffset = 0.35;
+
+                        // Rotation angle & rotated 2D footprint half-extents (The Sims style)
+                        const rotAngle = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+                        const cosA = Math.cos(rotAngle);
+                        const sinA = Math.sin(rotAngle);
+
+                        let halfW = 0.06, halfD = 0.06;
+                        if (typeToPlace === "wood_bed") {
+                            halfW = 0.075; // 0.32 * 0.46 / 2
+                            halfD = 0.121; // 0.52 * 0.46 / 2
+                        } else if (typeToPlace === "wood_chest") {
+                            halfW = 0.058; // 0.25 * 0.45 / 2
+                            halfD = 0.048; // 0.21 * 0.45 / 2
+                        } else if (typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
+                            halfW = 0.085;
+                            halfD = 0.085;
+                        }
+                        const extX = Math.abs(halfW * cosA) + Math.abs(halfD * sinA);
+                        const extZ = Math.abs(halfW * sinA) + Math.abs(halfD * cosA);
+
+                        // 1) Fine Sims-style sub-grid (0.025 step instead of 0.15 wall-edge jumps)
+                        const subStep = 0.025;
+                        let fX = Math.round(localX / subStep) * subStep;
+                        let fZ = Math.round(localZ / subStep) * subStep;
+
+                        // 2) Scan neighboring floors, walls, and placed furniture on the same story
+                        let hasFloorNegX = false, hasFloorPosX = false, hasFloorNegZ = false, hasFloorPosZ = false;
+                        const nearbyWalls = [];
+                        const nearbyFurniture = [];
+
+                        for (let other of collectibles) {
+                            if (!other || !other.active || other.isPreview || other === nearestFloor) continue;
+                            const odx = other.position[0] - sP[0];
+                            const ody = other.position[1] - sP[1];
+                            const odz = other.position[2] - sP[2];
+                            const olX = odx * sR[0] + ody * sR[1] + odz * sR[2];
+                            const olZ = odx * sF[0] + ody * sF[1] + odz * sF[2];
+                            const olN = odx * sN[0] + ody * sN[1] + odz * sN[2];
+
+                            if (Math.abs(olX) > 0.55 || Math.abs(olZ) > 0.55) continue;
+
+                            // Check adjacent floors at the same height level so items don't overhang into mid-air
+                            const isValidNeighborFloor = (typeToPlace === "wood_bed")
+                                ? (other.type === "wood_floor" || other.type === "thin_wood_floor")
+                                : (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor");
+                            if (isValidNeighborFloor && Math.abs(olN) < 0.08) {
+                                if (olX < -0.20 && olX > -0.42 && Math.abs(olZ) < 0.15) hasFloorNegX = true;
+                                if (olX >  0.20 && olX <  0.42 && Math.abs(olZ) < 0.15) hasFloorPosX = true;
+                                if (olZ < -0.20 && olZ > -0.42 && Math.abs(olX) < 0.15) hasFloorNegZ = true;
+                                if (olZ >  0.20 && olZ <  0.42 && Math.abs(olX) < 0.15) hasFloorPosZ = true;
+                            }
+
+                            // Check walls, windows, and doors at this floor story level
+                            if ((other.type === "wood_wall" || other.type === "wood_window" || other.type === "wood_door") && olN >= -0.05 && olN <= floorHH + 0.22) {
+                                const wAngle = other.angle || 0.0;
+                                const cosW = Math.cos(wAngle);
+                                const sinW = Math.sin(wAngle);
+                                const oR = other.R || sR;
+                                const oF = other.F || sF;
+                                const wallR0 = oR[0] * cosW + oF[0] * sinW;
+                                const wallR1 = oR[1] * cosW + oF[1] * sinW;
+                                const wallR2 = oR[2] * cosW + oF[2] * sinW;
+                                const projRX = Math.abs(wallR0 * sR[0] + wallR1 * sR[1] + wallR2 * sR[2]);
+                                const projRZ = Math.abs(wallR0 * sF[0] + wallR1 * sF[1] + wallR2 * sF[2]);
+                                const wallHalfLen = 0.152;
+                                const wallHalfThick = 0.024;
+                                const wHalfX = projRX * wallHalfLen + projRZ * wallHalfThick;
+                                const wHalfZ = projRZ * wallHalfLen + projRX * wallHalfThick;
+                                nearbyWalls.push({ olX, olZ, wHalfX, wHalfZ });
+                            }
+
+                            // Check other placed furniture on this floor to prevent overlapping objects
+                            if ((other.type === "wood_bed" || other.type === "wood_chest" || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") && Math.abs(olN - (floorHH / 2)) < 0.12) {
+                                const oR = other.R || sR;
+                                const oF = other.F || sF;
+                                let oHalfW = 0.06, oHalfD = 0.06;
+                                if (other.type === "wood_bed") { oHalfW = 0.075; oHalfD = 0.121; }
+                                else if (other.type === "wood_chest") { oHalfW = 0.058; oHalfD = 0.048; }
+                                else { oHalfW = 0.085; oHalfD = 0.085; }
+                                const rDotX = Math.abs(oR[0] * sR[0] + oR[1] * sR[1] + oR[2] * sR[2]);
+                                const fDotX = Math.abs(oF[0] * sR[0] + oF[1] * sR[1] + oF[2] * sR[2]);
+                                const rDotZ = Math.abs(oR[0] * sF[0] + oR[1] * sF[1] + oR[2] * sF[2]);
+                                const fDotZ = Math.abs(oF[0] * sF[0] + oF[1] * sF[1] + oF[2] * sF[2]);
+                                nearbyFurniture.push({
+                                    olX,
+                                    olZ,
+                                    oExtX: oHalfW * rDotX + oHalfD * fDotX,
+                                    oExtZ: oHalfW * rDotZ + oHalfD * fDotZ
+                                });
+                            }
+                        }
+
+                        // 3) Clamp to floor edges (unless an adjacent floor continues in that direction)
+                        let minX = hasFloorNegX ? -0.15 : (-0.15 + extX);
+                        let maxX = hasFloorPosX ?  0.15 : ( 0.15 - extX);
+                        let minZ = hasFloorNegZ ? -0.15 : (-0.15 + extZ);
+                        let maxZ = hasFloorPosZ ?  0.15 : ( 0.15 - extZ);
+
+                        // 4) Push back flush against tile-edge walls (The Sims wall-stop behavior)
+                        for (let w of nearbyWalls) {
+                            // Vertical wall running along Z (left/right edge of tile)
+                            if (w.wHalfX < 0.06 && Math.abs(fZ - w.olZ) < (w.wHalfZ + extZ - 0.01)) {
+                                if (w.olX < 0 && w.olX > -0.25) {
+                                    minX = Math.max(minX, w.olX + w.wHalfX + extX);
+                                } else if (w.olX > 0 && w.olX < 0.25) {
+                                    maxX = Math.min(maxX, w.olX - w.wHalfX - extX);
+                                }
+                            }
+                            // Horizontal wall running along X (front/back edge of tile)
+                            if (w.wHalfZ < 0.06 && Math.abs(fX - w.olX) < (w.wHalfX + extX - 0.01)) {
+                                if (w.olZ < 0 && w.olZ > -0.25) {
+                                    minZ = Math.max(minZ, w.olZ + w.wHalfZ + extZ);
+                                } else if (w.olZ > 0 && w.olZ < 0.25) {
+                                    maxZ = Math.min(maxZ, w.olZ - w.wHalfZ - extZ);
+                                }
+                            }
+                        }
+
+                        if (minX <= maxX) {
+                            fX = Math.max(minX, Math.min(maxX, fX));
+                        } else {
+                            fX = (minX + maxX) * 0.5;
+                            validPlace = false;
+                        }
+                        if (minZ <= maxZ) {
+                            fZ = Math.max(minZ, Math.min(maxZ, fZ));
+                        } else {
+                            fZ = (minZ + maxZ) * 0.5;
+                            validPlace = false;
+                        }
+
+                        // 5) Iterative 2D AABB push-out for corner/perpendicular walls
+                        for (let iter = 0; iter < 2; iter++) {
+                            for (let w of nearbyWalls) {
+                                const overlapX = (extX + w.wHalfX) - Math.abs(fX - w.olX);
+                                const overlapZ = (extZ + w.wHalfZ) - Math.abs(fZ - w.olZ);
+                                if (overlapX > 0 && overlapZ > 0) {
+                                    if (overlapX < overlapZ) {
+                                        fX += (fX >= w.olX ? overlapX : -overlapX);
+                                    } else {
+                                        fZ += (fZ >= w.olZ ? overlapZ : -overlapZ);
+                                    }
+                                }
+                            }
+                            if (minX <= maxX) fX = Math.max(minX, Math.min(maxX, fX));
+                            if (minZ <= maxZ) fZ = Math.max(minZ, Math.min(maxZ, fZ));
+                        }
+
+                        // 6) Final strict overlap check against walls and other furniture
+                        for (let w of nearbyWalls) {
+                            const overlapX = (extX + w.wHalfX - 0.004) - Math.abs(fX - w.olX);
+                            const overlapZ = (extZ + w.wHalfZ - 0.004) - Math.abs(fZ - w.olZ);
+                            if (overlapX > 0 && overlapZ > 0) {
+                                validPlace = false;
+                                break;
+                            }
+                        }
+                        if (validPlace) {
+                            for (let fn of nearbyFurniture) {
+                                const overlapX = (extX + fn.oExtX - 0.006) - Math.abs(fX - fn.olX);
+                                const overlapZ = (extZ + fn.oExtZ - 0.006) - Math.abs(fZ - fn.olZ);
+                                if (overlapX > 0 && overlapZ > 0) {
+                                    validPlace = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        floorPreviewCollectible.isValidPlacement = validPlace;
                         targetPos = [
-                            sP[0] + sR[0] * (gridX * 0.15) + sF[0] * (gridZ * 0.15) + sN[0] * (floorHH / 2 + floatOffset),
-                            sP[1] + sR[1] * (gridX * 0.15) + sF[1] * (gridZ * 0.15) + sN[1] * (floorHH / 2 + floatOffset),
-                            sP[2] + sR[2] * (gridX * 0.15) + sF[2] * (gridZ * 0.15) + sN[2] * (floorHH / 2 + floatOffset)
+                            sP[0] + sR[0] * fX + sF[0] * fZ + sN[0] * (floorHH / 2 + floatOffset),
+                            sP[1] + sR[1] * fX + sF[1] * fZ + sN[1] * (floorHH / 2 + floatOffset),
+                            sP[2] + sR[2] * fX + sF[2] * fZ + sN[2] * (floorHH / 2 + floatOffset)
                         ];
 
                         pN = [sN[0], sN[1], sN[2]];
-                        pR = [sR[0], sR[1], sR[2]];
-                        pF = [sF[0], sF[1], sF[2]];
+                        pR = [sR[0] * cosA - sF[0] * sinA, sR[1] * cosA - sF[1] * sinA, sR[2] * cosA - sF[2] * sinA];
+                        pF = [sF[0] * cosA + sR[0] * sinA, sF[1] * cosA + sR[1] * sinA, sF[2] * cosA + sR[2] * sinA];
                         isSnapped = true;
                     } else {
                         if (gridX === 0 && gridZ === 0) {
@@ -4511,6 +4685,40 @@ function buildCollectibles(count, seed) {
                           floorPreviewCollectible.angle = lowerWall.item.angle;
                         } else {
                           floorPreviewCollectible.angle = (gridX !== 0) ? Math.PI / 2 : 0.0;
+                        }
+
+                        // Prevent building a wall directly through existing furniture (bed/chest) on the floor
+                        if (targetLevel === 0) {
+                          const wCenterX = gridX * 0.15;
+                          const wCenterZ = gridZ * 0.15;
+                          const wHalfX = (gridX !== 0) ? 0.022 : 0.15;
+                          const wHalfZ = (gridX !== 0) ? 0.15 : 0.022;
+                          for (let other of collectibles) {
+                            if (other && other.active && !other.isPreview && (other.type === "wood_bed" || other.type === "wood_chest")) {
+                              const odx = other.position[0] - sP[0];
+                              const ody = other.position[1] - sP[1];
+                              const odz = other.position[2] - sP[2];
+                              const olX = odx * sR[0] + ody * sR[1] + odz * sR[2];
+                              const olZ = odx * sF[0] + ody * sF[1] + odz * sF[2];
+                              const olN = odx * sN[0] + ody * sN[1] + odz * sN[2];
+                              if (Math.abs(olN - floorTopOffset) < 0.14) {
+                                const oR = other.R || sR;
+                                const oF = other.F || sF;
+                                const oHalfW = (other.type === "wood_bed") ? 0.073 : 0.056;
+                                const oHalfD = (other.type === "wood_bed") ? 0.119 : 0.046;
+                                const rDotX = Math.abs(oR[0] * sR[0] + oR[1] * sR[1] + oR[2] * sR[2]);
+                                const fDotX = Math.abs(oF[0] * sR[0] + oF[1] * sR[1] + oF[2] * sR[2]);
+                                const rDotZ = Math.abs(oR[0] * sF[0] + oR[1] * sF[1] + oR[2] * sF[2]);
+                                const fDotZ = Math.abs(oF[0] * sF[0] + oF[1] * sF[1] + oF[2] * sF[2]);
+                                const oExtX = oHalfW * rDotX + oHalfD * fDotX;
+                                const oExtZ = oHalfW * rDotZ + oHalfD * fDotZ;
+                                if (Math.abs(wCenterX - olX) < (wHalfX + oExtX - 0.004) && Math.abs(wCenterZ - olZ) < (wHalfZ + oExtZ - 0.004)) {
+                                  floorPreviewCollectible.isValidPlacement = false;
+                                  break;
+                                }
+                              }
+                            }
+                          }
                         }
 
                         isSnapped = true;
@@ -4690,6 +4898,12 @@ function buildCollectibles(count, seed) {
                         pN = [pnx, pny, pnz];
                         pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
                         pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
+                    } else if (typeToPlace === "wood_bed") {
+                        floorPreviewCollectible.isValidPlacement = false;
+                        floorPreviewCollectible.size = 0.25;
+                        pN = [pnx, pny, pnz];
+                        pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
+                        pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
                     } else if (!isSnapped) {
                         floorPreviewCollectible.isValidPlacement = false;
                         floorPreviewCollectible.size = 0.25;
@@ -4699,6 +4913,12 @@ function buildCollectibles(count, seed) {
                 // No wood floor found nearby or too far
                 if (typeToPlace === "wood_chest" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
                     floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
+                    floorPreviewCollectible.size = 0.25;
+                    pN = [pnx, pny, pnz];
+                    pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
+                    pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
+                } else if (typeToPlace === "wood_bed") {
+                    floorPreviewCollectible.isValidPlacement = false;
                     floorPreviewCollectible.size = 0.25;
                     pN = [pnx, pny, pnz];
                     pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
@@ -5859,6 +6079,18 @@ function buildCollectibles(count, seed) {
           placeType: "wood_chest",
           usage_th: "พรี-วางเป็นหีบเก็บของความจุ 20 ช่องสำหรับเก็บไอเทมถาวร",
           usage_en: "Pre-place as a 20-slot storage chest to store items safely.",
+          maxStack: 99
+        },
+        "WOOD_BED": {
+          id: "WOOD_BED",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "เตียงไม้พร้อมฟูก",
+          name_en: "Wooden Bed with Mattress",
+          icon: "🛏️",
+          actionType: "PLACE_FURNITURE",
+          placeType: "wood_bed",
+          usage_th: "พรี-วางเป็นเตียงไม้พร้อมฟูกนุ่มจากฝ้าย (สามารถวางบนพื้นไม้เท่านั้น)",
+          usage_en: "Pre-place as a cozy wooden bed with soft cotton mattress (can only be placed on wooden floors).",
           maxStack: 99
         },
         "CAMPFIRE": {

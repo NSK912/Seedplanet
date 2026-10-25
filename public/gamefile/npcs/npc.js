@@ -254,16 +254,48 @@ function initAmphibians(count, seed) {
   const rRatio = Math.max(0.5, planetRadius / 8.0);
 
   function checkWaterAtCoord(theta, phi) {
-    const h = getHeightOnSphere(theta, phi, seed);
-    const gR = RADIUS + h * HEIGHT_SCALE;
-    const wR = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15;
-    const isWater = (gR < wR - 0.015);
+    const curSeed = seed || (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 12345);
+    const curRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+    const curHScale = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(curRadius / 8.0, 0.70));
+    const curWaterLevel = typeof waterLevel !== 'undefined' ? waterLevel : 1.0;
+    
+    const h = typeof getVisualHeightOnSphere === "function" 
+      ? getVisualHeightOnSphere(theta, phi, curSeed) 
+      : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, curSeed) : 0);
+      
+    const gR = curRadius + h * curHScale;
+    const wR = curRadius + curWaterLevel * (curHScale * 0.25);
+    
+    // ตรวจสอบว่าเป็นทะเลลึกจริง โดยพื้นผิวต้องต่ำกว่ารัศมีผิวน้ำอย่างน้อย 0.08m เพื่อไม่ให้เกยตื้นริมหาด
+    const isWater = (typeof waterEnabled === 'undefined' || waterEnabled) && (gR < wR - 0.08);
     return { height: h, gR, wR, isWater };
   }
 
   // Helper to find a suitable coordinate on the planet sphere
   function findSpawnCoordinate(preferType) {
     // preferType: 'water', 'land', or 'any'
+    // หากเป็นสัตว์น้ำ (Placoderm / Georgiacetus) ให้เลือกตำแหน่งจากกอพืชใต้น้ำ (underwater_plant) ที่อยู่ในน้ำลึกจริงก่อนเสมอ
+    if (preferType === 'water') {
+      const allObs = (typeof natureObstacles !== 'undefined' ? natureObstacles : []).concat(
+        (typeof window !== 'undefined' && window.allDeterministicNatureObstacles) ? window.allDeterministicNatureObstacles : []
+      );
+      const underwaterPlants = allObs.filter(o => o && o.type === "underwater_plant" && o.position);
+      if (underwaterPlants.length > 0) {
+        for (let rTry = 0; rTry < 20; rTry++) {
+          const reef = underwaterPlants[Math.floor(Math.random() * underwaterPlants.length)];
+          const pos = reef.position;
+          const pLen = Math.hypot(pos[0], pos[1], pos[2]) || 1;
+          const ny = pos[1] / pLen;
+          const theta = Math.acos(Math.max(-1, Math.min(1, ny)));
+          const phi = Math.atan2(pos[2], pos[0]);
+          const cCheck = checkWaterAtCoord(theta, phi);
+          if (cCheck.isWater) {
+            return { theta, phi, height: cCheck.height, isLand: false };
+          }
+        }
+      }
+    }
+
     let bestTheta = Math.random() * Math.PI;
     let bestPhi = Math.random() * Math.PI * 2;
     let initialCheck = checkWaterAtCoord(bestTheta, bestPhi);
@@ -284,8 +316,8 @@ function initAmphibians(count, seed) {
     let deepestWaterH = bestH;
     let maxWaterDepth = -999;
 
-    // Try up to 80 attempts to find desired terrain type
-    for (let attempt = 0; attempt < 80; attempt++) {
+    // Try up to 100 attempts to find desired terrain type
+    for (let attempt = 0; attempt < 100; attempt++) {
       const t = Math.random() * Math.PI;
       const p = Math.random() * Math.PI * 2;
       const cCheck = checkWaterAtCoord(t, p);
@@ -303,7 +335,8 @@ function initAmphibians(count, seed) {
     }
 
     if (!wantLand) {
-      return { theta: deepestWaterTheta, phi: deepestWaterPhi, height: deepestWaterH, isLand: (maxWaterDepth <= 0.015) };
+      const isActuallyWater = (maxWaterDepth > 0.025);
+      return { theta: deepestWaterTheta, phi: deepestWaterPhi, height: deepestWaterH, isLand: !isActuallyWater };
     }
 
     return { theta: bestTheta, phi: bestPhi, height: bestH, isLand: bestIsLand };
@@ -331,6 +364,10 @@ function initAmphibians(count, seed) {
     // Georgiacetus and Placoderm strictly prefer ocean water; Isopod/Meganeura can be anywhere
     const pref = (isGeorgiacetus || isPlacoderm) ? 'water' : 'any';
     const coord = findSpawnCoordinate(pref);
+
+    if (isPlacoderm && (!coord || coord.isLand)) {
+      return 0; // ไม่อนุญาตให้ Placoderm สปอนหากไม่ใช่ในมหาสมุทร
+    }
 
     const maxHp = (window.NpcRegistry && window.NpcRegistry[type]) ? window.NpcRegistry[type].maxHp : 1;
     const baseHeading = Math.random() * Math.PI * 2;
@@ -501,6 +538,12 @@ function initAmphibians(count, seed) {
 // === NPC Life-Cycle Simulation State Machine ===
 // Simulates daily schedule, energy recovery, hunger and social behavior
 function updateNpcLifeCycle(c, deltaTime, seed) {
+  if (c.type === 'placoderm') {
+    c.lifeSchedule = 'WANDERING';
+    c.isIdle = false;
+    c.walkBlend = 1.0;
+    return;
+  }
   if (c.energy === undefined) c.energy = 80;
   if (c.hunger === undefined) c.hunger = 20;
   if (c.lifeSchedule === undefined) c.lifeSchedule = (c.type === 'human') ? 'WANDERING' : (Math.random() < 0.5 ? 'FORAGING' : 'WANDERING');
@@ -799,14 +842,42 @@ function updateAmphibians(deltaTime, seed) {
                 }
             }
           } else if (c.type === 'georgiacetus' || c.type === 'placoderm') {
-            // Prehistoric aquatic animals: try to find an ocean/water spot for respawn
-            const wR = RADIUS + (typeof waterLevel !== 'undefined' ? waterLevel : 0) * 0.15;
-            for (let tries = 0; tries < 50; tries++) {
-              const testGR = RADIUS + newHeight * HEIGHT_SCALE;
-              if (testGR < wR - 0.015) break;
-              newTheta = Math.random() * Math.PI;
-              newPhi = Math.random() * Math.PI * 2;
-              newHeight = getHeightOnSphere(newTheta, newPhi, seed);
+            // Prehistoric aquatic animals: prioritize respawning near verified deep underwater plant reefs
+            let foundReef = false;
+            const curRad = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+            const curHS = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(curRad / 8.0, 0.70));
+            const wR = curRad + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (curHS * 0.25);
+            const allObs = (typeof natureObstacles !== 'undefined' ? natureObstacles : []).concat(
+              (typeof window !== 'undefined' && window.allDeterministicNatureObstacles) ? window.allDeterministicNatureObstacles : []
+            );
+            const underwaterPlants = allObs.filter(o => o && o.type === "underwater_plant" && o.position);
+            if (underwaterPlants.length > 0) {
+              for (let rTry = 0; rTry < 20; rTry++) {
+                const reef = underwaterPlants[Math.floor(Math.random() * underwaterPlants.length)];
+                const pos = reef.position;
+                const pLen = Math.hypot(pos[0], pos[1], pos[2]) || 1;
+                const ny = pos[1] / pLen;
+                const testT = Math.acos(Math.max(-1, Math.min(1, ny)));
+                const testP = Math.atan2(pos[2], pos[0]);
+                const testH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(testT, testP, seed) : getHeightOnSphere(testT, testP, seed);
+                const testGR = curRad + testH * curHS;
+                if (testGR < wR - 0.08) {
+                  newTheta = testT;
+                  newPhi = testP;
+                  newHeight = testH;
+                  foundReef = true;
+                  break;
+                }
+              }
+            }
+            if (!foundReef) {
+              for (let tries = 0; tries < 60; tries++) {
+                newTheta = Math.random() * Math.PI;
+                newPhi = Math.random() * Math.PI * 2;
+                newHeight = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(newTheta, newPhi, seed) : getHeightOnSphere(newTheta, newPhi, seed);
+                const testGR = curRad + newHeight * curHS;
+                if (testGR < wR - 0.08) break;
+              }
             }
           }
 
@@ -1246,15 +1317,74 @@ function updateAmphibians(deltaTime, seed) {
       updateNpcLifeCycle(c, deltaTime, seed);
 
       if (c.lodLevel === 2) {
-        // Fast numeric off-screen drift - updates position without heavy 3D math
-        if (!c.isIdle && c.lifeSchedule !== 'RESTING' && c.lifeSchedule !== 'SLEEPING') {
-          const moveSpeed = (c.isSwimming ? 0.20 : 0.04) * deltaTime;
-          c.heading += (Math.random() - 0.5) * 0.4 * deltaTime;
-          const dTheta = Math.cos(c.heading) * (moveSpeed / (c.r || RADIUS));
-          const dPhi = Math.sin(c.heading) * (moveSpeed / ((c.r || RADIUS) * Math.max(0.1, Math.sin(c.theta))));
-          c.theta = Math.max(0.05, Math.min(Math.PI - 0.05, c.theta + dTheta));
-          c.phi = (c.phi + dPhi + Math.PI * 2) % (Math.PI * 2);
+        // Fast numeric off-screen drift - updates position AND enforces ocean bounds so aquatic NPCs never drift onto land!
+        const curRad = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+        const curHS = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(curRad / 8.0, 0.70));
+        const wR = curRad + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (curHS * 0.25);
+        const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+
+        if (c.type === 'placoderm') {
+          // Ensure off-screen placoderm is never sitting on land
+          const curH = sampleH(c.theta, c.phi, seed);
+          const curGR = curRad + curH * curHS;
+          if (curGR > wR - 0.04) {
+            // Relocate off-screen stranded placoderm back to deep water
+            for (let t = 0; t < 30; t++) {
+              const testT = Math.random() * Math.PI;
+              const testP = Math.random() * Math.PI * 2;
+              const testGR = curRad + sampleH(testT, testP, seed) * curHS;
+              if (testGR < wR - 0.08) {
+                c.theta = testT;
+                c.phi = testP;
+                c.r = Math.max(testGR + 0.05, wR - 0.05);
+                c.isSwimming = true;
+                break;
+              }
+            }
+          }
         }
+
+        if (!c.isIdle && c.lifeSchedule !== 'RESTING' && c.lifeSchedule !== 'SLEEPING') {
+          const moveSpeed = (c.isSwimming ? 0.22 : 0.04) * deltaTime;
+          c.heading += (Math.random() - 0.5) * 0.4 * deltaTime;
+          const dTheta = -Math.cos(c.heading) * (moveSpeed / (c.r || curRad));
+          const dPhi = Math.sin(c.heading) * (moveSpeed / ((c.r || curRad) * Math.max(0.1, Math.sin(c.theta))));
+          const nextTheta = Math.max(0.05, Math.min(Math.PI - 0.05, c.theta + dTheta));
+          const nextPhi = (c.phi + dPhi + Math.PI * 2) % (Math.PI * 2);
+
+          if (c.type === 'placoderm' || (c.type === 'georgiacetus' && c.isSwimming)) {
+            const nextH = sampleH(nextTheta, nextPhi, seed);
+            const nextGR = curRad + nextH * curHS;
+            if (nextGR < wR - 0.025) {
+              c.theta = nextTheta;
+              c.phi = nextPhi;
+              c.r = Math.max(nextGR + 0.04, Math.min(wR - 0.03, c.r || (wR - 0.05)));
+            } else {
+              // Turn away from shore instead of drifting onto land while off-screen!
+              c.heading = (c.heading + Math.PI + (Math.random() - 0.5) * 0.6) % (Math.PI * 2);
+            }
+          } else {
+            c.theta = nextTheta;
+            c.phi = nextPhi;
+            const nextH = sampleH(nextTheta, nextPhi, seed);
+            const nextGR = curRad + nextH * curHS;
+            if (c.type === 'meganeura') {
+              c.r = Math.max(nextGR, wR) + 0.35;
+            } else if (c.type === 'obsidian_cube') {
+              c.r = Math.max(nextGR, wR) + 1.25;
+            } else {
+              c.r = nextGR + 0.03;
+            }
+          }
+        }
+
+        // Always keep c.position synced in LOD 2 so teleporting to NPC uses fresh coordinates
+        const sinT2 = Math.sin(c.theta);
+        const cosT2 = Math.cos(c.theta);
+        const sinP2 = Math.sin(c.phi);
+        const cosP2 = Math.cos(c.phi);
+        const r2 = c.r || curRad;
+        c.position = [r2 * sinT2 * cosP2, r2 * cosT2, r2 * sinT2 * sinP2];
         continue; // Skip all heavy 3D mesh transformations, trigonometry, and audio raycasts!
       }
 
@@ -1305,40 +1435,59 @@ function updateAmphibians(deltaTime, seed) {
         P_new = [P_new[0] / pLen, P_new[1] / pLen, P_new[2] / pLen];
       }
 
-      c.theta = Math.acos(Math.max(-1, Math.min(1, P_new[1])));
-      c.theta = Math.max(1e-5, Math.min(Math.PI - 1e-5, c.theta));
+      let nextTheta = Math.acos(Math.max(-1, Math.min(1, P_new[1])));
+      nextTheta = Math.max(1e-5, Math.min(Math.PI - 1e-5, nextTheta));
+      let nextPhi = Math.atan2(P_new[2], P_new[0]);
+      if (nextPhi < 0) nextPhi += Math.PI * 2;
 
-      c.phi = Math.atan2(P_new[2], P_new[0]);
-      if (c.phi < 0) c.phi += Math.PI * 2;
+      // Prevent Placoderm from stepping directly above the shoreline onto dry land
+      let blockedByShore = false;
+      if (c.type === 'placoderm' && (typeof waterEnabled === 'undefined' || waterEnabled)) {
+        const curRad = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+        const curHS = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(curRad / 8.0, 0.70));
+        const wR = curRad + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (curHS * 0.25);
+        const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+        const curGR = curRad + sampleH(c.theta, c.phi, seed) * curHS;
+        const nextGR = curRad + sampleH(nextTheta, nextPhi, seed) * curHS;
+        if (nextGR >= wR - 0.015 && nextGR > curGR) {
+          blockedByShore = true;
+          c.heading += 2.2 * deltaTime;
+        }
+      }
 
-      // Parallel transport the heading angle to the new position
-      const sinT_new = Math.sin(c.theta);
-      const cosT_new = Math.cos(c.theta);
-      const sinP_new = Math.sin(c.phi);
-      const cosP_new = Math.cos(c.phi);
+      if (!blockedByShore) {
+        c.theta = nextTheta;
+        c.phi = nextPhi;
 
-      const North_new = [
-        -cosT_new * cosP_new,
-        sinT_new,
-        -cosT_new * sinP_new,
-      ];
-      const East_new = [-sinP_new, 0, cosP_new];
+        // Parallel transport the heading angle to the new position
+        const sinT_new = Math.sin(c.theta);
+        const cosT_new = Math.cos(c.theta);
+        const sinP_new = Math.sin(c.phi);
+        const cosP_new = Math.cos(c.phi);
 
-      const V_tangent = [
-        -P_curr[0] * Math.sin(speed) + V_move[0] * Math.cos(speed),
-        -P_curr[1] * Math.sin(speed) + V_move[1] * Math.cos(speed),
-        -P_curr[2] * Math.sin(speed) + V_move[2] * Math.cos(speed),
-      ];
+        const North_new = [
+          -cosT_new * cosP_new,
+          sinT_new,
+          -cosT_new * sinP_new,
+        ];
+        const East_new = [-sinP_new, 0, cosP_new];
 
-      const f_comp =
-        V_tangent[0] * North_new[0] +
-        V_tangent[1] * North_new[1] +
-        V_tangent[2] * North_new[2];
-      const r_comp =
-        V_tangent[0] * East_new[0] +
-        V_tangent[1] * East_new[1] +
-        V_tangent[2] * East_new[2];
-      c.heading = Math.atan2(r_comp, f_comp);
+        const V_tangent = [
+          -P_curr[0] * Math.sin(speed) + V_move[0] * Math.cos(speed),
+          -P_curr[1] * Math.sin(speed) + V_move[1] * Math.cos(speed),
+          -P_curr[2] * Math.sin(speed) + V_move[2] * Math.cos(speed),
+        ];
+
+        const f_comp =
+          V_tangent[0] * North_new[0] +
+          V_tangent[1] * North_new[1] +
+          V_tangent[2] * North_new[2];
+        const r_comp =
+          V_tangent[0] * East_new[0] +
+          V_tangent[1] * East_new[1] +
+          V_tangent[2] * East_new[2];
+        c.heading = Math.atan2(r_comp, f_comp);
+      }
 
       if (!c.isChasing && (!npcRegConfig || npcRegConfig.disableRandomJitter !== true)) {
         c.heading += (Math.random() - 0.5) * 1.0 * deltaTime;
@@ -1360,7 +1509,7 @@ function updateAmphibians(deltaTime, seed) {
       }
       c.caveCheckAccumulator += deltaTime;
 
-      if (!c.cachedCaveData || c.caveCheckAccumulator >= 0.15) {
+      if (!c.cachedCaveData || c.caveCheckAccumulator >= 0.15 || c.type === 'placoderm') {
         c.caveCheckAccumulator = 0;
         c.cachedCaveData = typeof getTerrainSurfaceAndCeiling === "function"
           ? getTerrainSurfaceAndCeiling(npc_nx, npc_ny, npc_nz, npc_r_est)
@@ -1375,8 +1524,9 @@ function updateAmphibians(deltaTime, seed) {
       const gRadius = npcCaveData.ground;
       const npc_r = c.r || gRadius;
       let wRadius = c.cachedWaterRadius;
-      if (npcCaveData.insideTunnel && wRadius === 0) {
-          wRadius = (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * 0.15;
+      const basePlanetW = (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * ((typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : 0.6) * 0.25);
+      if ((npcCaveData.insideTunnel || gRadius < basePlanetW - 0.01) && wRadius === 0 && (typeof waterEnabled === 'undefined' || waterEnabled)) {
+          wRadius = basePlanetW;
       }
 
       // Update specific NPC type movement behavior

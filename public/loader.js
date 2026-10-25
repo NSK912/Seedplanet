@@ -74,6 +74,7 @@
     'gamefile/items/obsidian_compass_pad_item.js',
     'gamefile/items/obsidian_flux_item.js',
     'gamefile/items/wood_chest.js',
+    'gamefile/items/wood_bed.js',
     'gamefile/items/campfire.js',
     'gamefile/items/wood_boat.js',
     'gamefile/items/wood_wheel.js',
