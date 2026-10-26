@@ -133,8 +133,8 @@ const Physics = {
                 ];
                 const roofF = [
                     oF[0] * cosA - oR[0] * sinA,
-                    oF[1] * cosA - oR[0] * sinA,
-                    oF[2] * cosA - oR[0] * sinA
+                    oF[1] * cosA - oR[1] * sinA,
+                    oF[2] * cosA - oR[2] * sinA
                 ];
                 const halfW = 0.18;
                 const halfD = 0.18;
@@ -142,9 +142,10 @@ const Physics = {
                 const lz = (px - o.position[0]) * roofF[0] + (py - o.position[1]) * roofF[1] + (pz - o.position[2]) * roofF[2];
                 const ly = (px - o.position[0]) * oN[0] + (py - o.position[1]) * oN[1] + (pz - o.position[2]) * oN[2];
 
-                if (Math.abs(lx) <= halfW && Math.abs(lz) <= halfD && ly >= -0.05 && ly <= 0.40) {
-                    const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
-                    const surfH = (0.125 + (clampedZ / 0.30) * 0.25 + 0.04);
+                const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
+                const slopeH = 0.125 + (clampedZ / 0.30) * 0.25;
+                if (Math.abs(lx) <= halfW && Math.abs(lz) <= halfD && ly >= slopeH - 0.05 && ly <= slopeH + 0.18) {
+                    const surfH = slopeH + 0.04;
                     const fR = Math.sqrt(o.position[0]**2 + o.position[1]**2 + o.position[2]**2);
                     if (fR > 0) {
                         surfaceRad = Math.max(surfaceRad, fR + surfH);

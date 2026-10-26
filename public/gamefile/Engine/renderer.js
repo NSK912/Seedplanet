@@ -16,6 +16,7 @@
             uniform float uWaterRadius;
             uniform float uRenderDistEnabled;
             uniform float uMaxRenderDist;
+            uniform vec3 uLightDir;
             
             varying vec3 vColor;
             varying vec3 vNormal;
@@ -144,7 +145,16 @@
 
                 vViewPos = mvPosition.xyz;
                 vWorldPos = pos;
-                vec3 shadowPos = pos + normalize(vWorldNormal) * (isGrass ? 0.0 : 0.0055);
+                vec3 nWorld = normalize(vWorldNormal);
+                vec3 radialUp = length(pos) > 0.001 ? normalize(pos) : vec3(0.0, 1.0, 0.0);
+                vec3 lDir = length(uLightDir) > 0.001 ? normalize(uLightDir) : radialUp;
+                float upAlign = abs(dot(nWorld, radialUp));
+                // nonFloor is 0.0 on horizontal floors/baseboards (upAlign > 0.93) and 1.0 on sloped roofs (upAlign ~0.77) and vertical walls (upAlign ~0.0)
+                float nonFloor = 1.0 - smoothstep(0.82, 0.93, upAlign);
+                float cosTheta = clamp(dot(nWorld, lDir), 0.0, 1.0);
+                float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+                float normalOffset = isGrass ? 0.0 : mix(0.0015, 0.011 + 0.008 * sinTheta, nonFloor);
+                vec3 shadowPos = pos + nWorld * normalOffset;
                 vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
                 vDist = length(mvPosition.xyz);
             }
@@ -190,10 +200,20 @@
 
                 vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1536.0);
                 float currentDepth = projCoords.z;
+
+                vec3 radialUp = length(vWorldPos) > 0.001 ? normalize(vWorldPos) : vec3(0.0, 1.0, 0.0);
+                float upAlign = abs(dot(normal, radialUp));
+                float nonFloor = 1.0 - smoothstep(0.82, 0.93, upAlign);
+
                 float cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
                 float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-                float tanTheta = min(2.2, sinTheta / max(cosTheta, 0.20));
-                float bias = 0.00012 + 0.00018 * tanTheta;
+                float tanTheta = min(3.0, sinTheta / max(cosTheta, 0.1));
+
+                // Decoupled bias: ultra-tight on horizontal floors (prevents light leak under walls),
+                // slope-stabilized on vertical walls and sloped roofs (prevents self-shadowing bands while staying < wall thickness).
+                float biasFloor = clamp(0.00008 + 0.00010 * tanTheta, 0.00008, 0.00022);
+                float biasWall  = clamp(0.00018 + 0.00022 * tanTheta, 0.00015, 0.00044);
+                float bias = mix(biasFloor, biasWall, nonFloor);
                 float cmpDepth = currentDepth - bias;
 
                 vec2 res = 1.0 / texelSize;
@@ -235,7 +255,7 @@
                     return mix(1.0, shadow, edgeFade);
                 }
 
-                // Quality 2-4 (Medium / High / Ultra): Wide 5x5 Convolved B-Spline with 9-tap Perimeter+Center Early-Out
+                // Quality 2-4 (Medium / High / Ultra): C1-continuous B-Spline at exact integer texel steps
                 vec2 t1 = texelSize;
                 vec2 t2 = texelSize * 2.0;
 
@@ -279,9 +299,10 @@
                 vec2 b_0  = 0.75 - (f - 0.5) * (f - 0.5);
                 vec2 b_p1 = 0.5 * f * f;
 
-                // Convolve 3x3 Quadratic B-Spline with [alpha, 1 - 2*alpha, alpha] box kernel
-                // Quality 2 -> alpha = 0.16, Quality 3 -> alpha = 0.25, Quality 4 -> alpha = 0.3333 (full 3-texel box * B2)
-                float alpha = clamp(0.07 + (uShadowsEnabled - 1.0) * 0.088, 0.15, 0.3333);
+                // Pure 3x3 B-Spline on walls/roofs (alpha = 0) so outer 2-texel taps never sample up-slope texels;
+                // compact convolved B-Spline on flat ground/floors so penumbra stays narrower than wall base.
+                float baseAlpha = clamp(0.03 + (uShadowsEnabled - 1.0) * 0.035, 0.03, 0.12);
+                float alpha = baseAlpha * (1.0 - nonFloor);
                 float centerW = 1.0 - 2.0 * alpha;
 
                 vec2 wm2 = alpha * b_m1;
@@ -626,7 +647,8 @@
                 vColor = aColor;
                 vNormal = normalize(aPosition);
                 vWorldPos = aPosition;
-                vPositionLightSpace = uLightSpaceMatrix * vec4(aPosition, 1.0);
+                vec3 shadowPos = aPosition + normalize(aPosition) * 0.002;
+                vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
                 vDist = length(mvPosition.xyz);
                 vTerrainRadius = aTerrainRadius;
                 vTunnelCenter = aTunnelCenter;
@@ -1261,7 +1283,16 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     
     out.viewPos = mvPosition.xyz;
     out.worldPos = pos;
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(pos, 1.0);
+    let nWorld = normalize(out.worldNormal);
+    let radialUp = select(vec3<f32>(0.0, 1.0, 0.0), normalize(pos), length(pos) > 0.001);
+    let lDir = select(radialUp, normalize(uniforms.lightDir.xyz), length(uniforms.lightDir.xyz) > 0.001);
+    let upAlign = abs(dot(nWorld, radialUp));
+    let nonFloor = 1.0 - smoothstep(0.82, 0.93, upAlign);
+    let cosTheta = clamp(dot(nWorld, lDir), 0.0, 1.0);
+    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+    let normalOffset = select(mix(0.0015, 0.011 + 0.008 * sinTheta, nonFloor), 0.0, isGrass > 0.5);
+    let shadowPos = pos + nWorld * normalOffset;
+    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
     out.dist = length(mvPosition.xyz);
     
     return out;
@@ -1277,25 +1308,27 @@ fn calculateShadow(lightSpacePos: vec4<f32>, normal: vec3<f32>, lightDir: vec3<f
     if (projCoords.z > 1.0 || projCoords.z < 0.0) { return 1.0; }
     if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) { return 1.0; }
     
-    let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-    let tanTheta = min(3.0, sinTheta / max(cosTheta, 0.15));
-    let bias = 0.00038 + 0.00065 * tanTheta;
-    
     var texelSize = uniforms.shadowTexelSize;
     if (texelSize.x <= 0.0) { texelSize = vec2<f32>(1.0 / 1536.0); }
-    
+
+    let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
+    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+    let tanTheta = min(3.0, sinTheta / max(cosTheta, 0.1));
+
+    let bias = clamp(0.00012 + 0.00018 * tanTheta, 0.00010, 0.00038);
     let cmpDepth = projCoords.z - bias;
+    let ts = texelSize * 0.65;
+
     var shadow = 0.0;
     shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth) * 0.25;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  0.0), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  0.0), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0, -texelSize.y), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0,  texelSize.y), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x, -texelSize.y), cmpDepth) * 0.0625;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x, -texelSize.y), cmpDepth) * 0.0625;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-texelSize.x,  texelSize.y), cmpDepth) * 0.0625;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( texelSize.x,  texelSize.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-ts.x,  0.0), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( ts.x,  0.0), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0, -ts.y), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0,  ts.y), cmpDepth) * 0.125;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-ts.x, -ts.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( ts.x, -ts.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-ts.x,  ts.y), cmpDepth) * 0.0625;
+    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( ts.x,  ts.y), cmpDepth) * 0.0625;
     
     let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
     let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
@@ -1473,7 +1506,8 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     );
     out.worldNormal = normalize(worldNormalMatrix * in.normal);
     out.worldPos = worldPos.xyz;
-    out.lightSpacePos = uniforms.lightSpaceMatrix * worldPos;
+    let shadowPos = worldPos.xyz + out.worldNormal * 0.002;
+    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
     out.viewPos = mvPosition.xyz;
     return out;
 }
@@ -2700,7 +2734,8 @@ fn vs_main(in : VertexInput) -> VertexOutput {
     out.dist = length(in.position - uniforms.cameraPos.xyz);
     
     out.position = uniforms.viewProj * vec4<f32>(in.position, 1.0);
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(in.position, 1.0);
+    let shadowPos = in.position + normalize(in.position) * 0.002;
+    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
     
     return out;
 }
@@ -3153,6 +3188,9 @@ if (gl) {
   isWebGL2 = gl instanceof WebGL2RenderingContext;
   Graphics.webgl.isWebGL2 = isWebGL2;
   supportUint32 = isWebGL2 || gl.getExtension("OES_element_index_uint");
+  if (!isWebGL2 && typeof gl.getExtension === "function") {
+    gl.getExtension("OES_standard_derivatives");
+  }
 
   Graphics.webgl.supportUint32 = supportUint32;
 
@@ -4907,6 +4945,9 @@ window.cloud3DProgram = cloud3DProgram;
           if (typeof SpatialGrid !== "undefined" && typeof collectibles !== "undefined") {
             SpatialGrid.rebuild(collectibles);
           }
+          if (typeof window !== "undefined" && typeof window.invalidateStructureCollisionCache === "function") {
+            window.invalidateStructureCollisionCache();
+          }
         } else if (pendingDynamicRefresh) {
           refreshCollectiblesVBO('dynamic'); // Only rebuild dynamic
         }
@@ -5213,6 +5254,10 @@ window.cloud3DProgram = cloud3DProgram;
         if (typeof getFloorTopRadiusAt === "function") {
           floorTerrainRad = getFloorTopRadiusAt(nx, ny, nz, terrainRadius);
         }
+        let floorCeilingRad = Infinity;
+        if (typeof getFloorCeilingRadiusAt === "function") {
+          floorCeilingRad = getFloorCeilingRadiusAt(nx, ny, nz, floorTerrainRad, currentFeetRadius);
+        }
         let standGroundRadius = floorTerrainRad + (activeRidingMech ? mechOffset : 0.46 * charScale);
         if (activeRidingBoat) {
           const tRadius = terrainRadius;
@@ -5298,6 +5343,16 @@ window.cloud3DProgram = cloud3DProgram;
               // Air physics - apply gravity
               playerVerticalVel = Physics.applyVerticalGravity(playerVerticalVel, 1.0, Physics.gravityAccel);
               playerCenterRadius += playerVerticalVel;
+
+              // Overhead 2nd-floor / structure ceiling collision (head bump from below)
+              const maxStructureCenter = (floorCeilingRad !== Infinity) ? (floorCeilingRad - 0.46 * charScale) : Infinity;
+              if (maxStructureCenter !== Infinity) {
+                const ceilingLimitCenter = Math.max(minGroundRadius, maxStructureCenter);
+                if (playerCenterRadius > ceilingLimitCenter) {
+                  playerCenterRadius = ceilingLimitCenter;
+                  playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2);
+                }
+              }
 
               const minFallHeightForRagdoll = 1.8 * (charScale / 0.22);
               const currentFallDist = (window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
@@ -5654,239 +5709,42 @@ window.cloud3DProgram = cloud3DProgram;
           );
           P_new = [P_new[0] / pLen, P_new[1] / pLen, P_new[2] / pLen];
 
-          const nearbyObstacles = [];
-          const playerPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
-          const filterDistSq = (maxColliderDistance + 1.5) * (maxColliderDistance + 1.5);
-          const filterObstacles = (list) => {
-            if (!list) return;
-            for (let i = 0; i < list.length; i++) {
-              const obs = list[i];
-              if (!obs || !obs.position) continue;
-              const dx = playerPos3D[0] - obs.position[0];
-              const dy = playerPos3D[1] - obs.position[1];
-              const dz = playerPos3D[2] - obs.position[2];
-              if (dx*dx + dy*dy + dz*dz < filterDistSq) {
-                nearbyObstacles.push(obs);
-              }
-            }
-          };
-          filterObstacles(natureObstacles);
-          filterObstacles(cubeObstacles);
-          filterObstacles(amphibians);
-
-          // --- ระบบป้องกันการเดินชนต้นไม้ หิน และสี่เหลี่ยม (ใช้ Simplified Mesh/Capsule Collider) ---
-          const maxDistSq = maxColliderDistance * maxColliderDistance;
-          for (let iter = 0; iter < 3; iter++) {
-            for (let obs of nearbyObstacles) {
-              if (!obs.position) continue;
-              
-              const C = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
-              const dx = C[0] - obs.position[0];
-              const dy = C[1] - obs.position[1];
-              const dz = C[2] - obs.position[2];
-              
-              if (dx*dx + dy*dy + dz*dz > maxDistSq) continue;
-              
-              const charCollisionRadius = playerScale * 0.38;
-
-              if (obs.meshStart !== undefined && obs.meshEnd !== undefined) {
-                  if (dx*dx + dy*dy + dz*dz > (obs.radius + charCollisionRadius)*(obs.radius + charCollisionRadius)) {
-                      continue;
-                  }
-
-                  const collisionEnd = obs.collisionMeshEnd !== undefined ? obs.collisionMeshEnd : obs.meshEnd;
-                  const count = collisionEnd - obs.meshStart;
-
-                  for(let j=0; j<count; j+=3) {
-                      const vIdx = obs.meshStart + j;
-                      const v0 = vIdx * 3;
-                      const v1 = (vIdx + 1) * 3;
-                      const v2 = (vIdx + 2) * 3;
-                      
-                      const closest = closestPointOnTriangleFast(
-                          C[0], C[1], C[2],
-                          natureRawVertices[v0], natureRawVertices[v0+1], natureRawVertices[v0+2],
-                          natureRawVertices[v1], natureRawVertices[v1+1], natureRawVertices[v1+2],
-                          natureRawVertices[v2], natureRawVertices[v2+1], natureRawVertices[v2+2]
-                      );
-                      const px = C[0] - closest[0];
-                      const py = C[1] - closest[1];
-                      const pz = C[2] - closest[2];
-                      const pLenSq = px*px + py*py + pz*pz;
-                      
-                      if (pLenSq < charCollisionRadius * charCollisionRadius && pLenSq > 0.0001) {
-                          const pLen = Math.sqrt(pLenSq);
-                          const pushDist = charCollisionRadius - pLen;
-                          C[0] += (px / pLen) * pushDist;
-                          C[1] += (py / pLen) * pushDist;
-                          C[2] += (pz / pLen) * pushDist;
-                      }
-                  }
-                  
-                  const newLen = Math.sqrt(C[0]*C[0] + C[1]*C[1] + C[2]*C[2]);
-                  if (newLen > 0.001) {
-                      P_new[0] = C[0] / newLen;
-                      P_new[1] = C[1] / newLen;
-                      P_new[2] = C[2] / newLen;
-                  }
-              } else if (obs.colliders && obs.colliders.length > 0) {
-                for (let col of obs.colliders) {
-                  const cx = obs.position[0] + (col.offset[0] || 0);
-                  const cy = obs.position[1] + (col.offset[1] || 0);
-                  const cz = obs.position[2] + (col.offset[2] || 0);
-                  const clen = Math.sqrt(cx * cx + cy * cy + cz * cz);
-                  const obsNormalX = cx / clen;
-                  const obsNormalY = cy / clen;
-                  const obsNormalZ = cz / clen;
-
-                  const charCollisionRadius = playerScale * 0.38;
-                  const minDistance = col.radius + charCollisionRadius;
-
-                  // 3D Distance check using player's 3D groundRadius and joint's 3D height clen
-                  const vertical_diff = Math.abs(groundRadius - clen);
-
-                  if (vertical_diff < minDistance) {
-                    // Required horizontal distance on the sphere to clear collision in 3D
-                    const h_req = Math.sqrt(
-                      minDistance * minDistance - vertical_diff * vertical_diff,
-                    );
-
-                    const dx = P_new[0] - obsNormalX;
-                    const dy = P_new[1] - obsNormalY;
-                    const dz = P_new[2] - obsNormalZ;
-                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                    const h_actual = dist * groundRadius; // current horizontal distance
-
-                    if (h_actual < h_req && dist > 0.001) {
-                      let pushX = P_new[0] - obsNormalX;
-                      let pushY = P_new[1] - obsNormalY;
-                      let pushZ = P_new[2] - obsNormalZ;
-                      let pushLen = Math.sqrt(
-                        pushX * pushX + pushY * pushY + pushZ * pushZ,
-                      );
-                      if (pushLen < 1e-6) {
-                        pushX = 1;
-                        pushY = 0;
-                        pushZ = 0;
-                        pushLen = 1;
-                      }
-                      pushX /= pushLen;
-                      pushY /= pushLen;
-                      pushZ /= pushLen;
-
-                      const targetUnitDist = h_req / groundRadius;
-                      P_new[0] = obsNormalX + pushX * targetUnitDist;
-                      P_new[1] = obsNormalY + pushY * targetUnitDist;
-                      P_new[2] = obsNormalZ + pushZ * targetUnitDist;
-
-                      const pLen2 = Math.sqrt(
-                        P_new[0] * P_new[0] +
-                          P_new[1] * P_new[1] +
-                          P_new[2] * P_new[2],
-                      );
-                      if (pLen2 > 0.001) {
-                        P_new[0] /= pLen2;
-                        P_new[1] /= pLen2;
-                        P_new[2] /= pLen2;
-                      }
-                    }
-                  }
-            }
-          } else {
-                // คำนวณระยะห่างบนผิวทรงกลม 3D
-                // ใช้ position จาก obs ที่เก็บจากโมเดลจริง
-                const obsLen = Math.sqrt(
-                  obs.position[0] * obs.position[0] +
-                    obs.position[1] * obs.position[1] +
-                    obs.position[2] * obs.position[2],
-                );
-                if (obsLen > 0.001) {
-                  const obsNormalX = obs.position[0] / obsLen;
-                  const obsNormalY = obs.position[1] / obsLen;
-                  const obsNormalZ = obs.position[2] / obsLen;
-
-                  const charCollisionRadius = playerScale * 0.38;
-                  let minDistance = obs.radius + charCollisionRadius;
-
-                  const vertical_diff = Math.abs(groundRadius - obsLen);
-                  if (vertical_diff < minDistance) {
-                    const h_req = Math.sqrt(
-                      minDistance * minDistance - vertical_diff * vertical_diff,
-                    );
-
-                    const dx = P_new[0] - obsNormalX;
-                    const dy = P_new[1] - obsNormalY;
-                    const dz = P_new[2] - obsNormalZ;
-                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                    const h_actual = dist * groundRadius;
-
-                    if (h_actual < h_req && dist > 0.001) {
-                      let pushX = P_new[0] - obsNormalX;
-                      let pushY = P_new[1] - obsNormalY;
-                      let pushZ = P_new[2] - obsNormalZ;
-                      let pushLen = Math.sqrt(
-                        pushX * pushX + pushY * pushY + pushZ * pushZ,
-                      );
-                      if (pushLen < 1e-6) {
-                        pushX = 1;
-                        pushY = 0;
-                        pushZ = 0;
-                        pushLen = 1;
-                      }
-                      pushX /= pushLen;
-                      pushY /= pushLen;
-                      pushZ /= pushLen;
-
-                      const targetUnitDist = h_req / groundRadius;
-                      P_new[0] = obsNormalX + pushX * targetUnitDist;
-                      P_new[1] = obsNormalY + pushY * targetUnitDist;
-                      P_new[2] = obsNormalZ + pushZ * targetUnitDist;
-
-                      const pLen2 = Math.sqrt(
-                        P_new[0] * P_new[0] +
-                          P_new[1] * P_new[1] +
-                          P_new[2] * P_new[2],
-                      );
-                      if (pLen2 > 0.001) {
-                        P_new[0] /= pLen2;
-                        P_new[1] /= pLen2;
-                        P_new[2] /= pLen2;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-            // --- COLLISION WITH WOOD FLOORS & STONE FLOORS (horizontal blocking disabled to prevent redundant/overlapping collision) ---
-            // Wood floors and stone floors are flat surfaces and should not block the player horizontally.
-            // This prevents the player from floating unusually high due to conflicting/overlapping horizontal wall and floor collisions.
-
-            // Structure Collision (wood_wall, wood_roof, wood_window, wood_door)
-            // Prevents both on-foot player and wheeled land boat from passing through walls and roofs
-            if (typeof resolveStructureCollisions === "function") {
-              resolveStructureCollisions({
-                P_new,
-                P_curr,
-                groundRadius,
-                playerScale,
-                activeRidingBoat,
-                collectibles,
-                F_3d,
-                East,
-                North,
-                charTheta,
-                charPhi,
-                charHeading
-              });
-            }
-
-            // Renormalize P_new after physics
+          // --- Shared Obstacle & Structure Collision Pipeline (Used by both Player and PlayerClones) ---
+          if (typeof resolveEntityObstacleAndStructureCollisions === "function") {
+            resolveEntityObstacleAndStructureCollisions({
+              P_new,
+              P_curr,
+              groundRadius,
+              playerScale,
+              activeRidingBoat,
+              collectibles,
+              F_3d,
+              East,
+              North,
+              charTheta,
+              charPhi,
+              charHeading
+            });
+          } else if (typeof resolveStructureCollisions === "function") {
+            resolveStructureCollisions({
+              P_new,
+              P_curr,
+              groundRadius,
+              playerScale,
+              activeRidingBoat,
+              collectibles,
+              F_3d,
+              East,
+              North,
+              charTheta,
+              charPhi,
+              charHeading
+            });
             const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
             P_new[0] /= pLenTemp;
             P_new[1] /= pLenTemp;
             P_new[2] /= pLenTemp;
+          }
 
             // Step-height / Cave-wall and low ceiling blocking check to prevent clipping/teleporting to surface
             let collisionSwimFactor = currentSwimFactor;
@@ -5916,6 +5774,19 @@ window.cloud3DProgram = cloud3DProgram;
 
             P_new = collisionResult.P_new;
             playerCenterRadius = collisionResult.playerCenterRadius;
+            if (typeof getFloorCeilingRadiusAt === "function" && !activeRidingBoat && !activeRidingMech) {
+              const postMoveFeetRad = playerCenterRadius - 0.46 * charScale;
+              const postMoveCeilingRad = getFloorCeilingRadiusAt(P_new[0], P_new[1], P_new[2], floorTerrainRad, postMoveFeetRad);
+              if (postMoveCeilingRad !== Infinity) {
+                const postMaxCenter = Math.max(standGroundRadius, postMoveCeilingRad - 0.46 * charScale);
+                if (playerCenterRadius > postMaxCenter) {
+                  playerCenterRadius = postMaxCenter;
+                  if (playerVerticalVel > 0) {
+                    playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2);
+                  }
+                }
+              }
+            }
             playerDiveDepth = collisionResult.playerDiveDepth;
             isDivingMode = collisionResult.isDivingMode;
 
@@ -5979,6 +5850,18 @@ window.cloud3DProgram = cloud3DProgram;
             let feetRadiusBeforeForSwim = (playerCenterRadius !== null) ? (playerCenterRadius - (activeRidingMech ? mechOffsetMoving : 0.46 * charScale)) : (RADIUS + charHeight * HEIGHT_SCALE);
             const caveDataForSwim = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBeforeForSwim) : { ground: RADIUS + charHeight * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
             let tRadius = caveDataForSwim.ground;
+            if (!isPlayerGrounded && !activeRidingBoat && !activeRidingMech && typeof getFloorCeilingRadiusAt === "function") {
+              const ceilRadMoving = getFloorCeilingRadiusAt(nx, ny, nz, tRadius, feetRadiusBeforeForSwim);
+              const maxCenterMoving = (ceilRadMoving !== Infinity) ? (ceilRadMoving - 0.46 * charScale) : Infinity;
+              const minCenterMoving = tRadius + 0.46 * charScale;
+              if (maxCenterMoving > minCenterMoving && playerCenterRadius > maxCenterMoving) {
+                playerCenterRadius = maxCenterMoving;
+                if (playerVerticalVel > 0) {
+                  playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2);
+                }
+                feetRadiusBeforeForSwim = playerCenterRadius - 0.46 * charScale;
+              }
+            }
             let wRadius = getWaterRadiusAt(nx * feetRadiusBeforeForSwim, ny * feetRadiusBeforeForSwim, nz * feetRadiusBeforeForSwim);
             if (caveDataForSwim.insideTunnel && wRadius === 0) {
                 wRadius = waterRadius;
@@ -7781,7 +7664,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -8828,7 +8711,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         let lightDistance = Math.max(RADIUS + 8.0, 20.0);
         let lightFarPlane = Math.max(RADIUS * 2.5 + 8.0, 48.0);
         if (cameraMode !== "planet" && cameraMode !== "sun") {
-            orthoSize = Math.min(12.5, Math.max(5.8, Math.min(curObjectDist, snappedCamDist + 3.2)));
+            orthoSize = Math.min(10.5, Math.max(5.8, Math.min(curObjectDist, snappedCamDist + 2.5)));
             lightDistance = 10.0;
             lightFarPlane = 20.0;
         }
@@ -8850,11 +8733,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const texelWorldSize = (orthoSize * 2.0) / Math.max(1024, SHADOW_WIDTH);
           let lx = shadowTargetX * rxx + shadowTargetY * rxy + shadowTargetZ * rxz;
           let ly = shadowTargetX * uyx + shadowTargetY * uyy + shadowTargetZ * uyz;
-          let lz = shadowTargetX * fzx + shadowTargetY * fzy + shadowTargetZ * fzz;
+          const lz = shadowTargetX * fzx + shadowTargetY * fzy + shadowTargetZ * fzz;
 
           lx = Math.floor(lx / texelWorldSize) * texelWorldSize;
           ly = Math.floor(ly / texelWorldSize) * texelWorldSize;
-          lz = Math.floor(lz / (texelWorldSize * 4.0)) * (texelWorldSize * 4.0);
+          // Keep lz continuous along the light viewing ray to prevent depth popping
 
           shadowTargetX = rxx * lx + uyx * ly + fzx * lz;
           shadowTargetY = rxy * lx + uyy * ly + fzy * lz;
@@ -8896,6 +8779,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enable(gl.DEPTH_TEST);
           gl.disable(gl.BLEND);
           gl.disable(gl.CULL_FACE); // Draw both faces into shadow map to prevent missing shadows from wrong windings
+          gl.enable(gl.POLYGON_OFFSET_FILL);
+          gl.polygonOffset(2.0, 4.0);
 
           gl.useProgram(depthProgram);
         gl.uniformMatrix4fv(
@@ -9198,6 +9083,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         }
         }
 
+        gl.disable(gl.POLYGON_OFFSET_FILL);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.enable(gl.BLEND);

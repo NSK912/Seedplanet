@@ -934,13 +934,15 @@ const CollisionCore = {
   },
 
   // Layer: Player/Characters (Walking and Swimming on Terrain)
-  checkCaveAndTerrainCollision: function(P_new, P_curr, centerRadius, charScale, swimFactor, wRadius, diveDepth, swimMoveFactor, charHeight) {
+  checkCaveAndTerrainCollision: function(P_new, P_curr, centerRadius, charScale, swimFactor, wRadius, diveDepth, swimMoveFactor, charHeight, entityOpts = null) {
     const r_planet = typeof RADIUS !== "undefined" ? RADIUS : 8.0;
     const h_scale = typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 0.6;
     
     const maxStepUp = Math.max(0.20, 0.35 * charScale);
     
-    const isMech = (typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech);
+    const isMech = (entityOpts && entityOpts.ridingMech !== undefined)
+      ? !!entityOpts.ridingMech
+      : ((typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech));
     const playerFootOffset = isMech ? ((typeof window !== "undefined" && typeof window.mechSeatOffset !== "undefined") ? window.mechSeatOffset : 0.71) : 0.46 * charScale;
 
     // Check standard terrain surface and cave system mathematically
@@ -1092,7 +1094,15 @@ const CollisionCore = {
     const seedVal = (typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined') ? window.globalSeed : 0;
     const heightCurr = getH_fn(thetaCurr, phiCurr, seedVal);
     const currCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P_curr[0], P_curr[1], P_curr[2], currFeetRadius) : null;
-    const currTerrainRadius = (currCaveData && currCaveData.insideTunnel) ? currCaveData.ground : (r_planet + heightCurr * h_scale);
+    const currNaturalTerrainRadius = (currCaveData && currCaveData.insideTunnel) ? currCaveData.ground : (r_planet + heightCurr * h_scale);
+    let currTerrainRadius = currNaturalTerrainRadius;
+    if (swimFactor <= 0.0 && typeof getFloorTopRadiusAt === "function") {
+      currTerrainRadius = getFloorTopRadiusAt(P_curr[0], P_curr[1], P_curr[2], currNaturalTerrainRadius, currFeetRadius, false, 0);
+    }
+
+    const stairSourceList = (typeof _getFloorRoofCollectibles === "function" && typeof collectibles !== "undefined" && Array.isArray(collectibles))
+      ? _getFloorRoofCollectibles(collectibles)
+      : ((typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : []);
 
     function evaluatePosition(P, currentR) {
       let testCenterRadius = currentR;
@@ -1104,13 +1114,19 @@ const CollisionCore = {
       const heightP = getH_fn(thetaP, phiP, seedVal);
       const pFeetRadius = currentR - playerFootOffset;
       const caveDataP = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(P[0], P[1], P[2], pFeetRadius) : null;
-      let terrainRadius = (caveDataP && caveDataP.insideTunnel) ? caveDataP.ground : (r_planet + heightP * h_scale);
+      const naturalTerrainRadius = (caveDataP && caveDataP.insideTunnel) ? caveDataP.ground : (r_planet + heightP * h_scale);
+      let terrainRadius = naturalTerrainRadius;
+      if (swimFactor <= 0.0 && typeof getFloorTopRadiusAt === "function") {
+        terrainRadius = getFloorTopRadiusAt(P[0], P[1], P[2], naturalTerrainRadius, pFeetRadius, false, 0);
+      }
+      const isOnConstructedFloor = (terrainRadius > naturalTerrainRadius + 0.001) || (currTerrainRadius > currNaturalTerrainRadius + 0.001);
 
       // Check whether target position is supported by constructed stairs or folding ladders
       let isStairOrLadder = false;
-      if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+      if (stairSourceList.length > 0) {
         const testFeet = currentR - playerFootOffset;
-        for (let itm of collectibles) {
+        for (let i = 0; i < stairSourceList.length; i++) {
+          const itm = stairSourceList[i];
           if (itm.active && (itm.type === "wood_stairs" || itm.type === "folding_ladder") && !itm.isPreview && itm.position) {
             const dxStair = P[0] * testFeet - itm.position[0];
             const dyStair = P[1] * testFeet - itm.position[1];
@@ -1124,44 +1140,39 @@ const CollisionCore = {
         }
       }
 
-      // Calculate terrain slope angle using spherical surface arc distance and visual map noise height
+      // Calculate terrain slope angle using spherical surface arc distance and natural terrain height
       const dotPP = Math.max(-1.0, Math.min(1.0, P[0] * P_curr[0] + P[1] * P_curr[1] + P[2] * P_curr[2]));
       const arcAngle = Math.acos(dotPP);
       const groundDistance = arcAngle * r_planet;
-      const elevationDiff = terrainRadius - currTerrainRadius;
       
       // Check whether target is on water surface or submerged under water
       const hasWater = (typeof waterEnabled !== "undefined" && waterEnabled && wRadius > 0);
       const isTargetUnderWater = hasWater && (terrainRadius < wRadius - 0.02);
       const isCurrUnderWater = hasWater && (currTerrainRadius < wRadius - 0.02);
 
-      const activeBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
+      const activeBoat = (entityOpts && entityOpts.ridingBoat !== undefined)
+        ? entityOpts.ridingBoat
+        : ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat));
       const isBoatInWater = !!(activeBoat && (activeBoat.isInWater || (hasWater && currTerrainRadius < wRadius)));
       const isBoatFlying = !!(activeBoat && (activeBoat.isFlying || activeBoat.isAirborne));
 
-      // Calculate slope ratio:
-      // 1. When on water (both current and target in water), there is NO 45-degree slope limit (water surface is flat/navigable).
-      // 2. When encountering dry ground/land (> 45 degrees), whether walking on land or transitioning from water onto land ("กึ่งบกกึ่งน้ำ"),
-      //    the 45-degree slope restriction and GTA-style tangential slip MUST work!
+      // Calculate slope ratio ONLY on natural terrain (constructed floors/foundations are flat steps, not steep cliffs)
       let isTooSteep = false;
-      if (!isTargetUnderWater && !isBoatFlying && !isStairOrLadder) {
+      if (!isTargetUnderWater && !isBoatFlying && !isStairOrLadder && !isOnConstructedFloor) {
         if (!isCurrUnderWater && swimFactor <= 0.0 && !isBoatInWater) {
-          // Both current and target are on dry land
-          const elevationDiff = terrainRadius - currTerrainRadius;
+          // Both current and target are on dry natural land
+          const elevationDiff = naturalTerrainRadius - currNaturalTerrainRadius;
           const slopeRatio = groundDistance > 0.0001 ? (elevationDiff / groundDistance) : 0.0;
           isTooSteep = (elevationDiff > 0.01) && (slopeRatio > 1.0);
         } else {
           // Transitioning from water up onto emergent dry land (amphibious / กึ่งบกกึ่งน้ำ)
-          // 1) Elevation climb from the water surface up onto the emergent land:
-          const climbFromWater = terrainRadius - wRadius;
+          const climbFromWater = naturalTerrainRadius - wRadius;
           const climbRatio = groundDistance > 0.0001 ? (climbFromWater / groundDistance) : 0.0;
-          // 2) Terrain elevation difference between land and underwater floor:
-          const elevationFromTerrain = terrainRadius - currTerrainRadius;
+          const elevationFromTerrain = naturalTerrainRadius - currNaturalTerrainRadius;
           const terrainSlopeRatio = groundDistance > 0.0001 ? (elevationFromTerrain / groundDistance) : 0.0;
 
-          // Slope > 45 degrees (slope ratio > 1.0, tan 45° = 1.0)
           isTooSteep = (climbFromWater > 0.005 && climbRatio > 1.0) ||
-                       (terrainRadius > wRadius + 0.02 && elevationFromTerrain > 0.005 && terrainSlopeRatio > 1.0);
+                       (naturalTerrainRadius > wRadius + 0.02 && elevationFromTerrain > 0.005 && terrainSlopeRatio > 1.0);
         }
 
         // Additional probe: sample local terrain slope gradient ahead along movement direction
@@ -1179,8 +1190,8 @@ const CollisionCore = {
             const heightPr = getH_fn(thetaPr, phiPr, seedVal);
             const probeRadius = r_planet + heightPr * h_scale;
             const probeDist = stepLen * r_planet;
-            const localSlope = (probeRadius - terrainRadius) / probeDist;
-            if (probeRadius > terrainRadius + 0.005 && localSlope > 1.0) {
+            const localSlope = (probeRadius - naturalTerrainRadius) / probeDist;
+            if (probeRadius > naturalTerrainRadius + 0.005 && localSlope > 1.0) {
               isTooSteep = true;
             }
           }
@@ -1193,13 +1204,10 @@ const CollisionCore = {
 
         const testFeetRadius = testCenterRadius - playerFootOffset;
 
-        // If target is a steep cliff or slope (> 45 degrees) rising out of water (กึ่งบกกึ่งน้ำ),
-        // trigger steep collision so GTA-style contour tangential slip / inertia activates!
         if (isTooSteep) {
           return { colliding: true, isTooSteep: true, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
         }
 
-        // Terrain Wall Block in water (Blocks vertical cliffs/docks rising higher than maxStepUp above water surface)
         const isEmergentLand = (terrainRadius > wRadius - 0.05);
         const effectiveBase = hasWater ? Math.max(currTerrainRadius, wRadius) : currTerrainRadius;
         if (isEmergentLand && (terrainRadius > effectiveBase + maxStepUp)) {
@@ -1208,7 +1216,6 @@ const CollisionCore = {
           }
         }
 
-        // Terrain Floor Adjustment (Gentle beach / shallow water step up)
         if (testFeetRadius < terrainRadius) {
           if (terrainRadius <= effectiveBase + maxStepUp && !isTooSteep) {
             testCenterRadius = terrainRadius + playerFootOffset;
@@ -1310,7 +1317,7 @@ const CollisionCore = {
           const hw = floorW / 2 + charRad;
           const hd = floorD / 2 + charRad;
 
-          if (dy < -0.05 && dy > -2.0) {
+          if (dy < -maxStepUp - 0.05 && dy > -2.0) {
             if (Math.abs(dx) < hw && Math.abs(dz) < hd) {
               const penX = hw - Math.abs(dx);
               const penZ = hd - Math.abs(dz);
@@ -1348,8 +1355,11 @@ const CollisionCore = {
     // Instead, try sliding tangentially along the slope contour where the slope is manageable,
     // keeping momentum fluid like GTA.
     if (targetEval.isTooSteep) {
-      if (typeof activeRidingBoat !== "undefined" && activeRidingBoat && typeof activeRidingBoat.vehicleSpeed === "number") {
-        activeRidingBoat.vehicleSpeed *= 0.8;
+      const boatRef = (entityOpts && entityOpts.ridingBoat !== undefined)
+        ? entityOpts.ridingBoat
+        : ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) ? activeRidingBoat : null);
+      if (boatRef && typeof boatRef.vehicleSpeed === "number") {
+        boatRef.vehicleSpeed *= 0.8;
       }
 
       const disp = [pushP[0] - P_curr[0], pushP[1] - P_curr[1], pushP[2] - P_curr[2]];
@@ -1488,11 +1498,27 @@ const CollisionCore = {
     if (!collectibles || !collectibles.length) return false;
 
     const currentPlayPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
+    const colLen = collectibles.length;
+    const lastColItem = colLen > 0 ? collectibles[colLen - 1] : null;
+    if (!CollisionCore._cachedStructItems || CollisionCore._cachedStructLen !== colLen || CollisionCore._cachedStructLastItem !== lastColItem) {
+      const structList = [];
+      for (let i = 0; i < colLen; i++) {
+        const item = collectibles[i];
+        if (item && item.position && (item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_roof" || item.type === "robot_stand")) {
+          structList.push(item);
+        }
+      }
+      CollisionCore._cachedStructItems = structList;
+      CollisionCore._cachedStructLen = colLen;
+      CollisionCore._cachedStructLastItem = lastColItem;
+    }
+
     const nearbyCollectibles = [];
-    const collFilterDistSq = 4.0 * 4.0;
-    for (let i = 0; i < collectibles.length; i++) {
-      const item = collectibles[i];
-      if (item.active && !item.isPreview && (item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_roof" || item.type === "robot_stand")) {
+    const collFilterDistSq = 1.6 * 1.6;
+    const structItems = CollisionCore._cachedStructItems;
+    for (let i = 0; i < structItems.length; i++) {
+      const item = structItems[i];
+      if (item.active && !item.isPreview && item.position) {
         const dx = currentPlayPos3D[0] - item.position[0];
         const dy = currentPlayPos3D[1] - item.position[1];
         const dz = currentPlayPos3D[2] - item.position[2];
@@ -1569,13 +1595,13 @@ const CollisionCore = {
             ];
             
             let segments = [];
-            let hasCoLocatedDoor = (other.type === "wood_door");
-            let hasCoLocatedWindow = (other.type === "wood_window");
+            let hasCoLocatedDoor = false;
+            let hasCoLocatedWindow = false;
             if (isRidingBoat) {
               segments.push({ cx: 0.0, hw: 0.15 });
             } else {
               for (let d of nearbyCollectibles) {
-                if (d.active && !d.isPreview) {
+                if (d.active && !d.isPreview && (d.type === "wood_door" || d.type === "wood_window")) {
                   const ox = d.position[0] - other.position[0];
                   const oy = d.position[1] - other.position[1];
                   const oz = d.position[2] - other.position[2];
@@ -1586,8 +1612,8 @@ const CollisionCore = {
                 }
               }
               if (hasCoLocatedDoor) {
-                segments.push({ cx: -0.12, hw: 0.03 });
-                segments.push({ cx: 0.12, hw: 0.03 });
+                segments.push({ cx: -0.13, hw: 0.02 });
+                segments.push({ cx: 0.13, hw: 0.02 });
               } else if (hasCoLocatedWindow) {
                 const feetHeight = feetRadius - wallCenterRadius;
                 if (feetHeight >= 0.075 && feetHeight < 0.185) {
@@ -1624,8 +1650,8 @@ const CollisionCore = {
               const cur_dx = (curPt[0] - other.position[0]) * wallR[0] + (curPt[1] - other.position[1]) * wallR[1] + (curPt[2] - other.position[2]) * wallR[2];
               const cur_dz = (curPt[0] - other.position[0]) * wallF[0] + (curPt[1] - other.position[1]) * wallF[1] + (curPt[2] - other.position[2]) * wallF[2];
 
-              // If wall has a door and player is walking within doorway opening, do not block!
-              if (hasCoLocatedDoor && Math.abs(cur_dx) < 0.065) {
+              // If wall has a door and player/clone is walking within doorway opening, do not block!
+              if (hasCoLocatedDoor && Math.abs(cur_dx) < 0.10) {
                 continue;
               }
 
@@ -1646,7 +1672,7 @@ const CollisionCore = {
                   const signX = (Math.abs(prev_ldx) > 0.002 ? Math.sign(prev_ldx) : Math.sign(ldx)) || 1;
 
                   let pushVec;
-                  if (penX < penZ && Math.abs(ldx) > seg.hw * 0.75) {
+                  if (penX < penZ && (hasCoLocatedDoor || Math.abs(ldx) > seg.hw * 0.75)) {
                     const pushAmt = penX * signX;
                     pushVec = [wallR[0] * pushAmt, wallR[1] * pushAmt, wallR[2] * pushAmt];
                   } else {
@@ -1680,8 +1706,10 @@ const CollisionCore = {
             other.position[2] * other.position[2]
           );
           const roofHeight = 0.30;
-          const feetRadius = isRidingBoat ? (groundRadius - 0.22) : (groundRadius - 0.46 * playerScale);
-          const headRadius = isRidingBoat ? (groundRadius + 0.42) : (groundRadius + 0.46 * playerScale);
+          const feetOffset = isRidingBoat ? 0.22 : (0.46 * playerScale);
+          const headOffset = isRidingBoat ? 0.42 : (0.46 * playerScale);
+          const feetRadius = groundRadius - feetOffset;
+          const headRadius = groundRadius + headOffset;
 
           if (headRadius > roofCenterRadius - 0.08 && feetRadius < roofCenterRadius + roofHeight + 0.08) {
             const angle = other.angle || 0.0;
@@ -1702,12 +1730,10 @@ const CollisionCore = {
             const d = 0.30;
             const rise = 0.25;
             const slopeLen = Math.sqrt(d * d + rise * rise);
-            const normSlope = [
-              (roofN[0] * d - roofF[0] * rise) / slopeLen,
-              (roofN[1] * d - roofF[1] * rise) / slopeLen,
-              (roofN[2] * d - roofF[2] * rise) / slopeLen
-            ];
-            const slopeOffset = (rise / 2) * (d / slopeLen);
+            const maxZ = (typeof other._vMaxEff === "number")
+              ? Math.min(0.15, 0.15 * (other._vMaxEff / (slopeLen * 0.5)))
+              : 0.15;
+            if (maxZ <= -0.14) continue;
 
             for (let tp of structTestPoints) {
               const tpOff = isRidingBoat ? [
@@ -1736,38 +1762,51 @@ const CollisionCore = {
               const prev_ly = (prevPt[0] - other.position[0]) * roofN[0] + (prevPt[1] - other.position[1]) * roofN[1] + (prevPt[2] - other.position[2]) * roofN[2];
 
               const limitX = 0.15 + tp.rad;
-              const limitZ = 0.15 + tp.rad;
+              const minLimitZ = -0.15 - tp.rad;
+              const maxLimitZ = maxZ + tp.rad;
 
-              if (Math.abs(lx) < limitX && Math.abs(lz) < limitZ) {
-                const clampedZ = Math.max(-0.15, Math.min(0.15, lz));
+              if (Math.abs(lx) < limitX && lz > minLimitZ && lz < maxLimitZ) {
+                const clampedZ = Math.max(-0.15, Math.min(maxZ, lz));
                 const surfH = 0.125 + (clampedZ / 0.30) * 0.25;
+                const prevClampedZ = Math.max(-0.15, Math.min(maxZ, prev_lz));
+                const prevSurfH = 0.125 + (prevClampedZ / 0.30) * 0.25;
 
-                if (ly >= -tp.rad - 0.05 && ly <= surfH + tp.rad + 0.06) {
-                  const distSlope = (ly * d - lz * rise) / slopeLen - slopeOffset;
-                  const prev_distSlope = (prev_ly * d - prev_lz * rise) / slopeLen - slopeOffset;
+                const feetLy = ly - feetOffset;
+                const headLy = ly + headOffset;
+                const prevFeetLy = prev_ly - feetOffset;
 
+                const slabBottom = surfH - 0.025;
+                const slabTop = surfH + 0.025;
+
+                // Skip horizontal push if player is walking on top of the roof surface or walking on the floor underneath the roof
+                if (!isRidingBoat && ((prevFeetLy >= prevSurfH - 0.02 && feetLy >= slabBottom - 0.02) || feetLy < -0.04)) {
+                  continue;
+                }
+
+                // Only collide horizontally if the player's vertical span [feetLy, headLy] intersects the sloped roof slab [slabBottom, slabTop]
+                if (headLy > slabBottom && feetLy < slabTop) {
                   let pushVec = null;
-                  if (prev_distSlope >= -0.02 || distSlope >= -0.04) {
-                    const penSlope = (0.04 + tp.rad) - distSlope;
-                    if (penSlope > 0) {
-                      pushVec = [normSlope[0] * penSlope, normSlope[1] * penSlope, normSlope[2] * penSlope];
-                    }
-                  } else {
-                    const penX = limitX - Math.abs(lx);
-                    const penEave = lz - (-limitZ);
-                    const penRidge = limitZ - lz;
+                  const penX = limitX - Math.abs(lx);
+                  const penEave = lz - minLimitZ;
+                  const penRidge = maxLimitZ - lz;
 
-                    if (prev_lz <= -0.12 || (penEave < penX && lz < 0)) {
-                      const pushAmt = penEave;
-                      pushVec = [-roofF[0] * pushAmt, -roofF[1] * pushAmt, -roofF[2] * pushAmt];
-                    } else if (prev_lz >= 0.12 || (penRidge < penX && lz > 0)) {
-                      const pushAmt = penRidge;
-                      pushVec = [roofF[0] * pushAmt, roofF[1] * pushAmt, roofF[2] * pushAmt];
-                    } else {
-                      const signX = (Math.abs(prev_lx) > 0.01 ? Math.sign(prev_lx) : Math.sign(lx)) || 1;
-                      const pushAmt = penX * signX;
-                      pushVec = [roofR[0] * pushAmt, roofR[1] * pushAmt, roofR[2] * pushAmt];
-                    }
+                  // Check if player was underneath the roof interior and walked into the low sloped ceiling
+                  const wasUnderneathInterior = (prev_ly < prevSurfH - 0.02) && (prev_lz > -0.15) && (Math.abs(prev_lx) < 0.15);
+                  if (wasUnderneathInterior) {
+                    const reqSurfH = headLy + 0.025;
+                    const reqZ = ((reqSurfH - 0.125) / 0.25) * 0.30;
+                    const pushAmt = Math.max(0.005, Math.min(0.15, reqZ - lz));
+                    pushVec = [roofF[0] * pushAmt, roofF[1] * pushAmt, roofF[2] * pushAmt];
+                  } else if (prev_lz <= -0.12 || (penEave < penX && penEave < penRidge)) {
+                    const pushAmt = penEave;
+                    pushVec = [-roofF[0] * pushAmt, -roofF[1] * pushAmt, -roofF[2] * pushAmt];
+                  } else if (prev_lz >= maxZ - 0.03 || (penRidge < penX && penRidge <= penEave)) {
+                    const pushAmt = penRidge;
+                    pushVec = [roofF[0] * pushAmt, roofF[1] * pushAmt, roofF[2] * pushAmt];
+                  } else {
+                    const signX = (Math.abs(prev_lx) > 0.01 ? Math.sign(prev_lx) : Math.sign(lx)) || 1;
+                    const pushAmt = penX * signX;
+                    pushVec = [roofR[0] * pushAmt, roofR[1] * pushAmt, roofR[2] * pushAmt];
                   }
 
                   if (pushVec) {
@@ -1966,6 +2005,8 @@ const CollisionCore = {
               other.F[1] * cosA - other.R[1] * sinA,
               other.F[2] * cosA - other.R[2] * sinA
             ];
+          }
+          if (other._centerRadius === undefined) {
             other._centerRadius = Math.sqrt(
               other.position[0] * other.position[0] +
               other.position[1] * other.position[1] +
@@ -2019,69 +2060,21 @@ const CollisionCore = {
                   vehicleCollidedWithStructure = true;
                 }
               }
-            } else {
+            } else if (other.isLocked) {
               const dx = dx_vec_x * wallR[0] + dx_vec_y * wallR[1] + dx_vec_z * wallR[2];
               const dz = dx_vec_x * wallF[0] + dx_vec_y * wallF[1] + dx_vec_z * wallF[2];
-
-              const isInsideDoorway = Math.abs(dx) < 0.065;
-              const doorAngle = other.doorAngle || 0.0;
-              const isDoorOpen = Math.abs(doorAngle) > 0.4 || (other.doorTargetAngle !== undefined && Math.abs(other.doorTargetAngle) > 0.4);
-
-              // 1. Side post collisions (only block when player is walking into the outer frame/wall posts, NOT in the doorway)
-              if (!isInsideDoorway && Math.abs(dz) < 0.04) {
-                const postRadius = 0.012;
-                const leftPostDx = dx - (-0.076);
-                const rightPostDx = dx - 0.076;
-                const collRad = postRadius + playerScale * 0.38;
-
-                if (dx < 0) {
-                  const leftDistSq = leftPostDx * leftPostDx + dz * dz;
-                  if (leftDistSq < collRad * collRad) {
-                    const dist = Math.sqrt(leftDistSq) || 1.0;
-                    const pen = collRad - dist;
-                    const pushX = (leftPostDx / dist) * pen;
-                    const pushZ = (dz / dist) * pen;
-                    const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
-                    P_new[0] += pushVec[0] / groundRadius;
-                    P_new[1] += pushVec[1] / groundRadius;
-                    P_new[2] += pushVec[2] / groundRadius;
-                  }
-                } else {
-                  const rightDistSq = rightPostDx * rightPostDx + dz * dz;
-                  if (rightDistSq < collRad * collRad) {
-                    const dist = Math.sqrt(rightDistSq) || 1.0;
-                    const pen = collRad - dist;
-                    const pushX = (rightPostDx / dist) * pen;
-                    const pushZ = (dz / dist) * pen;
-                    const pushVec = [wallR[0] * pushX + wallF[0] * pushZ, wallR[1] * pushX + wallF[1] * pushZ, wallR[2] * pushX + wallF[2] * pushZ];
-                    P_new[0] += pushVec[0] / groundRadius;
-                    P_new[1] += pushVec[1] / groundRadius;
-                    P_new[2] += pushVec[2] / groundRadius;
-                  }
-                }
+              const limitZ = 0.025 + playerScale * 0.38;
+              if (Math.abs(dx) < 0.095 && Math.abs(dz) < limitZ) {
+                const penZ = limitZ - Math.abs(dz);
+                const signZ = Math.sign(dz) || 1;
+                P_new[0] += (wallF[0] * penZ * signZ) / groundRadius;
+                P_new[1] += (wallF[1] * penZ * signZ) / groundRadius;
+                P_new[2] += (wallF[2] * penZ * signZ) / groundRadius;
+                const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
+                P_new[0] /= pLenTemp;
+                P_new[1] /= pLenTemp;
+                P_new[2] /= pLenTemp;
               }
-
-              // 2. Door leaf interaction & collision
-              if (!isDoorOpen) {
-                // If player is walking towards / touching the closed door inside the doorway
-                if (isInsideDoorway && Math.abs(dz) < 0.10) {
-                  if (!other.isLocked) {
-                    // Auto swing open in walking direction!
-                    const openDir = (dz >= 0) ? -1.57 : 1.57;
-                    other.doorTargetAngle = openDir;
-                    other.doorOpenTimer = 1.0;
-                    if (Math.abs(other.doorAngle) < 0.4) {
-                      other.doorAngle = openDir * 0.45;
-                    }
-                    if (window._activeSwingingDoors) window._activeSwingingDoors.add(other);
-                  }
-                }
-              }
-
-              const pLenTemp = Math.sqrt(P_new[0]*P_new[0] + P_new[1]*P_new[1] + P_new[2]*P_new[2]) || 1;
-              P_new[0] /= pLenTemp;
-              P_new[1] /= pLenTemp;
-              P_new[2] /= pLenTemp;
             }
           }
         }
@@ -2210,6 +2203,213 @@ const CollisionCore = {
     }
 
     return vehicleCollidedWithStructure;
+  },
+
+  // Shared Obstacle & Structure Collision Pipeline (Used by both Player and PlayerClones)
+  resolveEntityObstacleAndStructureCollisions: function(params) {
+    const P_new = params.P_new;
+    const P_curr = params.P_curr;
+    const groundRadius = params.groundRadius;
+    const playerScale = params.playerScale || (typeof window !== "undefined" && typeof window.playerScale === "number" ? window.playerScale : 0.1);
+    const activeRidingBoat = params.activeRidingBoat || null;
+    const collectiblesList = params.collectibles || (typeof collectibles !== "undefined" ? collectibles : []);
+    const F_3d = params.F_3d;
+    const East = params.East;
+    const North = params.North;
+    const charTheta = params.charTheta;
+    const charPhi = params.charPhi;
+    const charHeading = params.charHeading;
+    const maxColDist = (typeof maxColliderDistance !== "undefined") ? maxColliderDistance : 3.5;
+
+    // 1. Obstacle Collisions (Trees, Rocks, Ores, Cubes, Amphibians)
+    const nearbyObstacles = [];
+    const entityPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
+    const filterDistSq = (maxColDist + 1.5) * (maxColDist + 1.5);
+    const filterObstacles = (list) => {
+      if (!list) return;
+      for (let i = 0; i < list.length; i++) {
+        const obs = list[i];
+        if (!obs || !obs.position || obs.type === "cotton_plant" || obs.noCollision || obs.isPassable) continue;
+        const dx = entityPos3D[0] - obs.position[0];
+        const dy = entityPos3D[1] - obs.position[1];
+        const dz = entityPos3D[2] - obs.position[2];
+        if (dx * dx + dy * dy + dz * dz < filterDistSq) {
+          nearbyObstacles.push(obs);
+        }
+      }
+    };
+    filterObstacles(typeof natureObstacles !== "undefined" ? natureObstacles : (typeof window !== "undefined" ? window.natureObstacles : null));
+    filterObstacles(typeof cubeObstacles !== "undefined" ? cubeObstacles : (typeof window !== "undefined" ? window.cubeObstacles : null));
+    filterObstacles(typeof amphibians !== "undefined" ? amphibians : (typeof window !== "undefined" ? window.amphibians : null));
+
+    const maxDistSq = maxColDist * maxColDist;
+    const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : (typeof window !== "undefined" ? window.natureRawVertices : null);
+    const hasFastTri = (typeof closestPointOnTriangleFast === "function");
+
+    for (let iter = 0; iter < 3; iter++) {
+      for (let obs of nearbyObstacles) {
+        if (!obs.position) continue;
+        const C = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
+        const dx = C[0] - obs.position[0];
+        const dy = C[1] - obs.position[1];
+        const dz = C[2] - obs.position[2];
+        if (dx * dx + dy * dy + dz * dz > maxDistSq) continue;
+
+        const charCollisionRadius = playerScale * 0.38;
+
+        if (obs.meshStart !== undefined && obs.meshEnd !== undefined && rawVerts) {
+          if (dx * dx + dy * dy + dz * dz > (obs.radius + charCollisionRadius) * (obs.radius + charCollisionRadius)) {
+            continue;
+          }
+          const collisionEnd = obs.collisionMeshEnd !== undefined ? obs.collisionMeshEnd : obs.meshEnd;
+          const count = collisionEnd - obs.meshStart;
+
+          for (let j = 0; j < count; j += 3) {
+            const vIdx = obs.meshStart + j;
+            const v0 = vIdx * 3;
+            const v1 = (vIdx + 1) * 3;
+            const v2 = (vIdx + 2) * 3;
+            if (v2 + 2 >= rawVerts.length) continue;
+
+            const closest = hasFastTri
+              ? closestPointOnTriangleFast(
+                  C[0], C[1], C[2],
+                  rawVerts[v0], rawVerts[v0 + 1], rawVerts[v0 + 2],
+                  rawVerts[v1], rawVerts[v1 + 1], rawVerts[v1 + 2],
+                  rawVerts[v2], rawVerts[v2 + 1], rawVerts[v2 + 2]
+                )
+              : CollisionCore.closestPointOnTriangle(
+                  C,
+                  [rawVerts[v0], rawVerts[v0 + 1], rawVerts[v0 + 2]],
+                  [rawVerts[v1], rawVerts[v1 + 1], rawVerts[v1 + 2]],
+                  [rawVerts[v2], rawVerts[v2 + 1], rawVerts[v2 + 2]]
+                );
+            const px = C[0] - closest[0];
+            const py = C[1] - closest[1];
+            const pz = C[2] - closest[2];
+            const pLenSq = px * px + py * py + pz * pz;
+
+            if (pLenSq < charCollisionRadius * charCollisionRadius && pLenSq > 0.0001) {
+              const pLen = Math.sqrt(pLenSq);
+              const pushDist = charCollisionRadius - pLen;
+              C[0] += (px / pLen) * pushDist;
+              C[1] += (py / pLen) * pushDist;
+              C[2] += (pz / pLen) * pushDist;
+            }
+          }
+
+          const newLen = Math.sqrt(C[0] * C[0] + C[1] * C[1] + C[2] * C[2]);
+          if (newLen > 0.001) {
+            P_new[0] = C[0] / newLen;
+            P_new[1] = C[1] / newLen;
+            P_new[2] = C[2] / newLen;
+          }
+        } else if (obs.colliders && obs.colliders.length > 0) {
+          for (let col of obs.colliders) {
+            const cx = obs.position[0] + (col.offset[0] || 0);
+            const cy = obs.position[1] + (col.offset[1] || 0);
+            const cz = obs.position[2] + (col.offset[2] || 0);
+            const clen = Math.sqrt(cx * cx + cy * cy + cz * cz);
+            if (clen <= 0.001) continue;
+            const obsNormalX = cx / clen;
+            const obsNormalY = cy / clen;
+            const obsNormalZ = cz / clen;
+
+            const minDistance = col.radius + charCollisionRadius;
+            const vertical_diff = Math.abs(groundRadius - clen);
+
+            if (vertical_diff < minDistance) {
+              const h_req = Math.sqrt(minDistance * minDistance - vertical_diff * vertical_diff);
+              const dux = P_new[0] - obsNormalX;
+              const duy = P_new[1] - obsNormalY;
+              const duz = P_new[2] - obsNormalZ;
+              const dist = Math.sqrt(dux * dux + duy * duy + duz * duz);
+              const h_actual = dist * groundRadius;
+
+              if (h_actual < h_req && dist > 0.001) {
+                const pushX = dux / dist;
+                const pushY = duy / dist;
+                const pushZ = duz / dist;
+                const targetUnitDist = h_req / groundRadius;
+                P_new[0] = obsNormalX + pushX * targetUnitDist;
+                P_new[1] = obsNormalY + pushY * targetUnitDist;
+                P_new[2] = obsNormalZ + pushZ * targetUnitDist;
+
+                const pLen2 = Math.sqrt(P_new[0] * P_new[0] + P_new[1] * P_new[1] + P_new[2] * P_new[2]);
+                if (pLen2 > 0.001) {
+                  P_new[0] /= pLen2;
+                  P_new[1] /= pLen2;
+                  P_new[2] /= pLen2;
+                }
+              }
+            }
+          }
+        } else {
+          const obsLen = Math.sqrt(
+            obs.position[0] * obs.position[0] +
+            obs.position[1] * obs.position[1] +
+            obs.position[2] * obs.position[2]
+          );
+          if (obsLen > 0.001) {
+            const obsNormalX = obs.position[0] / obsLen;
+            const obsNormalY = obs.position[1] / obsLen;
+            const obsNormalZ = obs.position[2] / obsLen;
+
+            const minDistance = (obs.radius || 0.15) + charCollisionRadius;
+            const vertical_diff = Math.abs(groundRadius - obsLen);
+            if (vertical_diff < minDistance) {
+              const h_req = Math.sqrt(minDistance * minDistance - vertical_diff * vertical_diff);
+              const dux = P_new[0] - obsNormalX;
+              const duy = P_new[1] - obsNormalY;
+              const duz = P_new[2] - obsNormalZ;
+              const dist = Math.sqrt(dux * dux + duy * duy + duz * duz);
+              const h_actual = dist * groundRadius;
+
+              if (h_actual < h_req && dist > 0.001) {
+                const pushX = dux / dist;
+                const pushY = duy / dist;
+                const pushZ = duz / dist;
+                const targetUnitDist = h_req / groundRadius;
+                P_new[0] = obsNormalX + pushX * targetUnitDist;
+                P_new[1] = obsNormalY + pushY * targetUnitDist;
+                P_new[2] = obsNormalZ + pushZ * targetUnitDist;
+
+                const pLen2 = Math.sqrt(P_new[0] * P_new[0] + P_new[1] * P_new[1] + P_new[2] * P_new[2]);
+                if (pLen2 > 0.001) {
+                  P_new[0] /= pLen2;
+                  P_new[1] /= pLen2;
+                  P_new[2] /= pLen2;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Structure Collisions (wood_wall, wood_roof, wood_window, wood_door, robot_stand)
+    const structCollided = CollisionCore.resolveStructureCollisions({
+      P_new,
+      P_curr,
+      groundRadius,
+      playerScale,
+      activeRidingBoat,
+      collectibles: collectiblesList,
+      F_3d,
+      East,
+      North,
+      charTheta,
+      charPhi,
+      charHeading
+    });
+
+    // 3. Renormalize P_new
+    const pLenFinal = Math.sqrt(P_new[0] * P_new[0] + P_new[1] * P_new[1] + P_new[2] * P_new[2]) || 1;
+    P_new[0] /= pLenFinal;
+    P_new[1] /= pLenFinal;
+    P_new[2] /= pLenFinal;
+
+    return structCollided;
   }
 };
 
@@ -2220,3 +2420,10 @@ resolveCameraCollision = CollisionCore.resolveCameraCollision;
 checkCaveAndTerrainCollision = CollisionCore.checkCaveAndTerrainCollision;
 closestPointOnTriangle = CollisionCore.closestPointOnTriangle;
 resolveStructureCollisions = CollisionCore.resolveStructureCollisions;
+resolveEntityObstacleAndStructureCollisions = CollisionCore.resolveEntityObstacleAndStructureCollisions;
+if (typeof window !== "undefined") {
+  window.CollisionCore = CollisionCore;
+  window.resolveStructureCollisions = CollisionCore.resolveStructureCollisions;
+  window.checkCaveAndTerrainCollision = CollisionCore.checkCaveAndTerrainCollision;
+  window.resolveEntityObstacleAndStructureCollisions = CollisionCore.resolveEntityObstacleAndStructureCollisions;
+}

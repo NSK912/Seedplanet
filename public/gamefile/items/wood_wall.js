@@ -287,23 +287,23 @@ window.ItemRegistry["wood_wall"] = {
     const topTrimMid = getTrimHeight(0.0, 0.25);
 
     if (!isWindow || item.isPreview) {
-      // 1) Bottom horizontal support beam & doorway stumps (non-overlapping width 0.300, raised 1mm above floor top to prevent Z-fighting)
+      // 1) Bottom horizontal support beam & doorway stumps (non-overlapping width 0.300, extends 2mm into floor to prevent light leaks)
       if (hasCoLocatedDoor) {
         // Left bottom stump: width 0.060, centered at t = -0.120 (meets door post at t = -0.090 cleanly)
         const leftStumpCenter = [
-          p[0] - wallR[0] * 0.120 + n[0] * 0.0115,
-          p[1] - wallR[1] * 0.120 + n[1] * 0.0115,
-          p[2] - wallR[2] * 0.120 + n[2] * 0.0115
+          p[0] - wallR[0] * 0.120 + n[0] * 0.0105,
+          p[1] - wallR[1] * 0.120 + n[1] * 0.0105,
+          p[2] - wallR[2] * 0.120 + n[2] * 0.0105
         ];
-        addBox(leftStumpCenter, 0.060, 0.021, 0.028, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        addBox(leftStumpCenter, 0.060, 0.025, 0.032, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
 
         // Right bottom stump: width 0.060, centered at t = +0.120 (meets door post at t = +0.090 cleanly)
         const rightStumpCenter = [
-          p[0] + wallR[0] * 0.120 + n[0] * 0.0115,
-          p[1] + wallR[1] * 0.120 + n[1] * 0.0115,
-          p[2] + wallR[2] * 0.120 + n[2] * 0.0115
+          p[0] + wallR[0] * 0.120 + n[0] * 0.0105,
+          p[1] + wallR[1] * 0.120 + n[1] * 0.0105,
+          p[2] + wallR[2] * 0.120 + n[2] * 0.0105
         ];
-        addBox(rightStumpCenter, 0.060, 0.021, 0.028, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        addBox(rightStumpCenter, 0.060, 0.025, 0.032, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
 
         // Internal recessed floor-joint tongues under left/right wall segments only (hidden inside wall/floor)
         const leftTongueCenter = [
@@ -311,52 +311,52 @@ window.ItemRegistry["wood_wall"] = {
           p[1] - wallR[1] * 0.120 - n[1] * 0.003,
           p[2] - wallR[2] * 0.120 - n[2] * 0.003
         ];
-        addBox(leftTongueCenter, 0.056, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        addBox(leftTongueCenter, 0.068, 0.012, 0.022, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
 
         const rightTongueCenter = [
           p[0] + wallR[0] * 0.120 - n[0] * 0.003,
           p[1] + wallR[1] * 0.120 - n[1] * 0.003,
           p[2] + wallR[2] * 0.120 - n[2] * 0.003
         ];
-        addBox(rightTongueCenter, 0.056, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        addBox(rightTongueCenter, 0.068, 0.012, 0.022, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
       } else {
-        // Full-width bottom sill beam (width 0.300, spans n = 0.001 to 0.022 so it never Z-fights with floor at n = 0.000 or adjacent walls)
+        // Full-width bottom sill beam (width 0.300, extends 2mm into floor and 32mm thick to guarantee zero light leak)
         const bottomBeamCenter = [
-          p[0] + n[0] * 0.0115,
-          p[1] + n[1] * 0.0115,
-          p[2] + n[2] * 0.0115
+          p[0] + n[0] * 0.0105,
+          p[1] + n[1] * 0.0105,
+          p[2] + n[2] * 0.0105
         ];
-        addBox(bottomBeamCenter, 0.300, 0.021, 0.028, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        addBox(bottomBeamCenter, 0.300, 0.025, 0.032, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
 
-        // Internal recessed floor-joint tongue (depth 0.018 hidden strictly inside the 0.024 wall thickness)
+        // Internal recessed floor-joint tongue (depth 0.022 hidden inside the 0.024 wall thickness, width 0.316 overlapping 90-deg corners)
         const bottomTongueCenter = [
           p[0] - n[0] * 0.003,
           p[1] - n[1] * 0.003,
           p[2] - n[2] * 0.003
         ];
-        addBox(bottomTongueCenter, 0.296, 0.010, 0.018, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        addBox(bottomTongueCenter, 0.316, 0.012, 0.022, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
       }
 
-      // 1.5) Internal Corner End-Seals at t = -0.15 and t = +0.15 (0.020 x 0.020 hidden inside 0.024 planks so zero Z-fighting, while sealing 90-degree corners)
+      // 1.5) Internal Corner End-Seals at t = -0.15 and t = +0.15 (0.0235 x 0.0235 hidden inside 0.024 planks so zero Z-fighting, while sealing 90-degree corners)
       if (topTrimLeft > 0.010) {
         const leftCornerBottom = [
-          p[0] - wallR[0] * 0.15 + n[0] * 0.002,
-          p[1] - wallR[1] * 0.15 + n[1] * 0.002,
-          p[2] - wallR[2] * 0.15 + n[2] * 0.002
+          p[0] - wallR[0] * 0.15 - n[0] * 0.002,
+          p[1] - wallR[1] * 0.15 - n[1] * 0.002,
+          p[2] - wallR[2] * 0.15 - n[2] * 0.002
         ];
-        const leftPostHIn = Math.max(0, getTrimHeight(-0.140, 0.246) - 0.004);
-        const leftPostHOut = Math.max(0, Math.min(0.246, topTrimLeft) - 0.004);
-        addCustomBox(leftCornerBottom, 0.020, 0.020, leftPostHOut, leftPostHIn, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        const leftPostHIn = Math.max(0, getTrimHeight(-0.140, 0.246));
+        const leftPostHOut = Math.max(0, Math.min(0.246, topTrimLeft));
+        addCustomBox(leftCornerBottom, 0.0235, 0.0235, leftPostHOut, leftPostHIn, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
       }
       if (topTrimRight > 0.010) {
         const rightCornerBottom = [
-          p[0] + wallR[0] * 0.15 + n[0] * 0.002,
-          p[1] + wallR[1] * 0.15 + n[1] * 0.002,
-          p[2] + wallR[2] * 0.15 + n[2] * 0.002
+          p[0] + wallR[0] * 0.15 - n[0] * 0.002,
+          p[1] + wallR[1] * 0.15 - n[1] * 0.002,
+          p[2] + wallR[2] * 0.15 - n[2] * 0.002
         ];
-        const rightPostHIn = Math.max(0, getTrimHeight(0.140, 0.246) - 0.004);
-        const rightPostHOut = Math.max(0, Math.min(0.246, topTrimRight) - 0.004);
-        addCustomBox(rightCornerBottom, 0.020, 0.020, rightPostHIn, rightPostHOut, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
+        const rightPostHIn = Math.max(0, getTrimHeight(0.140, 0.246));
+        const rightPostHOut = Math.max(0, Math.min(0.246, topTrimRight));
+        addCustomBox(rightCornerBottom, 0.0235, 0.0235, rightPostHIn, rightPostHOut, beamDarkColor, wallR, n, wallF, vertices, colors, indices);
       }
     }
 

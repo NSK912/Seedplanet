@@ -60,9 +60,28 @@
       ? getVisualHeightOnSphere(cState.theta, cState.phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0))
       : 0;
     const terrainRad = planetRadius + cHeight * heightScale;
-    const baseGroundRad = terrainRad + 0.46 * charScale;
-    let finalGroundRad = baseGroundRad;
     const isSwimming = (cState.currentSwimFactor || 0) > 0.0;
+
+    let supportFloorRad = terrainRad;
+    if (!isSwimming && typeof getFloorTopRadiusAt === "function") {
+      const feetHint = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+        ? (cState.centerRadius - 0.46 * charScale)
+        : terrainRad;
+      supportFloorRad = getFloorTopRadiusAt(
+        cNx,
+        cNy,
+        cNz,
+        terrainRad,
+        feetHint,
+        !cState.isGrounded,
+        cState.verticalVel || 0
+      );
+    }
+
+    const baseGroundRad = supportFloorRad + 0.46 * charScale;
+    let finalGroundRad = (!isSwimming && typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+      ? cState.centerRadius
+      : (baseGroundRad + (cState.jumpY || 0));
 
     const cEast = [-cSinP, 0, cCosP];
     const cNorth = [-cCosT * cCosP, cSinT, -cCosT * cSinP];
@@ -98,7 +117,7 @@
         N: cN,
         F: finalF,
         R: finalR,
-        baseGroundRadius: baseGroundRad
+        baseGroundRadius: terrainRad + 0.46 * charScale
       });
       finalGroundRad = swimRes.groundRadius;
       cN = swimRes.finalN;
@@ -361,6 +380,11 @@
         continue;
       }
 
+      if (chest && chest.active && house._chestSnapped) {
+        house.chest = chest;
+        continue;
+      }
+
       // Find all wood floors belonging to this house
       const houseFloors = colList.filter(c => {
         if (!c || !c.active || c.type !== "wood_floor") return false;
@@ -507,6 +531,7 @@
       chest.storage = Array(20).fill(null);
     }
     house.chest = chest;
+    house._chestSnapped = true;
   }
 
   if (modifiedChests) {
@@ -1388,20 +1413,379 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     window.respawnPlayerClonesNearHouses();
   };
 
+  // =========================================================================
+  // SHARED PLAYER COLLISION & DOORWAY NAVIGATION HELPERS FOR CLONES
+  // =========================================================================
+  function updateCloneVerticalPhysics(cState, planetRadius, heightScale, seed, charScale, dtClamped) {
+    const cSinT = Math.sin(cState.theta);
+    const cCosT = Math.cos(cState.theta);
+    const cSinP = Math.sin(cState.phi);
+    const cCosP = Math.cos(cState.phi);
+    const cNx = cSinT * cCosP;
+    const cNy = cCosT;
+    const cNz = cSinT * cSinP;
+
+    const cHeight = (typeof getVisualHeightOnSphere === "function")
+      ? getVisualHeightOnSphere(cState.theta, cState.phi, seed)
+      : 0;
+    const terrainRad = planetRadius + cHeight * heightScale;
+
+    if (typeof cState.isGrounded !== "boolean") cState.isGrounded = true;
+    if (typeof cState.verticalVel !== "number" || Number.isNaN(cState.verticalVel)) cState.verticalVel = 0;
+
+    const feetRadBefore = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+      ? (cState.centerRadius - 0.46 * charScale)
+      : terrainRad;
+
+    let nearAnyStructure = (feetRadBefore > terrainRad + 0.01) || !cState.isGrounded;
+    if (!nearAnyStructure && typeof window !== "undefined" && Array.isArray(window.placedHouses)) {
+      const wx = cNx * terrainRad, wy = cNy * terrainRad, wz = cNz * terrainRad;
+      const houses = window.placedHouses;
+      for (let h = 0; h < houses.length; h++) {
+        const hs = houses[h];
+        if (!hs) continue;
+        const dx = wx - hs.x, dy = wy - hs.y, dz = wz - hs.z;
+        if (dx * dx + dy * dy + dz * dz < 4.5) {
+          nearAnyStructure = true;
+          break;
+        }
+      }
+    }
+
+    const currentSupportRad = (nearAnyStructure && typeof getFloorTopRadiusAt === "function")
+      ? getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, feetRadBefore, !cState.isGrounded, cState.verticalVel)
+      : terrainRad;
+    const targetGroundCenterRad = currentSupportRad + 0.46 * charScale;
+
+    if (typeof cState.centerRadius !== "number" || Number.isNaN(cState.centerRadius) || cState.centerRadius <= 0.001) {
+      cState.centerRadius = targetGroundCenterRad;
+      cState.verticalVel = 0;
+      cState.isGrounded = true;
+    }
+
+    const isSwimming = (cState.currentSwimFactor || 0) > 0.1;
+    const isRiding = !!(cState.ridingBoat && cState.ridingBoat.active);
+
+    if (isSwimming || isRiding) {
+      cState.centerRadius = targetGroundCenterRad;
+      cState.verticalVel = 0;
+      cState.isGrounded = true;
+      cState.jumpY = 0;
+      cState.jumpVy = 0;
+      return { terrainRad, currentSupportRad, cNx, cNy, cNz };
+    }
+
+    // Transfer AI jump impulse into shared vertical velocity
+    if ((cState.jumpVy || 0) > 0 && cState.isGrounded) {
+      cState.verticalVel = cState.jumpVy;
+      cState.isGrounded = false;
+      cState.jumpVy = 0;
+    }
+
+    if (cState.isGrounded && cState.centerRadius > targetGroundCenterRad + 0.03 * charScale) {
+      cState.isGrounded = false;
+    }
+
+    if (!cState.isGrounded) {
+      cState.verticalVel -= 9.8 * charScale * dtClamped;
+      const prevCenterRad = cState.centerRadius;
+      cState.centerRadius += cState.verticalVel * dtClamped;
+
+      if (cState.verticalVel > 0 && typeof getFloorCeilingRadiusAt === "function") {
+        const charHeadOffset = 0.88 * charScale;
+        const currentFeetRad = prevCenterRad - 0.46 * charScale;
+        const nextFeetRad = cState.centerRadius - 0.46 * charScale;
+        const ceilingBottomRad = getFloorCeilingRadiusAt(cNx, cNy, cNz, currentFeetRad, nextFeetRad, charHeadOffset);
+        if (ceilingBottomRad < Infinity) {
+          const maxCenterRad = ceilingBottomRad + 0.46 * charScale - charHeadOffset - 0.004;
+          if (cState.centerRadius > maxCenterRad) {
+            cState.centerRadius = Math.max(prevCenterRad, maxCenterRad);
+            cState.verticalVel = 0;
+          }
+        }
+      }
+
+      if (cState.centerRadius <= targetGroundCenterRad) {
+        cState.centerRadius = targetGroundCenterRad;
+        cState.verticalVel = 0;
+        cState.isGrounded = true;
+      }
+    } else {
+      cState.centerRadius = targetGroundCenterRad;
+      cState.verticalVel = 0;
+    }
+
+    cState.jumpY = Math.max(0, cState.centerRadius - targetGroundCenterRad);
+    return { terrainRad, currentSupportRad, cNx, cNy, cNz };
+  }
+
+  function computeHouseDoorPoints(house) {
+    if (!house || !house.entranceDoor) return null;
+    const hx = house.x, hy = house.y, hz = house.z;
+    const hR = house.R || [1, 0, 0];
+    const hF = house.F || [0, 0, 1];
+    const wfW = house.wfW || 0.30;
+    const totalW = house.totalW || 0.60;
+    const totalD = house.totalD || 0.60;
+    const door = house.entranceDoor;
+
+    const cellCx = -totalW / 2 + wfW / 2 + door.gx * wfW;
+    const cellCy = -totalD / 2 + wfW / 2 + door.gy * wfW;
+
+    let outOffR = cellCx, outOffF = cellCy;
+    let inOffR = cellCx, inOffF = cellCy;
+    const outClear = 0.24;
+    const inClear = 0.14;
+
+    if (door.side === "bottom") {
+      outOffF = cellCy - wfW / 2 - outClear;
+      inOffF = cellCy - wfW / 2 + inClear;
+    } else if (door.side === "top") {
+      outOffF = cellCy + wfW / 2 + outClear;
+      inOffF = cellCy + wfW / 2 - inClear;
+    } else if (door.side === "left") {
+      outOffR = cellCx - wfW / 2 - outClear;
+      inOffR = cellCx - wfW / 2 + inClear;
+    } else if (door.side === "right") {
+      outOffR = cellCx + wfW / 2 + outClear;
+      inOffR = cellCx + wfW / 2 - inClear;
+    }
+
+    const toSpherical = (offR, offF) => {
+      const wx = hx + hR[0] * offR + hF[0] * offF;
+      const wy = hy + hR[1] * offR + hF[1] * offF;
+      const wz = hz + hR[2] * offR + hF[2] * offF;
+      const dist = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1;
+      const theta = Math.acos(Math.max(-1.0, Math.min(1.0, wy / dist)));
+      let phi = Math.atan2(wz, wx);
+      if (phi < 0) phi += Math.PI * 2;
+      return { theta, phi, offR, offF };
+    };
+
+    return {
+      outside: toSpherical(outOffR, outOffF),
+      inside: toSpherical(inOffR, inOffF)
+    };
+  }
+
+  function resolveCloneDoorwayWaypoint(cState, planetRadius, houses) {
+    const rawTheta = cState.targetTheta;
+    const rawPhi = cState.targetPhi;
+    if (!houses || houses.length === 0) return { navTheta: rawTheta, navPhi: rawPhi };
+
+    const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
+    const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
+    const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+
+    const tSinT = Math.sin(rawTheta), tCosT = Math.cos(rawTheta);
+    const tSinP = Math.sin(rawPhi), tCosP = Math.cos(rawPhi);
+    const tPos = [planetRadius * tSinT * tCosP, planetRadius * tCosT, planetRadius * tSinT * tSinP];
+
+    for (let hIdx = 0; hIdx < houses.length; hIdx++) {
+      const house = houses[hIdx];
+      if (!house || !house.R || !house.F) continue;
+
+      const dxC = cPos[0] - house.x, dyC = cPos[1] - house.y, dzC = cPos[2] - house.z;
+      if (dxC * dxC + dyC * dyC + dzC * dzC > 9.0) continue; // Only check nearby houses (< 3m)
+
+      const halfW = (house.totalW || 0.60) * 0.5;
+      const halfD = (house.totalD || 0.60) * 0.5;
+      const hR = house.R;
+      const hF = house.F;
+
+      const cLocR = dxC * hR[0] + dyC * hR[1] + dzC * hR[2];
+      const cLocF = dxC * hF[0] + dyC * hF[1] + dzC * hF[2];
+
+      const dxT = tPos[0] - house.x, dyT = tPos[1] - house.y, dzT = tPos[2] - house.z;
+      const tLocR = dxT * hR[0] + dyT * hR[1] + dzT * hR[2];
+      const tLocF = dxT * hF[0] + dyT * hF[1] + dzT * hF[2];
+
+      const margin = 0.04;
+      const cloneInside = Math.abs(cLocR) <= halfW + margin && Math.abs(cLocF) <= halfD + margin;
+      const targetInside = Math.abs(tLocR) <= halfW + margin && Math.abs(tLocF) <= halfD + margin;
+
+      if (cloneInside && !targetInside) {
+        // Clone is inside house and wants to go outside -> route through doorway!
+        const doorPts = computeHouseDoorPoints(house);
+        if (doorPts) {
+          const distToOutDoor = Math.hypot(cLocR - doorPts.outside.offR, cLocF - doorPts.outside.offF);
+          const distToInDoor = Math.hypot(cLocR - doorPts.inside.offR, cLocF - doorPts.inside.offF);
+          if (distToInDoor > 0.16 && distToOutDoor > distToInDoor) {
+            return { navTheta: doorPts.inside.theta, navPhi: doorPts.inside.phi };
+          }
+          return { navTheta: doorPts.outside.theta, navPhi: doorPts.outside.phi };
+        }
+      } else if (!cloneInside && targetInside) {
+        // Clone is outside house and wants to go inside (e.g., DEPOSIT_CHEST) -> route to outside of entrance door first!
+        const doorPts = computeHouseDoorPoints(house);
+        if (doorPts) {
+          const distToOutDoor = Math.hypot(cLocR - doorPts.outside.offR, cLocF - doorPts.outside.offF);
+          if (distToOutDoor > 0.18) {
+            return { navTheta: doorPts.outside.theta, navPhi: doorPts.outside.phi };
+          }
+        }
+      }
+    }
+
+    return { navTheta: rawTheta, navPhi: rawPhi };
+  }
+
+  function stepCloneWithSharedCollision(cState, moveNorth, moveEast, planetRadius, charScale, isBoatDriving, wRadiusLocal, cHeight) {
+    const sinT = Math.sin(cState.theta);
+    const cosT = Math.cos(cState.theta);
+    const sinP = Math.sin(cState.phi);
+    const cosP = Math.cos(cState.phi);
+
+    // Unit sphere normal (exact same convention as P_curr in renderer.js)
+    const P_curr = [sinT * cosP, cosT, sinT * sinP];
+    const East = [-sinP, 0, cosP];
+    const North = [-cosT * cosP, sinT, -cosT * sinP];
+
+    const cosH = Math.cos(cState.heading);
+    const sinH = Math.sin(cState.heading);
+    const F_3d = [
+      North[0] * cosH + East[0] * sinH,
+      North[1] * cosH + East[1] * sinH,
+      North[2] * cosH + East[2] * sinH
+    ];
+
+    const centerRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+      ? cState.centerRadius
+      : (planetRadius + 0.46 * charScale);
+
+    const M_vec = [
+      North[0] * moveNorth + East[0] * moveEast,
+      North[1] * moveNorth + East[1] * moveEast,
+      North[2] * moveNorth + East[2] * moveEast
+    ];
+    const moveLen = Math.hypot(M_vec[0], M_vec[1], M_vec[2]);
+    if (moveLen <= 0.00001) {
+      return { actualMoveDist: 0, blockedRatio: 0 };
+    }
+
+    // Candidate unit vector on sphere before collision
+    let P_new = [
+      P_curr[0] + M_vec[0] / planetRadius,
+      P_curr[1] + M_vec[1] / planetRadius,
+      P_curr[2] + M_vec[2] / planetRadius
+    ];
+    const pNewLen = Math.hypot(P_new[0], P_new[1], P_new[2]) || 1;
+    P_new[0] /= pNewLen;
+    P_new[1] /= pNewLen;
+    P_new[2] /= pNewLen;
+
+    // 1. Structure Collisions (Wood Walls, Windows, Doors, Roofs) using cached structure list
+    const resolveStructFn = (typeof CollisionCore !== "undefined" && typeof CollisionCore.resolveStructureCollisions === "function")
+      ? CollisionCore.resolveStructureCollisions
+      : null;
+
+    if (resolveStructFn) {
+      resolveStructFn({
+        P_new,
+        P_curr,
+        groundRadius: centerRad,
+        playerScale: charScale,
+        activeRidingBoat: isBoatDriving ? cState.ridingBoat : null,
+        collectibles: (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []),
+        F_3d,
+        East,
+        North,
+        charTheta: cState.theta,
+        charPhi: cState.phi,
+        charHeading: cState.heading
+      });
+    }
+
+    // 2. Fast bounding-sphere push against nearby trees/rocks (avoids per-triangle mesh math)
+    if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
+      const testX = P_new[0] * planetRadius;
+      const testY = P_new[1] * planetRadius;
+      const testZ = P_new[2] * planetRadius;
+      const nearObs = SpatialGrid.queryRadius(testX, testY, testZ, 0.75, null);
+      const cloneRad = (isBoatDriving ? 0.16 : (0.28 * charScale));
+      for (let i = 0; i < nearObs.length; i++) {
+        const obs = nearObs[i];
+        if (!obs || !obs.active || obs.isPreview || !obs.position) continue;
+        if (obs.type !== "tree" && obs.type !== "big_rock" && obs.type !== "glow_rock" && obs.type !== "iron_rock") continue;
+        const ox = testX - obs.position[0];
+        const oy = testY - obs.position[1];
+        const oz = testZ - obs.position[2];
+        const minR = cloneRad + (obs.type === "tree" ? 0.08 : 0.14);
+        const dSq = ox * ox + oy * oy + oz * oz;
+        if (dSq < minR * minR && dSq > 1e-6) {
+          const d = Math.sqrt(dSq);
+          const push = (minR - d) / planetRadius;
+          P_new[0] += (ox / d) * push;
+          P_new[1] += (oy / d) * push;
+          P_new[2] += (oz / d) * push;
+        }
+      }
+      const nLen = Math.hypot(P_new[0], P_new[1], P_new[2]) || 1;
+      P_new[0] /= nLen;
+      P_new[1] /= nLen;
+      P_new[2] /= nLen;
+    }
+
+    // 3. Fast single-sample natural terrain 45-degree slope check
+    const feetRad = centerRad - 0.46 * charScale;
+    const seedVal = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+    const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
+    const currNatRad = planetRadius + (cHeight || 0) * hScale;
+    const isOnElevatedFloor = feetRad > currNatRad + 0.015;
+    if (!isOnElevatedFloor && (cState.currentSwimFactor || 0) <= 0.05 && typeof getVisualHeightOnSphere === "function") {
+      const candTheta = Math.acos(Math.max(-1.0, Math.min(1.0, P_new[1])));
+      const candPhi = Math.atan2(P_new[2], P_new[0]);
+      const nextH = getVisualHeightOnSphere(candTheta, candPhi, seedVal);
+      const nextNatRad = planetRadius + nextH * hScale;
+      const elevDiff = nextNatRad - currNatRad;
+      if (elevDiff > 0.01 && moveLen > 0.0001 && (elevDiff / moveLen) > 1.0) {
+        // Blocked by > 45 deg natural cliff
+        P_new[0] = P_curr[0];
+        P_new[1] = P_curr[1];
+        P_new[2] = P_curr[2];
+      }
+    }
+
+    const candLen = Math.hypot(P_new[0], P_new[1], P_new[2]) || 1;
+    const finalNx = P_new[0] / candLen;
+    const finalNy = P_new[1] / candLen;
+    const finalNz = P_new[2] / candLen;
+
+    cState.theta = Math.max(0.08, Math.min(Math.PI - 0.08, Math.acos(Math.max(-1.0, Math.min(1.0, finalNy)))));
+    let newPhi = Math.atan2(finalNz, finalNx);
+    if (newPhi < 0) newPhi += Math.PI * 2;
+    cState.phi = newPhi;
+
+    const actualMoveDist = Math.hypot(
+      (finalNx - P_curr[0]) * planetRadius,
+      (finalNy - P_curr[1]) * planetRadius,
+      (finalNz - P_curr[2]) * planetRadius
+    );
+    const blockedRatio = moveLen > 0.0001 ? Math.max(0, 1.0 - actualMoveDist / moveLen) : 0;
+
+    return { actualMoveDist, blockedRatio };
+  }
+
+  let _chestEnsureTimer = 0;
+
   window.updatePlayerClones = function(dt) {
     if (typeof window.initPlayerClonesIfNeeded === "function") {
       window.initPlayerClonesIfNeeded();
     }
     if (!window.playerClonesState || window.playerClonesState.length === 0) return;
 
-    ensureHouseChests();
+    const dtClamped = Math.min(0.05, Math.max(0.001, dt || 0.016));
+    _chestEnsureTimer -= dtClamped;
+    if (_chestEnsureTimer <= 0) {
+      ensureHouseChests();
+      _chestEnsureTimer = 2.0;
+    }
 
     const planetRadius = (typeof RADIUS !== "undefined") ? RADIUS : 8.0;
     const heightScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
     const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
     const wLevel = (typeof waterLevel !== "undefined") ? waterLevel : 1.0;
     const minDryRadius = planetRadius + wLevel * (heightScale * 0.25) + 0.05;
-    const dtClamped = Math.min(0.05, Math.max(0.001, dt || 0.016));
     const houses = (typeof window !== "undefined" && window.placedHouses) ? window.placedHouses : [];
 
     for (let i = 0; i < window.playerClonesState.length; i++) {
@@ -1418,35 +1802,25 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         cState.actionAnim = Math.max(0, cState.actionAnim - dtClamped * 2.5);
       }
 
-      // Simple jump physics along surface normal
-      if (cState.jumpY > 0 || cState.jumpVy !== 0) {
-        const charScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
-        cState.jumpVy = (cState.jumpVy || 0) - 9.8 * charScale * dtClamped;
-        cState.jumpY = Math.max(0, (cState.jumpY || 0) + cState.jumpVy * dtClamped);
-        if (cState.jumpY <= 0) { cState.jumpY = 0; cState.jumpVy = 0; }
+      // Check Crafting periodically (every 1.0s instead of every frame)
+      cState._craftCheckTimer = (cState._craftCheckTimer || 0) - dtClamped;
+      if (cState._craftCheckTimer <= 0) {
+        tryCloneCrafting(cState, planetRadius);
+        cState._craftCheckTimer = 1.0;
       }
 
-      // Check Crafting automatically whenever clone has farmed materials
-      tryCloneCrafting(cState, planetRadius);
-
       // =========================================================================
-      // SWIMMING & WATER PHYSICS (EXACT SAME SHARED CODE AS PLAYER)
+      // SWIMMING, FLOOR & VERTICAL PHYSICS (EXACT SAME SHARED CODE AS PLAYER)
       // =========================================================================
       const charScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
-      const cSinT = Math.sin(cState.theta);
-      const cCosT = Math.cos(cState.theta);
-      const cSinP = Math.sin(cState.phi);
-      const cCosP = Math.cos(cState.phi);
-      const cNx = cSinT * cCosP;
-      const cNy = cCosT;
-      const cNz = cSinT * cSinP;
+      const vertInfo = updateCloneVerticalPhysics(cState, planetRadius, heightScale, seed, charScale, dtClamped);
+      const terrainRad = vertInfo.terrainRad;
+      const cNx = vertInfo.cNx;
+      const cNy = vertInfo.cNy;
+      const cNz = vertInfo.cNz;
 
-      const cHeight = (typeof getVisualHeightOnSphere === "function")
-        ? getVisualHeightOnSphere(cState.theta, cState.phi, seed)
-        : 0;
-      const terrainRad = planetRadius + cHeight * heightScale;
       const cWaterRad = planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * 0.15;
-      const cFeetRad = terrainRad;
+      const cFeetRad = cState.centerRadius ? (cState.centerRadius - 0.46 * charScale) : terrainRad;
       const wRadiusLocal = (typeof getWaterRadiusAt === "function")
         ? getWaterRadiusAt(cNx * cFeetRad, cNy * cFeetRad, cNz * cFeetRad)
         : cWaterRad;
@@ -1473,6 +1847,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       if ((cState.currentSwimFactor || 0) > 0.1) {
         cState.jumpY = 0;
         cState.jumpVy = 0;
+        cState.verticalVel = 0;
         if (cState.currentActivity !== "DRIVE_BOAT") {
           cState.faceText = cState.isIdle ? "(~˘▾˘)~" : "(o˘◡˘o)";
         }
@@ -1497,19 +1872,24 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
         cState.boatDriveTimer -= dtClamped;
 
-        // Clone drives the boat forward smoothly
+        // Clone drives the boat forward smoothly using shared collision system
         const boatSpeed = boat.hasEngine ? 1.4 : 0.95;
         cState.walkBlend = 0.0;
         cState.isIdle = false;
         cState.faceText = "(¬‿¬)"; // Cheeky grin while joyriding!
 
-        const sinT = Math.max(0.05, Math.sin(cState.theta));
         const step = boatSpeed * dtClamped;
 
         // Cruise around and turn smoothly
         cState.heading += Math.sin(cState.animPhase * 0.5) * 0.4 * dtClamped;
-        cState.theta = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * step) / planetRadius));
-        cState.phi += (Math.sin(cState.heading) * step) / (planetRadius * sinT);
+        const moveNorth = Math.cos(cState.heading) * step;
+        const moveEast = Math.sin(cState.heading) * step;
+        const cHeightEst = (terrainRad - planetRadius) / (heightScale || 1.0);
+        const boatStepRes = stepCloneWithSharedCollision(cState, moveNorth, moveEast, planetRadius, charScale, true, wRadiusLocal, cHeightEst);
+        if (boatStepRes.blockedRatio > 0.55) {
+          // Steer away if boat hits coastline, rock, or wall
+          cState.heading += (i % 2 === 0 ? 1 : -1) * 2.2 * dtClamped;
+        }
 
         // Update boat transformation directly on water/terrain surface (same as player)
         const nSinT = Math.sin(cState.theta);
@@ -1955,23 +2335,34 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         }
       } else {
-        // Walking towards current waypoint / target
+        // Walking towards current waypoint / target (with house doorway routing & shared wall collision)
         cState.walkBlend = Math.min(1.0, cState.walkBlend + dtClamped * 4.0);
         cState.animPhase += dtClamped * 5.0;
 
-        const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
+        const navTarget = resolveCloneDoorwayWaypoint(cState, planetRadius, houses);
+        const dNorth = -(navTarget.navTheta - cState.theta) * planetRadius;
         const sinT = Math.max(0.05, Math.sin(cState.theta));
-        let dPhi = cState.targetPhi - cState.phi;
+        let dPhi = navTarget.navPhi - cState.phi;
         while (dPhi > Math.PI) dPhi -= Math.PI * 2;
         while (dPhi < -Math.PI) dPhi += Math.PI * 2;
         const dEast = dPhi * (planetRadius * sinT);
         const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
+        if (cState.wallSteerTimer > 0) {
+          cState.wallSteerTimer = Math.max(0, cState.wallSteerTimer - dtClamped);
+        } else {
+          cState.wallSteerAngle = 0;
+        }
+
         if (distToTarget > 0.04) {
-          cState.heading = Math.atan2(dEast, dNorth);
+          let desiredHeading = Math.atan2(dEast, dNorth);
+          if (cState.wallSteerTimer > 0 && cState.wallSteerAngle) {
+            desiredHeading += cState.wallSteerAngle;
+          }
+          cState.heading = desiredHeading;
 
           // เมื่อเดินติดขอบ (เช่น ขอบพื้นไม้ หรือเนินต่างระดับข้างหน้า) และจำเป็นต้องเดินไป -> กระโดดข้ามขอบ (ยกเว้นกำลังว่ายน้ำ)
-          if ((cState.jumpY || 0) <= 0.001 && (cState.currentSwimFactor || 0) <= 0.1) {
+          if (cState.isGrounded && (cState.currentSwimFactor || 0) <= 0.1) {
             const probeDist = 0.20;
             const probeT = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * probeDist) / planetRadius));
             const sinTprobe = Math.max(0.05, Math.sin(cState.theta));
@@ -1980,18 +2371,38 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
             const aheadH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(probeT, probeP, seed) : 0;
             const diffH = (aheadH - curH) * heightScale;
             if (diffH > 0.035 && diffH < 0.35) {
-              const charScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
               cState.jumpVy = 2.0 * charScale;
             }
           }
 
           const speedMultiplier = (cState.currentSwimFactor > 0.4) ? 0.65 : 1.0;
           const step = Math.min(cState.moveSpeed * speedMultiplier * dtClamped, distToTarget);
-          cState.theta = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * step) / planetRadius));
-          cState.phi += (Math.sin(cState.heading) * step) / (planetRadius * sinT);
+          const moveNorth = Math.cos(cState.heading) * step;
+          const moveEast = Math.sin(cState.heading) * step;
+
+          const cHeightEst = (terrainRad - planetRadius) / (heightScale || 1.0);
+          const stepRes = stepCloneWithSharedCollision(cState, moveNorth, moveEast, planetRadius, charScale, false, wRadiusLocal, cHeightEst);
+
+          // If blocked by a wall or obstacle, steer tangentially along the wall to find the way around
+          if (stepRes.blockedRatio > 0.55) {
+            const steerSign = (i % 2 === 0) ? 1 : -1;
+            if (!cState.wallSteerTimer || cState.wallSteerTimer <= 0.05) {
+              cState.wallSteerAngle = steerSign * (Math.PI * 0.42);
+              cState.wallSteerTimer = 0.55;
+            } else {
+              cState.wallSteerAngle = steerSign * (Math.PI * 0.58);
+            }
+          }
         }
 
-        if (distToTarget <= 0.04 || cState.timer <= 0) {
+        const rawDNorth = -(cState.targetTheta - cState.theta) * planetRadius;
+        let rawDPhi = cState.targetPhi - cState.phi;
+        while (rawDPhi > Math.PI) rawDPhi -= Math.PI * 2;
+        while (rawDPhi < -Math.PI) rawDPhi += Math.PI * 2;
+        const rawDEast = rawDPhi * (planetRadius * sinT);
+        const rawDistToTarget = Math.sqrt(rawDNorth * rawDNorth + rawDEast * rawDEast);
+
+        if (rawDistToTarget <= 0.04 || cState.timer <= 0) {
           if (cState.currentActivity === "WANDER") {
             cState.isIdle = true;
             cState.timer = 1.0 + Math.random() * 2.0;

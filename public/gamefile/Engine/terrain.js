@@ -356,18 +356,72 @@
         return { valid, t, perpSq: perpSqTangent };
       }
 
-      function getFloorTopRadiusAt(nx, ny, nz, baseTerrainRadius) {
+      let _cachedFloorRoofCollectibles = [];
+      let _cachedFloorRoofCollectiblesLen = -1;
+      let _cachedFloorRoofCollectiblesLastItem = null;
+
+      function _invalidateFloorRoofCache() {
+        _cachedFloorRoofCollectiblesLen = -1;
+        _cachedFloorRoofCollectiblesLastItem = null;
+        if (typeof CollisionCore !== "undefined" && CollisionCore) {
+          CollisionCore._cachedStructLen = -1;
+          CollisionCore._cachedStructLastItem = null;
+        }
+      }
+      if (typeof window !== "undefined") {
+        window.invalidateStructureCollisionCache = _invalidateFloorRoofCache;
+      }
+
+      function _getFloorRoofCollectibles() {
+        if (typeof collectibles === "undefined" || !Array.isArray(collectibles)) return [];
+        const len = collectibles.length;
+        const lastItem = len > 0 ? collectibles[len - 1] : null;
+        if (_cachedFloorRoofCollectiblesLen !== len || _cachedFloorRoofCollectiblesLastItem !== lastItem) {
+          _cachedFloorRoofCollectiblesLen = len;
+          _cachedFloorRoofCollectiblesLastItem = lastItem;
+          const arr = [];
+          for (let i = 0; i < len; i++) {
+            const c = collectibles[i];
+            if (c && c.position) {
+              const t = c.type;
+              if (
+                t === "wood_floor" ||
+                t === "thin_wood_floor" ||
+                t === "stone_floor" ||
+                t === "wood_roof" ||
+                t === "wood_stairs" ||
+                t === "folding_ladder" ||
+                t === "robot_stand" ||
+                t === "obsidian_pad_warp_item" ||
+                t === "obsidian_compass_pad_item"
+              ) {
+                arr.push(c);
+              }
+            }
+          }
+          _cachedFloorRoofCollectibles = arr;
+        }
+        return _cachedFloorRoofCollectibles;
+      }
+
+      function getFloorTopRadiusAt(nx, ny, nz, baseTerrainRadius, feetRadiusOverride, isAirborneOverride, verticalVelOverride) {
         let maxRadius = baseTerrainRadius;
+        const pScale = (typeof playerScale !== 'undefined' ? playerScale : 0.1);
         
-        // The player's feet radius is:
-        const currentFeetRadius = (playerCenterRadius !== null) 
-          ? (playerCenterRadius - 0.46 * playerScale) 
-          : baseTerrainRadius;
+        // The entity's feet radius is:
+        const currentFeetRadius = (typeof feetRadiusOverride === "number")
+          ? feetRadiusOverride
+          : ((playerCenterRadius !== null) 
+            ? (playerCenterRadius - 0.46 * pScale) 
+            : baseTerrainRadius);
           
         const playerPos = [nx * currentFeetRadius, ny * currentFeetRadius, nz * currentFeetRadius];
+        const floorItems = _getFloorRoofCollectibles();
           
-        for (let other of collectibles) {
-          if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor" || other.type === "robot_stand" || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") && !other.isPreview) {
+        for (let i = 0; i < floorItems.length; i++) {
+          const other = floorItems[i];
+          if (!other.active || other.isPreview) continue;
+          if (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor" || other.type === "robot_stand" || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") {
             const dx_dist = playerPos[0] - other.position[0];
             const dy_dist = playerPos[1] - other.position[1];
             const dz_dist = playerPos[2] - other.position[2];
@@ -395,6 +449,7 @@
               
               // The exact flat top collision radius in this direction is:
               const topRadius = (pos_dot_n + hh) / u_dot_n;
+              const bottomRadius = (other.type === "thin_wood_floor") ? (topRadius - 0.018) : ((pos_dot_n - hh) / u_dot_n);
               
               // Project the 3D collision point onto the floor's local horizontal axes
               const collPos = [nx * topRadius, ny * topRadius, nz * topRadius];
@@ -407,14 +462,26 @@
               const dx = dx_vec[0] * other.R[0] + dx_vec[1] * other.R[1] + dx_vec[2] * other.R[2];
               const dz = dx_vec[0] * other.F[0] + dx_vec[1] * other.F[1] + dx_vec[2] * other.F[2];
               
-              const charMargin = 0.18 * (typeof playerScale !== 'undefined' ? playerScale : 0.1);
+              const charMargin = 0.18 * pScale;
               const hw = w/2 + charMargin; // slightly larger for smooth transitions and boundaries
               const hd = d/2 + charMargin;
               
               if (Math.abs(dx) <= hw && Math.abs(dz) <= hd) {
                 // Only stand on this floor if our feet are above it, OR only slightly below it (step-up threshold).
-                // For stone floors or robot stands, require feet to be close to topRadius so player on ground doesn't snap up unnaturally.
-                const stepUpLimit = (isStone || isStand) ? 0.12 * (playerScale / 0.1) : 0.15 * (playerScale / 0.1); 
+                // Elevated 2nd-story floors (thin_wood_floor or floors with open space below) must never snap a jumping player up from underneath.
+                const isElevatedFloor = (other.type === "thin_wood_floor") || (bottomRadius > baseTerrainRadius + 0.10);
+                const isAirborne = (typeof isAirborneOverride === "boolean")
+                  ? isAirborneOverride
+                  : (typeof isPlayerGrounded !== "undefined" && !isPlayerGrounded);
+                const isMovingUp = (typeof verticalVelOverride === "number")
+                  ? (verticalVelOverride > 0)
+                  : (typeof playerVerticalVel === "number" && playerVerticalVel > 0);
+                let stepUpLimit;
+                if (isElevatedFloor) {
+                  stepUpLimit = isMovingUp ? 0.0 : (isAirborne ? 0.015 * (pScale / 0.1) : 0.035 * (pScale / 0.1));
+                } else {
+                  stepUpLimit = (isStone || isStand) ? 0.12 * (pScale / 0.1) : 0.15 * (pScale / 0.1);
+                }
                 if (currentFeetRadius >= topRadius - stepUpLimit) {
                   if (topRadius > maxRadius) {
                     maxRadius = topRadius;
@@ -422,7 +489,64 @@
                 }
               }
             }
-          } else if (other.active && (other.type === "wood_stairs" || other.type === "folding_ladder") && !other.isPreview && other.stairTop && other.stairBottom) {
+          } else if (other.type === "wood_roof") {
+            const dx_dist = playerPos[0] - other.position[0];
+            const dy_dist = playerPos[1] - other.position[1];
+            const dz_dist = playerPos[2] - other.position[2];
+            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > 9.0) {
+              continue;
+            }
+            const u_dot_n = nx * other.normal[0] + ny * other.normal[1] + nz * other.normal[2];
+            if (u_dot_n > 0.01) {
+              const pos_dot_n = other.position[0] * other.normal[0] +
+                                other.position[1] * other.normal[1] +
+                                other.position[2] * other.normal[2];
+              const baseRadius = pos_dot_n / u_dot_n;
+              const basePos = [nx * baseRadius, ny * baseRadius, nz * baseRadius];
+              const dx_vec = [
+                basePos[0] - other.position[0],
+                basePos[1] - other.position[1],
+                basePos[2] - other.position[2]
+              ];
+              const angle = other.angle || 0.0;
+              const cosA = Math.cos(angle);
+              const sinA = Math.sin(angle);
+              const roofR = [
+                other.R[0] * cosA + other.F[0] * sinA,
+                other.R[1] * cosA + other.F[1] * sinA,
+                other.R[2] * cosA + other.F[2] * sinA
+              ];
+              const roofF = [
+                other.F[0] * cosA - other.R[0] * sinA,
+                other.F[1] * cosA - other.R[1] * sinA,
+                other.F[2] * cosA - other.R[2] * sinA
+              ];
+              const lx = dx_vec[0] * roofR[0] + dx_vec[1] * roofR[1] + dx_vec[2] * roofR[2];
+              const lz = dx_vec[0] * roofF[0] + dx_vec[1] * roofF[1] + dx_vec[2] * roofF[2];
+
+              const slopeHalfLen = 0.19525624;
+              const maxZ = (typeof other._vMaxEff === "number")
+                ? Math.min(0.15, 0.15 * (other._vMaxEff / slopeHalfLen))
+                : 0.15;
+              if (maxZ <= -0.14) continue;
+
+              const charMargin = 0.14 * pScale;
+              if (Math.abs(lx) <= 0.15 + charMargin && lz >= -0.15 - charMargin && lz <= maxZ + charMargin) {
+                const clampedZ = Math.max(-0.15, Math.min(maxZ, lz));
+                const surfH = 0.125 + (clampedZ / 0.30) * 0.25;
+                const topRadius = (pos_dot_n + surfH + 0.015) / u_dot_n;
+                const isMovingUp = (typeof verticalVelOverride === "number")
+                  ? (verticalVelOverride > 0)
+                  : (typeof playerVerticalVel === "number" && playerVerticalVel > 0);
+                const stepUpLimit = isMovingUp ? 0.0 : (0.025 * (pScale / 0.1));
+                if (currentFeetRadius >= topRadius - stepUpLimit) {
+                  if (topRadius > maxRadius) {
+                    maxRadius = topRadius;
+                  }
+                }
+              }
+            }
+          } else if ((other.type === "wood_stairs" || other.type === "folding_ladder") && other.stairTop && other.stairBottom) {
             const dx_dist = playerPos[0] - other.position[0];
             const dy_dist = playerPos[1] - other.position[1];
             const dz_dist = playerPos[2] - other.position[2];
@@ -460,7 +584,7 @@
                 ];
                 const r_stair = Math.sqrt(P_on_stair[0]*P_on_stair[0] + P_on_stair[1]*P_on_stair[1] + P_on_stair[2]*P_on_stair[2]);
                 
-                const stepUpLimit = (other.type === "folding_ladder" ? 0.60 : 0.35) * (typeof playerScale !== 'undefined' ? playerScale / 0.1 : 1.0);
+                const stepUpLimit = (other.type === "folding_ladder" ? 0.60 : 0.35) * (pScale / 0.1);
                 if (currentFeetRadius >= r_stair - stepUpLimit) {
                   if (r_stair > maxRadius) {
                     maxRadius = r_stair;
@@ -475,8 +599,127 @@
         }
         return maxRadius;
       }
+      window.getFloorTopRadiusAt = getFloorTopRadiusAt;
 
+      function getFloorCeilingRadiusAt(nx, ny, nz, baseTerrainRadius, feetRadiusOverride) {
+        let minCeiling = Infinity;
+        const pScale = (typeof playerScale !== 'undefined' ? playerScale : 0.1);
+        const currentFeetRadius = (typeof feetRadiusOverride === 'number')
+          ? feetRadiusOverride
+          : ((playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * pScale) : baseTerrainRadius);
+        const playerPos = [nx * currentFeetRadius, ny * currentFeetRadius, nz * currentFeetRadius];
+        const floorItems = _getFloorRoofCollectibles();
 
+        for (let i = 0; i < floorItems.length; i++) {
+          const other = floorItems[i];
+          if (!other.active || other.isPreview) continue;
+          if (other.type === "thin_wood_floor" || other.type === "wood_floor" || other.type === "stone_floor") {
+            const dx_dist = playerPos[0] - other.position[0];
+            const dy_dist = playerPos[1] - other.position[1];
+            const dz_dist = playerPos[2] - other.position[2];
+            const maxReach = (other.width !== undefined || other.depth !== undefined)
+              ? (Math.max(other.width || 3.0, other.depth || 3.0) * 0.75 + 2.0)
+              : 6.0;
+            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > maxReach * maxReach) {
+              continue;
+            }
+            const u_dot_n = nx * other.normal[0] + ny * other.normal[1] + nz * other.normal[2];
+            if (u_dot_n > 0.01) {
+              const pos_dot_n = other.position[0] * other.normal[0] +
+                                other.position[1] * other.normal[1] +
+                                other.position[2] * other.normal[2];
+              const isStone = other.type === "stone_floor";
+              const isThin = other.type === "thin_wood_floor";
+              const sizeVal = other.size || 0.25;
+              const w = isStone ? (typeof other.width === "number" ? other.width : sizeVal * 12.0) : sizeVal * 1.2;
+              const d = isStone ? (typeof other.depth === "number" ? other.depth : sizeVal * 12.0) : sizeVal * 1.2;
+              const h = isStone ? sizeVal * 0.15 : (other.type === "wood_floor" ? (woodFloorHeight + 0.25 * 0.12) : (isThin ? 0.018 : 0.25 * 0.08));
+              const hh = isStone ? h * 0.9 : h * 0.5;
+
+              const topRadius = (pos_dot_n + hh) / u_dot_n;
+              const bottomRadius = isThin ? (topRadius - 0.018) : ((pos_dot_n - hh) / u_dot_n);
+
+              if (bottomRadius > baseTerrainRadius + 0.10 && currentFeetRadius < bottomRadius - 0.005 * (pScale / 0.1)) {
+                const collPos = [nx * bottomRadius, ny * bottomRadius, nz * bottomRadius];
+                const dx_vec = [
+                  collPos[0] - other.position[0],
+                  collPos[1] - other.position[1],
+                  collPos[2] - other.position[2]
+                ];
+                const dx = dx_vec[0] * other.R[0] + dx_vec[1] * other.R[1] + dx_vec[2] * other.R[2];
+                const dz = dx_vec[0] * other.F[0] + dx_vec[1] * other.F[1] + dx_vec[2] * other.F[2];
+
+                const charMargin = 0.20 * pScale;
+                const hw = w / 2 + charMargin;
+                const hd = d / 2 + charMargin;
+
+                if (Math.abs(dx) <= hw && Math.abs(dz) <= hd) {
+                  if (bottomRadius < minCeiling) {
+                    minCeiling = bottomRadius;
+                  }
+                }
+              }
+            }
+          } else if (other.type === "wood_roof") {
+            const dx_dist = playerPos[0] - other.position[0];
+            const dy_dist = playerPos[1] - other.position[1];
+            const dz_dist = playerPos[2] - other.position[2];
+            if (dx_dist * dx_dist + dy_dist * dy_dist + dz_dist * dz_dist > 9.0) {
+              continue;
+            }
+            const u_dot_n = nx * other.normal[0] + ny * other.normal[1] + nz * other.normal[2];
+            if (u_dot_n > 0.01) {
+              const pos_dot_n = other.position[0] * other.normal[0] +
+                                other.position[1] * other.normal[1] +
+                                other.position[2] * other.normal[2];
+              const baseRadius = pos_dot_n / u_dot_n;
+              const basePos = [nx * baseRadius, ny * baseRadius, nz * baseRadius];
+              const dx_vec = [
+                basePos[0] - other.position[0],
+                basePos[1] - other.position[1],
+                basePos[2] - other.position[2]
+              ];
+              const angle = other.angle || 0.0;
+              const cosA = Math.cos(angle);
+              const sinA = Math.sin(angle);
+              const roofR = [
+                other.R[0] * cosA + other.F[0] * sinA,
+                other.R[1] * cosA + other.F[1] * sinA,
+                other.R[2] * cosA + other.F[2] * sinA
+              ];
+              const roofF = [
+                other.F[0] * cosA - other.R[0] * sinA,
+                other.F[1] * cosA - other.R[1] * sinA,
+                other.F[2] * cosA - other.R[2] * sinA
+              ];
+              const lx = dx_vec[0] * roofR[0] + dx_vec[1] * roofR[1] + dx_vec[2] * roofR[2];
+              const lz = dx_vec[0] * roofF[0] + dx_vec[1] * roofF[1] + dx_vec[2] * roofF[2];
+
+              const slopeHalfLen = 0.19525624;
+              const maxZ = (typeof other._vMaxEff === "number")
+                ? Math.min(0.15, 0.15 * (other._vMaxEff / slopeHalfLen))
+                : 0.15;
+              if (maxZ <= -0.14) continue;
+
+              const charMargin = 0.12 * pScale;
+              if (Math.abs(lx) <= 0.15 + charMargin && lz >= -0.13 && lz <= maxZ + charMargin) {
+                const clampedZ = Math.max(-0.15, Math.min(maxZ, lz));
+                const surfH = 0.125 + (clampedZ / 0.30) * 0.25;
+                const bottomRadius = (pos_dot_n + surfH - 0.02) / u_dot_n;
+                const topRadius = (pos_dot_n + surfH + 0.015) / u_dot_n;
+
+                if (bottomRadius > baseTerrainRadius + 0.10 && currentFeetRadius < topRadius - 0.025) {
+                  if (bottomRadius < minCeiling) {
+                    minCeiling = bottomRadius;
+                  }
+                }
+              }
+            }
+          }
+        }
+        return minCeiling;
+      }
+      window.getFloorCeilingRadiusAt = getFloorCeilingRadiusAt;
 
       if (!tunnels3D) tunnels3D = [];
       let lastGeneratedSeed = null;

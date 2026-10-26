@@ -767,7 +767,7 @@ function buildCollectibles(count, seed) {
           });
 
           const stoneH = wfSize * 0.15;
-          const baseWfH = (typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05;
+          const baseWfH = (typeof woodFloorHeight === "number") ? woodFloorHeight : ((typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05);
           const actualWfThickness = baseWfH + wfSize * 0.12;
           
           const floorCenterHeight = stoneH + actualWfThickness / 2;
@@ -3549,25 +3549,49 @@ function buildCollectibles(count, seed) {
                     const halfW = sW / 2;
                     const halfD = sD / 2;
                     if (Math.abs(localX) <= halfW + 0.15 && Math.abs(localZ) <= halfD + 0.15) {
-                        // Snap to 0.3 grid
-                        let gridX = Math.round(localX / 0.3);
-                        let gridZ = Math.round(localZ / 0.3);
+                        // Snap to exact 0.30m cell centers within [-halfW, +halfW] x [-halfD, +halfD]
+                        // Matches both random house generation (-halfW + 0.15 + gx * 0.3) and 3.0m stone floors
+                        const numCols = Math.max(1, Math.round(sW / 0.3));
+                        const numRows = Math.max(1, Math.round(sD / 0.3));
+                        let gx = Math.round((localX - (-halfW + 0.15)) / 0.3);
+                        let gz = Math.round((localZ - (-halfD + 0.15)) / 0.3);
+                        gx = Math.max(0, Math.min(numCols - 1, gx));
+                        gz = Math.max(0, Math.min(numRows - 1, gz));
 
-                        const maxGridX = Math.round(halfW / 0.3);
-                        const maxGridZ = Math.round(halfD / 0.3);
-                        gridX = Math.max(-maxGridX, Math.min(maxGridX, gridX));
-                        gridZ = Math.max(-maxGridZ, Math.min(maxGridZ, gridZ));
+                        const snappedX = -halfW + 0.15 + gx * 0.3;
+                        const snappedZ = -halfD + 0.15 + gz * 0.3;
 
                         floorPreviewCollectible.isValidPlacement = true;
                         floorPreviewCollectible.size = 0.25;
 
-                        const sH = nearestStone.size * 0.15; // stone floor height
-                        const wH = woodFloorHeight + 0.25 * 0.12;       // wood floor height
+                        const sH = (nearestStone.size || 0.25) * 0.15; // stone floor height
+                        const baseWfH = (typeof woodFloorHeight === "number") ? woodFloorHeight : ((typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05);
+                        const wH = baseWfH + 0.25 * 0.12;              // wood floor height
+
+                        let normalOffset = (nearestStone.isHouse || nearestStone.isProceduralHouse)
+                            ? (sH + wH / 2)
+                            : (sH / 2 + wH / 2);
+
+                        // If any wood_floor already sits on this stone_floor, match its exact vertical plane
+                        for (let other of collectibles) {
+                            if (other.active && other.type === "wood_floor" && !other.isPreview) {
+                                const odx = other.position[0] - sP[0];
+                                const ody = other.position[1] - sP[1];
+                                const odz = other.position[2] - sP[2];
+                                const olX = odx * sR[0] + ody * sR[1] + odz * sR[2];
+                                const olZ = odx * sF[0] + ody * sF[1] + odz * sF[2];
+                                const olN = odx * sN[0] + ody * sN[1] + odz * sN[2];
+                                if (Math.abs(olX) <= halfW + 0.2 && Math.abs(olZ) <= halfD + 0.2 && olN > 0 && olN < 0.25) {
+                                    normalOffset = olN;
+                                    break;
+                                }
+                            }
+                        }
 
                         targetPos = [
-                            sP[0] + sR[0] * (gridX * 0.3) + sF[0] * (gridZ * 0.3) + sN[0] * (sH/2 + wH/2),
-                            sP[1] + sR[1] * (gridX * 0.3) + sF[1] * (gridZ * 0.3) + sN[1] * (sH/2 + wH/2),
-                            sP[2] + sR[2] * (gridX * 0.3) + sF[2] * (gridZ * 0.3) + sN[2] * (sH/2 + wH/2)
+                            sP[0] + sR[0] * snappedX + sF[0] * snappedZ + sN[0] * normalOffset,
+                            sP[1] + sR[1] * snappedX + sF[1] * snappedZ + sN[1] * normalOffset,
+                            sP[2] + sR[2] * snappedX + sF[2] * snappedZ + sN[2] * normalOffset
                         ];
 
                         pN = [sN[0], sN[1], sN[2]];

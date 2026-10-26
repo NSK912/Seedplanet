@@ -30,8 +30,8 @@ window.characterVertexShaderSource = `
                 vec4 worldPos = uModelMatrix * vec4(aPosition, 1.0);
                 vWorldNormal = normalize(mat3(uModelMatrix) * aNormal);
                 vWorldPos = worldPos.xyz;
-                vPositionLightSpace = uLightSpaceMatrix * vec4(worldPos.xyz + vWorldNormal * 0.004, 1.0);
-                            }
+                vPositionLightSpace = uLightSpaceMatrix * vec4(worldPos.xyz + vWorldNormal * 0.002, 1.0);
+            }
         `;
 
       window.characterFragmentShaderSource = `
@@ -6519,7 +6519,7 @@ window.characterVertexShaderSource = `
               // 2. Action Reach check for other collectibles
               for (let item of collectibles) {
                 if (!item.active) continue;
-                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);

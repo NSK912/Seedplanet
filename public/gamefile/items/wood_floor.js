@@ -2,7 +2,7 @@
 
 window.getFloorThickness = function(item) {
   const size = (item && item.size) || 0.25;
-  const wfH = (typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05;
+  const wfH = (typeof woodFloorHeight === "number") ? woodFloorHeight : ((typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05);
   if (!item || item.type === "wood_floor") {
     return wfH + size * 0.12;
   } else if (item.type === "stone_floor") {
