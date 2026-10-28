@@ -79,6 +79,11 @@
       "createStartMenuShortcut": true,
       "shortcutName": "SeedPlanet",
       "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "NSK912",
+      "repo": "seedplanet-Build"
     }
   }
 }
