@@ -5468,6 +5468,11 @@ function cancelFloorPlacement() {
             el.addEventListener("scroll", () => {
               updateCustomScrollbar();
             }, { passive: true });
+            el.addEventListener("wheel", (e) => {
+              e.stopPropagation();
+              el.scrollTop += e.deltaY;
+              updateCustomScrollbar();
+            }, { passive: false });
           }
         });
 

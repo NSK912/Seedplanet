@@ -21,8 +21,8 @@
       <div class="aaa-loading-content">
         <div class="aaa-loading-bar-bg">
           <div class="aaa-loading-bar-fill" id="aaaLoadingBarFill"></div>
+          <div class="aaa-loading-percentage" id="aaaLoadingPercentage">0%</div>
         </div>
-        <div class="aaa-loading-percentage" id="aaaLoadingPercentage">0%</div>
         <div class="aaa-loading-tech-logs" id="aaaLoadingTechLogs">
           [SYS_OK] Planetary Threads Initialized<br>
           [SYS_OK] WebGL2 Pipeline Context Bound<br>

@@ -150,11 +150,46 @@
     }
   }
 
+  const TRAVELER_FACE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 256" width="512" height="256">
+  <ellipse cx="133" cy="118" rx="63" ry="117" fill="#0e0e12" stroke="rgba(205, 215, 228, 0.45)" stroke-width="3.5" />
+  <path d="M 98 62 A 52 95 0 0 1 168 62" fill="none" stroke="rgba(215, 225, 238, 0.75)" stroke-width="5.0" stroke-linecap="round" />
+  <ellipse cx="379" cy="118" rx="63" ry="117" fill="#0e0e12" stroke="rgba(205, 215, 228, 0.45)" stroke-width="3.5" />
+  <path d="M 344 62 A 52 95 0 0 1 414 62" fill="none" stroke="rgba(215, 225, 238, 0.75)" stroke-width="5.0" stroke-linecap="round" />
+  <g stroke="#0e0e12" stroke-width="16" stroke-linecap="round">
+    <line x1="228" y1="182" x2="284" y2="238" />
+    <line x1="284" y1="182" x2="228" y2="238" />
+  </g>
+</svg>`;
+
+  function setCloneExpression(cState, emojiText) {
+    if (!cState) return;
+    cState.emojiFaceText = emojiText;
+    if (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") {
+      cState.faceText = emojiText;
+    } else {
+      cState.faceText = "traveler";
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.cloneFaceStyle = "svg"; // Primary face style: svg traveler face exclusively
+    window.setCloneFaceStyle = function(style) {
+      window.cloneFaceStyle = (style === "emoji") ? "emoji" : "svg";
+      if (Array.isArray(window.playerClonesState)) {
+        window.playerClonesState.forEach(c => {
+          c.faceText = window.cloneFaceStyle === "emoji" ? (c.emojiFaceText || "(•‿•)") : "traveler";
+          c.baseFaceText = c.faceText;
+        });
+      }
+    };
+  }
+
   const cloneFaceTextureCache = new Map();
 
   function getCloneFaceTexture(gl, faceText) {
-    if (cloneFaceTextureCache.has(faceText)) {
-      return cloneFaceTextureCache.get(faceText);
+    const key = (!faceText || faceText === "traveler" || faceText === "svg") ? "traveler_1.5x" : faceText;
+    if (cloneFaceTextureCache.has(key)) {
+      return cloneFaceTextureCache.get(key);
     }
 
     const canvas = document.createElement("canvas");
@@ -163,40 +198,87 @@
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, 512, 256);
 
-    // Soft rosy chibi blush cheeks on left and right
-    const drawCheek = (cx, cy) => {
-      const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 42);
-      grad.addColorStop(0, "rgba(255, 110, 145, 0.75)");
-      grad.addColorStop(0.55, "rgba(255, 110, 145, 0.35)");
-      grad.addColorStop(1, "rgba(255, 110, 145, 0.0)");
-      ctx.fillStyle = grad;
+    if (key === "traveler_1.5x") {
+      // 1. Left Eye: 1.5x larger tall vertical oval with subtle soft rim & top crescent highlight (image_5b46f111.png)
+      ctx.save();
+      ctx.fillStyle = "#0e0e12";
+      ctx.strokeStyle = "rgba(205, 215, 228, 0.45)";
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, 42, 0, Math.PI * 2);
+      ctx.ellipse(133, 118, 63, 117, 0, 0, Math.PI * 2);
       ctx.fill();
-    };
-    drawCheek(102, 162);
-    drawCheek(410, 162);
+      ctx.stroke();
 
-    // Dynamic font sizing based on emoji string length
-    let fontSize = 84;
-    if (faceText.length >= 9) fontSize = 56;
-    else if (faceText.length >= 7) fontSize = 66;
-    else if (faceText.length >= 5) fontSize = 76;
+      // Top soft accent arc on left eye
+      ctx.strokeStyle = "rgba(225, 235, 248, 0.75)";
+      ctx.lineWidth = 5.0;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(133, 72, 45, Math.PI * 1.08, Math.PI * 1.92);
+      ctx.stroke();
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#161616";
-    ctx.font = "900 " + fontSize + "px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', monospace, 'Courier New', sans-serif";
+      // 2. Right Eye: 1.5x larger tall vertical oval with subtle soft rim & top crescent highlight
+      ctx.strokeStyle = "rgba(205, 215, 228, 0.45)";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.ellipse(379, 118, 63, 117, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
 
-    // Auto-scale if text exceeds available head face width
-    const maxTextWidth = 360;
-    const measuredWidth = ctx.measureText(faceText).width;
-    if (measuredWidth > maxTextWidth && measuredWidth > 0) {
-      fontSize = Math.floor(fontSize * (maxTextWidth / measuredWidth));
+      ctx.strokeStyle = "rgba(225, 235, 248, 0.75)";
+      ctx.lineWidth = 5.0;
+      ctx.beginPath();
+      ctx.arc(379, 72, 45, Math.PI * 1.08, Math.PI * 1.92);
+      ctx.stroke();
+
+      // 3. 'X' Mouth: 1.5x larger centered cross with rounded ends
+      ctx.strokeStyle = "#0e0e12";
+      ctx.lineWidth = 16;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(228, 182);
+      ctx.lineTo(284, 238);
+      ctx.moveTo(284, 182);
+      ctx.lineTo(228, 238);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // Emoji / Kaomoji Face
+      // Soft rosy chibi blush cheeks on left and right
+      const drawCheek = (cx, cy) => {
+        const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 42);
+        grad.addColorStop(0, "rgba(255, 110, 145, 0.75)");
+        grad.addColorStop(0.55, "rgba(255, 110, 145, 0.35)");
+        grad.addColorStop(1, "rgba(255, 110, 145, 0.0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 42, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawCheek(102, 162);
+      drawCheek(410, 162);
+
+      // Dynamic font sizing based on emoji string length
+      let fontSize = 84;
+      if (key.length >= 9) fontSize = 56;
+      else if (key.length >= 7) fontSize = 66;
+      else if (key.length >= 5) fontSize = 76;
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#161616";
       ctx.font = "900 " + fontSize + "px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', monospace, 'Courier New', sans-serif";
-    }
 
-    ctx.fillText(faceText, 256, 126);
+      // Auto-scale if text exceeds available head face width
+      const maxTextWidth = 360;
+      const measuredWidth = ctx.measureText(key).width;
+      if (measuredWidth > maxTextWidth && measuredWidth > 0) {
+        fontSize = Math.floor(fontSize * (maxTextWidth / measuredWidth));
+        ctx.font = "900 " + fontSize + "px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', monospace, 'Courier New', sans-serif";
+      }
+
+      ctx.fillText(key, 256, 126);
+    }
 
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -206,7 +288,7 @@
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 
-    cloneFaceTextureCache.set(faceText, tex);
+    cloneFaceTextureCache.set(key, tex);
     return tex;
   }
 
@@ -626,7 +708,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         removeCloneItem(cState, "BRANCH", 3);
         addCloneItem(cState, "AXE", "🪓", 1);
         cState.equippedTool = "AXE";
-        cState.faceText = "(•̀ᴗ•́)";
+        setCloneExpression(cState, "(•̀ᴗ•́)");
         return "axe";
       }
     }
@@ -643,7 +725,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         removeCloneItem(cState, "BRANCH", 3);
         addCloneItem(cState, "PICKAXE", "⛏️", 1);
         cState.equippedTool = "PICKAXE";
-        cState.faceText = "(★‿★)";
+        setCloneExpression(cState, "(★‿★)");
         return "pickaxe";
       }
     }
@@ -654,7 +736,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     if (glowOreCount >= 1 && batteryCount < 3) {
       if (removeCloneItem(cState, "GLOW_ORE", 1)) {
         addCloneItem(cState, "GLOW_BATTERY", "🔋", 1);
-        cState.faceText = "(✨‿✨)";
+        setCloneExpression(cState, "(✨‿✨)");
         return "glow_battery";
       }
     }
@@ -666,7 +748,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         const newBoat = spawnPlainBoatNearHouse(cState.houseIndex, planetRadius);
         if (newBoat) {
           cState.ownedBoat = newBoat;
-          cState.faceText = "(^o^)";
+          setCloneExpression(cState, "(^o^)");
           return "wood_boat";
         }
       }
@@ -680,7 +762,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           cState.ownedBoat.hasWheel = true;
           cState.ownedBoat.hasWheels = true;
           cState.ownedBoat.wheelCount = 4;
-          cState.faceText = "(🛞‿🛞)";
+          setCloneExpression(cState, "(🛞‿🛞)");
           if (typeof window !== "undefined") {
             window.pendingDynamicCollectibleRefresh = true;
           }
@@ -694,7 +776,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       if (ironCount >= 10) {
         if (removeCloneItem(cState, "IRON_ORE", 10)) {
           cState.ownedBoat.hasEngine = true;
-          cState.faceText = "(⚙️‿⚙️)";
+          setCloneExpression(cState, "(⚙️‿⚙️)");
           if (typeof window !== "undefined") {
             window.pendingDynamicCollectibleRefresh = true;
           }
@@ -710,7 +792,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       if (removeCloneItem(cState, "LOG", 2)) {
         if (removeCloneItem(cState, "BIG_ROCK", 1) || removeCloneItem(cState, "ROCK", 1)) {
           addCloneItem(cState, "WOODEN_ARM_CANNON", "🪵🦾", 1);
-          cState.faceText = "(🪵🦾‿🦾)";
+          setCloneExpression(cState, "(🪵🦾‿🦾)");
           return "wooden_arm_cannon";
         } else {
           addCloneItem(cState, "LOG", "🪵", 2);
@@ -724,7 +806,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       if (removeCloneItem(cState, "LOG", 1)) {
         if (removeCloneItem(cState, "BIG_ROCK", 1) || removeCloneItem(cState, "ROCK", 1)) {
           addCloneItem(cState, "ARROW", "🏹", 30);
-          cState.faceText = "(🏹‿🏹)";
+          setCloneExpression(cState, "(🏹‿🏹)");
           return "arrow";
         } else {
           addCloneItem(cState, "LOG", "🪵", 1);
@@ -844,7 +926,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     }
 
     if (depositedCount > 0) {
-      cState.faceText = "(^人^)";
+      setCloneExpression(cState, "(^人^)");
     }
     return depositedCount;
   }
@@ -1194,19 +1276,19 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       cState.currentActivity = "DEPOSIT_CHEST";
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
       cState.equippedTool = null;
-      cState.faceText = "(^人^)";
+      setCloneExpression(cState, "(^人^)");
       cState.timer = 6.0;
     } else if (chosen.action === "PICKUP_DROPS") {
       cState.currentActivity = "PICKUP_DROPS";
       cState.targetDrop = chosen.target;
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
-      cState.faceText = "(ʘ‿ʘ)";
+      setCloneExpression(cState, "(ʘ‿ʘ)");
       cState.timer = 5.0;
     } else if (chosen.action === "STEAL_BOAT") {
       cState.currentActivity = "STEAL_BOAT";
       cState.targetBoat = chosen.target;
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
-      cState.faceText = "(¬‿¬)";
+      setCloneExpression(cState, "(¬‿¬)");
       cState.equippedTool = null;
       cState.timer = 8.0;
     } else if (chosen.action === "CHOP_WOOD") {
@@ -1214,14 +1296,14 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       cState.targetObstacle = chosen.target;
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
       cState.equippedTool = "AXE";
-      cState.faceText = "(•̀o•́)";
+      setCloneExpression(cState, "(•̀o•́)");
       cState.timer = 8.0;
     } else if (chosen.action === "MINE_ORE") {
       cState.currentActivity = "MINE_ORE";
       cState.targetObstacle = chosen.target;
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
       cState.equippedTool = "PICKAXE";
-      cState.faceText = "(•̀ᴗ•́)";
+      setCloneExpression(cState, "(•̀ᴗ•́)");
       cState.timer = 8.0;
     } else if (chosen.action === "HUNT_ANIMAL") {
       cState.currentActivity = "HUNT_ANIMAL";
@@ -1230,13 +1312,13 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       if (chosen.target.ragdollPos && chosen.target.ragdollInitialized) aPos = chosen.target.ragdollPos;
       if (aPos) setCloneTargetPos(cState, aPos[0], aPos[1], aPos[2], planetRadius);
       cState.equippedTool = "AXE";
-      cState.faceText = "(•̀ᴗ•́)";
+      setCloneExpression(cState, "(•̀ᴗ•́)");
       cState.timer = 7.0;
     } else {
       // WANDER (Stroll around assigned house yard)
       cState.currentActivity = "WANDER";
       cState.equippedTool = null;
-      cState.faceText = cState.baseFaceText || "(•‿•)";
+      cState.faceText = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? (cState.emojiFaceText || "(•‿•)") : "traveler";
       cState.timer = 2.0 + Math.random() * 3.5;
 
       const rAngle = Math.random() * Math.PI * 2;
@@ -1374,8 +1456,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         speedInitialized: true,
         animPhase: i * 1.3,
         walkBlend: 0.0,
-        faceText: face,
-        baseFaceText: face,
+        faceText: (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? face : "traveler",
+        baseFaceText: (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? face : "traveler",
+        emojiFaceText: face,
         // LIFE SYSTEM ATTRIBUTES:
         hp: 5,
         maxHp: 5,
@@ -1849,7 +1932,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         cState.jumpVy = 0;
         cState.verticalVel = 0;
         if (cState.currentActivity !== "DRIVE_BOAT") {
-          cState.faceText = cState.isIdle ? "(~˘▾˘)~" : "(o˘◡˘o)";
+          setCloneExpression(cState, cState.isIdle ? "(~˘▾˘)~" : "(o˘◡˘o)");
         }
       }
 
@@ -1866,7 +1949,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           cState.currentActivity = "WANDER";
           cState.timer = 1.0;
           cState.thinkTimer = 0.0;
-          cState.faceText = cState.baseFaceText || "(^_-)";
+          cState.faceText = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? (cState.emojiFaceText || "(•‿•)") : "traveler";
           continue;
         }
 
@@ -1876,7 +1959,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         const boatSpeed = boat.hasEngine ? 1.4 : 0.95;
         cState.walkBlend = 0.0;
         cState.isIdle = false;
-        cState.faceText = "(¬‿¬)"; // Cheeky grin while joyriding!
+        setCloneExpression(cState, "(¬‿¬)"); // Cheeky grin while joyriding!
 
         const step = boatSpeed * dtClamped;
 
@@ -1941,7 +2024,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           cState.currentActivity = "WANDER";
           cState.timer = 1.0;
           cState.thinkTimer = 0.0;
-          cState.faceText = cState.baseFaceText || "(^_-)";
+          cState.faceText = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? (cState.emojiFaceText || "(•‿•)") : "traveler";
         }
         continue;
       }
@@ -1956,7 +2039,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
           setCloneTargetPos(cState, targetBoat.position[0], targetBoat.position[1], targetBoat.position[2], planetRadius);
-          cState.faceText = "(¬‿¬)";
+          setCloneExpression(cState, "(¬‿¬)");
           cState.equippedTool = null;
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
@@ -1993,7 +2076,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         } else {
           setCloneTargetPos(cState, tree.position[0], tree.position[1], tree.position[2], planetRadius);
           cState.equippedTool = "AXE";
-          cState.faceText = "(•̀o•́)";
+          setCloneExpression(cState, "(•̀o•́)");
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
           const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -2034,7 +2117,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
                   }
                 }
 
-                cState.faceText = "(^o^)";
+                setCloneExpression(cState, "(^o^)");
                 cState.targetObstacle = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
                 tryCloneCrafting(cState, planetRadius);
@@ -2058,7 +2141,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         } else {
           setCloneTargetPos(cState, ore.position[0], ore.position[1], ore.position[2], planetRadius);
           cState.equippedTool = "PICKAXE";
-          cState.faceText = "(•̀ᴗ•́)";
+          setCloneExpression(cState, "(•̀ᴗ•́)");
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
           const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -2110,7 +2193,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
                   }
                 }
 
-                cState.faceText = "(★‿★)";
+                setCloneExpression(cState, "(★‿★)");
                 cState.targetObstacle = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
                 tryCloneCrafting(cState, planetRadius);
@@ -2140,10 +2223,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const arrowCount = getCloneItemCount(cState, "ARROW") + getCloneItemCount(cState, "IRON_BULLET");
           if (hasCannon && arrowCount > 0) {
             cState.equippedTool = "WOODEN_ARM_CANNON";
-            cState.faceText = "(🪵🦾‿🦾)";
+            setCloneExpression(cState, "(🪵🦾‿🦾)");
           } else {
             cState.equippedTool = "AXE";
-            cState.faceText = "(•̀ᴗ•́)";
+            setCloneExpression(cState, "(•̀ᴗ•́)");
           }
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
@@ -2214,7 +2297,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
                 if (animal.type === "isopod") addCloneItem(cState, "ISOPOD", "🦐", 1);
                 else if (animal.type === "meganeura") addCloneItem(cState, "MEGANEURA", "🦟", 1);
                 else addCloneItem(cState, "ISOPOD", "🦐", 1);
-                cState.faceText = "(^o^)";
+                setCloneExpression(cState, "(^o^)");
                 cState.targetAnimal = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
                 executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
@@ -2247,7 +2330,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
                   addCloneItem(cState, "ISOPOD", "🦐", 1);
                 }
 
-                cState.faceText = "(^o^)";
+                setCloneExpression(cState, "(^o^)");
                 cState.targetAnimal = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
                 executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
@@ -2267,7 +2350,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
           setCloneTargetPos(cState, drop.position[0], drop.position[1], drop.position[2], planetRadius);
-          cState.faceText = "(ʘ‿ʘ)";
+          setCloneExpression(cState, "(ʘ‿ʘ)");
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
           const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -2301,7 +2384,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         } else {
           setCloneTargetPos(cState, chest.position[0], chest.position[1], chest.position[2], planetRadius);
           cState.equippedTool = null;
-          cState.faceText = "(^人^)";
+          setCloneExpression(cState, "(^人^)");
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
           const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -2470,13 +2553,14 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     }
 
     if (charUseFaceTexLoc) {
-      // Clones use the classic model, so disable GLB texture (0.0)
-      gl.uniform1f(charUseFaceTexLoc, 0.0);
+      // Enable face texture for clones (renders SVG traveler face or emoji face)
+      gl.uniform1f(charUseFaceTexLoc, 1.0);
     }
     const charHasMainTexLoc = gl.getUniformLocation(charProgram, "uHasMainTex");
     if (charHasMainTexLoc) {
       gl.uniform1f(charHasMainTexLoc, 0.0);
     }
+    const charCloneSeedLoc = gl.getUniformLocation(charProgram, "uCloneSeed");
     if (charFaceTexLoc) {
       gl.uniform1i(charFaceTexLoc, 3);
     }
@@ -2533,11 +2617,23 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       if (charModelMatrixLoc) {
         gl.uniformMatrix4fv(charModelMatrixLoc, false, f32_cloneModel);
       }
+      if (charCloneSeedLoc) {
+        const seedVal = (typeof cState.houseIndex === "number" ? cState.houseIndex + 1 : i + 1) * 19.37;
+        gl.uniform1f(charCloneSeedLoc, seedVal);
+      }
 
       if (charFaceTexLoc) {
         gl.activeTexture(gl.TEXTURE3);
-        const faceTex = getCloneFaceTexture(gl, cState.faceText || "(^_^)");
+        // User request: PlayerClones uses SVG face as primary face exclusively,
+        // while preserving emoji expressions in cState.emojiFaceText for future toggle.
+        const currentFace = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji")
+          ? (cState.emojiFaceText || (cState.faceText !== "traveler" ? cState.faceText : "(•‿•)"))
+          : "traveler";
+        const faceTex = getCloneFaceTexture(gl, currentFace);
         gl.bindTexture(gl.TEXTURE_2D, faceTex);
+      }
+      if (charUseFaceTexLoc) {
+        gl.uniform1f(charUseFaceTexLoc, 1.0);
       }
 
       if (supportUint32 && currentIndicesLen > 65535) {
@@ -2547,6 +2643,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
     }
 
+    if (charCloneSeedLoc) {
+      gl.uniform1f(charCloneSeedLoc, 0.0);
+    }
     if (charUseFaceTexLoc) {
       gl.uniform1f(charUseFaceTexLoc, 0.0);
     }

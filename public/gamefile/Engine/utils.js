@@ -997,31 +997,38 @@ window.addEventListener("pointerup", () => {
   updateVirtualCursorVisibility();
 }, { capture: true, passive: true });
 
-// Scroll wheel handler for virtual cursor
+// Scroll wheel handler for mouse wheel & gamepad virtual cursor
 window.addEventListener("wheel", (e) => {
   if (isSyntheticEvent) return;
 
   let targetEl = null;
-  if (typeof virtualCursorX !== "undefined" && typeof virtualCursorY !== "undefined") {
-    targetEl = document.elementFromPoint(virtualCursorX, virtualCursorY);
-  }
-  if (!targetEl) {
+  if (typeof e.clientX === "number" && !isNaN(e.clientX) && e.clientX > 0 && e.clientY > 0) {
+    targetEl = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+  } else if (typeof virtualCursorX !== "undefined" && typeof virtualCursorY !== "undefined") {
+    targetEl = document.elementFromPoint(virtualCursorX, virtualCursorY) || e.target;
+  } else {
     targetEl = e.target;
   }
 
   function findScrollContainer(el) {
     let curr = el;
     while (curr && curr !== document.body && curr !== document.documentElement) {
-      if (curr.classList && (curr.classList.contains("inventory-panel") || curr.classList.contains("settings-panel") || curr.classList.contains("custom-select-list"))) {
-        return curr;
-      }
-      if (curr.scrollHeight > curr.clientHeight) {
+      if (curr.scrollHeight > curr.clientHeight + 2) {
         const overflowY = window.getComputedStyle(curr).overflowY;
         if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
           return curr;
         }
       }
       curr = curr.parentElement;
+    }
+    // Fallback: If mouse is over an open overlay/panel, return the active scrollable container inside it
+    if (typeof window.getActiveScrollableContainer === "function") {
+      const active = window.getActiveScrollableContainer();
+      if (active && active.scrollHeight > active.clientHeight + 2) return active;
+    }
+    const saveList = document.getElementById("saveSlotsList");
+    if (saveList && saveList.offsetParent !== null && saveList.scrollHeight > saveList.clientHeight + 2) {
+      return saveList;
     }
     return null;
   }
@@ -1032,6 +1039,24 @@ window.addEventListener("wheel", (e) => {
     e.preventDefault();
     e.stopPropagation();
     scrollContainer.scrollTop += e.deltaY;
+    if (typeof updateCustomScrollbar === "function") {
+      try { updateCustomScrollbar(); } catch(err){}
+    } else if (typeof window.updateCustomScrollbar === "function") {
+      try { window.updateCustomScrollbar(); } catch(err){}
+    }
+  } else if (typeof isUIOpen === "function" && isUIOpen()) {
+    // Over open UI panel/overlay background or padding -> scroll active list if available, prevent camera zoom
+    e.preventDefault();
+    e.stopPropagation();
+    const active = (typeof window.getActiveScrollableContainer === "function" ? window.getActiveScrollableContainer() : null) || document.getElementById("saveSlotsList");
+    if (active && active.scrollHeight > active.clientHeight + 2) {
+      active.scrollTop += e.deltaY;
+      if (typeof updateCustomScrollbar === "function") {
+        try { updateCustomScrollbar(); } catch(err){}
+      } else if (typeof window.updateCustomScrollbar === "function") {
+        try { window.updateCustomScrollbar(); } catch(err){}
+      }
+    }
   } else if (!isUIOpen()) {
     // If no scrollable UI and in gameplay, switch hotbar action slot with mouse wheel
     if (typeof selectedActionSlotIndex !== "undefined" && typeof renderActionSlots === "function") {

@@ -58,6 +58,23 @@ window.characterVertexShaderSource = `
             uniform float uUseFaceTex;
             uniform sampler2D uMainTex;
             uniform float uHasMainTex;
+            uniform float uCloneSeed;
+
+            float hash12(vec2 p) {
+                vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return fract((p3.x + p3.y) * p3.z);
+            }
+
+            vec2 hash22(vec2 p) {
+                vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+                p3 += dot(p3, p3.yzx + 33.33);
+                return fract((p3.xx + p3.yz) * p3.zy);
+            }
+
+            vec3 getHoodieSquareColor(float h) {
+                return vec3(0.08, 0.08, 0.10); // Jet Black only
+            }
 
             float distToSegment(vec2 p, vec2 a, vec2 b) {
                 vec2 pa = p - a, ba = b - a;
@@ -89,12 +106,50 @@ window.characterVertexShaderSource = `
                     baseColor = texture2D(uMainTex, vTexCoord).rgb;
                 }
 
-                if (uHasMainTex < 0.5 && vLocalPos.y > 0.22 && vLocalPos.y < 0.67 && vLocalPos.z > 0.04 && vLocalPos.z < 0.28) {
+                if (uHasMainTex < 0.5 && vLocalPos.x > 5.0) {
+                    vec3 clothPos = vec3(vLocalPos.x - 10.0, vLocalPos.y, vLocalPos.z);
+                    vec2 cellId;
+                    vec2 gv;
+                    if (clothPos.y >= 0.215) {
+                        // Hood region (outer hood, front rim, and inner hood ceiling)
+                        float hAng = atan(clothPos.x, clothPos.y - 0.41);
+                        float hRad = length(vec2(clothPos.x, clothPos.y - 0.41));
+                        float nHoodCols = 10.0;
+                        float hDepth = (0.32 - clothPos.z + (0.30 - hRad) * 0.45) / 0.066;
+                        float hRowId = floor(hDepth);
+                        float hColCoord = (hAng / 6.2831853 + 0.5) * nHoodCols + mod(hRowId, 2.0) * 0.5;
+                        cellId = vec2(mod(floor(hColCoord), nHoodCols) + 50.0, hRowId + 50.0);
+                        gv = vec2(fract(hColCoord), fract(hDepth)) - 0.5;
+                    } else {
+                        // Cloak, Capelet, Collar & Sleeves region
+                        float cAng = atan(clothPos.x, clothPos.z);
+                        float nCols = 12.0;
+                        float rowCoord = (0.215 - clothPos.y) / 0.068;
+                        float rowId = floor(rowCoord);
+                        float colCoord = (cAng / 6.2831853 + 0.5) * nCols + mod(rowId, 2.0) * 0.5;
+                        cellId = vec2(mod(floor(colCoord), nCols), rowId);
+                        gv = vec2(fract(colCoord), fract(rowCoord)) - 0.5;
+                    }
+                    vec2 jitter = (hash22(cellId) - 0.5) * 0.16;
+                    float rot = 0.52 + (hash12(cellId + vec2(13.7, 29.3)) - 0.5) * 0.55;
+                    vec2 p = gv - jitter;
+                    float ca = cos(rot);
+                    float sa = sin(rot);
+                    vec2 pr = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
+                    float sqSize = 0.21 + hash12(cellId + vec2(41.1, 19.7)) * 0.04;
+                    float sqDist = max(abs(pr.x), abs(pr.y));
+                    float sqMask = 1.0 - smoothstep(sqSize - 0.018, sqSize + 0.018, sqDist);
+                    if (sqMask > 0.001) {
+                        float colH = hash12(cellId * 1.73 + vec2(uCloneSeed, uCloneSeed * 0.618));
+                        vec3 sqColor = getHoodieSquareColor(colH);
+                        baseColor = mix(baseColor, sqColor, sqMask);
+                    }
+                } else if (uHasMainTex < 0.5 && vLocalPos.y > 0.22 && vLocalPos.y < 0.67 && vLocalPos.z > 0.04 && vLocalPos.z < 0.28) {
                     vec2 uv = vec2(vLocalPos.x, vLocalPos.y - 0.43) / 0.24;
                     
                     if (uUseFaceTex > 0.5) {
-                        float halfW = 0.56;
-                        float halfH = 0.28;
+                        float halfW = 0.75;
+                        float halfH = 0.375;
                         float texU = (uv.x / (halfW * 2.0)) + 0.5;
                         float texV = 0.5 - ((uv.y - (-0.01)) / (halfH * 2.0));
                         if (texU >= 0.0 && texU <= 1.0 && texV >= 0.0 && texV <= 1.0) {
@@ -3246,6 +3301,105 @@ window.characterVertexShaderSource = `
       }
 
       // =========================================================================
+      // Traveler Hoodie & Cloak Dynamic Gravity & Cloth Physics
+      // (ระบบแรงโน้มถ่วงและแรงสปริงสำหรับเสื้อฮู้ดและผ้าคลุม เลียนแบบระบบช่อผม GLB)
+      // =========================================================================
+      const chibiHoodiePhysics = {
+        enabled: true,
+        stiffness: 72.0,     // Spring tension (bouncy & fluid cloth response)
+        damping: 8.5,        // Cloth oscillation damping
+        inertia: 1.15,       // Sensitivity to footsteps, wind, and body turning
+        maxAngle: 0.75,      // Max deflection (~43 degrees)
+        gravity: 0.050,      // Constant downward gravitational droop on cloak hem & hood tip
+        pitch: 0.0,
+        pitchVel: 0.0,
+        yaw: 0.0,
+        yawVel: 0.0,
+        roll: 0.0,
+        rollVel: 0.0,
+        lastHeading: 0.0,
+        _lastTime: 0.0
+      };
+
+      if (typeof window !== "undefined") {
+        window.chibiHoodiePhysics = chibiHoodiePhysics;
+        window.triggerHoodieJiggle = function(impulsePitch = 35.0, impulseYaw = 40.0, impulseRoll = 20.0) {
+          chibiHoodiePhysics.pitchVel += impulsePitch;
+          chibiHoodiePhysics.yawVel += impulseYaw;
+          chibiHoodiePhysics.rollVel += impulseRoll;
+        };
+      }
+
+      function updateChibiHoodiePhysics(isMovingActive, isSprintingActive, phase, currentHeading) {
+        if (!chibiHoodiePhysics.enabled) {
+          chibiHoodiePhysics.pitch = 0.0;
+          chibiHoodiePhysics.yaw = 0.0;
+          chibiHoodiePhysics.roll = 0.0;
+          return;
+        }
+
+        const hoodiePhys = chibiHoodiePhysics;
+        const nowSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
+        if (!hoodiePhys._lastTime) hoodiePhys._lastTime = nowSec;
+        const clampedDt = Math.min(0.05, Math.max(0.001, nowSec - hoodiePhys._lastTime));
+        hoodiePhys._lastTime = nowSec;
+
+        let forcePitch = 0.0;
+        let forceYaw = 0.0;
+        let forceRoll = 0.0;
+
+        const inertia = hoodiePhys.inertia;
+
+        if (isMovingActive) {
+          // Footstep bobbing (twice per stride, spring bounce)
+          const bounce = Math.sin(phase * 2.0);
+          forcePitch += bounce * (isSprintingActive ? 36.0 : 22.0) * inertia;
+          // Movement wind drag & inertia tilts cloak and hood tip backward
+          forcePitch += (isSprintingActive ? 32.0 : 18.0) * inertia;
+          // Lateral weight transfer sway
+          const sway = Math.cos(phase);
+          forceYaw += sway * (isSprintingActive ? 26.0 : 16.0) * inertia;
+          forceRoll += sway * (isSprintingActive ? 20.0 : 12.0) * inertia;
+        } else {
+          // Organic breathing & ambient wind breeze
+          forcePitch += Math.sin(nowSec * 2.5) * 6.0 * inertia;
+          forceYaw += Math.cos(nowSec * 1.6) * 9.0 * inertia;
+          forceRoll += Math.sin(nowSec * 2.0 + 0.6) * 5.0 * inertia;
+        }
+
+        // Turning / Angular velocity centrifugal inertia
+        let dHeading = (currentHeading || 0.0) - hoodiePhys.lastHeading;
+        while (dHeading < -Math.PI) dHeading += Math.PI * 2;
+        while (dHeading > Math.PI) dHeading -= Math.PI * 2;
+        hoodiePhys.lastHeading = (currentHeading || 0.0);
+
+        const turnRate = Math.max(-10.0, Math.min(10.0, dHeading / clampedDt));
+        forceYaw -= turnRate * 2.4 * inertia;
+        forceRoll -= turnRate * 1.5 * inertia;
+
+        // Spring-damper integration (matching GLB hair physics model)
+        const stiffness = hoodiePhys.stiffness;
+        const damping = hoodiePhys.damping;
+
+        const accPitch = -stiffness * hoodiePhys.pitch - damping * hoodiePhys.pitchVel + forcePitch;
+        const accYaw   = -stiffness * hoodiePhys.yaw   - damping * hoodiePhys.yawVel   + forceYaw;
+        const accRoll  = -stiffness * hoodiePhys.roll  - damping * hoodiePhys.rollVel  + forceRoll;
+
+        hoodiePhys.pitchVel += accPitch * clampedDt;
+        hoodiePhys.yawVel   += accYaw   * clampedDt;
+        hoodiePhys.rollVel  += accRoll  * clampedDt;
+
+        hoodiePhys.pitch += hoodiePhys.pitchVel * clampedDt;
+        hoodiePhys.yaw   += hoodiePhys.yawVel   * clampedDt;
+        hoodiePhys.roll  += hoodiePhys.rollVel  * clampedDt;
+
+        const maxA = hoodiePhys.maxAngle;
+        hoodiePhys.pitch = Math.max(-maxA, Math.min(maxA, hoodiePhys.pitch));
+        hoodiePhys.yaw   = Math.max(-maxA, Math.min(maxA, hoodiePhys.yaw));
+        hoodiePhys.roll  = Math.max(-maxA, Math.min(maxA, hoodiePhys.roll));
+      }
+
+      // =========================================================================
       // Chibi Hand Pose & Finger Controls (กำมือ, แบมือ, แยกนิ้ว)
       // =========================================================================
       const chibiHandState = {
@@ -3300,6 +3454,536 @@ window.characterVertexShaderSource = `
           rightSpread: rSpread,
           leftSpread: lSpread
         });
+      }
+
+      function buildTravelerHoodieCloakMesh(
+        headP1, headP2,
+        chestP1, chestP2,
+        neckP1, neckP2,
+        leftArmPivot, leftElbowRot, leftHandRot,
+        rightArmPivot, rightElbowRot, rightHandRot,
+        scale,
+        phase,
+        isLocal,
+        leftFootRot, rightFootRot
+      ) {
+        const outV = [];
+        const outC = [];
+        const outI = [];
+
+        // Head center
+        const hx = (headP1[0] + headP2[0]) * 0.5;
+        const hy = (headP1[1] + headP2[1]) * 0.5;
+        const hz = (headP1[2] + headP2[2]) * 0.5;
+
+        // Neck center
+        const nx = (neckP1[0] + neckP2[0]) * 0.5;
+        const ny = (neckP1[1] + neckP2[1]) * 0.5;
+        const nz = (neckP1[2] + neckP2[2]) * 0.5;
+
+        // Chest center
+        const cx = (chestP1[0] + chestP2[0]) * 0.5;
+        const cy = (chestP1[1] + chestP2[1]) * 0.5;
+        const cz = (chestP1[2] + chestP2[2]) * 0.5;
+
+        // Color palette based on reference artwork (image_7de34809.png):
+        // Main fabric: Warm ivory / pearlescent off-white
+        const colCloth = [0.95, 0.94, 0.91];
+        const colHighlight = [0.99, 0.98, 0.96];
+        const colCrease = [0.82, 0.79, 0.75];
+        const colDark = [0.12, 0.12, 0.15];
+        const colBrooch = [0.98, 0.85, 0.45];
+        const colBroochCenter = [1.0, 0.96, 0.88];
+
+        const s = scale || 1.0;
+        let isClothSection = true;
+
+        const addV = (px, py, pz, color) => {
+          const idx = (outV.length / 3) | 0;
+          if (isLocal && isClothSection) {
+            outV.push((px / s) + 10.0, py / s, pz / s);
+          } else {
+            outV.push(px, py, pz);
+          }
+          outC.push(color[0], color[1], color[2]);
+          return idx;
+        };
+
+        const addTri = (v0, v1, v2) => {
+          outI.push(v0, v1, v2);
+        };
+
+        const addQuad = (v0, v1, v2, v3) => {
+          outI.push(v0, v1, v2);
+          outI.push(v0, v2, v3);
+        };
+
+        const addCylinder = (p0, p1, r0, r1, sides, color, capStart = false, capEnd = false, innerSides = false) => {
+          if (!p0 || !p1) return;
+          const dx = p1[0] - p0[0];
+          const dy = p1[1] - p0[1];
+          const dz = p1[2] - p0[2];
+          const len = Math.hypot(dx, dy, dz) || 0.001;
+          const dir = [dx / len, dy / len, dz / len];
+
+          let up = Math.abs(dir[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+          let uX = up[1] * dir[2] - up[2] * dir[1];
+          let uY = up[2] * dir[0] - up[0] * dir[2];
+          let uZ = up[0] * dir[1] - up[1] * dir[0];
+          const uLen = Math.hypot(uX, uY, uZ) || 1;
+          uX /= uLen; uY /= uLen; uZ /= uLen;
+
+          const vX = dir[1] * uZ - dir[2] * uY;
+          const vY = dir[2] * uX - dir[0] * uZ;
+          const vZ = dir[0] * uY - dir[1] * uX;
+
+          const ring0 = [];
+          const ring1 = [];
+          for (let i = 0; i < sides; i++) {
+            const ang = (i / sides) * Math.PI * 2;
+            const cosA = Math.cos(ang);
+            const sinA = Math.sin(ang);
+
+            const offX0 = (uX * cosA + vX * sinA) * r0;
+            const offY0 = (uY * cosA + vY * sinA) * r0;
+            const offZ0 = (uZ * cosA + vZ * sinA) * r0;
+
+            const offX1 = (uX * cosA + vX * sinA) * r1;
+            const offY1 = (uY * cosA + vY * sinA) * r1;
+            const offZ1 = (uZ * cosA + vZ * sinA) * r1;
+
+            ring0.push(addV(p0[0] + offX0, p0[1] + offY0, p0[2] + offZ0, color));
+            ring1.push(addV(p1[0] + offX1, p1[1] + offY1, p1[2] + offZ1, color));
+          }
+
+          for (let i = 0; i < sides; i++) {
+            const nextI = (i + 1) % sides;
+            addQuad(ring0[i], ring0[nextI], ring1[nextI], ring1[i]);
+          }
+
+          if (innerSides) {
+            const inRing0 = [];
+            const inRing1 = [];
+            const rIn0 = r0 * 0.92;
+            const rIn1 = r1 * 0.92;
+            for (let i = 0; i < sides; i++) {
+              const ang = (i / sides) * Math.PI * 2;
+              const cosA = Math.cos(ang);
+              const sinA = Math.sin(ang);
+              const offX0 = (uX * cosA + vX * sinA) * rIn0;
+              const offY0 = (uY * cosA + vY * sinA) * rIn0;
+              const offZ0 = (uZ * cosA + vZ * sinA) * rIn0;
+              const offX1 = (uX * cosA + vX * sinA) * rIn1;
+              const offY1 = (uY * cosA + vY * sinA) * rIn1;
+              const offZ1 = (uZ * cosA + vZ * sinA) * rIn1;
+              inRing0.push(addV(p0[0] + offX0, p0[1] + offY0, p0[2] + offZ0, colCrease));
+              inRing1.push(addV(p1[0] + offX1, p1[1] + offY1, p1[2] + offZ1, colCrease));
+            }
+            for (let i = 0; i < sides; i++) {
+              const nextI = (i + 1) % sides;
+              addQuad(inRing0[nextI], inRing0[i], inRing1[i], inRing1[nextI]);
+              // Bridge opening cuff rim
+              addQuad(ring1[i], ring1[nextI], inRing1[nextI], inRing1[i]);
+            }
+          }
+
+          if (capStart) {
+            const vC0 = addV(p0[0], p0[1], p0[2], color);
+            for (let i = 0; i < sides; i++) {
+              const nextI = (i + 1) % sides;
+              addTri(vC0, ring0[nextI], ring0[i]);
+            }
+          }
+          if (capEnd) {
+            const vC1 = addV(p1[0], p1[1], p1[2], color);
+            for (let i = 0; i < sides; i++) {
+              const nextI = (i + 1) % sides;
+              addTri(vC1, ring1[i], ring1[nextI]);
+            }
+          }
+        };
+
+        // -------------------------------------------------------------
+        // PART 1: THE FULL POINTED TRAVELER HOOD (หมวกฮู้ดคลุมศีรษะทรงแหลมมน ลึก มิดชิด)
+        // -------------------------------------------------------------
+        // Ring 0: Face Aperture Rim (8 vertices framing the face opening)
+        const apertureOffsets = [
+          [ 0.00 * s,  0.31 * s,  0.28 * s], // 0: Top visor peak
+          [-0.20 * s,  0.26 * s,  0.25 * s], // 1: Top left
+          [-0.28 * s,  0.06 * s,  0.20 * s], // 2: Left cheek
+          [-0.21 * s, -0.14 * s,  0.16 * s], // 3: Left jaw
+          [ 0.00 * s, -0.19 * s,  0.15 * s], // 4: Chin bottom
+          [ 0.21 * s, -0.14 * s,  0.16 * s], // 5: Right jaw
+          [ 0.28 * s,  0.06 * s,  0.20 * s], // 6: Right cheek
+          [ 0.20 * s,  0.26 * s,  0.25 * s]  // 7: Top right
+        ];
+        const vAperture = [];
+        for (let i = 0; i < 8; i++) {
+          const off = apertureOffsets[i];
+          const col = (i === 0) ? colHighlight : colCloth;
+          vAperture.push(addV(hx + off[0], hy + off[1], hz + off[2], col));
+        }
+
+        // Inner hood lining rim (frames the face and displays square patches cleanly)
+        const vInner = [];
+        for (let i = 0; i < 8; i++) {
+          const off = apertureOffsets[i];
+          const px = hx + off[0] * 0.88;
+          const py = hy + off[1] * 0.88;
+          const pz = hz + off[2] - 0.09 * s;
+          vInner.push(addV(px, py, pz, colCrease));
+        }
+        for (let i = 0; i < 8; i++) {
+          const nextI = (i + 1) % 8;
+          addQuad(vAperture[i], vAperture[nextI], vInner[nextI], vInner[i]);
+        }
+
+        // Ring 1: Mid-Crown & Temples (encasing skull top, sides, and temples)
+        const crownOffsets = [
+          [ 0.00 * s,  0.34 * s,  0.06 * s], // 0: Top ridge
+          [-0.23 * s,  0.29 * s,  0.03 * s], // 1: Top-left
+          [-0.30 * s,  0.06 * s, -0.03 * s], // 2: Left temple
+          [-0.23 * s, -0.14 * s, -0.05 * s], // 3: Low-left
+          [ 0.00 * s, -0.18 * s, -0.07 * s], // 4: Low-mid
+          [ 0.23 * s, -0.14 * s, -0.05 * s], // 5: Low-right
+          [ 0.30 * s,  0.06 * s, -0.03 * s], // 6: Right temple
+          [ 0.23 * s,  0.29 * s,  0.03 * s]  // 7: Top-right
+        ];
+        const vCrown = [];
+        for (let i = 0; i < 8; i++) {
+          const off = crownOffsets[i];
+          vCrown.push(addV(hx + off[0], hy + off[1], hz + off[2], colCloth));
+        }
+        for (let i = 0; i < 8; i++) {
+          const nextI = (i + 1) % 8;
+          addQuad(vAperture[i], vCrown[i], vCrown[nextI], vAperture[nextI]);
+        }
+
+        // Ring 2: Rear Skull (covering back of head fully)
+        const rearOffsets = [
+          [ 0.00 * s,  0.30 * s, -0.16 * s], // 0: Top rear
+          [-0.19 * s,  0.25 * s, -0.18 * s], // 1: Upper-left rear
+          [-0.24 * s,  0.06 * s, -0.21 * s], // 2: Mid-left rear
+          [-0.18 * s, -0.13 * s, -0.19 * s], // 3: Low-left rear
+          [ 0.00 * s, -0.16 * s, -0.18 * s], // 4: Low-mid rear
+          [ 0.18 * s, -0.13 * s, -0.19 * s], // 5: Low-right rear
+          [ 0.24 * s,  0.06 * s, -0.21 * s], // 6: Mid-right rear
+          [ 0.19 * s,  0.25 * s, -0.18 * s]  // 7: Upper-right rear
+        ];
+        const vRear = [];
+        for (let i = 0; i < 8; i++) {
+          const off = rearOffsets[i];
+          vRear.push(addV(hx + off[0], hy + off[1], hz + off[2], colCloth));
+        }
+        for (let i = 0; i < 8; i++) {
+          const nextI = (i + 1) % 8;
+          addQuad(vCrown[i], vRear[i], vRear[nextI], vCrown[nextI]);
+        }
+
+        // -------------------------------------------------------------
+        // HOOD APEX TIP DYNAMIC GRAVITY & SWAY (เลียนแบบฟิสิกส์ช่อผม GLB)
+        // -------------------------------------------------------------
+        const hPhys = (typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : {
+          pitch: 0.0, yaw: 0.0, roll: 0.0, gravity: 0.050
+        };
+        const pAngle = isLocal ? 0.0 : (hPhys.pitch || 0.0);
+        const yAngle = isLocal ? 0.0 : (hPhys.yaw || 0.0);
+        const rAngle = isLocal ? 0.0 : (hPhys.roll || 0.0);
+        const grav = (typeof hPhys.gravity === "number") ? hPhys.gravity : 0.050;
+        const effPhase = isLocal ? 0.0 : phase;
+
+        // Drooping Pointed Apex Cone Tip (swept backwards with natural gravity sag & turning sway)
+        const tipGravY = -grav * 1.5 * s;
+        const tipPitchZ = -pAngle * 0.16 * s;
+        const tipPitchY = isLocal ? 0.0 : (Math.sin(effPhase * 2.0) * 0.016 * s);
+        const tipYawX = (yAngle * 0.18 + rAngle * 0.10) * s;
+        const vApexTip = addV(
+          hx + tipYawX,
+          hy + 0.18 * s + tipGravY + tipPitchY,
+          hz - 0.38 * s + tipPitchZ,
+          colHighlight
+        );
+        for (let i = 0; i < 8; i++) {
+          const nextI = (i + 1) % 8;
+          addTri(vRear[i], vApexTip, vRear[nextI]);
+        }
+
+        // Neck Collar Ring (seals the hood bottom to the neck and shoulders)
+        const collarOffsets = [
+          [ 0.00 * s,  0.02 * s,  0.15 * s], // 0: Throat front
+          [-0.14 * s,  0.00 * s,  0.12 * s], // 1: Front-left
+          [-0.19 * s, -0.01 * s, -0.01 * s], // 2: Left neck
+          [-0.15 * s, -0.01 * s, -0.14 * s], // 3: Back-left
+          [ 0.00 * s,  0.00 * s, -0.16 * s], // 4: Back neck
+          [ 0.15 * s, -0.01 * s, -0.14 * s], // 5: Back-right
+          [ 0.19 * s, -0.01 * s, -0.01 * s], // 6: Right neck
+          [ 0.14 * s,  0.00 * s,  0.12 * s]  // 7: Front-right
+        ];
+        const vCollar = [];
+        for (let i = 0; i < 8; i++) {
+          const off = collarOffsets[i];
+          vCollar.push(addV(nx + off[0], ny + off[1], nz + off[2], colCloth));
+        }
+
+        // Bridge hood bottom tightly down to collar
+        addQuad(vAperture[3], vAperture[4], vCollar[0], vCollar[1]);
+        addQuad(vAperture[4], vAperture[5], vCollar[7], vCollar[0]);
+        addQuad(vAperture[2], vAperture[3], vCollar[1], vCollar[2]);
+        addQuad(vAperture[5], vAperture[6], vCollar[6], vCollar[7]);
+        addQuad(vRear[3], vRear[4], vCollar[4], vCollar[3]);
+        addQuad(vRear[4], vRear[5], vCollar[5], vCollar[4]);
+        addQuad(vRear[2], vRear[3], vCollar[3], vCollar[2]);
+        addQuad(vRear[5], vRear[6], vCollar[6], vCollar[5]);
+        addQuad(vCrown[3], vCrown[4], vCollar[4], vCollar[3]);
+        addQuad(vCrown[4], vCrown[5], vCollar[5], vCollar[4]);
+
+        // -------------------------------------------------------------
+        // PART 2: TWO-TIERED FLUTTERING CLOAK / PONCHO WITH REAL GRAVITY & INERTIA
+        // (ระบบแรงโน้มถ่วงและแรงสปริงเลียนแบบฟิสิกส์ช่อผม GLB)
+        // -------------------------------------------------------------
+        // 2.1 Upper Tier: Shoulder Capelet / Cowl Mantle (ผ้าคลุมไหล่ชั้นบน)
+        const N_CAPELET = 12;
+        const capeletLevels = [
+          { y: ny + 0.005 * s, rx: 0.22 * s, rz: 0.17 * s, t: 0.0 },
+          { y: ny - 0.150 * s, rx: 0.33 * s, rz: 0.25 * s, t: 0.32 }
+        ];
+        const capeletRings = [];
+        for (let rIdx = 0; rIdx < capeletLevels.length; rIdx++) {
+          const lvl = capeletLevels[rIdx];
+          const ring = [];
+          const t = lvl.t;
+          const w = t * t * (3.0 - 2.0 * t); // Cubic Hermite weight from GLB hair physics
+          const capGravY = -grav * w * s;
+          const capPitchZ = -pAngle * 0.08 * w * s;
+          const capYawX = (yAngle * 0.08 + rAngle * 0.04) * w * s;
+          const capBounceY = isLocal ? 0.0 : (Math.sin(effPhase * 2.0) * 0.008 * w * s);
+
+          for (let j = 0; j < N_CAPELET; j++) {
+            const ang = (j / N_CAPELET) * Math.PI * 2;
+            let px = cx + Math.sin(ang) * lvl.rx + capYawX;
+            let py = lvl.y + capGravY + capBounceY;
+            let pz = cz + Math.cos(ang) * lvl.rz + capPitchZ;
+            if (rIdx === 1) {
+              const isRidge = (j % 2 === 0);
+              py += isRidge ? -0.015 * s : 0.010 * s;
+            }
+            ring.push(addV(px, py, pz, (rIdx === 1 && j % 2 === 0) ? colHighlight : colCloth));
+          }
+          capeletRings.push(ring);
+        }
+        for (let j = 0; j < N_CAPELET; j++) {
+          const nextJ = (j + 1) % N_CAPELET;
+          addQuad(capeletRings[0][j], capeletRings[1][j], capeletRings[1][nextJ], capeletRings[0][nextJ]);
+        }
+
+        // 2.2 Lower Tier: Main Flowing Cloak with Hermite Progressive Gravity & Air Drag
+        const N_CLOAK = 16;
+        const cloakRings = [];
+        const ponchoLevels = [
+          { y: ny - 0.080 * s, rx: 0.28 * s, rz: 0.21 * s, t: 0.18, scalloped: false },
+          { y: ny - 0.220 * s, rx: 0.37 * s, rz: 0.29 * s, t: 0.58, scalloped: false },
+          { y: ny - 0.380 * s, rx: 0.46 * s, rz: 0.36 * s, t: 1.00, scalloped: true }
+        ];
+
+        for (let rIdx = 0; rIdx < ponchoLevels.length; rIdx++) {
+          const lvl = ponchoLevels[rIdx];
+          const ringVerts = [];
+          const t = lvl.t;
+          // Smooth progressive bending curve borrowed from GLB hair strands (Hermite cubic)
+          const w = t * t * (3.0 - 2.0 * t);
+
+          // Physical displacements from chibiHoodiePhysics
+          const gravSag = -grav * w * s;
+          const footstepBounce = isLocal ? 0.0 : (Math.sin(effPhase * 2.0) * 0.020 * w * s);
+          const dragZ = -pAngle * 0.24 * w * s;
+          const swayX = (yAngle * 0.22 + rAngle * 0.14) * w * s;
+
+          for (let j = 0; j < N_CLOAK; j++) {
+            const ang = (j / N_CLOAK) * Math.PI * 2;
+            const cosA = Math.cos(ang);
+            const sinA = Math.sin(ang);
+            const isRidge = (j % 2 === 0);
+
+            // Natural cloth fluttering ripples across hem
+            const rippleY = isLocal ? 0.0 : (Math.sin(effPhase * 2.2 + ang * 2.0) * 0.012 * w * s);
+            const rippleRad = isLocal ? 0.0 : (Math.cos(effPhase * 1.8 + ang * 2.0) * 0.009 * w * s);
+
+            let px = cx + sinA * (lvl.rx + rippleRad) + swayX;
+            let py = lvl.y + gravSag + footstepBounce + rippleY;
+            let pz = cz + cosA * (lvl.rz + rippleRad) + dragZ;
+
+            if (lvl.scalloped) {
+              if (isRidge) {
+                py -= 0.055 * s;
+                px += sinA * (0.025 * s);
+                pz += cosA * (0.025 * s);
+              } else {
+                py += 0.030 * s;
+                px -= sinA * (0.015 * s);
+                pz -= cosA * (0.015 * s);
+              }
+            }
+
+            const col = isRidge ? colHighlight : colCrease;
+            ringVerts.push(addV(px, py, pz, col));
+          }
+          cloakRings.push(ringVerts);
+        }
+
+        for (let r = 0; r < cloakRings.length - 1; r++) {
+          const r0 = cloakRings[r];
+          const r1 = cloakRings[r + 1];
+          for (let j = 0; j < N_CLOAK; j++) {
+            const nextJ = (j + 1) % N_CLOAK;
+            addQuad(r0[j], r1[j], r1[nextJ], r0[nextJ]);
+          }
+        }
+
+        // -------------------------------------------------------------
+        // PART 3: CHEST BROOCH & ROSETTE RIBBON BOW (ด้านหน้าชุดคลุม ติดแนบชิดคอเสื้อ)
+        // -------------------------------------------------------------
+        // Positioned flush on the front surface of the collar and mantle
+        const bX = nx;
+        const bY = ny - 0.010 * s;
+        const bZ = nz + 0.175 * s;
+
+        // 3.1 Faceted Gold Brooch Button with Center Pearl (Exclude from cloth square pattern)
+        isClothSection = false;
+        const rBrooch = 0.026 * s;
+        const vBroochC = addV(bX, bY, bZ + rBrooch * 0.8, colBroochCenter);
+        const broochRing = [];
+        for (let j = 0; j < 8; j++) {
+          const ang = (j / 8) * Math.PI * 2;
+          const bx = bX + Math.sin(ang) * rBrooch;
+          const by = bY + Math.cos(ang) * rBrooch;
+          broochRing.push(addV(bx, by, bZ, colBrooch));
+        }
+        for (let j = 0; j < 8; j++) {
+          const nextJ = (j + 1) % 8;
+          addTri(broochRing[j], vBroochC, broochRing[nextJ]);
+        }
+
+        // 3.2 Rosette Ribbon Bow (radiating folded ribbon petals flush against the mantle)
+        isClothSection = true;
+        const rPetal = 0.048 * s;
+        for (let j = 0; j < 6; j++) {
+          const ang = (j / 6) * Math.PI * 2;
+          const pTipX = bX + Math.sin(ang) * rPetal;
+          const pTipY = bY + Math.cos(ang) * rPetal;
+          const pTipZ = bZ + 0.005 * s;
+          const angL = ang - 0.30;
+          const angR = ang + 0.30;
+          const pBaseLX = bX + Math.sin(angL) * (rBrooch * 0.85);
+          const pBaseLY = bY + Math.cos(angL) * (rBrooch * 0.85);
+          const pBaseRX = bX + Math.sin(angR) * (rBrooch * 0.85);
+          const pBaseRY = bY + Math.cos(angR) * (rBrooch * 0.85);
+          const vTipP = addV(pTipX, pTipY, pTipZ, colHighlight);
+          const vBaseL = addV(pBaseLX, pBaseLY, bZ, colCloth);
+          const vBaseR = addV(pBaseRX, pBaseRY, bZ, colCloth);
+          addTri(vBaseL, vTipP, vBaseR);
+        }
+
+        // -------------------------------------------------------------
+        // PART 4: VOLUMINOUS TRAVELER BELL SLEEVES (เสื้อพร้อมแขนเสื้อบานทรงกระดิ่ง สวมทับแขนเดิม)
+        // -------------------------------------------------------------
+        if (leftArmPivot && leftElbowRot && leftHandRot) {
+          // Upper arm sleeve - wraps over upper arm
+          addCylinder(leftArmPivot, leftElbowRot, 0.058 * s, 0.054 * s, 8, colCloth, false, false, false);
+          // Forearm flared bell sleeve - expands outwards towards hand with hollow inner lining
+          addCylinder(leftElbowRot, leftHandRot, 0.054 * s, 0.084 * s, 8, colCloth, false, false, true);
+        }
+        if (rightArmPivot && rightElbowRot && rightHandRot) {
+          // Upper arm sleeve - wraps over upper arm
+          addCylinder(rightArmPivot, rightElbowRot, 0.058 * s, 0.054 * s, 8, colCloth, false, false, false);
+          // Forearm flared bell sleeve - expands outwards towards hand with hollow inner lining
+          addCylinder(rightElbowRot, rightHandRot, 0.054 * s, 0.084 * s, 8, colCloth, false, false, true);
+        }
+
+        // -------------------------------------------------------------
+        // PART 5: ROOMY TRAVELER BOOTS (รองเท้าบูทนักเดินทางทรงสวย หุ้มมิดชิดทั้งข้อเท้า หลังเท้า และนิ้วเท้า)
+        // -------------------------------------------------------------
+        isClothSection = false;
+        const addTravelerBoot = (pFoot) => {
+          if (!pFoot) return;
+          const fx = pFoot[0];
+          const fy = pFoot[1];
+          const fz = pFoot[2];
+
+          // 1. Ankle shaft - wraps around lower leg and ankle
+          const pAnkleTop = [fx, fy + 0.028 * s, fz];
+          const pAnkleBot = [fx, fy - 0.010 * s, fz];
+          addCylinder(pAnkleTop, pAnkleBot, 0.048 * s, 0.046 * s, 8, colDark, false, false, false);
+
+          // Top folded cuff trim
+          const pCuffRim = [fx, fy + 0.032 * s, fz];
+          addCylinder(pAnkleTop, pCuffRim, 0.052 * s, 0.050 * s, 8, colCrease, true, false, false);
+
+          // 2. Full Shoe Body & Roomy Toe Box (extends forward along Z to fully encase heel, instep, and all 5 toes)
+          const pHeel = [fx, fy - 0.013 * s, fz - 0.022 * s];
+          const pToeTip = [fx, fy - 0.015 * s, fz + 0.076 * s];
+          addCylinder(pHeel, pToeTip, 0.046 * s, 0.042 * s, 8, colDark, true, true, false);
+
+          // 3. Sturdy Sole Tread (underneath the shoe)
+          const pSoleHeel = [fx, fy - 0.026 * s, fz - 0.020 * s];
+          const pSoleToe = [fx, fy - 0.026 * s, fz + 0.074 * s];
+          addCylinder(pSoleHeel, pSoleToe, 0.046 * s, 0.042 * s, 6, [0.08, 0.08, 0.10], true, true, false);
+        };
+
+        if (leftFootRot) {
+          addTravelerBoot(leftFootRot);
+        }
+        if (rightFootRot) {
+          addTravelerBoot(rightFootRot);
+        }
+
+        // -------------------------------------------------------------
+        // CALCULATE NORMALS (SMOOTH LIGHTING)
+        // -------------------------------------------------------------
+        const frontTriCount = outI.length;
+        const normals = new Float32Array(outV.length);
+        for (let k = 0; k < frontTriCount; k += 3) {
+          const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
+          const p0x = outV[i0 * 3], p0y = outV[i0 * 3 + 1], p0z = outV[i0 * 3 + 2];
+          const p1x = outV[i1 * 3], p1y = outV[i1 * 3 + 1], p1z = outV[i1 * 3 + 2];
+          const p2x = outV[i2 * 3], p2y = outV[i2 * 3 + 1], p2z = outV[i2 * 3 + 2];
+
+          const uX = p1x - p0x, uY = p1y - p0y, uZ = p1z - p0z;
+          const vX = p2x - p0x, vY = p2y - p0y, vZ = p2z - p0z;
+
+          const nX = uY * vZ - uZ * vY;
+          const nY = uZ * vX - uX * vZ;
+          const nZ = uX * vY - uY * vX;
+
+          normals[i0 * 3]     += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
+          normals[i1 * 3]     += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
+          normals[i2 * 3]     += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
+        }
+
+        for (let k = 0; k < normals.length; k += 3) {
+          const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+          if (l > 0.0001) {
+            normals[k] /= l;
+            normals[k + 1] /= l;
+            normals[k + 2] /= l;
+          } else {
+            normals[k + 1] = 1.0;
+          }
+        }
+
+        // -------------------------------------------------------------
+        // DOUBLE-SIDED WINDING (ป้องกันหน้าตาข่ายแหว่ง/ทะลุจากทุกมุมมอง)
+        // -------------------------------------------------------------
+        // Appends reverse triangles so WebGL backface culling never makes the cloth transparent!
+        for (let k = 0; k < frontTriCount; k += 3) {
+          outI.push(outI[k], outI[k + 2], outI[k + 1]);
+        }
+
+        return {
+          vertices: outV,
+          normals: normals,
+          colors: outC,
+          indices: outI
+        };
       }
 
       function getGlbCharacterMeshData(phase, isClone = false, cloneWalkBlend = 1.0) {
@@ -3999,9 +4683,10 @@ window.characterVertexShaderSource = `
 
         let torsoTilt = 0.0;
         const walkScale = isClone ? cloneWalkBlend : 1.0;
-        let armAngle = Math.sin(phase) * 0.8 * walkScale;
+        const armSwingAmp = isClone ? 0.28 : 0.8;
+        let armAngle = Math.sin(phase) * armSwingAmp * walkScale;
         let leftElbowFlex = 0.1 + Math.max(0, -armAngle * 0.5);
-        let rightArmAngle = Math.sin(phase + Math.PI) * 0.8 * walkScale;
+        let rightArmAngle = Math.sin(phase + Math.PI) * armSwingAmp * walkScale;
         let rightElbowFlex = 0.1 + Math.max(0, -rightArmAngle * 0.5);
 
         let legAngle = Math.sin(phase + Math.PI) * 0.6 * walkScale;
@@ -5354,11 +6039,66 @@ window.characterVertexShaderSource = `
           };
         }
 
-        const playerHairMesh = createHairMesh(false);
-        window._lastPlayerHairMesh = playerHairMesh;
-        const playerLocalHairMesh = createHairMesh(true);
+        const playerHairMesh = isClone ? null : createHairMesh(false);
+        if (!isClone) window._lastPlayerHairMesh = playerHairMesh;
+        const playerLocalHairMesh = isClone ? null : createHairMesh(true);
 
-        let meshesToMerge = [
+        let cloneHoodieMesh = null;
+        let cloneLocalHoodieMesh = null;
+        if (isClone) {
+          const isMoving = cloneWalkBlend > 0.05;
+          const cloneHeading = (typeof window.playerClonesState !== "undefined" && window.playerClonesState[0])
+            ? (window.playerClonesState[0].heading || 0.0)
+            : 0.0;
+          if (typeof updateChibiHoodiePhysics === "function") {
+            updateChibiHoodiePhysics(isMoving, false, phase, cloneHeading);
+          }
+
+          cloneHoodieMesh = buildTravelerHoodieCloakMesh(
+            headP1, headP2,
+            chestP1, chestP2,
+            neckP1, neckP2,
+            leftArmPivot, leftElbowRot, leftHandRot,
+            rightArmPivot, rightElbowRot, rightHandRot,
+            scaleFactor,
+            phase,
+            false,
+            leftFootRot, rightFootRot
+          );
+          cloneLocalHoodieMesh = buildTravelerHoodieCloakMesh(
+            localHeadP1, localHeadP2,
+            localChestP1, localChestP2,
+            localNeckP1, localNeckP2,
+            leftArmPivot, leftElbowRot, leftHandRot,
+            rightArmPivot, rightElbowRot, rightHandRot,
+            scaleFactor,
+            phase,
+            true,
+            leftFootRot, rightFootRot
+          );
+        }
+
+        let meshesToMerge = isClone ? [
+          chest,
+          pelvis,
+          neck,
+          head,
+          leftEar,
+          rightEar,
+          leftArmUpper,
+          leftArmLower,
+          rightArmUpper,
+          rightArmLower,
+          leftLegUpper,
+          leftLegLower,
+          rightLegUpper,
+          rightLegLower,
+          ...leftHandParts,
+          ...rightHandParts,
+          ...leftFootParts,
+          ...rightFootParts,
+          cloneHoodieMesh,
+        ] : [
           chest,
           pelvis,
           neck,
@@ -5380,7 +6120,27 @@ window.characterVertexShaderSource = `
           ...rightFootParts,
         ];
 
-        let localMeshesToMerge = [
+        let localMeshesToMerge = isClone ? [
+          localChest,
+          localPelvis,
+          localNeck,
+          localHead,
+          localLeftEar,
+          localRightEar,
+          leftArmUpper,
+          leftArmLower,
+          rightArmUpper,
+          rightArmLower,
+          leftLegUpper,
+          leftLegLower,
+          rightLegUpper,
+          rightLegLower,
+          ...leftHandParts,
+          ...rightHandParts,
+          ...leftFootParts,
+          ...rightFootParts,
+          cloneLocalHoodieMesh,
+        ] : [
           localChest,
           localPelvis,
           localNeck,
