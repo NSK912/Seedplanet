@@ -1596,6 +1596,31 @@ function buildCollectibles(count, seed) {
                     }
                 }
             }
+
+            const staticCols = (typeof window !== "undefined" && window.staticCollectiblesList) ? window.staticCollectiblesList : [];
+            const colRawVerts = (typeof window !== "undefined" && window.collectibleRawVertices) ? window.collectibleRawVertices : null;
+            if (colRawVerts && staticCols.length > 0) {
+                for (let i = 0; i < staticCols.length; i++) {
+                    const item = staticCols[i];
+                    if (!item || !item.active || item.isPreview || item.isDemolished) continue;
+                    if (item.type !== "wood_bed" && item.type !== "wood_chest") continue;
+                    if (item.meshStart !== undefined && item.meshEnd !== undefined) {
+                        const baseIdx = vertices.length / 3;
+                        const count = item.meshEnd - item.meshStart;
+                        for (let j = 0; j < count; j++) {
+                            const vIdx = item.meshStart + j;
+                            if (vIdx * 3 + 2 >= colRawVerts.length) break;
+                            vertices.push(
+                                colRawVerts[vIdx * 3],
+                                colRawVerts[vIdx * 3 + 1],
+                                colRawVerts[vIdx * 3 + 2]
+                            );
+                            colors.push(1.0, 0.0, 0.0);
+                            indices.push(baseIdx + j);
+                        }
+                    }
+                }
+            }
         }
         
         hitboxIndicesLength = indices.length;
@@ -1835,6 +1860,7 @@ function buildCollectibles(count, seed) {
           if (targetBuffer === 'main') {
             collectibleIndicesLength = 0;
             window.staticCollectiblesList = [];
+            window.collectibleRawVertices = null;
           } else if (targetBuffer === 'dynamic') {
             dynamicCollectibleIndicesLength = 0;
             window.dynamicCollectiblesList = [];
@@ -1860,6 +1886,7 @@ function buildCollectibles(count, seed) {
 
         if (targetBuffer === 'main') {
             collectibleIndicesLength = flatGeom.indices.length;
+            window.collectibleRawVertices = flatGeom.vertices;
 
             if (!collectibleVertexBuffer)
               collectibleVertexBuffer = gl.createBuffer();

@@ -62,26 +62,19 @@
     const terrainRad = planetRadius + cHeight * heightScale;
     const isSwimming = (cState.currentSwimFactor || 0) > 0.0;
 
+    const cloneFeetRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
+      ? (cState.centerRadius - 0.46 * charScale)
+      : terrainRad;
     let supportFloorRad = terrainRad;
     if (!isSwimming && typeof getFloorTopRadiusAt === "function") {
-      const feetHint = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
-        ? (cState.centerRadius - 0.46 * charScale)
-        : terrainRad;
-      supportFloorRad = getFloorTopRadiusAt(
-        cNx,
-        cNy,
-        cNz,
-        terrainRad,
-        feetHint,
-        !cState.isGrounded,
-        cState.verticalVel || 0
-      );
+      supportFloorRad = getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, cloneFeetRad, !cState.isGrounded, cState.verticalVel || 0);
+      supportFloorRad = clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, supportFloorRad, planetRadius, !!cState.isTraversingDoor);
     }
 
     const baseGroundRad = supportFloorRad + 0.46 * charScale;
-    let finalGroundRad = (!isSwimming && typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+    let finalGroundRad = (!isSwimming && typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
       ? cState.centerRadius
-      : (baseGroundRad + (cState.jumpY || 0));
+      : baseGroundRad;
 
     const cEast = [-cSinP, 0, cCosP];
     const cNorth = [-cCosT * cCosP, cSinT, -cCosT * cSinP];
@@ -939,6 +932,86 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     cState.targetPhi = phi;
   }
 
+  function getChestFrontApproachPos(chest, house) {
+    if (!chest || !chest.position) return null;
+    const cp = chest.position;
+    if (house && typeof house.x === "number") {
+      let dx = house.x - cp[0];
+      let dy = house.y - cp[1];
+      let dz = house.z - cp[2];
+      const cRad = Math.hypot(cp[0], cp[1], cp[2]) || 1;
+      const nx = cp[0] / cRad, ny = cp[1] / cRad, nz = cp[2] / cRad;
+      const dotN = dx * nx + dy * ny + dz * nz;
+      dx -= dotN * nx;
+      dy -= dotN * ny;
+      dz -= dotN * nz;
+      const len = Math.hypot(dx, dy, dz);
+      if (len > 0.001) {
+        const offset = Math.max(0.105, Math.min(0.14, len * 0.75));
+        return [
+          cp[0] + (dx / len) * offset,
+          cp[1] + (dy / len) * offset,
+          cp[2] + (dz / len) * offset
+        ];
+      }
+    }
+    if (chest.forward) {
+      return [
+        cp[0] + chest.forward[0] * 0.11,
+        cp[1] + chest.forward[1] * 0.11,
+        cp[2] + chest.forward[2] * 0.11
+      ];
+    }
+    return [cp[0], cp[1], cp[2]];
+  }
+
+  function isCloneStrictlyInsideHouse(cState, house, planetRadius) {
+    if (!house || !house.R || !house.F || typeof house.x !== "number") return true;
+    const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
+    const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
+    const cNx = cSinT * cCosP, cNy = cCosT, cNz = cSinT * cSinP;
+    const houseRad = Math.hypot(house.x, house.y, house.z) || planetRadius;
+    const dxC = houseRad * cNx - house.x;
+    const dyC = houseRad * cNy - house.y;
+    const dzC = houseRad * cNz - house.z;
+    const halfW = (house.totalW || 0.60) * 0.5;
+    const halfD = (house.totalD || 0.60) * 0.5;
+    const cLocR = dxC * house.R[0] + dyC * house.R[1] + dzC * house.R[2];
+    const cLocF = dxC * house.F[0] + dyC * house.F[1] + dzC * house.F[2];
+    return Math.abs(cLocR) < (halfW - 0.015) && Math.abs(cLocF) < (halfD - 0.015);
+  }
+
+  function checkClonePlayerReach3D(cState, targetPos, minScaleReach, charScale, planetRadius, extraColliderMargin = 0.0) {
+    if (!targetPos) return { valid: false, horizDist: Infinity, vertDiff: Infinity };
+    const playerBaseReach = (typeof actionReachDistance === "number" && actionReachDistance > 0)
+      ? actionReachDistance
+      : (charScale * 1.5);
+    const maxHorizReach = Math.max(playerBaseReach, minScaleReach * (charScale / 0.1)) + extraColliderMargin;
+
+    const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
+    const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
+    const cNx = cSinT * cCosP, cNy = cCosT, cNz = cSinT * cSinP;
+
+    const targetRad = Math.hypot(targetPos[0], targetPos[1], targetPos[2]) || planetRadius;
+    const cFeetRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
+      ? (cState.centerRadius - 0.46 * charScale)
+      : targetRad;
+
+    const cPosAtTargetRad = [targetRad * cNx, targetRad * cNy, targetRad * cNz];
+    const dx = targetPos[0] - cPosAtTargetRad[0];
+    const dy = targetPos[1] - cPosAtTargetRad[1];
+    const dz = targetPos[2] - cPosAtTargetRad[2];
+    const horizDist = Math.hypot(dx, dy, dz);
+    const vertDiff = Math.abs(targetRad - cFeetRad);
+    const maxVertDiff = 0.14 * (charScale / 0.1);
+
+    return {
+      valid: horizDist <= maxHorizReach && vertDiff <= maxVertDiff,
+      horizDist,
+      vertDiff
+    };
+  }
+
   function findTargetTree(cState, planetRadius) {
     const natureObs = (typeof natureObstacles !== "undefined" && Array.isArray(natureObstacles))
       ? natureObstacles
@@ -1272,25 +1345,30 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     cState.thinkTimer = 1.2 + Math.random() * 0.8;
     cState.isIdle = false;
 
+    cState.isUsingChest = false;
+    cState.chestHoldTimer = 0.0;
+
     if (chosen.action === "DEPOSIT_CHEST") {
       cState.currentActivity = "DEPOSIT_CHEST";
-      setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
+      const house = (houses && houses[cState.houseIndex]) ? houses[cState.houseIndex] : null;
+      const approachPos = getChestFrontApproachPos(chosen.target, house) || chosen.target.position;
+      setCloneTargetPos(cState, approachPos[0], approachPos[1], approachPos[2], planetRadius);
       cState.equippedTool = null;
       setCloneExpression(cState, "(^人^)");
-      cState.timer = 6.0;
+      cState.timer = 14.0;
     } else if (chosen.action === "PICKUP_DROPS") {
       cState.currentActivity = "PICKUP_DROPS";
       cState.targetDrop = chosen.target;
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
       setCloneExpression(cState, "(ʘ‿ʘ)");
-      cState.timer = 5.0;
+      cState.timer = 8.0;
     } else if (chosen.action === "STEAL_BOAT") {
       cState.currentActivity = "STEAL_BOAT";
       cState.targetBoat = chosen.target;
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
       setCloneExpression(cState, "(¬‿¬)");
       cState.equippedTool = null;
-      cState.timer = 8.0;
+      cState.timer = 10.0;
     } else if (chosen.action === "CHOP_WOOD") {
       cState.currentActivity = "CHOP_WOOD";
       cState.targetObstacle = chosen.target;
@@ -1499,6 +1577,56 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
   // =========================================================================
   // SHARED PLAYER COLLISION & DOORWAY NAVIGATION HELPERS FOR CLONES
   // =========================================================================
+  function clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, floorRad, planetRadius, isTraversingDoor = false) {
+    if (floorRad <= terrainRad + 0.005) return floorRad;
+    const houses = (typeof window !== "undefined" && window.placedHouses) ? window.placedHouses : [];
+    for (let i = 0; i < houses.length; i++) {
+      const h = houses[i];
+      if (!h || !h.R || !h.F || typeof h.x !== "number") continue;
+      const hRad = Math.hypot(h.x, h.y, h.z) || planetRadius;
+      const dx = hRad * cNx - h.x;
+      const dy = hRad * cNy - h.y;
+      const dz = hRad * cNz - h.z;
+      if (dx * dx + dy * dy + dz * dz > 9.0) continue;
+      const halfW = (h.totalW || 0.60) * 0.5;
+      const halfD = (h.totalD || 0.60) * 0.5;
+      const locR = Math.abs(dx * h.R[0] + dy * h.R[1] + dz * h.R[2]);
+      const locF = Math.abs(dx * h.F[0] + dy * h.F[1] + dz * h.F[2]);
+      // Allow doorway threshold support while actively traversing the doorway
+      const margin = isTraversingDoor ? -0.04 : 0.012;
+      if (locR >= (halfW - margin) && locR <= (halfW + 0.25) && locF <= (halfD + 0.25)) {
+        return terrainRad;
+      }
+      if (locF >= (halfD - margin) && locF <= (halfD + 0.25) && locR <= (halfW + 0.25)) {
+        return terrainRad;
+      }
+    }
+    return floorRad;
+  }
+
+  function segmentIntersectsBox2D(x1, y1, x2, y2, minX, maxX, minY, maxY) {
+    let t0 = 0.0, t1 = 1.0;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const p = [-dx, dx, -dy, dy];
+    const q = [x1 - minX, maxX - x1, y1 - minY, maxY - y1];
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(p[i]) < 1e-8) {
+        if (q[i] < 0) return false;
+      } else {
+        const t = q[i] / p[i];
+        if (p[i] < 0) {
+          if (t > t1) return false;
+          if (t > t0) t0 = t;
+        } else {
+          if (t < t0) return false;
+          if (t < t1) t1 = t;
+        }
+      }
+    }
+    return t0 <= t1;
+  }
+
   function updateCloneVerticalPhysics(cState, planetRadius, heightScale, seed, charScale, dtClamped) {
     const cSinT = Math.sin(cState.theta);
     const cCosT = Math.cos(cState.theta);
@@ -1516,28 +1644,14 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     if (typeof cState.isGrounded !== "boolean") cState.isGrounded = true;
     if (typeof cState.verticalVel !== "number" || Number.isNaN(cState.verticalVel)) cState.verticalVel = 0;
 
-    const feetRadBefore = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+    const feetRadBefore = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
       ? (cState.centerRadius - 0.46 * charScale)
       : terrainRad;
 
-    let nearAnyStructure = (feetRadBefore > terrainRad + 0.01) || !cState.isGrounded;
-    if (!nearAnyStructure && typeof window !== "undefined" && Array.isArray(window.placedHouses)) {
-      const wx = cNx * terrainRad, wy = cNy * terrainRad, wz = cNz * terrainRad;
-      const houses = window.placedHouses;
-      for (let h = 0; h < houses.length; h++) {
-        const hs = houses[h];
-        if (!hs) continue;
-        const dx = wx - hs.x, dy = wy - hs.y, dz = wz - hs.z;
-        if (dx * dx + dy * dy + dz * dz < 4.5) {
-          nearAnyStructure = true;
-          break;
-        }
-      }
-    }
-
-    const currentSupportRad = (nearAnyStructure && typeof getFloorTopRadiusAt === "function")
-      ? getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, feetRadBefore, !cState.isGrounded, cState.verticalVel)
+    const rawSupportRad = (typeof getFloorTopRadiusAt === "function")
+      ? getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, feetRadBefore, !cState.isGrounded, cState.verticalVel || 0)
       : terrainRad;
+    const currentSupportRad = clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, rawSupportRad, planetRadius, !!cState.isTraversingDoor);
     const targetGroundCenterRad = currentSupportRad + 0.46 * charScale;
 
     if (typeof cState.centerRadius !== "number" || Number.isNaN(cState.centerRadius) || cState.centerRadius <= 0.001) {
@@ -1558,18 +1672,19 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       return { terrainRad, currentSupportRad, cNx, cNy, cNz };
     }
 
-    // Transfer AI jump impulse into shared vertical velocity
-    if ((cState.jumpVy || 0) > 0 && cState.isGrounded) {
-      cState.verticalVel = cState.jumpVy;
-      cState.isGrounded = false;
-      cState.jumpVy = 0;
-    }
+    const minGroundRadius = targetGroundCenterRad;
+    const groundSnapThreshold = 0.15 * charScale;
+    const diffFromGround = cState.centerRadius - minGroundRadius;
 
-    if (cState.isGrounded && cState.centerRadius > targetGroundCenterRad + 0.03 * charScale) {
+    if (cState.isGrounded && cState.verticalVel <= 0.0 && diffFromGround >= -0.05 && diffFromGround <= groundSnapThreshold) {
+      cState.centerRadius = minGroundRadius;
+      cState.verticalVel = 0.0;
+    } else if (cState.centerRadius <= minGroundRadius) {
+      cState.centerRadius = minGroundRadius;
+      cState.verticalVel = 0.0;
+      cState.isGrounded = true;
+    } else {
       cState.isGrounded = false;
-    }
-
-    if (!cState.isGrounded) {
       cState.verticalVel -= 9.8 * charScale * dtClamped;
       const prevCenterRad = cState.centerRadius;
       cState.centerRadius += cState.verticalVel * dtClamped;
@@ -1578,7 +1693,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         const charHeadOffset = 0.88 * charScale;
         const currentFeetRad = prevCenterRad - 0.46 * charScale;
         const nextFeetRad = cState.centerRadius - 0.46 * charScale;
-        const ceilingBottomRad = getFloorCeilingRadiusAt(cNx, cNy, cNz, currentFeetRad, nextFeetRad, charHeadOffset);
+        const ceilingBottomRad = getFloorCeilingRadiusAt(cNx, cNy, cNz, terrainRad, currentFeetRad, nextFeetRad, charHeadOffset);
         if (ceilingBottomRad < Infinity) {
           const maxCenterRad = ceilingBottomRad + 0.46 * charScale - charHeadOffset - 0.004;
           if (cState.centerRadius > maxCenterRad) {
@@ -1588,87 +1703,72 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         }
       }
 
-      if (cState.centerRadius <= targetGroundCenterRad) {
-        cState.centerRadius = targetGroundCenterRad;
-        cState.verticalVel = 0;
+      if (cState.centerRadius <= minGroundRadius) {
+        cState.centerRadius = minGroundRadius;
+        cState.verticalVel = 0.0;
         cState.isGrounded = true;
       }
-    } else {
-      cState.centerRadius = targetGroundCenterRad;
-      cState.verticalVel = 0;
     }
 
-    cState.jumpY = Math.max(0, cState.centerRadius - targetGroundCenterRad);
+    cState.jumpY = 0;
+    cState.jumpVy = 0;
     return { terrainRad, currentSupportRad, cNx, cNy, cNz };
   }
 
-  function computeHouseDoorPoints(house) {
-    if (!house || !house.entranceDoor) return null;
-    const hx = house.x, hy = house.y, hz = house.z;
-    const hR = house.R || [1, 0, 0];
-    const hF = house.F || [0, 0, 1];
-    const wfW = house.wfW || 0.30;
-    const totalW = house.totalW || 0.60;
-    const totalD = house.totalD || 0.60;
-    const door = house.entranceDoor;
-
-    const cellCx = -totalW / 2 + wfW / 2 + door.gx * wfW;
-    const cellCy = -totalD / 2 + wfW / 2 + door.gy * wfW;
-
-    let outOffR = cellCx, outOffF = cellCy;
-    let inOffR = cellCx, inOffF = cellCy;
-    const outClear = 0.24;
-    const inClear = 0.14;
-
-    if (door.side === "bottom") {
-      outOffF = cellCy - wfW / 2 - outClear;
-      inOffF = cellCy - wfW / 2 + inClear;
-    } else if (door.side === "top") {
-      outOffF = cellCy + wfW / 2 + outClear;
-      inOffF = cellCy + wfW / 2 - inClear;
-    } else if (door.side === "left") {
-      outOffR = cellCx - wfW / 2 - outClear;
-      inOffR = cellCx - wfW / 2 + inClear;
-    } else if (door.side === "right") {
-      outOffR = cellCx + wfW / 2 + outClear;
-      inOffR = cellCx + wfW / 2 - inClear;
+  function findHouseDoorCollectible(house, houseIndex) {
+    const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []);
+    if (typeof houseIndex === "number" && houseIndex >= 0) {
+      for (let i = 0; i < colList.length; i++) {
+        const c = colList[i];
+        if (c && c.active && !c.isPreview && c.type === "wood_door" && c.houseIndex === houseIndex && c.position && c.F) {
+          return c;
+        }
+      }
     }
-
-    const toSpherical = (offR, offF) => {
-      const wx = hx + hR[0] * offR + hF[0] * offF;
-      const wy = hy + hR[1] * offR + hF[1] * offF;
-      const wz = hz + hR[2] * offR + hF[2] * offF;
-      const dist = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1;
-      const theta = Math.acos(Math.max(-1.0, Math.min(1.0, wy / dist)));
-      let phi = Math.atan2(wz, wx);
-      if (phi < 0) phi += Math.PI * 2;
-      return { theta, phi, offR, offF };
-    };
-
-    return {
-      outside: toSpherical(outOffR, outOffF),
-      inside: toSpherical(inOffR, inOffF)
-    };
+    if (house && typeof house.x === "number") {
+      let bestDoor = null;
+      let bestDistSq = Infinity;
+      const maxDistSq = 2.5 * 2.5;
+      for (let i = 0; i < colList.length; i++) {
+        const c = colList[i];
+        if (!c || !c.active || c.isPreview || c.type !== "wood_door" || !c.position || !c.F) continue;
+        const dx = c.position[0] - house.x, dy = c.position[1] - house.y, dz = c.position[2] - house.z;
+        const dSq = dx * dx + dy * dy + dz * dz;
+        if (dSq < maxDistSq && dSq < bestDistSq) {
+          bestDistSq = dSq;
+          bestDoor = c;
+        }
+      }
+      if (bestDoor) return bestDoor;
+    }
+    return null;
   }
 
   function resolveCloneDoorwayWaypoint(cState, planetRadius, houses) {
     const rawTheta = cState.targetTheta;
     const rawPhi = cState.targetPhi;
-    if (!houses || houses.length === 0) return { navTheta: rawTheta, navPhi: rawPhi };
+    cState.isTraversingDoor = false;
+    cState.doorFloorRadius = null;
+
+    if (!houses || houses.length === 0) {
+      return { navTheta: rawTheta, navPhi: rawPhi };
+    }
 
     const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
     const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
-    const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+    const cNx = cSinT * cCosP, cNy = cCosT, cNz = cSinT * cSinP;
 
     const tSinT = Math.sin(rawTheta), tCosT = Math.cos(rawTheta);
     const tSinP = Math.sin(rawPhi), tCosP = Math.cos(rawPhi);
-    const tPos = [planetRadius * tSinT * tCosP, planetRadius * tCosT, planetRadius * tSinT * tSinP];
+    const tNx = tSinT * tCosP, tNy = tCosT, tNz = tSinT * tSinP;
 
     for (let hIdx = 0; hIdx < houses.length; hIdx++) {
       const house = houses[hIdx];
       if (!house || !house.R || !house.F) continue;
 
-      const dxC = cPos[0] - house.x, dyC = cPos[1] - house.y, dzC = cPos[2] - house.z;
+      const houseRad = Math.hypot(house.x, house.y, house.z) || planetRadius;
+      const cPosH = [houseRad * cNx, houseRad * cNy, houseRad * cNz];
+      const dxC = cPosH[0] - house.x, dyC = cPosH[1] - house.y, dzC = cPosH[2] - house.z;
       if (dxC * dxC + dyC * dyC + dzC * dzC > 9.0) continue; // Only check nearby houses (< 3m)
 
       const halfW = (house.totalW || 0.60) * 0.5;
@@ -1679,33 +1779,155 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       const cLocR = dxC * hR[0] + dyC * hR[1] + dzC * hR[2];
       const cLocF = dxC * hF[0] + dyC * hF[1] + dzC * hF[2];
 
-      const dxT = tPos[0] - house.x, dyT = tPos[1] - house.y, dzT = tPos[2] - house.z;
+      const tPosH = [houseRad * tNx, houseRad * tNy, houseRad * tNz];
+      const dxT = tPosH[0] - house.x, dyT = tPosH[1] - house.y, dzT = tPosH[2] - house.z;
       const tLocR = dxT * hR[0] + dyT * hR[1] + dzT * hR[2];
       const tLocF = dxT * hF[0] + dyT * hF[1] + dzT * hF[2];
 
-      const margin = 0.04;
-      const cloneInside = Math.abs(cLocR) <= halfW + margin && Math.abs(cLocF) <= halfD + margin;
-      const targetInside = Math.abs(tLocR) <= halfW + margin && Math.abs(tLocF) <= halfD + margin;
+      // Strictly inside the house walls for the clone; slightly generous for target inside house
+      const cloneInside = Math.abs(cLocR) < (halfW - 0.015) && Math.abs(cLocF) < (halfD - 0.015);
+      const targetInside = Math.abs(tLocR) <= (halfW + 0.04) && Math.abs(tLocF) <= (halfD + 0.04);
 
-      if (cloneInside && !targetInside) {
-        // Clone is inside house and wants to go outside -> route through doorway!
-        const doorPts = computeHouseDoorPoints(house);
-        if (doorPts) {
-          const distToOutDoor = Math.hypot(cLocR - doorPts.outside.offR, cLocF - doorPts.outside.offF);
-          const distToInDoor = Math.hypot(cLocR - doorPts.inside.offR, cLocF - doorPts.inside.offF);
-          if (distToInDoor > 0.16 && distToOutDoor > distToInDoor) {
-            return { navTheta: doorPts.inside.theta, navPhi: doorPts.inside.phi };
+      const doorItem = findHouseDoorCollectible(house, hIdx);
+      if (doorItem && doorItem.position && doorItem.F && doorItem.R) {
+        const dPos = doorItem.position;
+        const dRad = Math.hypot(dPos[0], dPos[1], dPos[2]) || houseRad;
+        const dAngle = doorItem.angle || 0.0;
+        const cosDA = Math.cos(dAngle);
+        const sinDA = Math.sin(dAngle);
+        const dR = [
+          doorItem.R[0] * cosDA + doorItem.F[0] * sinDA,
+          doorItem.R[1] * cosDA + doorItem.F[1] * sinDA,
+          doorItem.R[2] * cosDA + doorItem.F[2] * sinDA
+        ];
+        const dF = [
+          doorItem.F[0] * cosDA - doorItem.R[0] * sinDA,
+          doorItem.F[1] * cosDA - doorItem.R[1] * sinDA,
+          doorItem.F[2] * cosDA - doorItem.R[2] * sinDA
+        ];
+
+        // Determine which direction of dF points inside the house
+        const toHouseCenter = [house.x - dPos[0], house.y - dPos[1], house.z - dPos[2]];
+        const dotIn = toHouseCenter[0] * dF[0] + toHouseCenter[1] * dF[1] + toHouseCenter[2] * dF[2];
+        const inwardF = (dotIn >= 0) ? [dF[0], dF[1], dF[2]] : [-dF[0], -dF[1], -dF[2]];
+        const outwardF = [-inwardF[0], -inwardF[1], -inwardF[2]];
+
+        // Approach & exit points well clear of the door leaf and foundation step
+        const outPt3D = [dPos[0] + outwardF[0] * 0.28, dPos[1] + outwardF[1] * 0.28, dPos[2] + outwardF[2] * 0.28];
+        const inPt3D = [dPos[0] + inwardF[0] * 0.20, dPos[1] + inwardF[1] * 0.20, dPos[2] + inwardF[2] * 0.20];
+
+        const toSpherical = (pt) => {
+          const len = Math.hypot(pt[0], pt[1], pt[2]) || 1;
+          const th = Math.acos(Math.max(-1.0, Math.min(1.0, pt[1] / len)));
+          let ph = Math.atan2(pt[2], pt[0]);
+          if (ph < 0) ph += Math.PI * 2;
+          return { navTheta: th, navPhi: ph };
+        };
+
+        // Evaluate clone position at the door's spherical radius to eliminate radial height skew
+        const cPosD = [dRad * cNx, dRad * cNy, dRad * cNz];
+        const toClone = [cPosD[0] - dPos[0], cPosD[1] - dPos[1], cPosD[2] - dPos[2]];
+        const cloneLat = Math.abs(toClone[0] * dR[0] + toClone[1] * dR[1] + toClone[2] * dR[2]);
+        const cloneDotIn = toClone[0] * inwardF[0] + toClone[1] * inwardF[1] + toClone[2] * inwardF[2];
+        const distToOut = Math.hypot(cPosD[0] - outPt3D[0], cPosD[1] - outPt3D[1], cPosD[2] - outPt3D[2]);
+        const distToIn = Math.hypot(cPosD[0] - inPt3D[0], cPosD[1] - inPt3D[1], cPosD[2] - inPt3D[2]);
+
+        // Helper to route around the nearest exterior corner of the house
+        const routeAroundExteriorCorner = (goalLocR, goalLocF) => {
+          const clearW = halfW + 0.28;
+          const clearD = halfD + 0.28;
+          const corners = [
+            { r: clearW, f: clearD },
+            { r: clearW, f: -clearD },
+            { r: -clearW, f: clearD },
+            { r: -clearW, f: -clearD }
+          ];
+          let bestCorner = null;
+          let bestScore = Infinity;
+          for (let ci = 0; ci < corners.length; ci++) {
+            const cr = corners[ci].r;
+            const cf = corners[ci].f;
+            const dClone = Math.hypot(cLocR - cr, cLocF - cf);
+            if (dClone < 0.11) continue; // Already at this corner
+            // Corner must be reachable from current clone position without cutting through the house walls
+            if (segmentIntersectsBox2D(cLocR, cLocF, cr, cf, -halfW - 0.04, halfW + 0.04, -halfD - 0.04, halfD + 0.04)) {
+              continue;
+            }
+            const dGoal = Math.hypot(goalLocR - cr, goalLocF - cf);
+            const score = dClone + dGoal;
+            if (score < bestScore) {
+              bestScore = score;
+              bestCorner = corners[ci];
+            }
           }
-          return { navTheta: doorPts.outside.theta, navPhi: doorPts.outside.phi };
-        }
-      } else if (!cloneInside && targetInside) {
-        // Clone is outside house and wants to go inside (e.g., DEPOSIT_CHEST) -> route to outside of entrance door first!
-        const doorPts = computeHouseDoorPoints(house);
-        if (doorPts) {
-          const distToOutDoor = Math.hypot(cLocR - doorPts.outside.offR, cLocF - doorPts.outside.offF);
-          if (distToOutDoor > 0.18) {
-            return { navTheta: doorPts.outside.theta, navPhi: doorPts.outside.phi };
+          if (bestCorner) {
+            return toSpherical([
+              house.x + hR[0] * bestCorner.r + hF[0] * bestCorner.f,
+              house.y + hR[1] * bestCorner.r + hF[1] * bestCorner.f,
+              house.z + hR[2] * bestCorner.r + hF[2] * bestCorner.f
+            ]);
           }
+          return null;
+        };
+
+        if (!cloneInside && targetInside) {
+          cState.exitingHouseIdx = -1;
+          // Clone is outside and wants to go inside
+          const alignedInFrontOfDoor = (cloneLat <= 0.05 && cloneDotIn >= -0.32 && cloneDotIn <= 0.22) || (distToOut <= 0.06);
+          if (!alignedInFrontOfDoor) {
+            const outDx = outPt3D[0] - house.x, outDy = outPt3D[1] - house.y, outDz = outPt3D[2] - house.z;
+            const outLocR = outDx * hR[0] + outDy * hR[1] + outDz * hR[2];
+            const outLocF = outDx * hF[0] + outDy * hF[1] + outDz * hF[2];
+            if (cloneDotIn > 0.02 || segmentIntersectsBox2D(cLocR, cLocF, outLocR, outLocF, -halfW - 0.08, halfW + 0.08, -halfD - 0.08, halfD + 0.08)) {
+              const cornerNav = routeAroundExteriorCorner(outLocR, outLocF);
+              if (cornerNav) return cornerNav;
+            }
+            if (distToOut < 0.30 && cloneLat <= 0.08) {
+              cState.isTraversingDoor = true;
+              cState.doorFloorRadius = dRad;
+            }
+            return toSpherical(outPt3D);
+          }
+          // Aligned in front of doorway: walk straight through the doorway to inPt3D!
+          cState.isTraversingDoor = true;
+          cState.doorFloorRadius = dRad;
+          if (cloneDotIn < 0.14 && distToIn > 0.055) {
+            return toSpherical(inPt3D);
+          }
+          return { navTheta: rawTheta, navPhi: rawPhi };
+        } else if (cloneInside && !targetInside) {
+          // Clone is inside and wants to go outside: mark persistent door exit state
+          cState.exitingHouseIdx = hIdx;
+          cState.isTraversingDoor = true;
+          cState.doorFloorRadius = dRad;
+          const alignedInsideDoor = (cloneLat <= 0.048 && cloneDotIn <= 0.24) || (distToIn <= 0.055);
+          if (!alignedInsideDoor) {
+            return toSpherical(inPt3D);
+          }
+          return toSpherical(outPt3D);
+        } else if (!cloneInside && !targetInside) {
+          // 1. If clone is currently exiting the doorway, keep walking straight to outPt3D until completely outside (-0.25m clear of door)
+          const isFinishingDoorExit = (cState.exitingHouseIdx === hIdx) || (cloneLat <= 0.12 && cloneDotIn > -0.24 && cloneDotIn < 0.22);
+          if (isFinishingDoorExit) {
+            if (distToOut > 0.06 && cloneDotIn > -0.25) {
+              cState.isTraversingDoor = true;
+              cState.doorFloorRadius = dRad;
+              if (cloneDotIn > 0.04 && cloneLat > 0.055) {
+                return toSpherical(inPt3D);
+              }
+              return toSpherical(outPt3D);
+            } else {
+              cState.exitingHouseIdx = -1;
+            }
+          }
+
+          // 2. Once outside the house, if the straight line to the target cuts through the house walls, route around the nearest exterior corner!
+          if (segmentIntersectsBox2D(cLocR, cLocF, tLocR, tLocF, -halfW - 0.12, halfW + 0.12, -halfD - 0.12, halfD + 0.12)) {
+            const cornerNav = routeAroundExteriorCorner(tLocR, tLocF);
+            if (cornerNav) return cornerNav;
+          }
+        } else {
+          cState.exitingHouseIdx = -1;
         }
       }
     }
@@ -1757,19 +1979,32 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     P_new[1] /= pNewLen;
     P_new[2] /= pNewLen;
 
-    // 1. Structure Collisions (Wood Walls, Windows, Doors, Roofs) using cached structure list
+    // If actively traversing a house doorway on a slope, ensure centerRadius can step smoothly onto the doorway floor threshold
+    let activeCenterRad = centerRad;
+    if (cState.isTraversingDoor && typeof cState.doorFloorRadius === "number") {
+      const doorCenterRad = cState.doorFloorRadius + 0.46 * charScale;
+      if (activeCenterRad < doorCenterRad) {
+        activeCenterRad = doorCenterRad;
+        cState.centerRadius = doorCenterRad;
+        cState.isGrounded = true;
+        cState.verticalVel = 0;
+      }
+    }
+
+    // 1. Structure Collisions FIRST (Wood Walls, Windows, Doors, Roofs) - identical order to player in renderer.js
     const resolveStructFn = (typeof CollisionCore !== "undefined" && typeof CollisionCore.resolveStructureCollisions === "function")
       ? CollisionCore.resolveStructureCollisions
       : null;
 
     if (resolveStructFn) {
+      const allCollectibles = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []);
       resolveStructFn({
         P_new,
         P_curr,
-        groundRadius: centerRad,
+        groundRadius: activeCenterRad,
         playerScale: charScale,
         activeRidingBoat: isBoatDriving ? cState.ridingBoat : null,
-        collectibles: (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []),
+        collectibles: allCollectibles,
         F_3d,
         East,
         North,
@@ -1809,23 +2044,56 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       P_new[2] /= nLen;
     }
 
-    // 3. Fast single-sample natural terrain 45-degree slope check
-    const feetRad = centerRad - 0.46 * charScale;
+    // 3. Exact Shared Terrain & Cave Collision with Auto Step-Up (Identical to Player renderer.js:5791)
+    if (typeof CollisionCore !== "undefined" && typeof CollisionCore.checkCaveAndTerrainCollision === "function") {
+      const collisionResult = CollisionCore.checkCaveAndTerrainCollision(
+        P_new,
+        P_curr,
+        activeCenterRad,
+        charScale,
+        cState.currentSwimFactor || 0,
+        wRadiusLocal,
+        0,
+        0,
+        cHeight,
+        { ridingBoat: isBoatDriving ? cState.ridingBoat : null }
+      );
+      if (collisionResult && collisionResult.P_new) {
+        P_new = collisionResult.P_new;
+        if (typeof collisionResult.playerCenterRadius === "number" && !Number.isNaN(collisionResult.playerCenterRadius)) {
+          cState.centerRadius = collisionResult.playerCenterRadius;
+          cState.isGrounded = true;
+          cState.verticalVel = 0;
+        }
+      }
+    }
+
     const seedVal = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
     const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
-    const currNatRad = planetRadius + (cHeight || 0) * hScale;
-    const isOnElevatedFloor = feetRad > currNatRad + 0.015;
-    if (!isOnElevatedFloor && (cState.currentSwimFactor || 0) <= 0.05 && typeof getVisualHeightOnSphere === "function") {
-      const candTheta = Math.acos(Math.max(-1.0, Math.min(1.0, P_new[1])));
-      const candPhi = Math.atan2(P_new[2], P_new[0]);
-      const nextH = getVisualHeightOnSphere(candTheta, candPhi, seedVal);
-      const nextNatRad = planetRadius + nextH * hScale;
-      const elevDiff = nextNatRad - currNatRad;
-      if (elevDiff > 0.01 && moveLen > 0.0001 && (elevDiff / moveLen) > 1.0) {
-        // Blocked by > 45 deg natural cliff
-        P_new[0] = P_curr[0];
-        P_new[1] = P_curr[1];
-        P_new[2] = P_curr[2];
+    const candTheta = Math.acos(Math.max(-1.0, Math.min(1.0, P_new[1])));
+    const candPhi = Math.atan2(P_new[2], P_new[0]);
+    const nextH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(candTheta, candPhi, seedVal) : 0;
+    const nextNatRad = planetRadius + nextH * hScale;
+
+    if (!isBoatDriving && typeof cState.centerRadius === "number") {
+      const curFeet = cState.centerRadius - 0.46 * charScale;
+      const clampedFloor = clampCloneExteriorHouseFloor(P_new[0], P_new[1], P_new[2], nextNatRad, curFeet, planetRadius, !!cState.isTraversingDoor);
+      if (clampedFloor < curFeet - 0.001) {
+        cState.centerRadius = clampedFloor + 0.46 * charScale;
+      }
+    }
+
+    // 4. Roof / ceiling headroom clamp (Identical to Player renderer.js:5814-5826)
+    if (!isBoatDriving && typeof getFloorCeilingRadiusAt === "function") {
+      const charHeadOffset = 0.88 * charScale;
+      const prevFeet = activeCenterRad - 0.46 * charScale;
+      const curFeet = (cState.centerRadius || activeCenterRad) - 0.46 * charScale;
+      const ceilingRad = getFloorCeilingRadiusAt(P_new[0], P_new[1], P_new[2], nextNatRad, prevFeet, curFeet, charHeadOffset);
+      if (ceilingRad < Infinity) {
+        const maxCenterRad = ceilingRad + 0.46 * charScale - charHeadOffset - 0.004;
+        if (cState.centerRadius > maxCenterRad) {
+          cState.centerRadius = Math.max(nextNatRad + 0.46 * charScale, maxCenterRad);
+        }
       }
     }
 
@@ -2050,8 +2318,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
-          if (distToTarget <= 0.7) {
-            // Successfully board and steal the boat!
+          const boatReach = checkClonePlayerReach3D(cState, targetBoat.position, 0.22, charScale, planetRadius, 0.08);
+
+          if (boatReach.valid) {
+            // Successfully board and steal the boat at player [E] reach!
             if (isBoatUsableByClone(targetBoat, planetRadius, cState)) {
               cState.ridingBoat = targetBoat;
               cState.currentActivity = "DRIVE_BOAT";
@@ -2360,7 +2630,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
-          if (distToTarget <= 0.6) {
+          const isCotton = (drop.type === "cotton_plant");
+          const dropReach = checkClonePlayerReach3D(cState, drop.position, isCotton ? 0.25 : 0.15, charScale, planetRadius, 0.06);
+
+          if (dropReach.valid) {
             drop.active = false;
             const dropType = (drop.type || "").toUpperCase();
             addCloneItem(cState, dropType, getResourceIcon(dropType), 1);
@@ -2374,32 +2647,62 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
 
       // =========================================================================
-      // STATE 7: STORING FARMED LOOT INTO HOUSE CHEST
+      // STATE 7: STORING FARMED LOOT INTO HOUSE CHEST (CLOSE-RANGE PLAYER [E] SYSTEM)
       // =========================================================================
       if (cState.currentActivity === "DEPOSIT_CHEST") {
         const house = houses[cState.houseIndex];
         const chest = (house && house.chest && house.chest.active && !house.chestDemolished && !house.chest.isDemolished) ? house.chest : null;
         if (!chest || !chest.position) {
+          cState.isUsingChest = false;
+          cState.chestHoldTimer = 0.0;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
-          setCloneTargetPos(cState, chest.position[0], chest.position[1], chest.position[2], planetRadius);
+          const approachPos = getChestFrontApproachPos(chest, house) || chest.position;
+          setCloneTargetPos(cState, approachPos[0], approachPos[1], approachPos[2], planetRadius);
           cState.equippedTool = null;
           setCloneExpression(cState, "(^人^)");
 
-          const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
-          const sinT = Math.max(0.05, Math.sin(cState.theta));
-          let dPhi = cState.targetPhi - cState.phi;
-          while (dPhi > Math.PI) dPhi -= Math.PI * 2;
-          while (dPhi < -Math.PI) dPhi += Math.PI * 2;
-          const dEast = dPhi * (planetRadius * sinT);
-          const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
+          // Must be strictly inside the house walls AND within the player's 3D [E] chest reach (~0.22m) on the same floor level
+          const insideHouse = isCloneStrictlyInsideHouse(cState, house, planetRadius);
+          const chestReach = checkClonePlayerReach3D(cState, chest.position, 0.15, charScale, planetRadius, 0.08);
 
-          if (distToTarget <= 0.65) {
-            depositItemsIntoHouseChest(cState, houses);
-            cState.workCycles = 0;
-            cState.currentActivity = "IDLE";
-            cState.timer = 2.5;
-            cState.isIdle = true;
+          if (insideHouse && chestReach.valid) {
+            // Stand right in front of the chest and hold [E] for 0.8s (identical to player chestHoldTimer)
+            cState.isUsingChest = true;
+            cState.walkBlend = Math.max(0.0, cState.walkBlend - dtClamped * 6.0);
+            cState.actionAnim = 0.5;
+            cState.timer = Math.max(cState.timer, 1.5);
+            cState.thinkTimer = Math.max(cState.thinkTimer || 0, 1.5);
+
+            // Face directly toward the chest while opening it
+            const chestSphere = { targetTheta: cState.targetTheta, targetPhi: cState.targetPhi };
+            const chDist = Math.hypot(chest.position[0], chest.position[1], chest.position[2]) || 1;
+            chestSphere.targetTheta = Math.acos(Math.max(-1.0, Math.min(1.0, chest.position[1] / chDist)));
+            chestSphere.targetPhi = Math.atan2(chest.position[2], chest.position[0]);
+            if (chestSphere.targetPhi < 0) chestSphere.targetPhi += Math.PI * 2;
+            const cDNorth = -(chestSphere.targetTheta - cState.theta) * planetRadius;
+            const cSinT = Math.max(0.05, Math.sin(cState.theta));
+            let cDPhi = chestSphere.targetPhi - cState.phi;
+            while (cDPhi > Math.PI) cDPhi -= Math.PI * 2;
+            while (cDPhi < -Math.PI) cDPhi += Math.PI * 2;
+            const cDEast = cDPhi * (planetRadius * cSinT);
+            if (cDNorth * cDNorth + cDEast * cDEast > 0.0001) {
+              cState.heading = Math.atan2(cDEast, cDNorth);
+            }
+
+            cState.chestHoldTimer = (cState.chestHoldTimer || 0.0) + dtClamped;
+            if (cState.chestHoldTimer >= 0.8) {
+              depositItemsIntoHouseChest(cState, houses);
+              cState.chestHoldTimer = 0.0;
+              cState.isUsingChest = false;
+              cState.workCycles = 0;
+              cState.currentActivity = "IDLE";
+              cState.timer = 2.5;
+              cState.isIdle = true;
+            }
+          } else {
+            cState.isUsingChest = false;
+            cState.chestHoldTimer = 0.0;
           }
         }
       }
@@ -2417,7 +2720,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         if (cState.timer <= 0 || cState.thinkTimer <= 0) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         }
-      } else {
+      } else if (!cState.isUsingChest) {
         // Walking towards current waypoint / target (with house doorway routing & shared wall collision)
         cState.walkBlend = Math.min(1.0, cState.walkBlend + dtClamped * 4.0);
         cState.animPhase += dtClamped * 5.0;
@@ -2444,20 +2747,6 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           }
           cState.heading = desiredHeading;
 
-          // เมื่อเดินติดขอบ (เช่น ขอบพื้นไม้ หรือเนินต่างระดับข้างหน้า) และจำเป็นต้องเดินไป -> กระโดดข้ามขอบ (ยกเว้นกำลังว่ายน้ำ)
-          if (cState.isGrounded && (cState.currentSwimFactor || 0) <= 0.1) {
-            const probeDist = 0.20;
-            const probeT = Math.max(0.08, Math.min(Math.PI - 0.08, cState.theta - (Math.cos(cState.heading) * probeDist) / planetRadius));
-            const sinTprobe = Math.max(0.05, Math.sin(cState.theta));
-            const probeP = cState.phi + (Math.sin(cState.heading) * probeDist) / (planetRadius * sinTprobe);
-            const curH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(cState.theta, cState.phi, seed) : 0;
-            const aheadH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(probeT, probeP, seed) : 0;
-            const diffH = (aheadH - curH) * heightScale;
-            if (diffH > 0.035 && diffH < 0.35) {
-              cState.jumpVy = 2.0 * charScale;
-            }
-          }
-
           const speedMultiplier = (cState.currentSwimFactor > 0.4) ? 0.65 : 1.0;
           const step = Math.min(cState.moveSpeed * speedMultiplier * dtClamped, distToTarget);
           const moveNorth = Math.cos(cState.heading) * step;
@@ -2466,15 +2755,20 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const cHeightEst = (terrainRad - planetRadius) / (heightScale || 1.0);
           const stepRes = stepCloneWithSharedCollision(cState, moveNorth, moveEast, planetRadius, charScale, false, wRadiusLocal, cHeightEst);
 
-          // If blocked by a wall or obstacle, steer tangentially along the wall to find the way around
+          // Track blocked time so even if stuck on a door jamb or wall corner, tangential steering kicks in
           if (stepRes.blockedRatio > 0.55) {
-            const steerSign = (i % 2 === 0) ? 1 : -1;
-            if (!cState.wallSteerTimer || cState.wallSteerTimer <= 0.05) {
-              cState.wallSteerAngle = steerSign * (Math.PI * 0.42);
-              cState.wallSteerTimer = 0.55;
-            } else {
-              cState.wallSteerAngle = steerSign * (Math.PI * 0.58);
+            cState.stuckTimer = (cState.stuckTimer || 0) + dtClamped;
+            if (!cState.isTraversingDoor || cState.stuckTimer > 0.20) {
+              const steerSign = (i % 2 === 0) ? 1 : -1;
+              if (!cState.wallSteerTimer || cState.wallSteerTimer <= 0.05) {
+                cState.wallSteerAngle = steerSign * (Math.PI * 0.38);
+                cState.wallSteerTimer = 0.45;
+              } else {
+                cState.wallSteerAngle = steerSign * (Math.PI * 0.52);
+              }
             }
+          } else {
+            cState.stuckTimer = 0;
           }
         }
 
@@ -2485,12 +2779,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         const rawDEast = rawDPhi * (planetRadius * sinT);
         const rawDistToTarget = Math.sqrt(rawDNorth * rawDNorth + rawDEast * rawDEast);
 
-        if (rawDistToTarget <= 0.04 || cState.timer <= 0) {
-          if (cState.currentActivity === "WANDER") {
-            cState.isIdle = true;
-            cState.timer = 1.0 + Math.random() * 2.0;
-            cState.thinkTimer = cState.timer * 0.8;
-          }
+        if ((rawDistToTarget <= 0.04 && cState.currentActivity !== "DEPOSIT_CHEST") || cState.timer <= 0) {
+          cState.isIdle = true;
+          cState.timer = 1.0 + Math.random() * 1.5;
+          cState.thinkTimer = cState.timer * 0.8;
         }
       }
     }
@@ -2588,11 +2880,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         : 0;
       const walkBob = Math.sin(cState.animPhase) * 0.010 * cState.walkBlend * charScale;
       const idleBob = Math.sin((cState.timer || 0) * 2.5) * 0.003 * (1.0 - cState.walkBlend) * charScale;
-      const jumpOffset = (cState.jumpY || 0);
       const finalPos = [
-        cPos[0] + (walkBob + idleBob + actionBob + jumpOffset) * cN[0],
-        cPos[1] + (walkBob + idleBob + actionBob + jumpOffset) * cN[1],
-        cPos[2] + (walkBob + idleBob + actionBob + jumpOffset) * cN[2]
+        cPos[0] + (walkBob + idleBob + actionBob) * cN[0],
+        cPos[1] + (walkBob + idleBob + actionBob) * cN[1],
+        cPos[2] + (walkBob + idleBob + actionBob) * cN[2]
       ];
 
       if (eyePos) {
@@ -2707,11 +2998,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         : 0;
       const walkBob = Math.sin(cState.animPhase) * 0.010 * cState.walkBlend * charScale;
       const idleBob = Math.sin((cState.timer || 0) * 2.5) * 0.003 * (1.0 - cState.walkBlend) * charScale;
-      const jumpOffset = (cState.jumpY || 0);
       const finalPos = [
-        cPos[0] + (walkBob + idleBob + actionBob + jumpOffset) * cN[0],
-        cPos[1] + (walkBob + idleBob + actionBob + jumpOffset) * cN[1],
-        cPos[2] + (walkBob + idleBob + actionBob + jumpOffset) * cN[2]
+        cPos[0] + (walkBob + idleBob + actionBob) * cN[0],
+        cPos[1] + (walkBob + idleBob + actionBob) * cN[1],
+        cPos[2] + (walkBob + idleBob + actionBob) * cN[2]
       ];
 
       f32_cloneModel[0] = cR[0] * charScale; f32_cloneModel[1] = cR[1] * charScale; f32_cloneModel[2] = cR[2] * charScale; f32_cloneModel[3] = 0;

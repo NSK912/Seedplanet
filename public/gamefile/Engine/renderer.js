@@ -4696,9 +4696,34 @@ window.cloud3DProgram = cloud3DProgram;
         const pY = Math.cos(charTheta) * pRadius;
         const pZ = Math.sin(charTheta) * Math.sin(charPhi) * pRadius;
 
+        // Collect all character positions (Player + PlayerClones) for shared auto-door opening
+        const allChars = [{ x: pX, y: pY, z: pZ }];
+        if (typeof window.playerClonesState !== "undefined" && Array.isArray(window.playerClonesState)) {
+          const cPlanetRadius = typeof RADIUS !== "undefined" ? RADIUS : 8.0;
+          const cScale = typeof playerScale !== "undefined" ? playerScale : 0.1;
+          for (let ci = 0; ci < window.playerClonesState.length; ci++) {
+            const cs = window.playerClonesState[ci];
+            if (cs && typeof cs.theta === "number" && typeof cs.phi === "number") {
+              const cRad = (typeof cs.centerRadius === "number" && !Number.isNaN(cs.centerRadius)) ? cs.centerRadius : (cPlanetRadius + 0.46 * cScale);
+              const cSinT = Math.sin(cs.theta), cCosT = Math.cos(cs.theta);
+              const cSinP = Math.sin(cs.phi), cCosP = Math.cos(cs.phi);
+              allChars.push({
+                x: cRad * cSinT * cCosP,
+                y: cRad * cCosT,
+                z: cRad * cSinT * cSinP
+              });
+            }
+          }
+        }
+
         let doorsToCheck = [];
         if (typeof SpatialGrid !== "undefined") {
-          doorsToCheck = SpatialGrid.queryRadius(pX, pY, pZ, 2.5, item => item.type === "wood_door" && !item.isPreview);
+          for (let ch of allChars) {
+            const found = SpatialGrid.queryRadius(ch.x, ch.y, ch.z, 2.5, item => item.type === "wood_door" && !item.isPreview);
+            for (let d of found) {
+              if (!doorsToCheck.includes(d)) doorsToCheck.push(d);
+            }
+          }
           if (!window._activeSwingingDoors) window._activeSwingingDoors = new Set();
           for (const d of window._activeSwingingDoors) {
             if (!doorsToCheck.includes(d)) doorsToCheck.push(d);
@@ -4731,55 +4756,67 @@ window.cloud3DProgram = cloud3DProgram;
             if (other.doorTargetAngle === undefined) other.doorTargetAngle = 0.0;
             if (other.doorOpenTimer === undefined) other.doorOpenTimer = 0.0;
 
-            // Distance check to player
-            const dx = pX - other.position[0];
-            const dy = pY - other.position[1];
-            const dz = pZ - other.position[2];
-            const distSq = dx*dx + dy*dy + dz*dz;
-            const playerIsNear = (distSq <= 0.36); // ~0.6m
+            if (other._wallR === undefined) {
+              const angle = other.angle || 0.0;
+              const cosA = Math.cos(angle);
+              const sinA = Math.sin(angle);
+              other._wallR = [
+                other.R[0] * cosA + other.F[0] * sinA,
+                other.R[1] * cosA + other.F[1] * sinA,
+                other.R[2] * cosA + other.F[2] * sinA
+              ];
+              other._wallF = [
+                other.F[0] * cosA - other.R[0] * sinA,
+                other.F[1] * cosA - other.R[1] * sinA,
+                other.F[2] * cosA - other.R[2] * sinA
+              ];
+            }
 
-            // Auto-open when walking near/through doorway (unlocked doors)
-            if (!other.isLocked && playerIsNear) {
-              if (other._wallR === undefined) {
-                const angle = other.angle || 0.0;
-                const cosA = Math.cos(angle);
-                const sinA = Math.sin(angle);
-                other._wallR = [
-                  other.R[0] * cosA + other.F[0] * sinA,
-                  other.R[1] * cosA + other.F[1] * sinA,
-                  other.R[2] * cosA + other.F[2] * sinA
-                ];
-                other._wallF = [
-                  other.F[0] * cosA - other.R[0] * sinA,
-                  other.F[1] * cosA - other.R[1] * sinA,
-                  other.F[2] * cosA - other.R[2] * sinA
-                ];
-              }
-              const local_dx = dx * other._wallR[0] + dy * other._wallR[1] + dz * other._wallR[2];
-              const local_dz = dx * other._wallF[0] + dy * other._wallF[1] + dz * other._wallF[2];
+            // Distance check to all characters (Player and PlayerClones)
+            let anyCharNear = false;
+            let closestCharDz = 0;
+            let minCharDistSq = Infinity;
 
-              // If player is in front of or inside doorway
-              if (Math.abs(local_dx) < 0.09 && Math.abs(local_dz) < 0.22) {
-                other.doorOpenTimer = 1.0; // Keep open while player is near doorway
-                if (Math.abs(other.doorTargetAngle) < 0.2) {
-                  const openDir = (local_dz >= 0) ? -1.57 : 1.57;
-                  other.doorTargetAngle = openDir;
-                  if (Math.abs(other.doorAngle) < 0.35) {
-                    other.doorAngle = openDir * 0.4;
-                  }
-                  if (typeof playPlaceSound === "function") playPlaceSound(other.position);
+            for (let ch of allChars) {
+              const dx = ch.x - other.position[0];
+              const dy = ch.y - other.position[1];
+              const dz = ch.z - other.position[2];
+              const distSq = dx*dx + dy*dy + dz*dz;
+              if (distSq < minCharDistSq) minCharDistSq = distSq;
+
+              if (distSq <= 0.36) { // ~0.6m
+                const local_dx = dx * other._wallR[0] + dy * other._wallR[1] + dz * other._wallR[2];
+                const local_dz = dx * other._wallF[0] + dy * other._wallF[1] + dz * other._wallF[2];
+
+                // If character is in front of or inside doorway
+                if (Math.abs(local_dx) < 0.09 && Math.abs(local_dz) < 0.22) {
+                  anyCharNear = true;
+                  closestCharDz = local_dz;
                 }
               }
             }
 
-            // Auto-close: when door is open, countdown timer and close automatically once player has cleared doorway
+            // Auto-open when walking near/through doorway (unlocked doors)
+            if (!other.isLocked && anyCharNear) {
+              other.doorOpenTimer = 1.0; // Keep open while character is near doorway
+              if (Math.abs(other.doorTargetAngle) < 0.2) {
+                const openDir = (closestCharDz >= 0) ? -1.57 : 1.57;
+                other.doorTargetAngle = openDir;
+                if (Math.abs(other.doorAngle) < 0.35) {
+                  other.doorAngle = openDir * 0.4;
+                }
+                if (typeof playPlaceSound === "function") playPlaceSound(other.position);
+              }
+            }
+
+            // Auto-close: when door is open, countdown timer and close automatically once character has cleared doorway
             if (Math.abs(other.doorTargetAngle) > 0.1 || Math.abs(other.doorAngle) > 0.1) {
               if (other.doorOpenTimer > 0) {
                 other.doorOpenTimer -= dt;
               }
 
-              // Check if player has stepped away from doorway
-              const isClearingDoor = (distSq > 0.18);
+              // Check if all characters have stepped away from doorway
+              const isClearingDoor = (minCharDistSq > 0.18);
               if (other.doorOpenTimer <= 0 || (isClearingDoor && other.doorOpenTimer <= 0.6)) {
                 other.doorTargetAngle = 0.0;
                 other.doorOpenTimer = 0.0;

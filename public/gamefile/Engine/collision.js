@@ -2194,6 +2194,179 @@ const CollisionCore = {
           }
         }
       }
+
+      // 6. Wooden Bed (wood_bed) & Wooden Chest (wood_chest) Mesh Collision
+      const staticPropsList = (typeof window !== "undefined" && window.staticCollectiblesList && window.staticCollectiblesList.length > 0)
+        ? window.staticCollectiblesList
+        : collectiblesList;
+      const colRawVerts = (typeof window !== "undefined" && window.collectibleRawVertices)
+        ? window.collectibleRawVertices
+        : null;
+      const hasFastTri = (typeof closestPointOnTriangleFast === "function");
+
+      if (staticPropsList) {
+        for (let i = 0; i < staticPropsList.length; i++) {
+          const other = staticPropsList[i];
+          if (!other || !other.active || other.isPreview || other.isDemolished || !other.position) continue;
+          const isBed = (other.type === "wood_bed");
+          const isChest = (other.type === "wood_chest");
+          if (!isBed && !isChest) continue;
+
+          const estX = P_new[0] * groundRadius - other.position[0];
+          const estY = P_new[1] * groundRadius - other.position[1];
+          const estZ = P_new[2] * groundRadius - other.position[2];
+          if (estX * estX + estY * estY + estZ * estZ > 0.65) continue;
+
+          const itemCenterRadius = Math.sqrt(
+            other.position[0] * other.position[0] +
+            other.position[1] * other.position[1] +
+            other.position[2] * other.position[2]
+          );
+          if (itemCenterRadius <= 0.001) continue;
+
+          const itemN = other.normal || [
+            other.position[0] / itemCenterRadius,
+            other.position[1] / itemCenterRadius,
+            other.position[2] / itemCenterRadius
+          ];
+
+          const itemHeight = isBed ? 0.125 : 0.090;
+          const itemBoundRadius = isBed ? 0.22 : 0.15;
+          const feetRadius = groundRadius - 0.46 * playerScale;
+          const headRadius = groundRadius + 0.46 * playerScale;
+
+          if (headRadius <= itemCenterRadius + 0.004 || feetRadius >= itemCenterRadius + itemHeight) {
+            continue;
+          }
+
+          const charColRad = isRidingBoat ? 0.22 : (playerScale * 0.36);
+          const C = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
+          const dx0 = C[0] - other.position[0];
+          const dy0 = C[1] - other.position[1];
+          const dz0 = C[2] - other.position[2];
+          const dotN0 = dx0 * itemN[0] + dy0 * itemN[1] + dz0 * itemN[2];
+          const hx0 = dx0 - dotN0 * itemN[0];
+          const hy0 = dy0 - dotN0 * itemN[1];
+          const hz0 = dz0 - dotN0 * itemN[2];
+          const maxBound = itemBoundRadius + charColRad;
+          if (hx0 * hx0 + hy0 * hy0 + hz0 * hz0 > maxBound * maxBound) {
+            continue;
+          }
+
+          if (other.meshStart !== undefined && other.meshEnd !== undefined && colRawVerts) {
+            const count = other.meshEnd - other.meshStart;
+            let pushedByMesh = false;
+
+            for (let pass = 0; pass < 2; pass++) {
+              const cDotN = C[0] * itemN[0] + C[1] * itemN[1] + C[2] * itemN[2];
+              for (let j = 0; j < count; j += 3) {
+                const vIdx = other.meshStart + j;
+                const v0 = vIdx * 3;
+                const v1 = (vIdx + 1) * 3;
+                const v2 = (vIdx + 2) * 3;
+                if (v2 + 2 >= colRawVerts.length) break;
+
+                const v0Dot = colRawVerts[v0] * itemN[0] + colRawVerts[v0 + 1] * itemN[1] + colRawVerts[v0 + 2] * itemN[2];
+                const v1Dot = colRawVerts[v1] * itemN[0] + colRawVerts[v1 + 1] * itemN[1] + colRawVerts[v1 + 2] * itemN[2];
+                const v2Dot = colRawVerts[v2] * itemN[0] + colRawVerts[v2 + 1] * itemN[1] + colRawVerts[v2 + 2] * itemN[2];
+                const d0 = cDotN - v0Dot;
+                const d1 = cDotN - v1Dot;
+                const d2 = cDotN - v2Dot;
+
+                const ax = colRawVerts[v0] + d0 * itemN[0];
+                const ay = colRawVerts[v0 + 1] + d0 * itemN[1];
+                const az = colRawVerts[v0 + 2] + d0 * itemN[2];
+                const bx = colRawVerts[v1] + d1 * itemN[0];
+                const by = colRawVerts[v1 + 1] + d1 * itemN[1];
+                const bz = colRawVerts[v1 + 2] + d1 * itemN[2];
+                const cx = colRawVerts[v2] + d2 * itemN[0];
+                const cy = colRawVerts[v2 + 1] + d2 * itemN[1];
+                const cz = colRawVerts[v2 + 2] + d2 * itemN[2];
+
+                const closest = hasFastTri
+                  ? closestPointOnTriangleFast(C[0], C[1], C[2], ax, ay, az, bx, by, bz, cx, cy, cz)
+                  : CollisionCore.closestPointOnTriangle(C, [ax, ay, az], [bx, by, bz], [cx, cy, cz]);
+
+                let px = C[0] - closest[0];
+                let py = C[1] - closest[1];
+                let pz = C[2] - closest[2];
+                const pDotN = px * itemN[0] + py * itemN[1] + pz * itemN[2];
+                px -= pDotN * itemN[0];
+                py -= pDotN * itemN[1];
+                pz -= pDotN * itemN[2];
+
+                const pLenSq = px * px + py * py + pz * pz;
+                if (pLenSq < charColRad * charColRad) {
+                  if (pLenSq > 1e-7) {
+                    const pLen = Math.sqrt(pLenSq);
+                    const pushDist = charColRad - pLen;
+                    C[0] += (px / pLen) * pushDist;
+                    C[1] += (py / pLen) * pushDist;
+                    C[2] += (pz / pLen) * pushDist;
+                    pushedByMesh = true;
+                  } else {
+                    const refX = (P_curr ? P_curr[0] * groundRadius : C[0]) - other.position[0];
+                    const refY = (P_curr ? P_curr[1] * groundRadius : C[1]) - other.position[1];
+                    const refZ = (P_curr ? P_curr[2] * groundRadius : C[2]) - other.position[2];
+                    const rDotN = refX * itemN[0] + refY * itemN[1] + refZ * itemN[2];
+                    let escX = refX - rDotN * itemN[0];
+                    let escY = refY - rDotN * itemN[1];
+                    let escZ = refZ - rDotN * itemN[2];
+                    const escLen = Math.sqrt(escX * escX + escY * escY + escZ * escZ);
+                    if (escLen > 1e-5) {
+                      C[0] += (escX / escLen) * (charColRad * 0.5);
+                      C[1] += (escY / escLen) * (charColRad * 0.5);
+                      C[2] += (escZ / escLen) * (charColRad * 0.5);
+                      pushedByMesh = true;
+                    }
+                  }
+                }
+              }
+            }
+
+            if (pushedByMesh) {
+              const newLen = Math.sqrt(C[0] * C[0] + C[1] * C[1] + C[2] * C[2]);
+              if (newLen > 0.001) {
+                P_new[0] = C[0] / newLen;
+                P_new[1] = C[1] / newLen;
+                P_new[2] = C[2] / newLen;
+              }
+              if (isRidingBoat) {
+                vehicleCollidedWithStructure = true;
+              }
+            }
+          } else {
+            let itemR = other.right || [1, 0, 0];
+            let itemF = other.forward || [0, 0, 1];
+            const hw = isBed ? (0.16 * 0.46) : (0.132 * 0.45);
+            const hd = isBed ? (0.26 * 0.46) : (0.105 * 0.45);
+            const dx = hx0 * itemR[0] + hy0 * itemR[1] + hz0 * itemR[2];
+            const dz = hx0 * itemF[0] + hy0 * itemF[1] + hz0 * itemF[2];
+            const limitX = hw + charColRad;
+            const limitZ = hd + charColRad;
+            if (Math.abs(dx) < limitX && Math.abs(dz) < limitZ) {
+              const penX = limitX - Math.abs(dx);
+              const penZ = limitZ - Math.abs(dz);
+              let pushVec;
+              if (penX < penZ) {
+                const signX = Math.sign(dx) || 1;
+                pushVec = [itemR[0] * penX * signX, itemR[1] * penX * signX, itemR[2] * penX * signX];
+              } else {
+                const signZ = Math.sign(dz) || 1;
+                pushVec = [itemF[0] * penZ * signZ, itemF[1] * penZ * signZ, itemF[2] * penZ * signZ];
+              }
+              P_new[0] += pushVec[0] / groundRadius;
+              P_new[1] += pushVec[1] / groundRadius;
+              P_new[2] += pushVec[2] / groundRadius;
+              const pLenTemp = Math.sqrt(P_new[0] * P_new[0] + P_new[1] * P_new[1] + P_new[2] * P_new[2]) || 1;
+              P_new[0] /= pLenTemp; P_new[1] /= pLenTemp; P_new[2] /= pLenTemp;
+              if (isRidingBoat) {
+                vehicleCollidedWithStructure = true;
+              }
+            }
+          }
+        }
+      }
     }
 
     if (vehicleCollidedWithStructure && isRidingBoat && activeRidingBoat) {
