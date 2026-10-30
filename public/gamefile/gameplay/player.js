@@ -59,6 +59,9 @@ window.characterVertexShaderSource = `
             uniform sampler2D uMainTex;
             uniform float uHasMainTex;
             uniform float uCloneSeed;
+            uniform vec4 uPointLights[16];
+            uniform vec4 uPointLightColors[16];
+            uniform int uPointLightCount;
 
             float hash12(vec2 p) {
                 vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -249,7 +252,35 @@ window.characterVertexShaderSource = `
                     }
                     }
                 }
-                vec3 finalColor = baseColor * diffuse;
+                vec3 pointLightAccum = vec3(0.0);
+                vec3 pointTintAccum = vec3(0.0);
+                for (int i = 0; i < 16; i++) {
+                    if (i < uPointLightCount) {
+                        vec4 pl = uPointLights[i];
+                        vec4 plc = uPointLightColors[i];
+                        vec3 toLight = pl.xyz - vWorldPos;
+                        float d = length(toLight);
+                        float rad = pl.w;
+                        if (d < rad && rad > 0.001) {
+                            vec3 L = d > 0.0001 ? (toLight / d) : normal;
+                            float ndl = max(dot(normal, L), 0.0);
+                            if (ndl > 0.001) {
+                                float occl = calculatePointLightOcclusion(vWorldPos + normal * 0.015, pl.xyz);
+                                if (occl > 0.001) {
+                                    float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
+                                    float atten = falloff * falloff * (3.0 - 2.0 * falloff);
+                                    float facing = ndl * smoothstep(0.0, 0.12, ndl);
+                                    float wLight = atten * facing * occl * plc.w;
+                                    pointLightAccum += mix(vec3(0.80, 0.96, 0.93), plc.rgb, 0.55) * wLight;
+                                    pointTintAccum += plc.rgb * (0.04 * wLight);
+                                }
+                            }
+                        }
+                    }
+                }
+                vec3 baseLit = baseColor * diffuse;
+                vec3 addedCharLight = baseColor * pointLightAccum + pointTintAccum;
+                vec3 finalColor = clamp(baseLit + addedCharLight * (1.0 - baseLit * 0.55), 0.0, 1.0);
 
                 // Apply Water Volume Tint & Fog
                 float dist = length(vWorldPos);
@@ -7279,7 +7310,7 @@ window.characterVertexShaderSource = `
               // 2. Action Reach check for other collectibles
               for (let item of collectibles) {
                 if (!item.active) continue;
-                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);

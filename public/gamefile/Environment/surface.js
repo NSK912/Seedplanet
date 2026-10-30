@@ -228,7 +228,51 @@
       }
     } else {
       // Normal / Earth-like Planet
-      if (height < -0.80) {
+      // ละติจูดบนทรงกลม: ขั้วโลกเหนือ (North Pole) = +1.0, ขั้วโลกใต้ (South Pole) = -1.0, เส้นศูนย์สูตร (Equator) = 0.0
+      const absLat = Math.abs(rawY);
+      const polarNoise = fbm(x * 3.5, y * 3.5, z * 3.5, seed + 920, 2) * 0.07;
+      const effectiveLat = Math.max(0.0, Math.min(1.0, absLat + polarNoise));
+
+      // คำนวณความสูงขั้นต่ำของแนวหิมะ (Snowline Altitude) ตามเขตละติจูด:
+      // 1. เขตขั้วโลกเหนือและใต้ (effectiveLat >= 0.72): หิมะและแผ่นน้ำแข็งปกคลุมตั้งแต่ระดับชายฝั่ง/ที่ราบต่ำ (snowLine ~0.35)
+      // 2. เขตกึ่งขั้วโลก (0.58 <= effectiveLat < 0.72): แนวหิมะลาดลงจากยอดเขาลงมาที่เนินต่ำ (snowLine 1.55 -> 0.35)
+      // 3. เขตศูนย์สูตรและเขตอบอุ่น (effectiveLat < 0.58): แนวหิมะอยู่สูงมาก (2.35 ที่เส้นศูนย์สูตร)
+      //    ทำให้จุดอื่นๆ มีจุดหนาวหิมะน้อยลงอย่างเห็นได้ชัด (จะมีเฉพาะยอดเขาสูงเสียดฟ้าที่หายากเท่านั้น)
+      let snowLine;
+      if (effectiveLat >= 0.72) {
+        snowLine = 0.35;
+      } else if (effectiveLat >= 0.58) {
+        const t = (effectiveLat - 0.58) / (0.72 - 0.58);
+        snowLine = 1.55 * (1.0 - t) + 0.35 * t;
+      } else {
+        const t = effectiveLat / 0.58;
+        snowLine = 2.35 * (1.0 - t) + 1.55 * t;
+      }
+
+      if (height >= snowLine) {
+        // หิมะยอดเขา หรือแผ่นน้ำแข็งขั้วโลก (Polar Ice Sheet / Alpine Snow)
+        const blend = Math.min(1.0, (height - snowLine) / 0.18);
+        const snowVar = 0.92 + detailForColor * 0.16;
+        const polarTint = Math.min(1.0, Math.max(0.0, (effectiveLat - 0.60) / 0.25));
+        const snowR = (0.92 * (1.0 - polarTint) + 0.88 * polarTint) * snowVar;
+        const snowG = (0.95 * (1.0 - polarTint) + 0.95 * polarTint) * snowVar;
+        const snowB = (1.00 * (1.0 - polarTint) + 1.00 * polarTint) * snowVar;
+
+        if (blend < 1.0 && snowLine > 0.50) {
+          // ผสมสีหินผาตามแนวขอบหิมะให้ไล่ระดับอย่างนุ่มนวล
+          const rockVar = 0.85 + detailForColor * 0.3;
+          const rockR = 0.44 * rockVar;
+          const rockG = 0.42 * rockVar;
+          const rockB = 0.40 * rockVar;
+          sharedColor[0] = rockR * (1.0 - blend) + snowR * blend;
+          sharedColor[1] = rockG * (1.0 - blend) + snowG * blend;
+          sharedColor[2] = rockB * (1.0 - blend) + snowB * blend;
+        } else {
+          sharedColor[0] = snowR;
+          sharedColor[1] = snowG;
+          sharedColor[2] = snowB;
+        }
+      } else if (height < -0.80) {
         // Abyssal deep navy seabed
         const depthVar = detailForColor * 0.2 + 0.8;
         sharedColor[0] = 0.05 * depthVar;
@@ -244,22 +288,45 @@
         // Underwater sand bed leading to shore line
         const blend = (height + 0.15) / 0.40;
         const sandVar = 0.9 + detailForColor * 0.15;
-        sharedColor[0] = (0.52 * (1 - blend) + 0.88 * blend) * sandVar;
-        sharedColor[1] = (0.48 * (1 - blend) + 0.82 * blend) * sandVar;
-        sharedColor[2] = (0.40 * (1 - blend) + 0.68 * blend) * sandVar;
+        if (effectiveLat >= 0.70) {
+          // ก้นทะเลชายฝั่งขั้วโลก (Icy polar seabed)
+          sharedColor[0] = (0.35 * (1 - blend) + 0.65 * blend) * sandVar;
+          sharedColor[1] = (0.42 * (1 - blend) + 0.72 * blend) * sandVar;
+          sharedColor[2] = (0.55 * (1 - blend) + 0.85 * blend) * sandVar;
+        } else {
+          sharedColor[0] = (0.52 * (1 - blend) + 0.88 * blend) * sandVar;
+          sharedColor[1] = (0.48 * (1 - blend) + 0.82 * blend) * sandVar;
+          sharedColor[2] = (0.40 * (1 - blend) + 0.68 * blend) * sandVar;
+        }
       } else if (height < 0.45) {
-        // Pristine, expansive white/golden powder sand beach
+        // Shoreline / Beach
         const blend = (height - 0.25) / 0.20;
         const sandVar = 0.95 + detailForColor * 0.1;
-        sharedColor[0] = (0.88 * (1 - blend) + 0.95 * blend) * sandVar;
-        sharedColor[1] = (0.82 * (1 - blend) + 0.90 * blend) * sandVar;
-        sharedColor[2] = (0.68 * (1 - blend) + 0.80 * blend) * sandVar;
+        if (effectiveLat >= 0.70) {
+          // ชายฝั่งน้ำแข็งขั้วโลก (Icy Permafrost Shoreline)
+          sharedColor[0] = (0.65 * (1 - blend) + 0.88 * blend) * sandVar;
+          sharedColor[1] = (0.72 * (1 - blend) + 0.92 * blend) * sandVar;
+          sharedColor[2] = (0.85 * (1 - blend) + 0.98 * blend) * sandVar;
+        } else {
+          // ชายหาดทรายขาวนุ่มและทรายทองเขตร้อน
+          sharedColor[0] = (0.88 * (1 - blend) + 0.95 * blend) * sandVar;
+          sharedColor[1] = (0.82 * (1 - blend) + 0.90 * blend) * sandVar;
+          sharedColor[2] = (0.68 * (1 - blend) + 0.80 * blend) * sandVar;
+        }
       } else if (height < 0.95) {
-        // Lush tropical island coastal jungle & palm greenery
+        // Coastal lowlands & greenery
         const blend = (height - 0.45) / 0.50;
-        sharedColor[0] = 0.95 * (1 - blend) + 0.18 * blend;
-        sharedColor[1] = 0.92 * (1 - blend) + 0.58 * blend;
-        sharedColor[2] = 0.82 * (1 - blend) + 0.22 * blend;
+        if (effectiveLat >= 0.62) {
+          // ทุ่งหญ้ามอสไทกาและทุนดราเขตกึ่งขั้วโลก
+          sharedColor[0] = 0.65 * (1 - blend) + 0.22 * blend;
+          sharedColor[1] = 0.75 * (1 - blend) + 0.42 * blend;
+          sharedColor[2] = 0.75 * (1 - blend) + 0.28 * blend;
+        } else {
+          // ป่าไม้และทุ่งหญ้าเขตร้อนเขียวขจี
+          sharedColor[0] = 0.95 * (1 - blend) + 0.18 * blend;
+          sharedColor[1] = 0.92 * (1 - blend) + 0.58 * blend;
+          sharedColor[2] = 0.82 * (1 - blend) + 0.22 * blend;
+        }
       } else if (height < 1.60) {
         // Tropical island granite rocks & limestone cliffs
         const blend = (height - 0.95) / 0.65;
@@ -268,11 +335,12 @@
         sharedColor[1] = (0.58 * (1 - blend) + 0.44 * blend) * rockVar;
         sharedColor[2] = (0.22 * (1 - blend) + 0.38 * blend) * rockVar;
       } else {
-        // Mountain crests / snow peaks
-        const snowVar = 0.9 + detailForColor * 0.2;
-        sharedColor[0] = 0.92 * snowVar;
-        sharedColor[1] = 0.95 * snowVar;
-        sharedColor[2] = 1.00 * snowVar;
+        // ยอดเขาหินผาสูงชันและสันเขาแอลไพน์ (เขตอบอุ่น/ศูนย์สูตร ที่ยังไม่ถึงแนวหิมะ)
+        const blend = Math.min(1.0, (height - 1.60) / Math.max(0.1, snowLine - 1.60));
+        const rockVar = 0.85 + detailForColor * 0.3;
+        sharedColor[0] = (0.48 * (1 - blend) + 0.38 * blend) * rockVar;
+        sharedColor[1] = (0.44 * (1 - blend) + 0.36 * blend) * rockVar;
+        sharedColor[2] = (0.38 * (1 - blend) + 0.35 * blend) * rockVar;
       }
     }
 

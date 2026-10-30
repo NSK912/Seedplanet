@@ -346,6 +346,7 @@
     if (name === "ISOPOD") return "🦐";
     if (name === "MEGANEURA") return "🦟";
     if (name === "MEAT" || name === "RAW_MEAT") return "🥩";
+    if (name === "DRAGON_FRUIT" || name === "dragon_fruit") return "🐉";
     return "📦";
   }
 
@@ -1126,8 +1127,8 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
     for (let i = 0; i < colList.length; i++) {
       const it = colList[i];
-      if (!it || !it.active || it.isPreview || !it.position) continue;
-      const isResourceDrop = (it.type === "log" || it.type === "branch" || it.type === "rock" || it.type === "big_rock" || it.type === "iron_ore" || it.type === "gold_ore" || it.type === "glow_ore" || it.type === "isopod_item" || it.type === "meganeura_item");
+      if (!it || !it.active || it.isPreview || it.isAttachedToTree || !it.position) continue;
+      const isResourceDrop = (it.type === "log" || it.type === "branch" || it.type === "rock" || it.type === "big_rock" || it.type === "iron_ore" || it.type === "gold_ore" || it.type === "glow_ore" || it.type === "isopod_item" || it.type === "meganeura_item" || it.type === "dragon_fruit");
       if (!isResourceDrop) continue;
 
       const dx = it.position[0] - cPos[0];
@@ -2367,7 +2368,26 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
               tree.hits = (tree.hits || 0) + 1;
               if (typeof playChopSound === "function") playChopSound(tree.position);
 
+              // Use shared code with Player to detach dragon fruits on hit
+              if (tree.isWhiteRedTree && typeof window.detachTreeAttachedFruits === "function") {
+                window.detachTreeAttachedFruits(tree);
+              }
+
               if (tree.hits >= 3) {
+                // Ensure any remaining attached dragon fruits are detached when tree is felled
+                if (tree.isWhiteRedTree && typeof window.detachTreeAttachedFruits === "function") {
+                  window.detachTreeAttachedFruits(tree);
+                }
+                if (tree.fruitPositions) tree.fruitPositions = [];
+
+                if (tree.id !== undefined) {
+                  if (typeof choppedTrees !== "undefined" && Array.isArray(choppedTrees)) {
+                    if (!choppedTrees.includes(tree.id)) choppedTrees.push(tree.id);
+                  } else if (typeof window !== "undefined" && Array.isArray(window.choppedTrees)) {
+                    if (!window.choppedTrees.includes(tree.id)) window.choppedTrees.push(tree.id);
+                  }
+                }
+
                 // Tree felled! Clone acquires logs and branches
                 addCloneItem(cState, "LOG", "🪵", 2);
                 addCloneItem(cState, "BRANCH", "🌿", 2 + Math.floor(Math.random() * 2));
@@ -2637,9 +2657,13 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
             drop.active = false;
             const dropType = (drop.type || "").toUpperCase();
             addCloneItem(cState, dropType, getResourceIcon(dropType), 1);
+            if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+            if (typeof pendingDynamicCollectibleRefresh !== "undefined") pendingDynamicCollectibleRefresh = true;
             if (typeof window !== "undefined") {
+              window.pendingCollectibleRefresh = true;
               window.pendingDynamicCollectibleRefresh = true;
             }
+            if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO();
             cState.targetDrop = null;
             executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
           }

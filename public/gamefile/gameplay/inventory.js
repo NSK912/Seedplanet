@@ -275,6 +275,7 @@
         { name: "WOOD_BED", icon: "🛏️" },
         { name: "WOOD_TABLE", icon: "🪑" },
         { name: "WOOD_CHAIR", icon: "🪑" },
+        { name: "LANTERN", icon: "🏮" },
         { name: "MEGANEURA", icon: "🦟" },
         { name: "ISOPOD", icon: "🦐" },
         { name: "FRIED_BUG", icon: "🍤" },
@@ -819,7 +820,7 @@
             targetSize = 0.85;
           } else if (name === "WOOD_BED" || name === "WOOD_TABLE") {
             targetSize = 0.85;
-          } else if (name === "WOOD_CHAIR") {
+          } else if (name === "WOOD_CHAIR" || name === "LANTERN") {
             targetSize = 0.82;
           } else if (name === "IRON_BULLET") {
             targetSize = 0.68;
@@ -1034,6 +1035,8 @@
             create3DIconCanvas("WOOD_TABLE", 38, 38);
             create3DIconCanvas("WOOD_CHAIR", 48, 48);
             create3DIconCanvas("WOOD_CHAIR", 38, 38);
+            create3DIconCanvas("LANTERN", 48, 48);
+            create3DIconCanvas("LANTERN", 38, 38);
           } catch (e) {}
         });
       } else {
@@ -1047,6 +1050,8 @@
             create3DIconCanvas("WOOD_TABLE", 38, 38);
             create3DIconCanvas("WOOD_CHAIR", 48, 48);
             create3DIconCanvas("WOOD_CHAIR", 38, 38);
+            create3DIconCanvas("LANTERN", 48, 48);
+            create3DIconCanvas("LANTERN", 38, 38);
           } catch (e) {}
         }, 150);
       }
@@ -2378,7 +2383,11 @@
        const hitType = bestType;
        const hitIndex = bestIndex;
        
-       if (hitType === "tree" && obs.isWhiteRedTree && typeof collectibles !== "undefined" && Array.isArray(collectibles)) { let detachedAny = false; for (let c of collectibles) { if (c && c.active !== false && c.isAttachedToTree && c.treeId === obs.id) { c.isAttachedToTree = false; c.isDynamic = true; c.vel = [(Math.random() - 0.5) * 0.005, -0.015, (Math.random() - 0.5) * 0.005]; c.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05]; c.spinSpeed = 0.02; detachedAny = true; } } if (detachedAny) { if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true; if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true; if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO(); } }
+       if (hitType === "tree" && obs.isWhiteRedTree) {
+         if (typeof window.detachTreeAttachedFruits === "function") {
+           window.detachTreeAttachedFruits(obs);
+         }
+       }
         if (toolType !== "HAND") { obs.hits = (obs.hits || 0) + 1; } else { obs.handHits = (obs.handHits || 0) + 1; }
        const requiredHits = 3;
        
@@ -2411,9 +2420,10 @@
                const numBranches = 1 + Math.floor(Math.random() * 2);
                for (let i = 0; i < numBranches; i++) spawnDrop(obs.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
                if (obs.isWhiteRedTree) {
-    
+                    if (typeof window.detachTreeAttachedFruits === "function") {
+                        window.detachTreeAttachedFruits(obs);
+                    }
                     if (obs.fruitPositions && obs.fruitPositions.length > 0) {
-                        // Attached fruits detached on hit
                         obs.fruitPositions = [];
                     }
                }
@@ -2617,6 +2627,8 @@ function cancelFloorPlacement() {
              showNotice("ส่วนหัวและท้ายของบันไดต้องติดพื้นทั้ง 2 ด้าน และห้ามวางบนน้ำ! (Both ends must touch ground and cannot be placed on water)");
            } else if (floorPreviewCollectible.type === "wood_bed" || placingItemName === "WOOD_BED") {
              showNotice("🛏️ เตียงไม้ต้องวางบนพื้นไม้เท่านั้น! (Bed can only be placed on wooden floors)");
+           } else if (floorPreviewCollectible.type === "lantern" || placingItemName === "LANTERN") {
+             showNotice("🏮 ตะเกียงสามารถวางบนโต๊ะไม้และพื้นไม้เท่านั้น! (Lantern can only be placed on wooden tables and wooden floors)");
            } else {
              showNotice("พื้นที่ไม่เหมาะสมสำหรับการวาง! (Invalid placement)");
            }
@@ -2816,6 +2828,10 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.type = "wood_chair";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+        } else if (placingItemName === "LANTERN") {
+          floorPreviewCollectible.type = "lantern";
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "MEGANEURA") {
           floorPreviewCollectible.type = "meganeura_item";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
@@ -2900,7 +2916,29 @@ function cancelFloorPlacement() {
 
         if (stillHasItems) {
           // Keep placing, spawn a new preview of the same type
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "WOOD_BED" ? "wood_bed" : (placingItemName === "WOOD_TABLE" ? "wood_table" : (placingItemName === "WOOD_CHAIR" ? "wood_chair" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : ((placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase()
+            : placingItemName === "STONE_FLOOR" ? "stone_floor"
+            : placingItemName === "WOOD_STAIRS" ? "wood_stairs"
+            : placingItemName === "FOLDING_LADDER" ? "folding_ladder"
+            : placingItemName === "CAMPFIRE" ? "campfire"
+            : placingItemName === "WOOD_BOAT" ? "wood_boat"
+            : placingItemName === "ELECTRIC_ENGINE" ? "electric_engine"
+            : placingItemName === "BOAT_WING" ? "boat_wing"
+            : placingItemName === "WOOD_WHEEL" ? "wood_wheel"
+            : placingItemName === "WOOD_WALL" ? "wood_wall"
+            : placingItemName === "WOOD_WINDOW" ? "wood_window"
+            : placingItemName === "WOOD_DOOR" ? "wood_door"
+            : placingItemName === "WOOD_ROOF" ? "wood_roof"
+            : placingItemName === "WOOD_CHEST" ? "wood_chest"
+            : placingItemName === "WOOD_BED" ? "wood_bed"
+            : placingItemName === "WOOD_TABLE" ? "wood_table"
+            : placingItemName === "WOOD_CHAIR" ? "wood_chair"
+            : placingItemName === "LANTERN" ? "lantern"
+            : placingItemName === "MEGANEURA" ? "meganeura_item"
+            : placingItemName === "ISOPOD" ? "isopod_item"
+            : (placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item"
+            : placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor"
+            : "wood_floor";
           floorPreviewCollectible = {
             type: typeToPlace,
             position: [0, 0, 0],
@@ -2916,7 +2954,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -4082,6 +4120,14 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "lantern",
+            output: { name: "LANTERN", icon: "🏮", count: 1, label: "ตะเกียง (LANTERN) x1" },
+            ingredients: [
+              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง (GLOWING ORE)" },
+              { name: "IRON_ORE", icon: "🟥", count: 1, label: "แร่เหล็ก (IRON ORE)" }
+            ]
+          },
+          {
             id: "shovel",
             output: { name: "SHOVEL", icon: "🥄", count: 1, label: "พลั่ว (SHOVEL) x1" },
             ingredients: [
@@ -4642,6 +4688,14 @@ function cancelFloorPlacement() {
             output: { name: "WOOD_CHAIR", icon: "🪑", count: 1 },
             ingredients: [
               { name: "LOG", count: 1 }
+            ]
+          },
+          {
+            id: "lantern",
+            output: { name: "LANTERN", icon: "🏮", count: 1 },
+            ingredients: [
+              { name: "GLOW_ORE", count: 1 },
+              { name: "IRON_ORE", count: 1 }
             ]
           },
           {
@@ -5739,6 +5793,27 @@ function cancelFloorPlacement() {
             flatItems.push({ name: "BOAT_WING", icon: "🪽", label: "BOAT_WING" });
           }
         }
+
+        // If it's a table with lanterns sitting on top, return those lanterns too!
+        if (closestDemolishItem.type === "wood_table" && closestDemolishItem.position && typeof collectibles !== "undefined") {
+          const tP = closestDemolishItem.position;
+          const tR = closestDemolishItem.R || [1, 0, 0];
+          const tF = closestDemolishItem.F || [0, 0, 1];
+          const tN = closestDemolishItem.normal || [0, 1, 0];
+          for (let c of collectibles) {
+            if (c && c.active && !c.isPreview && c.type === "lantern" && c.position) {
+              const dx = c.position[0] - tP[0];
+              const dy = c.position[1] - tP[1];
+              const dz = c.position[2] - tP[2];
+              const lx = Math.abs(dx * tR[0] + dy * tR[1] + dz * tR[2]);
+              const lz = Math.abs(dx * tF[0] + dy * tF[1] + dz * tF[2]);
+              const ly = dx * tN[0] + dy * tN[1] + dz * tN[2];
+              if (lx <= 0.075 && lz <= 0.060 && Math.abs(ly - 0.145 * 0.46) < 0.03) {
+                flatItems.push({ name: "LANTERN", icon: "🏮", label: "LANTERN" });
+              }
+            }
+          }
+        }
         
         // 2. If it's a chest, add all its stored items
         if (closestDemolishItem.type === "wood_chest" && closestDemolishItem.storage) {
@@ -5828,6 +5903,8 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_TABLE", icon: "🪑", label: "WOOD_TABLE" };
         } else if (closestDemolishItem.type === "wood_chair") {
           itemData = { name: "WOOD_CHAIR", icon: "🪑", label: "WOOD_CHAIR" };
+        } else if (closestDemolishItem.type === "lantern") {
+          itemData = { name: "LANTERN", icon: "🏮", label: "LANTERN" };
         } else if (closestDemolishItem.type === "meganeura_item") {
           itemData = { name: "MEGANEURA", icon: "🦟", label: "MEGANEURA" };
         } else if (closestDemolishItem.type === "isopod_item") {
@@ -5855,6 +5932,26 @@ function cancelFloorPlacement() {
           if (simulatedInventory) {
             for (let i = 0; i < UNLOCKED_SLOTS; i++) {
               inventory[i] = simulatedInventory[i];
+            }
+            if (closestDemolishItem.type === "wood_table" && closestDemolishItem.position && typeof collectibles !== "undefined") {
+              const tP = closestDemolishItem.position;
+              const tR = closestDemolishItem.R || [1, 0, 0];
+              const tF = closestDemolishItem.F || [0, 0, 1];
+              const tN = closestDemolishItem.normal || [0, 1, 0];
+              for (let c of collectibles) {
+                if (c && c.active && !c.isPreview && c.type === "lantern" && c.position) {
+                  const dx = c.position[0] - tP[0];
+                  const dy = c.position[1] - tP[1];
+                  const dz = c.position[2] - tP[2];
+                  const lx = Math.abs(dx * tR[0] + dy * tR[1] + dz * tR[2]);
+                  const lz = Math.abs(dx * tF[0] + dy * tF[1] + dz * tF[2]);
+                  const ly = dx * tN[0] + dy * tN[1] + dz * tN[2];
+                  if (lx <= 0.075 && lz <= 0.060 && Math.abs(ly - 0.145 * 0.46) < 0.03) {
+                    c.active = false;
+                    c.isDemolished = true;
+                  }
+                }
+              }
             }
             closestDemolishItem.active = false;
             closestDemolishItem.isDemolished = true;

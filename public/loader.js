@@ -77,6 +77,7 @@
     'gamefile/items/wood_bed.js',
     'gamefile/items/wood_table.js',
     'gamefile/items/wood_chair.js',
+    'gamefile/items/lantern.js',
     'gamefile/items/campfire.js',
     'gamefile/items/wood_boat.js',
     'gamefile/items/wood_wheel.js',

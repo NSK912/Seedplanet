@@ -2503,18 +2503,27 @@
               L_up[2] * leafThickness,
           ];
 
-          // ไล่เฉดสีสุ่มของใบ (รองรับต้นไม้พิเศษที่มีใบสีขาวและแดงสลับกัน)
+          // ไล่เฉดสีสุ่มของใบ (รองรับต้นไม้พิเศษที่มีใบสีขาวและแดงสลับกัน และโทนสีทอง/ขาวในเขตขั้วโลก)
           const shade = (prng() - 0.5) * 0.16;
           let finalLeafColor;
           if (leafColor && leafColor.isWhiteRedAlternating) {
             const isWhiteLeaf = ((i + Math.floor(Math.abs(seed))) % 2 === 0);
             if (isWhiteLeaf) {
-              const wShade = shade * 0.45;
-              finalLeafColor = [
-                Math.max(0.04, Math.min(0.98, 0.94 + wShade)),
-                Math.max(0.04, Math.min(0.98, 0.94 + wShade)),
-                Math.max(0.04, Math.min(0.98, 0.96 + wShade)),
-              ];
+              if (leafColor.useGoldForWhite) {
+                const gShade = shade * 0.5;
+                finalLeafColor = [
+                  Math.max(0.04, Math.min(0.99, 0.98 + gShade * 0.4)),
+                  Math.max(0.04, Math.min(0.98, 0.80 + gShade)),
+                  Math.max(0.04, Math.min(0.98, 0.12 + gShade * 0.3)),
+                ];
+              } else {
+                const wShade = shade * 0.45;
+                finalLeafColor = [
+                  Math.max(0.04, Math.min(0.98, 0.94 + wShade)),
+                  Math.max(0.04, Math.min(0.98, 0.94 + wShade)),
+                  Math.max(0.04, Math.min(0.98, 0.96 + wShade)),
+                ];
+              }
             } else {
               finalLeafColor = [
                 Math.max(0.04, Math.min(0.98, 0.88 + shade)),
@@ -2522,6 +2531,13 @@
                 Math.max(0.04, Math.min(0.98, 0.12 + shade * 0.3)),
               ];
             }
+          } else if (leafColor && leafColor.isPolarWhiteLeaf) {
+            const wShade = shade * 0.40;
+            finalLeafColor = [
+              Math.max(0.04, Math.min(0.99, 0.95 + wShade)),
+              Math.max(0.04, Math.min(0.99, 0.96 + wShade)),
+              Math.max(0.04, Math.min(0.99, 0.98 + wShade)),
+            ];
           } else {
             finalLeafColor = [
               Math.max(0.04, Math.min(0.98, leafColor[0] + shade)),
@@ -3213,6 +3229,14 @@
         window.destroyedRocks = destroyedRocks;
         const treePositions = [];
         const treeGroupCenters = [];
+        let northPolarTreeClusters = 0;
+        let southPolarTreeClusters = 0;
+        const rPlanetVal = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+        const minPolarClustersPerPole = 2;
+        const maxPolarClustersPerPole = Math.max(2, Math.min(5, Math.round(2.2 * Math.pow(rPlanetVal / 8.0, 0.6))));
+        const minPolarClusterDist = Math.max(1.4, rPlanetVal * 0.18);
+        const minPolarClusterDistSq = minPolarClusterDist * minPolarClusterDist;
+        const maxExtraPolarAttempts = count > 0 ? 48 : 0;
 
         let lastYieldTime = performance.now();
         const checkYield = async () => {
@@ -3223,12 +3247,26 @@
         };
 
         // สุ่มกระจายแบบอิง Noise เพื่อให้เกิดการรวมกลุ่มเป็นป่า และทุ่งหินธรรมชาติ
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < count + maxExtraPolarAttempts; i++) {
+          const isFallbackPolarSearch = i >= count;
+          if (isFallbackPolarSearch) {
+            if (northPolarTreeClusters >= minPolarClustersPerPole && southPolarTreeClusters >= minPolarClustersPerPole) {
+              break;
+            }
+          }
           await checkYield();
           Math.random = mulberry32(seed + i * 11235);
           const u = Math.random();
           const v = Math.random();
-          const theta = Math.acos(2 * u - 1);
+          let theta;
+          if (isFallbackPolarSearch) {
+            const needNorth = northPolarTreeClusters < minPolarClustersPerPole && (southPolarTreeClusters >= minPolarClustersPerPole || (i % 2 === 0));
+            const poleSign = needNorth ? 1.0 : -1.0;
+            const polarCos = poleSign * (0.73 + u * 0.23);
+            theta = Math.acos(Math.max(-1.0, Math.min(1.0, polarCos)));
+          } else {
+            theta = Math.acos(2 * u - 1);
+          }
           const phi = 2 * Math.PI * v;
 
           const height = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
@@ -3282,6 +3320,7 @@
 
           // หากต่ำกว่าระดับน้ำ ให้สร้างพืชใต้น้ำเป็นกลุ่มแนวปะการัง (Coral Reef Clusters)
           if (height < minLandHeight) {
+            if (isFallbackPolarSearch) continue;
             // คำนวณความหนาแน่นด้วย 3D Noise เพื่อแบ่งพื้นที่เป็นกลุ่มแนวปะการัง
             const reefDensity = typeof fbmNoise === "function"
               ? fbmNoise(nx * 2.8, ny * 2.8, nz * 2.8, seed + 8888, 3)
@@ -3368,9 +3407,44 @@
             3,
           );
 
-          if (forestDensity > -0.05) {
-            
-            const treeCount = Math.floor(Math.random() * 9) + 2; // 2 to 10 trees per zone
+          const isNorthPolarZone = ny >= 0.72;
+          const isSouthPolarZone = ny <= -0.72;
+          const isPolarZone = isNorthPolarZone || isSouthPolarZone;
+          let shouldSpawnTreeCluster = false;
+
+          if (!isPolarZone) {
+            shouldSpawnTreeCluster = !isFallbackPolarSearch && (forestDensity > -0.05);
+          } else {
+            const currentPoleClusterCount = isNorthPolarZone ? northPolarTreeClusters : southPolarTreeClusters;
+            if (currentPoleClusterCount < maxPolarClustersPerPole) {
+              let tooCloseToExistingPolarGroup = false;
+              for (let pg = 0; pg < treeGroupCenters.length; pg++) {
+                const grp = treeGroupCenters[pg];
+                if ((isNorthPolarZone && grp.ny >= 0.70) || (isSouthPolarZone && grp.ny <= -0.70)) {
+                  const dx = wx - grp.wx;
+                  const dy = wy - grp.wy;
+                  const dz = wz - grp.wz;
+                  if (dx * dx + dy * dy + dz * dz < minPolarClusterDistSq) {
+                    tooCloseToExistingPolarGroup = true;
+                    break;
+                  }
+                }
+              }
+              if (!tooCloseToExistingPolarGroup) {
+                // ขั้วโลกเหนือและใต้มีกลุ่มต้นไม้สร้างออกมาบ้างแต่น้อย (จำกัดจำนวนกลุ่มและเว้นระยะห่าง)
+                shouldSpawnTreeCluster =
+                  isFallbackPolarSearch ||
+                  (currentPoleClusterCount === 0) ||
+                  (forestDensity > 0.08) ||
+                  (((i * 7 + Math.abs(Math.floor(seed))) % 3) === 0);
+              }
+            }
+          }
+
+          if (shouldSpawnTreeCluster) {
+            const rawTreeCount = Math.floor(Math.random() * 9) + 2; // 2 to 10 trees per zone
+            // เขตขั้วโลกเหนือและใต้ให้มีต้นไม้ในกลุ่มน้อยกว่าเขตปกติ (2 ถึง 4 ต้นต่อกลุ่ม)
+            const treeCount = isPolarZone ? (2 + (rawTreeCount % 3)) : rawTreeCount;
             let clusterHasWhiteRedTree = false;
             let groupSpawnedAnyTree = false;
             for (let t = 0; t < treeCount; t++) {
@@ -3402,6 +3476,9 @@
                 if (isPositionInsideCave(localWx, localWy, localWz, 0.40)) continue;
                 groupSpawnedAnyTree = true;
 
+                const treeLat = Math.abs(treeNy);
+                const isPolarTree = isPolarZone || treeLat >= 0.60;
+
                 // ============================================
                 // สร้างต้นไม้ (TREE) มี ลำต้น ราก กิ่งก้าน และใบ
                 // ============================================
@@ -3410,13 +3487,21 @@
                 const treeYaw = Math.random() * Math.PI * 2; // สุ่มทิศทางการหันของต้นไม้แต่ละต้นให้ไม่เหมือนกัน 360 องศา
                 const trunkBaseRadius = scale * 0.16;
 
-                // เลือกสีของใบไม้แบบสุ่มตามโทนธรรมชาติ (ต่อ 1 กลุ่มของต้นไม้ จะมี 1 ต้นที่มีใบสีขาวและแดงสลับกัน)
+                // เลือกสีของใบไม้แบบสุ่มตามโทนธรรมชาติ
                 const leafType = Math.random();
                 let leafColor = [0.15, 0.48, 0.18]; // เขียวขจีปกติ
                 if (!clusterHasWhiteRedTree) {
                   leafColor = [0.94, 0.12, 0.15];
                   leafColor.isWhiteRedAlternating = true;
+                  if (isPolarTree) {
+                    // ในโซนขั้วโลกเหนือ-ใต้ ต้นไม้ที่มีใบแดง-ขาว ใบสีขาวจะเปลี่ยนเป็นสีทอง
+                    leafColor.useGoldForWhite = true;
+                  }
                   clusterHasWhiteRedTree = true;
+                } else if (isPolarTree) {
+                  // ในโซนขั้วโลกเหนือ-ใต้ ใบไม้ที่เป็นสีปกติทั้งหมดจะเป็นสีขาว
+                  leafColor = [0.95, 0.96, 0.98];
+                  leafColor.isPolarWhiteLeaf = true;
                 } else if (leafType > 0.8) {
                   leafColor = [0.85, 0.42, 0.12]; // ส้มฤดูใบไม้ร่วงอบอุ่น
                 } else if (leafType > 0.65) {
@@ -3881,13 +3966,15 @@
               trunkBaseRadius: trunkBaseRadius
             });
 
-            treePositions.push({ theta: treeTheta, phi: treePhi, wx: localWx, wy: localWy, wz: localWz });
+            treePositions.push({ theta: treeTheta, phi: treePhi, wx: localWx, wy: localWy, wz: localWz, isPolar: isPolarTree });
             }
             if (groupSpawnedAnyTree) {
               treeGroupCenters.push({ wx, wy, wz, nx, ny, nz, theta, phi });
+              if (isNorthPolarZone) northPolarTreeClusters++;
+              else if (isSouthPolarZone) southPolarTreeClusters++;
             }
             
-          } else {
+          } else if (!isFallbackPolarSearch) {
             // ============================================
             // สร้างก้อนหิน (ROCK) แบบกลุ่มก้อน
             // ============================================
@@ -4301,8 +4388,10 @@
         if (currentBiome === 'moon' || currentBiome === 'desert') isGrassBiome = false;
         
         // ฟังก์ชันประเมินการงอกของหญ้าตามผืนดิน
-        function getGrassSpawnProfile(surfColor, h_pt) {
+        function getGrassSpawnProfile(surfColor, h_pt, gY) {
             if (!isGrassBiome) return { count: 0, scale: 0, isLush: false };
+            // ขั้วโลกเหนือและขั้วโลกใต้จะไม่มีหญ้าเลย
+            if (typeof gY === "number" && Math.abs(gY) >= 0.60) return { count: 0, scale: 0, isLush: false };
             if (h_pt <= waterH + 0.03) return { count: 0, scale: 0, isLush: false }; // ไม่เกิดใต้น้ำ
             if (h_pt >= 1.55) return { count: 0, scale: 0, isLush: false }; // ไม่เกิดบนยอดเขาหิมะ
             
@@ -4316,6 +4405,12 @@
             const g = surfColor[1];
             const b = surfColor[2];
             
+            // หิมะและแผ่นน้ำแข็งขั้วโลก (Snow & Glacial Ice): ไม่ให้หญ้าขึ้นบนหิมะเด็ดขาด
+            const isSnow = (r > 0.72 && g > 0.76 && b > 0.82);
+            if (isSnow) {
+                return { count: 0, scale: 0, isLush: false };
+            }
+
             // หาดทราย (Sand Beach): ขาว/ทองริมทะเล ไม่มีหญ้าขึ้นมั่ว
             const isSand = (h_pt < 0.46) || (r > 0.65 && g > 0.58 && b > 0.45 && (r >= g * 0.90 || h_pt < 0.50));
             if (isSand) {
@@ -4343,21 +4438,26 @@
             return { count: 0, scale: 0, isLush: false };
         }
 
-        // ฟังก์ชันตรวจเช็คสำหรับโคนต้นไม้ (คงไว้แบบเดิม)
-        function isTreeBaseGround(surfColor, h_pt) {
+        // ฟังก์ชันตรวจเช็คสำหรับโคนต้นไม้ (คงไว้แบบเดิม ยกเว้นโซนขั้วโลกและหิมะ)
+        function isTreeBaseGround(surfColor, h_pt, gY) {
             if (!isGrassBiome) return false;
+            if (typeof gY === "number" && Math.abs(gY) >= 0.60) return false;
             if (h_pt <= waterH + 0.02) return false;
             if (h_pt > 1.55) return false;
             if (!surfColor) return true;
             const r = surfColor[0];
             const g = surfColor[1];
             const b = surfColor[2];
+            if (r > 0.72 && g > 0.76 && b > 0.82) return false; // ไม่เกิดบนหิมะ
             if (h_pt < 0.46 && r > 0.70 && g > 0.65) return false; // ไม่เกิดบนหาดทรายริมน้ำ
             return true;
         }
 
         function addGrassTuft(gX, gY, gZ, h_pt, r_surf, groundColor, densityMult = 1.0) {
             if (!isGrassEnabled || userGrassDensity <= 0.001 || !isGrassBiome) return;
+            // ขั้วโลกเหนือและขั้วโลกใต้ไม่มีหญ้าเลย
+            if (Math.abs(gY) >= 0.60) return;
+            if (groundColor && groundColor[0] > 0.72 && groundColor[1] > 0.76 && groundColor[2] > 0.82) return;
             const gCenter = [gX * r_surf, gY * r_surf, gZ * r_surf];
             const numBlades = Math.max(3, Math.floor((4 + Math.floor(Math.random() * 3)) * Math.max(0.8, densityMult)));
             
@@ -4456,13 +4556,14 @@
         window.grassChunks = [];
         grassChunks = window.grassChunks;
         
-        // 1. หญ้าที่โคนต้นไม้ (คงไว้แบบเดิมตามที่ผู้เล่นต้องการ + ปรับเพิ่มตามขนาดดาว)
+        // 1. หญ้าที่โคนต้นไม้ (คงไว้แบบเดิมตามที่ผู้เล่นต้องการ + ปรับเพิ่มตามขนาดดาว แต่ไม่เกิดในขั้วโลกเหนือ-ใต้)
         if (isGrassBiome && isGrassEnabled && userGrassDensity > 0) {
             const radiusScaleRatio = Math.max(1.0, RADIUS / 8.0);
             for (let i = 0; i < treePositions.length; i++) {
                 if (i % 10 === 0) await checkYield();
-                const chunkStart = indices.length;
                 const tp = treePositions[i];
+                if (tp.isPolar || Math.abs(Math.cos(tp.theta)) >= 0.60) continue;
+                const chunkStart = indices.length;
                 const numGrassNearTree = Math.floor(40 * userGrassDensity * Math.min(2.0, Math.max(1.0, radiusScaleRatio)));
                 const sinTheta = Math.max(0.15, Math.sin(tp.theta));
 
@@ -4473,6 +4574,7 @@
                     const gX = Math.sin(gTheta) * Math.cos(gPhi);
                     const gY = Math.cos(gTheta);
                     const gZ = Math.sin(gTheta) * Math.sin(gPhi);
+                    if (Math.abs(gY) >= 0.60) continue;
                     
                     const surfData = typeof getTerrainHeightAndColor === "function" 
                         ? getTerrainHeightAndColor(gTheta, gPhi, seed) 
@@ -4480,7 +4582,7 @@
                     const h_pt = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(gTheta, gPhi, seed) : surfData.height;
                     const gColor = surfData.color;
                     
-                    if (h_pt <= waterH + 0.02) continue;
+                    if (!isTreeBaseGround(gColor, h_pt, gY)) continue;
                     
                     const r_surf = RADIUS + h_pt * HEIGHT_SCALE;
                     const gx_world = gX * r_surf;
@@ -4503,7 +4605,7 @@
             }
         }
         
-        // 2. หญ้าในทุ่งกว้างทั่วดาว (หนาแน่นสวยงาม กระจายตัวเต็มผืนดินแบบสมดุลหน่วยความจำ)
+        // 2. หญ้าในทุ่งกว้างทั่วดาว (หนาแน่นสวยงาม กระจายตัวเต็มผืนดินแบบสมดุลหน่วยความจำ ยกเว้นขั้วโลกเหนือ-ใต้)
         if (isGrassBiome && isGrassEnabled && userGrassDensity > 0) {
             const rRatio = Math.max(0.5, RADIUS / 8.0);
             
@@ -4534,6 +4636,7 @@
                         const gX = Math.sin(gTheta) * Math.cos(gPhi);
                         const gY = Math.cos(gTheta);
                         const gZ = Math.sin(gTheta) * Math.sin(gPhi);
+                        if (Math.abs(gY) >= 0.60) continue;
                         
                         const surfData = typeof getTerrainHeightAndColor === "function" 
                             ? getTerrainHeightAndColor(gTheta, gPhi, seed) 
@@ -4543,7 +4646,7 @@
                         const gColor = surfData.color;
                         
                         // ประเมินโปรไฟล์การเกิดของหญ้าตามสีและความสูง
-                        const profile = getGrassSpawnProfile(gColor, h_pt);
+                        const profile = getGrassSpawnProfile(gColor, h_pt, gY);
                         if (profile.count <= 0) continue;
                         
                         const r_surf = RADIUS + h_pt * HEIGHT_SCALE;
@@ -4565,13 +4668,14 @@
                                 const cX = Math.sin(cTheta) * Math.cos(cPhi);
                                 const cY = Math.cos(cTheta);
                                 const cZ = Math.sin(cTheta) * Math.sin(cPhi);
+                                if (Math.abs(cY) >= 0.60) continue;
                                 
                                 const cSurf = typeof getTerrainHeightAndColor === "function"
                                     ? getTerrainHeightAndColor(cTheta, cPhi, seed)
                                     : surfData;
                                 
                                 const cH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(cTheta, cPhi, seed) : cSurf.height;
-                                const cProfile = getGrassSpawnProfile(cSurf.color, cH);
+                                const cProfile = getGrassSpawnProfile(cSurf.color, cH, cY);
                                 if (cProfile.count <= 0) continue;
                                 
                                 const cR = RADIUS + cH * HEIGHT_SCALE;

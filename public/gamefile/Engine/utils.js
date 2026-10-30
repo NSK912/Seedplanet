@@ -93,6 +93,12 @@ function isUIOpen() {
   const antialias = document.getElementById("antialiasConfirmOverlay");
   if (antialias && antialias.style.display !== "none" && antialias.style.display !== "") return true;
 
+  const mainControls = document.getElementById("mainControls");
+  if (mainControls && mainControls.style.display !== "none" && mainControls.offsetParent !== null) return true;
+
+  const devControls = document.querySelector(".controls");
+  if (devControls && devControls.style.display !== "none" && devControls.offsetParent !== null) return true;
+
   return false;
 }
 
@@ -722,6 +728,12 @@ function setupToggleControlsBtnListener() {
       if (isHidden) {
         mainControls.style.display = "flex";
         toggleBtn.textContent = "⚙️ ซ่อนเมนู";
+        if (document.exitPointerLock) {
+          try { document.exitPointerLock(); } catch(err){}
+        }
+        if (typeof simulatedPointerLock !== "undefined") {
+          simulatedPointerLock = false;
+        }
       } else {
         mainControls.style.display = "none";
         toggleBtn.textContent = "⚙️ แสดงเมนู";
@@ -997,12 +1009,13 @@ window.addEventListener("pointerup", () => {
   updateVirtualCursorVisibility();
 }, { capture: true, passive: true });
 
-// Scroll wheel handler for mouse wheel & gamepad virtual cursor
+// Scroll wheel handler: Cleanly decouples raw mouse input from simulated custom scrollbars
 window.addEventListener("wheel", (e) => {
   if (isSyntheticEvent) return;
 
+  // 1. Resolve element under mouse or virtual cursor
   let targetEl = null;
-  if (typeof e.clientX === "number" && !isNaN(e.clientX) && e.clientX > 0 && e.clientY > 0) {
+  if (typeof e.clientX === "number" && !isNaN(e.clientX) && (e.clientX > 0 || e.clientY > 0)) {
     targetEl = document.elementFromPoint(e.clientX, e.clientY) || e.target;
   } else if (typeof virtualCursorX !== "undefined" && typeof virtualCursorY !== "undefined") {
     targetEl = document.elementFromPoint(virtualCursorX, virtualCursorY) || e.target;
@@ -1010,6 +1023,51 @@ window.addEventListener("wheel", (e) => {
     targetEl = e.target;
   }
 
+  // 2. DevGame & Dev UI (RAW INPUT):
+  // Directly handle native scrolling for #mainControls, .control-group, and dev panels without simulated scrollbar interference
+  const isDevTarget = !!((targetEl && targetEl.closest && targetEl.closest("#mainControls, .controls, .control-group, [id^='dev'], [class*='dev']")) ||
+                         (e.target && e.target.closest && e.target.closest("#mainControls, .controls, .control-group, [id^='dev'], [class*='dev']")));
+
+  if (isDevTarget) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Find the innermost scrollable container in DevGame that can scroll in the requested deltaY direction
+    let scrollEl = null;
+    let curr = targetEl || e.target;
+    while (curr && curr !== document.body && curr !== document.documentElement) {
+      if (curr.scrollHeight > curr.clientHeight + 1) {
+        const overflowY = window.getComputedStyle(curr).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+          const canScrollDown = e.deltaY > 0 && (curr.scrollTop + curr.clientHeight < curr.scrollHeight - 1);
+          const canScrollUp = e.deltaY < 0 && (curr.scrollTop > 1);
+          if (canScrollDown || canScrollUp) {
+            scrollEl = curr;
+            break;
+          } else if (!scrollEl) {
+            scrollEl = curr; // Candidate if outer containers cannot scroll either
+          }
+        }
+      }
+      curr = curr.parentElement;
+    }
+
+    // Fallback: If an inner group reached its scroll boundary, bubble scroll to the parent #mainControls
+    if (!scrollEl || (e.deltaY > 0 && scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1) || (e.deltaY < 0 && scrollEl.scrollTop <= 1)) {
+      const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
+      if (mainControls && mainControls.scrollHeight > mainControls.clientHeight + 1) {
+        scrollEl = mainControls;
+      }
+    }
+
+    if (scrollEl) {
+      scrollEl.scrollTop += e.deltaY;
+    }
+    // Raw input: NEVER invoke simulated inventory scrollbars and NEVER switch hotbar action slots
+    return;
+  }
+
+  // 3. Simulated Custom Scrollbar Handling (Inventory & Save Select Overlays)
   function findScrollContainer(el) {
     let curr = el;
     while (curr && curr !== document.body && curr !== document.documentElement) {
@@ -1039,10 +1097,14 @@ window.addEventListener("wheel", (e) => {
     e.preventDefault();
     e.stopPropagation();
     scrollContainer.scrollTop += e.deltaY;
-    if (typeof updateCustomScrollbar === "function") {
-      try { updateCustomScrollbar(); } catch(err){}
-    } else if (typeof window.updateCustomScrollbar === "function") {
-      try { window.updateCustomScrollbar(); } catch(err){}
+    // Decoupling: Only update the simulated custom scrollbar if the container is part of inventory or save select
+    const isSimulatedScrollUI = scrollContainer.closest && scrollContainer.closest("#inventoryOverlay, #saveSelectOverlay");
+    if (isSimulatedScrollUI) {
+      if (typeof updateCustomScrollbar === "function") {
+        try { updateCustomScrollbar(); } catch(err){}
+      } else if (typeof window.updateCustomScrollbar === "function") {
+        try { window.updateCustomScrollbar(); } catch(err){}
+      }
     }
   } else if (typeof isUIOpen === "function" && isUIOpen()) {
     // Over open UI panel/overlay background or padding -> scroll active list if available, prevent camera zoom
@@ -1058,8 +1120,9 @@ window.addEventListener("wheel", (e) => {
       }
     }
   } else if (!isUIOpen()) {
-    // If no scrollable UI and in gameplay, switch hotbar action slot with mouse wheel
-    if (typeof selectedActionSlotIndex !== "undefined" && typeof renderActionSlots === "function") {
+    // If no scrollable UI is open and we are in active gameplay on canvas, switch hotbar action slot
+    const isTargetCanvas = (e.target === canvas) || (targetEl === canvas) || (!targetEl && !e.target);
+    if (isTargetCanvas && typeof selectedActionSlotIndex !== "undefined" && typeof renderActionSlots === "function") {
       const delta = e.deltaY > 0 ? 1 : -1;
       let nextIdx = selectedActionSlotIndex + delta;
       if (nextIdx > 8) nextIdx = 0;

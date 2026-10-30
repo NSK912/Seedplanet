@@ -70,8 +70,8 @@
       const woodColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
       const woodDarkColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
       const woodHeadColor = isPreview ? previewColor : [0.50, 0.34, 0.18];
-      const mattressColor = isPreview ? previewColor : [0.96, 0.95, 0.91];
-      const pillowColor = isPreview ? previewColor : [0.99, 0.99, 0.98];
+      const mattressColor = isPreview ? previewColor : [0.91, 0.89, 0.85];
+      const pillowColor = isPreview ? previewColor : [0.94, 0.93, 0.90];
       const blanketColor = isPreview ? previewColor : [0.44, 0.56, 0.68];
 
       // 1) 4 Wooden Legs (ขาเตียงไม้ทั้ง 4 มุม)

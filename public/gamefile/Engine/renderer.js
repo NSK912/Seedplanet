@@ -184,6 +184,9 @@
             uniform float uTime;
             uniform float uShadowsEnabled;
             uniform vec2 uShadowTexelSize;
+            uniform vec4 uPointLights[16];
+            uniform vec4 uPointLightColors[16];
+            uniform int uPointLightCount;
 
             ${window.SHARED_SHADOW_GLSL = `
             float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
@@ -320,6 +323,55 @@
                 float shadow = wm2.y * r_m2 + wm1.y * r_m1 + w0.y * r_0 + wp1.y * r_p1 + wp2.y * r_p2;
                 return mix(1.0, shadow, edgeFade);
             }
+
+            uniform vec4 uPointLightOccluders[72];
+            uniform int uPointLightOccluderCount;
+
+            float calculatePointLightOcclusion(vec3 fragPos, vec3 lightPos) {
+                if (uPointLightOccluderCount <= 0) return 1.0;
+                float vis = 1.0;
+                for (int j = 0; j < 24; j++) {
+                    if (j < uPointLightOccluderCount) {
+                        vec4 r0 = uPointLightOccluders[j * 3];
+                        vec4 r1 = uPointLightOccluders[j * 3 + 1];
+                        vec4 r2 = uPointLightOccluders[j * 3 + 2];
+
+                        vec3 la = vec3(
+                            dot(r0.xyz, fragPos) + r0.w,
+                            dot(r1.xyz, fragPos) + r1.w,
+                            dot(r2.xyz, fragPos) + r2.w
+                        );
+                        vec3 lb = vec3(
+                            dot(r0.xyz, lightPos) + r0.w,
+                            dot(r1.xyz, lightPos) + r1.w,
+                            dot(r2.xyz, lightPos) + r2.w
+                        );
+
+                        if ((la.x > 1.0 && lb.x > 1.0) || (la.x < -1.0 && lb.x < -1.0) ||
+                            (la.y > 1.0 && lb.y > 1.0) || (la.y < -1.0 && lb.y < -1.0) ||
+                            (la.z > 1.0 && lb.z > 1.0) || (la.z < -1.0 && lb.z < -1.0)) {
+                            continue;
+                        }
+
+                        vec3 ld = lb - la;
+                        vec3 invD = vec3(
+                            abs(ld.x) > 1e-5 ? (1.0 / ld.x) : 1e5,
+                            abs(ld.y) > 1e-5 ? (1.0 / ld.y) : 1e5,
+                            abs(ld.z) > 1e-5 ? (1.0 / ld.z) : 1e5
+                        );
+                        vec3 t0 = (-1.0 - la) * invD;
+                        vec3 t1 = ( 1.0 - la) * invD;
+                        vec3 tmin3 = min(t0, t1);
+                        vec3 tmax3 = max(t0, t1);
+                        float tEnter = max(max(tmin3.x, tmin3.y), max(tmin3.z, 0.005));
+                        float tExit  = min(min(tmax3.x, tmax3.y), min(tmax3.z, 0.995));
+                        if (tEnter < tExit) {
+                            return 0.0;
+                        }
+                    }
+                }
+                return vis;
+            }
             `}
 
             void main() {
@@ -359,9 +411,46 @@
                      finalColor = vColor * diffuseVal * 1.2 + vec3(0.1, 0.2, 0.05);
                  }
 
+                 // Point Lights from Lanterns (ตะเกียงหินเรืองแสง), Glowing Stones (หินเรืองแสง), and Campfires
+                 if (uPointLightCount > 0) {
+                     vec3 pointLightAccum = vec3(0.0);
+                     vec3 pointTintAccum = vec3(0.0);
+                     vec3 pointSpecAccum = vec3(0.0);
+                     for (int i = 0; i < 16; i++) {
+                         if (i < uPointLightCount) {
+                             vec4 pl = uPointLights[i];
+                             vec4 plc = uPointLightColors[i];
+                             vec3 toLight = pl.xyz - vWorldPos;
+                             float d = length(toLight);
+                             float rad = pl.w;
+                             if (d < rad && rad > 0.001) {
+                                 vec3 L = d > 0.0001 ? (toLight / d) : normal;
+                                 float ndl = max(dot(normal, L), 0.0);
+                                 if (ndl > 0.001) {
+                                     float occl = calculatePointLightOcclusion(vWorldPos + normal * 0.012, pl.xyz);
+                                     if (occl > 0.001) {
+                                         float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
+                                         float atten = falloff * falloff * (3.0 - 2.0 * falloff);
+                                         float cageMask = smoothstep(0.016, 0.034, d);
+                                         float facing = ndl * smoothstep(0.0, 0.12, ndl);
+                                         float wLight = atten * cageMask * facing * occl * plc.w;
+                                         pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
+                                         pointTintAccum += plc.rgb * (0.045 * wLight);
+                                         vec3 H = normalize(L + viewDir);
+                                         float pSpec = pow(max(dot(normal, H), 0.0), 20.0) * 0.10 * wLight;
+                                         pointSpecAccum += plc.rgb * pSpec;
+                                     }
+                                 }
+                             }
+                         }
+                     }
+                     vec3 addedLight = vColor * pointLightAccum + pointTintAccum + pointSpecAccum;
+                     finalColor = clamp(finalColor + addedLight * (1.0 - finalColor * 0.55), 0.0, 1.0);
+                 }
+
                  // Glowing Ore & Obsidian Pad (White Core & Gold Accents Glow)
                  bool isGlowingOre = (abs(vColor.r - 0.22) < 0.08 && abs(vColor.g - 0.95) < 0.08 && abs(vColor.b - 0.88) < 0.08);
-                 bool isWhiteGlow = (abs(vColor.r - 0.98) < 0.03 && abs(vColor.g - 0.98) < 0.03 && abs(vColor.b - 1.0) < 0.03);
+                 bool isWhiteGlow = (abs(vColor.r - 0.98) < 0.008 && abs(vColor.g - 0.98) < 0.008 && abs(vColor.b - 1.0) < 0.008 && vColor.b > vColor.r);
                  bool isGoldGlow = (abs(vColor.r - 0.95) < 0.04 && abs(vColor.g - 0.78) < 0.04 && abs(vColor.b - 0.23) < 0.04);
                  if (isGlowingOre || isWhiteGlow) {
                      float pulse = 0.94 + 0.12 * sin(uTime * 3.0 + vWorldPos.x * 2.8 + vWorldPos.y * 2.8 + vWorldPos.z * 2.8);
@@ -512,10 +601,6 @@
             uniform float uPlanetRadius;
             uniform float uWaterRadius;
             void main() {
-                if (length(aPosition) < 0.01) {
-                    gl_Position = vec4(9999.0, 9999.0, 9999.0, 1.0);
-                    return;
-                }
                 vec3 pos = aPosition;
                 
                 vec3 actualColor = aColor;
@@ -683,6 +768,9 @@
             uniform float uIsTunnelMesh;
             uniform float uShadowsEnabled;
             uniform vec2 uShadowTexelSize;
+            uniform vec4 uPointLights[16];
+            uniform vec4 uPointLightColors[16];
+            uniform int uPointLightCount;
 
             ${window.SHARED_SHADOW_GLSL}
 
@@ -757,6 +845,36 @@
                     }
                     float diffuse = 0.24 + diffuseVal * shadow * 0.76;
                     finalColor = vColor * diffuse;
+                    if (uPointLightCount > 0) {
+                        vec3 pointLightAccum = vec3(0.0);
+                        vec3 pointTintAccum = vec3(0.0);
+                        for (int i = 0; i < 16; i++) {
+                            if (i < uPointLightCount) {
+                                vec4 pl = uPointLights[i];
+                                vec4 plc = uPointLightColors[i];
+                                vec3 toLight = pl.xyz - vWorldPos;
+                                float d = length(toLight);
+                                float rad = pl.w;
+                                if (d < rad && rad > 0.001) {
+                                    vec3 L = d > 0.0001 ? (toLight / d) : normal;
+                                    float ndl = max(dot(normal, L), 0.0);
+                                    if (ndl > 0.001) {
+                                        float occl = calculatePointLightOcclusion(vWorldPos + normal * 0.015, pl.xyz);
+                                        if (occl > 0.001) {
+                                            float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
+                                            float atten = falloff * falloff * (3.0 - 2.0 * falloff);
+                                            float facing = ndl * smoothstep(0.0, 0.12, ndl);
+                                            float wLight = atten * facing * occl * plc.w;
+                                            pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
+                                            pointTintAccum += plc.rgb * (0.04 * wLight);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        vec3 addedTerrainLight = vColor * pointLightAccum + pointTintAccum;
+                        finalColor = clamp(finalColor + addedTerrainLight * (1.0 - finalColor * 0.55), 0.0, 1.0);
+                    }
                 } else {
                     finalColor = vColor;
                 }
@@ -3373,6 +3491,11 @@ if (gl) {
       const terrainShadowMapLoc = gl.getUniformLocation(program, "uShadowMap");
       const terrainShadowTexelSizeLoc = gl.getUniformLocation(program, "uShadowTexelSize");
       const terrainWaterMaskLoc = gl.getUniformLocation(program, "uWaterMaskTex");
+      const terrainPointLightsLoc = gl.getUniformLocation(program, "uPointLights");
+      const terrainPointLightColorsLoc = gl.getUniformLocation(program, "uPointLightColors");
+      const terrainPointLightCountLoc = gl.getUniformLocation(program, "uPointLightCount");
+      const terrainPointLightOccludersLoc = gl.getUniformLocation(program, "uPointLightOccluders");
+      const terrainPointLightOccluderCountLoc = gl.getUniformLocation(program, "uPointLightOccluderCount");
 
       // --- Model Program Setup ---
       const modelVS = createShader(modelVertexShaderSource, gl.VERTEX_SHADER);
@@ -3443,6 +3566,11 @@ if (gl) {
       const modelShadowMapLoc = gl.getUniformLocation(modelProgram, "uShadowMap");
       const modelShadowTexelSizeLoc = gl.getUniformLocation(modelProgram, "uShadowTexelSize");
       const modelWaterMaskLoc = gl.getUniformLocation(modelProgram, "uWaterMaskTex");
+      const modelPointLightsLoc = gl.getUniformLocation(modelProgram, "uPointLights");
+      const modelPointLightColorsLoc = gl.getUniformLocation(modelProgram, "uPointLightColors");
+      const modelPointLightCountLoc = gl.getUniformLocation(modelProgram, "uPointLightCount");
+      const modelPointLightOccludersLoc = gl.getUniformLocation(modelProgram, "uPointLightOccluders");
+      const modelPointLightOccluderCountLoc = gl.getUniformLocation(modelProgram, "uPointLightOccluderCount");
 
       let charLocalPosLoc, charColorLoc, charTexCoordLoc;
       let charMainTexLoc, charHasMainTexLoc;
@@ -3502,6 +3630,16 @@ if (gl) {
       const charShadowTexelSizeLoc = gl.getUniformLocation(charProgram, "uShadowTexelSize");
       const charWaterMaskLoc = gl.getUniformLocation(charProgram, "uWaterMaskTex");
       const charModelMatrixLoc = gl.getUniformLocation(charProgram, "uModelMatrix");
+      const charPointLightsLoc = gl.getUniformLocation(charProgram, "uPointLights");
+      const charPointLightColorsLoc = gl.getUniformLocation(charProgram, "uPointLightColors");
+      const charPointLightCountLoc = gl.getUniformLocation(charProgram, "uPointLightCount");
+      const charPointLightOccludersLoc = gl.getUniformLocation(charProgram, "uPointLightOccluders");
+      const charPointLightOccluderCountLoc = gl.getUniformLocation(charProgram, "uPointLightOccluderCount");
+      const f32_pointLights = new Float32Array(16 * 4);
+      const f32_pointLightColors = new Float32Array(16 * 4);
+      const f32_pointLightOccluders = new Float32Array(72 * 4);
+      const _pointLightCandidates = [];
+      const _pointLightOccluderCandidates = [];
 
       if (typeof WaterSystem !== "undefined" && WaterSystem.init) {
         WaterSystem.init(gl, supportUint32);
@@ -6928,7 +7066,7 @@ window.cloud3DProgram = cloud3DProgram;
             const demolishableTypes = [
               "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
               "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
-              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table", "wood_chair",
+              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table", "wood_chair", "lantern",
               "meganeura_item", "isopod_item", "obsidian_pad_warp_item", "obsidian_compass_pad_item",
               "robot_stand", "robot_cockpit",
               "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
@@ -6994,6 +7132,12 @@ window.cloud3DProgram = cloud3DProgram;
                   item.position[1] + n[1] * 0.05,
                   item.position[2] + n[2] * 0.05
                 ];
+              } else if (item.type === "lantern") {
+                itemCenter = [
+                  item.position[0] + n[0] * 0.025,
+                  item.position[1] + n[1] * 0.025,
+                  item.position[2] + n[2] * 0.025
+                ];
               } else if (item.type === "campfire") {
                 itemCenter = [
                   item.position[0] + n[0] * 0.06,
@@ -7035,6 +7179,8 @@ window.cloud3DProgram = cloud3DProgram;
                 meshRadius = 0.26;
               } else if (item.type === "wood_chest" || item.type === "wood_table" || item.type === "wood_chair") {
                 meshRadius = 0.18;
+              } else if (item.type === "lantern") {
+                meshRadius = 0.10;
               } else if (item.type === "wood_bed") {
                 meshRadius = 0.25;
               } else if (item.type.startsWith("robot_")) {
@@ -7098,6 +7244,8 @@ window.cloud3DProgram = cloud3DProgram;
               let fixturePriority = 0;
               if (item.type === "wood_door" || item.type === "wood_window") {
                 fixturePriority = -0.15;
+              } else if (item.type === "lantern") {
+                fixturePriority = -0.12;
               }
 
               // Direct 3D intersection on the object's mass is prioritized over loose peripheral hits
@@ -7701,7 +7849,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -9223,6 +9371,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               if (sunTimeLoc) gl.uniform1f(sunTimeLoc, sunTime);
               if (sunTintLoc) gl.uniform3f(sunTintLoc, 1.0, 1.0, 1.0);
             } else if (modelLightDirLoc) {
+              if (modelPointLightCountLoc) gl.uniform1i(modelPointLightCountLoc, 0);
               setF32(f32_finalLightDir, finalLightDir);
               gl.uniform3fv(modelLightDirLoc, f32_finalLightDir);
             }
@@ -9282,6 +9431,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const extraProg = modelProgram || sunProgram;
           if (extraProg) {
             gl.useProgram(extraProg);
+            if (extraProg === modelProgram && modelPointLightCountLoc) {
+              gl.uniform1i(modelPointLightCountLoc, 0);
+            }
             const posLoc = (modelPosLoc !== -1) ? modelPosLoc : sunPosLoc;
             const colLoc = (modelColorLoc !== -1) ? modelColorLoc : sunColorLoc;
             const mvLoc = modelMVLoc || sunMVLoc;
@@ -9357,6 +9509,578 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         // To maximize GPU performance, disable alpha blending when rendering opaque geometry
         gl.disable(gl.BLEND);
 
+        // Gather active 3D Point Lights (Lanterns, Glowing Stones, Held Lantern/Glowing Stone, Campfires)
+        let activePointLightCount = 0;
+        let activePointLightOccluderCount = 0;
+        if (cameraMode !== "sun") {
+          _pointLightCandidates.length = 0;
+          const refX = eyePos ? eyePos[0] : 0;
+          const refY = eyePos ? eyePos[1] : 0;
+          const refZ = eyePos ? eyePos[2] : 0;
+          const allCols = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : [];
+          for (let i = 0; i < allCols.length; i++) {
+            const c = allCols[i];
+            if (!c || !c.active || c.isPreview || !c.position) continue;
+            const t = c.type;
+            if (t === "lantern" || t === "glow_ore" || t === "glow_battery" || t === "campfire") {
+              const px = c.position[0], py = c.position[1], pz = c.position[2];
+              const dx = px - refX, dy = py - refY, dz = pz - refZ;
+              const distSq = dx * dx + dy * dy + dz * dz;
+              if (distSq > 625.0) continue; // Within 25m of camera
+              const n = c.normal || [0, 1, 0];
+              const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + px * 2.8 + py * 2.8 + pz * 2.8);
+              if (t === "lantern") {
+                _pointLightCandidates.push({
+                  x: px + n[0] * 0.030,
+                  y: py + n[1] * 0.030,
+                  z: pz + n[2] * 0.030,
+                  rad: 0.62,
+                  r: 0.22, g: 0.95, b: 0.88,
+                  intensity: 0.42 * pulse,
+                  sortKey: distSq * 0.05 // Top priority for placed lanterns
+                });
+              } else if (t === "campfire") {
+                const flicker = 0.94 + 0.08 * Math.sin(leafAnimTime * 7.5 + px * 5.0 + pz * 5.0);
+                _pointLightCandidates.push({
+                  x: px + n[0] * 0.055,
+                  y: py + n[1] * 0.055,
+                  z: pz + n[2] * 0.055,
+                  rad: 0.65,
+                  r: 1.0, g: 0.62, b: 0.22,
+                  intensity: 0.38 * flicker,
+                  sortKey: distSq * 0.15
+                });
+              } else {
+                _pointLightCandidates.push({
+                  x: px + n[0] * 0.026,
+                  y: py + n[1] * 0.026,
+                  z: pz + n[2] * 0.026,
+                  rad: 0.38,
+                  r: 0.22, g: 0.95, b: 0.88,
+                  intensity: 0.25 * pulse,
+                  sortKey: distSq * 0.5
+                });
+              }
+            }
+          }
+
+          // Placement preview of lantern also casts light so player sees illumination while aiming
+          if (typeof floorPreviewCollectible !== "undefined" && floorPreviewCollectible && floorPreviewCollectible.active && floorPreviewCollectible.type === "lantern" && floorPreviewCollectible.position) {
+            const fp = floorPreviewCollectible.position;
+            const fn = floorPreviewCollectible.normal || [0, 1, 0];
+            const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + fp[0] * 2.8 + fp[1] * 2.8 + fp[2] * 2.8);
+            _pointLightCandidates.push({
+              x: fp[0] + fn[0] * 0.030,
+              y: fp[1] + fn[1] * 0.030,
+              z: fp[2] + fn[2] * 0.030,
+              rad: 0.56,
+              r: 0.22, g: 0.95, b: 0.88,
+              intensity: 0.35 * pulse,
+              sortKey: 0.01
+            });
+          } else {
+            // Held LANTERN / GLOW_ORE / GLOW_BATTERY in player's hand
+            const held = (typeof window.getHeldItem === "function") ? window.getHeldItem() : ((typeof activeItem !== "undefined") ? activeItem : null);
+            const heldName = held && held.name ? held.name.toUpperCase() : "";
+            if (heldName === "LANTERN" || heldName === "GLOW_ORE" || heldName === "GLOW_BATTERY") {
+              const cm = (typeof getCharacterMatrix === "function") ? getCharacterMatrix() : null;
+              if (cm) {
+                const hx = cm[12], hy = cm[13], hz = cm[14];
+                const hLen = Math.hypot(hx, hy, hz) || 1.0;
+                const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + hx * 2.8 + hy * 2.8 + hz * 2.8);
+                const isLanternHeld = (heldName === "LANTERN");
+                _pointLightCandidates.push({
+                  x: hx + (hx / hLen) * 0.05,
+                  y: hy + (hy / hLen) * 0.05,
+                  z: hz + (hz / hLen) * 0.05,
+                  rad: isLanternHeld ? 0.52 : 0.34,
+                  r: 0.22, g: 0.95, b: 0.88,
+                  intensity: (isLanternHeld ? 0.34 : 0.22) * pulse,
+                  sortKey: 0.02
+                });
+              }
+            }
+          }
+
+          // Nearby natural Glowing Ore veins in natureObstacles
+          if (_pointLightCandidates.length < 16 && typeof natureObstacles !== "undefined" && Array.isArray(natureObstacles)) {
+            for (let i = 0; i < natureObstacles.length; i++) {
+              const obs = natureObstacles[i];
+              if (!obs || obs.type !== "glow_ore" || !obs.position) continue;
+              const ox = obs.position[0], oy = obs.position[1], oz = obs.position[2];
+              const dx = ox - refX, dy = oy - refY, dz = oz - refZ;
+              const distSq = dx * dx + dy * dy + dz * dz;
+              if (distSq > 49.0) continue; // Within 7m
+              const on = obs.normal || [0, 1, 0];
+              const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + ox * 2.8 + oy * 2.8 + oz * 2.8);
+              _pointLightCandidates.push({
+                x: ox + on[0] * 0.026,
+                y: oy + on[1] * 0.026,
+                z: oz + on[2] * 0.026,
+                rad: 0.38,
+                r: 0.22, g: 0.95, b: 0.88,
+                intensity: 0.24 * pulse,
+                sortKey: distSq
+              });
+            }
+          }
+
+          if (_pointLightCandidates.length > 1) {
+            _pointLightCandidates.sort((a, b) => a.sortKey - b.sortKey);
+          }
+          activePointLightCount = Math.min(16, _pointLightCandidates.length);
+          for (let i = 0; i < activePointLightCount; i++) {
+            const pl = _pointLightCandidates[i];
+            const idx4 = i * 4;
+            f32_pointLights[idx4] = pl.x;
+            f32_pointLights[idx4 + 1] = pl.y;
+            f32_pointLights[idx4 + 2] = pl.z;
+            f32_pointLights[idx4 + 3] = pl.rad;
+            f32_pointLightColors[idx4] = pl.r;
+            f32_pointLightColors[idx4 + 1] = pl.g;
+            f32_pointLightColors[idx4 + 2] = pl.b;
+            f32_pointLightColors[idx4 + 3] = pl.intensity;
+          }
+
+          // Gather 3D OBB Occluders (floors, walls, tables, roofs, chests, beds) near active point lights so light never passes through objects
+          if (activePointLightCount > 0) {
+            _pointLightOccluderCandidates.length = 0;
+
+            const pushOBB = (cx, cy, cz, axisR, axisN, axisF, hx, hy, hz, priorityBias) => {
+              if (hx <= 0.0005 || hy <= 0.0005 || hz <= 0.0005) return;
+              let minSurfDistSq = 1e9;
+              let withinAnyLight = false;
+              for (let k = 0; k < activePointLightCount; k++) {
+                const pl = _pointLightCandidates[k];
+                const dx = pl.x - cx;
+                const dy = pl.y - cy;
+                const dz = pl.z - cz;
+                const lx = Math.max(0.0, Math.abs(dx * axisR[0] + dy * axisR[1] + dz * axisR[2]) - hx);
+                const ly = Math.max(0.0, Math.abs(dx * axisN[0] + dy * axisN[1] + dz * axisN[2]) - hy);
+                const lz = Math.max(0.0, Math.abs(dx * axisF[0] + dy * axisF[1] + dz * axisF[2]) - hz);
+                const dSq = lx * lx + ly * ly + lz * lz;
+                if (dSq < pl.rad * pl.rad) {
+                  withinAnyLight = true;
+                  if (dSq < minSurfDistSq) minSurfDistSq = dSq;
+                }
+              }
+              if (!withinAnyLight) return;
+
+              const invRx = axisR[0] / hx, invRy = axisR[1] / hx, invRz = axisR[2] / hx;
+              const invNx = axisN[0] / hy, invNy = axisN[1] / hy, invNz = axisN[2] / hy;
+              const invFx = axisF[0] / hz, invFy = axisF[1] / hz, invFz = axisF[2] / hz;
+
+              _pointLightOccluderCandidates.push({
+                r0x: invRx, r0y: invRy, r0z: invRz, r0w: -(cx * invRx + cy * invRy + cz * invRz),
+                r1x: invNx, r1y: invNy, r1z: invNz, r1w: -(cx * invNx + cy * invNy + cz * invNz),
+                r2x: invFx, r2y: invFy, r2z: invFz, r2w: -(cx * invFx + cy * invFy + cz * invFz),
+                sortKey: minSurfDistSq * (priorityBias || 1.0)
+              });
+            };
+
+            const solidWallPieces = [];
+            const woodFloorPieces = [];
+            const thinFloorPieces = [];
+
+            for (let i = 0; i < allCols.length; i++) {
+              const c = allCols[i];
+              if (!c || !c.active || c.isPreview || !c.position) continue;
+              const t = c.type;
+              const p = c.position;
+              const r = c.R || [1, 0, 0];
+              const f = c.F || [0, 0, 1];
+              const n = c.normal || [0, 1, 0];
+
+              if (t === "wood_table") {
+                const s = 0.46;
+                // Tabletop + apron occluder strictly below the top plank surface (0.145 * s = 0.0667)
+                const cyOff = 0.118 * s;
+                pushOBB(
+                  p[0] + n[0] * cyOff,
+                  p[1] + n[1] * cyOff,
+                  p[2] + n[2] * cyOff,
+                  r, n, f,
+                  0.132 * s, 0.017 * s, 0.102 * s,
+                  0.2 // High priority for tabletops directly under lanterns
+                );
+              } else if (t === "wood_chest") {
+                const s = 0.46;
+                const cyOff = 0.072 * s;
+                pushOBB(
+                  p[0] + n[0] * cyOff,
+                  p[1] + n[1] * cyOff,
+                  p[2] + n[2] * cyOff,
+                  r, n, f,
+                  0.105 * s, 0.064 * s, 0.070 * s,
+                  0.5
+                );
+              } else if (t === "wood_bed") {
+                const s = 0.46;
+                const cyOff = 0.042 * s;
+                pushOBB(
+                  p[0] + n[0] * cyOff,
+                  p[1] + n[1] * cyOff,
+                  p[2] + n[2] * cyOff,
+                  r, n, f,
+                  0.115 * s, 0.034 * s, 0.175 * s,
+                  0.5
+                );
+              } else if (t === "wood_chair") {
+                const s = 0.46;
+                const cyOff = 0.062 * s;
+                pushOBB(
+                  p[0] + n[0] * cyOff,
+                  p[1] + n[1] * cyOff,
+                  p[2] + n[2] * cyOff,
+                  r, n, f,
+                  0.048 * s, 0.010 * s, 0.048 * s,
+                  0.6
+                );
+              } else if (t === "stone_floor") {
+                const sz = c.size || 0.25;
+                const w = c.width !== undefined ? c.width : sz * 12.0;
+                const d = c.depth !== undefined ? c.depth : sz * 12.0;
+                const h = sz * 0.15;
+                const topY = h * 0.5 - 0.002;
+                const botY = -0.35;
+                const midY = (topY + botY) * 0.5;
+                const hy = (topY - botY) * 0.5;
+                pushOBB(
+                  p[0] + n[0] * midY,
+                  p[1] + n[1] * midY,
+                  p[2] + n[2] * midY,
+                  r, n, f,
+                  w * 0.5 + 0.022, hy, d * 0.5 + 0.022,
+                  0.25
+                );
+              } else if (t === "wood_floor" || t === "thin_wood_floor") {
+                // Include all connected house floor tiles within 3.2m of any active point light
+                let nearLight = false;
+                for (let k = 0; k < activePointLightCount; k++) {
+                  const pl = _pointLightCandidates[k];
+                  const dx = pl.x - p[0], dy = pl.y - p[1], dz = pl.z - p[2];
+                  if (dx * dx + dy * dy + dz * dz < 10.24) { nearLight = true; break; }
+                }
+                if (nearLight) {
+                  const sz = c.size || 0.25;
+                  const w = c.width !== undefined ? c.width : sz * 1.2;
+                  const d = c.depth !== undefined ? c.depth : sz * 1.2;
+                  const h = (typeof window.getFloorThickness === "function") ? window.getFloorThickness(c) : (t === "wood_floor" ? 0.08 : 0.01);
+                  const targetArr = (t === "wood_floor") ? woodFloorPieces : thinFloorPieces;
+                  targetArr.push({ p, r, n, f, w, d, h });
+                }
+              } else if (t === "wood_wall" || t === "wood_window" || t === "wood_door") {
+                let nearLight = false;
+                for (let k = 0; k < activePointLightCount; k++) {
+                  const pl = _pointLightCandidates[k];
+                  const dx = pl.x - p[0], dy = pl.y - p[1], dz = pl.z - p[2];
+                  if (dx * dx + dy * dy + dz * dz < 10.24) { nearLight = true; break; }
+                }
+                if (!nearLight) continue;
+
+                let hasCoDoor = (t === "wood_door");
+                let hasCoWall = false;
+                for (let m = 0; m < allCols.length; m++) {
+                  const other = allCols[m];
+                  if (!other || !other.active || other.isPreview || other === c || !other.position) continue;
+                  if (other.type === "wood_door" || other.type === "wood_wall") {
+                    const ox = other.position[0] - p[0], oy = other.position[1] - p[1], oz = other.position[2] - p[2];
+                    if (ox * ox + oy * oy + oz * oz < 0.005) {
+                      if (other.type === "wood_door") hasCoDoor = true;
+                      if (other.type === "wood_wall") hasCoWall = true;
+                    }
+                  }
+                }
+                // Avoid duplicate OBBs for co-located door/window on a wood_wall
+                if ((t === "wood_door" || t === "wood_window") && hasCoWall) continue;
+
+                const angle = c.angle || 0.0;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const wallR = [
+                  r[0] * cosA + f[0] * sinA,
+                  r[1] * cosA + f[1] * sinA,
+                  r[2] * cosA + f[2] * sinA
+                ];
+                const wallF = [
+                  f[0] * cosA - r[0] * sinA,
+                  f[1] * cosA - r[1] * sinA,
+                  f[2] * cosA - r[2] * sinA
+                ];
+
+                if (hasCoDoor) {
+                  // Left pillar, Right pillar (extended down into floor), and Top lintel around open doorway
+                  pushOBB(
+                    p[0] - wallR[0] * 0.120 + n[0] * 0.106,
+                    p[1] - wallR[1] * 0.120 + n[1] * 0.106,
+                    p[2] - wallR[2] * 0.120 + n[2] * 0.106,
+                    wallR, n, wallF,
+                    0.036, 0.152, 0.012, 0.35
+                  );
+                  pushOBB(
+                    p[0] + wallR[0] * 0.120 + n[0] * 0.106,
+                    p[1] + wallR[1] * 0.120 + n[1] * 0.106,
+                    p[2] + wallR[2] * 0.120 + n[2] * 0.106,
+                    wallR, n, wallF,
+                    0.036, 0.152, 0.012, 0.35
+                  );
+                  pushOBB(
+                    p[0] + n[0] * 0.220,
+                    p[1] + n[1] * 0.220,
+                    p[2] + n[2] * 0.220,
+                    wallR, n, wallF,
+                    0.092, 0.036, 0.012, 0.35
+                  );
+                } else {
+                  solidWallPieces.push({
+                    p, wallR, n, wallF,
+                    minR: -0.15, maxR: 0.15,
+                    minY: -0.045, maxY: 0.258,
+                    merged: false
+                  });
+                }
+              } else if (t === "wood_roof") {
+                const angle = c.angle || 0.0;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const roofR = [
+                  r[0] * cosA + f[0] * sinA,
+                  r[1] * cosA + f[1] * sinA,
+                  r[2] * cosA + f[2] * sinA
+                ];
+                const roofF = [
+                  f[0] * cosA - r[0] * sinA,
+                  f[1] * cosA - r[1] * sinA,
+                  f[2] * cosA - r[2] * sinA
+                ];
+                const slopeLen = Math.hypot(0.30, 0.25);
+                const tanF = [
+                  (roofF[0] * 0.30 + n[0] * 0.25) / slopeLen,
+                  (roofF[1] * 0.30 + n[1] * 0.25) / slopeLen,
+                  (roofF[2] * 0.30 + n[2] * 0.25) / slopeLen
+                ];
+                const normN = [
+                  (n[0] * 0.30 - roofF[0] * 0.25) / slopeLen,
+                  (n[1] * 0.30 - roofF[1] * 0.25) / slopeLen,
+                  (n[2] * 0.30 - roofF[2] * 0.25) / slopeLen
+                ];
+                pushOBB(
+                  p[0] + n[0] * 0.125,
+                  p[1] + n[1] * 0.125,
+                  p[2] + n[2] * 0.125,
+                  roofR, normN, tanF,
+                  0.154, 0.009, slopeLen * 0.5 + 0.008,
+                  0.5
+                );
+              }
+            }
+
+            // Merge horizontally adjacent wall segments first (so full-width lower walls always unify even under gable walls), then merge vertically
+            for (let i = 0; i < solidWallPieces.length; i++) {
+              const w1 = solidWallPieces[i];
+              if (w1.merged) continue;
+              let changed = true;
+              while (changed) {
+                changed = false;
+                for (let j = i + 1; j < solidWallPieces.length; j++) {
+                  const w2 = solidWallPieces[j];
+                  if (w2.merged) continue;
+                  const dotF = Math.abs(w1.wallF[0] * w2.wallF[0] + w1.wallF[1] * w2.wallF[1] + w1.wallF[2] * w2.wallF[2]);
+                  if (dotF < 0.98) continue;
+                  const dx = w2.p[0] - w1.p[0], dy = w2.p[1] - w1.p[1], dz = w2.p[2] - w1.p[2];
+                  const dR = dx * w1.wallR[0] + dy * w1.wallR[1] + dz * w1.wallR[2];
+                  const dF = dx * w1.wallF[0] + dy * w1.wallF[1] + dz * w1.wallF[2];
+                  const dN = dx * w1.n[0] + dy * w1.n[1] + dz * w1.n[2];
+                  if (Math.abs(dF) < 0.03 && Math.abs((dN + w2.minY) - w1.minY) < 0.03 && Math.abs((dN + w2.maxY) - w1.maxY) < 0.03) {
+                    const w2MinR = dR + w2.minR;
+                    const w2MaxR = dR + w2.maxR;
+                    if (w2MinR <= w1.maxR + 0.03 && w2MaxR >= w1.minR - 0.03) {
+                      w1.minR = Math.min(w1.minR, w2MinR);
+                      w1.maxR = Math.max(w1.maxR, w2MaxR);
+                      w2.merged = true;
+                      changed = true;
+                    }
+                  }
+                }
+              }
+            }
+            for (let i = 0; i < solidWallPieces.length; i++) {
+              const w1 = solidWallPieces[i];
+              if (w1.merged) continue;
+              for (let j = i + 1; j < solidWallPieces.length; j++) {
+                const w2 = solidWallPieces[j];
+                if (w2.merged) continue;
+                const dotF = Math.abs(w1.wallF[0] * w2.wallF[0] + w1.wallF[1] * w2.wallF[1] + w1.wallF[2] * w2.wallF[2]);
+                if (dotF < 0.98) continue;
+                const dx = w2.p[0] - w1.p[0], dy = w2.p[1] - w1.p[1], dz = w2.p[2] - w1.p[2];
+                const dR = dx * w1.wallR[0] + dy * w1.wallR[1] + dz * w1.wallR[2];
+                const dF = dx * w1.wallF[0] + dy * w1.wallF[1] + dz * w1.wallF[2];
+                const dN = dx * w1.n[0] + dy * w1.n[1] + dz * w1.n[2];
+                if (Math.abs(dF) < 0.03 && Math.abs((dR + w2.minR) - w1.minR) < 0.03 && Math.abs((dR + w2.maxR) - w1.maxR) < 0.03) {
+                  const w2MinY = dN + w2.minY;
+                  const w2MaxY = dN + w2.maxY;
+                  if (w2MinY <= w1.maxY + 0.03 && w2MaxY >= w1.minY - 0.03) {
+                    w1.minY = Math.min(w1.minY, w2MinY);
+                    w1.maxY = Math.max(w1.maxY, w2MaxY);
+                    w2.merged = true;
+                  }
+                }
+              }
+              const midR = (w1.minR + w1.maxR) * 0.5;
+              const midY = (w1.minY + w1.maxY) * 0.5;
+              const hx = (w1.maxR - w1.minR) * 0.5 + 0.012;
+              const hy = (w1.maxY - w1.minY) * 0.5;
+              pushOBB(
+                w1.p[0] + w1.wallR[0] * midR + w1.n[0] * midY,
+                w1.p[1] + w1.wallR[1] * midR + w1.n[1] * midY,
+                w1.p[2] + w1.wallR[2] * midR + w1.n[2] * midY,
+                w1.wallR, w1.n, w1.wallF,
+                hx, hy, 0.012, 0.22
+              );
+            }
+
+            // Helper to merge co-planar floor tiles (wood_floor / thin_wood_floor) into unified rectangular slabs
+            const emitMergedFloors = (pieces, isThin) => {
+              if (pieces.length === 0) return;
+              // Group co-planar tiles into shared plane coordinate frames so rotated tiles (90/180/270 deg) merge seamlessly
+              const planes = [];
+              for (let i = 0; i < pieces.length; i++) {
+                const f1 = pieces[i];
+                let plane = null;
+                for (let k = 0; k < planes.length; k++) {
+                  const pl = planes[k];
+                  const dotN = pl.n[0] * f1.n[0] + pl.n[1] * f1.n[1] + pl.n[2] * f1.n[2];
+                  if (dotN < 0.98) continue;
+                  const dx = f1.p[0] - pl.p[0], dy = f1.p[1] - pl.p[1], dz = f1.p[2] - pl.p[2];
+                  const dN = dx * pl.n[0] + dy * pl.n[1] + dz * pl.n[2];
+                  if (Math.abs(dN) < 0.03) {
+                    plane = pl;
+                    break;
+                  }
+                }
+                if (!plane) {
+                  plane = { p: f1.p, r: f1.r, n: f1.n, f: f1.f, h: f1.h, strips: [] };
+                  planes.push(plane);
+                }
+                const dx = f1.p[0] - plane.p[0], dy = f1.p[1] - plane.p[1], dz = f1.p[2] - plane.p[2];
+                const cR = dx * plane.r[0] + dy * plane.r[1] + dz * plane.r[2];
+                const cF = dx * plane.f[0] + dy * plane.f[1] + dz * plane.f[2];
+                const rr = Math.abs(f1.r[0] * plane.r[0] + f1.r[1] * plane.r[1] + f1.r[2] * plane.r[2]);
+                const fr = Math.abs(f1.f[0] * plane.r[0] + f1.f[1] * plane.r[1] + f1.f[2] * plane.r[2]);
+                const rf = Math.abs(f1.r[0] * plane.f[0] + f1.r[1] * plane.f[1] + f1.r[2] * plane.f[2]);
+                const ff = Math.abs(f1.f[0] * plane.f[0] + f1.f[1] * plane.f[1] + f1.f[2] * plane.f[2]);
+                const extR = 0.5 * f1.w * rr + 0.5 * f1.d * fr;
+                const extF = 0.5 * f1.w * rf + 0.5 * f1.d * ff;
+                plane.strips.push({
+                  minR: cR - extR, maxR: cR + extR,
+                  minF: cF - extF, maxF: cF + extF,
+                  merged: false
+                });
+              }
+
+              for (let pIdx = 0; pIdx < planes.length; pIdx++) {
+                const plane = planes[pIdx];
+                const strips = plane.strips;
+                // Merge along R
+                for (let i = 0; i < strips.length; i++) {
+                  const s1 = strips[i];
+                  if (s1.merged) continue;
+                  let changed = true;
+                  while (changed) {
+                    changed = false;
+                    for (let j = i + 1; j < strips.length; j++) {
+                      const s2 = strips[j];
+                      if (s2.merged) continue;
+                      if (Math.abs(s2.minF - s1.minF) < 0.03 && Math.abs(s2.maxF - s1.maxF) < 0.03) {
+                        if (s2.minR <= s1.maxR + 0.03 && s2.maxR >= s1.minR - 0.03) {
+                          s1.minR = Math.min(s1.minR, s2.minR);
+                          s1.maxR = Math.max(s1.maxR, s2.maxR);
+                          s2.merged = true;
+                          changed = true;
+                        }
+                      }
+                    }
+                  }
+                }
+                // Merge strips along F
+                for (let i = 0; i < strips.length; i++) {
+                  const s1 = strips[i];
+                  if (s1.merged) continue;
+                  let changed = true;
+                  while (changed) {
+                    changed = false;
+                    for (let j = i + 1; j < strips.length; j++) {
+                      const s2 = strips[j];
+                      if (s2.merged) continue;
+                      if (Math.abs(s2.minR - s1.minR) < 0.03 && Math.abs(s2.maxR - s1.maxR) < 0.03) {
+                        if (s2.minF <= s1.maxF + 0.03 && s2.maxF >= s1.minF - 0.03) {
+                          s1.minF = Math.min(s1.minF, s2.minF);
+                          s1.maxF = Math.max(s1.maxF, s2.maxF);
+                          s2.merged = true;
+                          changed = true;
+                        }
+                      }
+                    }
+                  }
+                  const midR = (s1.minR + s1.maxR) * 0.5;
+                  const midF = (s1.minF + s1.maxF) * 0.5;
+                  const hx = (s1.maxR - s1.minR) * 0.5 + 0.022;
+                  const hz = (s1.maxF - s1.minF) * 0.5 + 0.022;
+                  const topY = plane.h * 0.5 - 0.002;
+                  const botY = isThin ? (-plane.h * 0.5 - 0.008) : -0.35;
+                  const midY = (topY + botY) * 0.5;
+                  const hy = (topY - botY) * 0.5;
+                  pushOBB(
+                    plane.p[0] + plane.r[0] * midR + plane.f[0] * midF + plane.n[0] * midY,
+                    plane.p[1] + plane.r[1] * midR + plane.f[1] * midF + plane.n[1] * midY,
+                    plane.p[2] + plane.r[2] * midR + plane.f[2] * midF + plane.n[2] * midY,
+                    plane.r, plane.n, plane.f,
+                    hx, hy, hz, 0.20
+                  );
+                }
+              }
+            };
+
+            emitMergedFloors(woodFloorPieces, false);
+            emitMergedFloors(thinFloorPieces, true);
+
+            if (_pointLightOccluderCandidates.length > 1) {
+              _pointLightOccluderCandidates.sort((a, b) => a.sortKey - b.sortKey);
+            }
+            activePointLightOccluderCount = Math.min(24, _pointLightOccluderCandidates.length);
+            for (let i = 0; i < activePointLightOccluderCount; i++) {
+              const obb = _pointLightOccluderCandidates[i];
+              const base = i * 12;
+              f32_pointLightOccluders[base]     = obb.r0x;
+              f32_pointLightOccluders[base + 1] = obb.r0y;
+              f32_pointLightOccluders[base + 2] = obb.r0z;
+              f32_pointLightOccluders[base + 3] = obb.r0w;
+              f32_pointLightOccluders[base + 4] = obb.r1x;
+              f32_pointLightOccluders[base + 5] = obb.r1y;
+              f32_pointLightOccluders[base + 6] = obb.r1z;
+              f32_pointLightOccluders[base + 7] = obb.r1w;
+              f32_pointLightOccluders[base + 8] = obb.r2x;
+              f32_pointLightOccluders[base + 9] = obb.r2y;
+              f32_pointLightOccluders[base + 10] = obb.r2z;
+              f32_pointLightOccluders[base + 11] = obb.r2w;
+            }
+          }
+        }
+
+        // Upload point lights and 3D occluder OBBs to modelProgram
+        if (modelProgram) {
+          gl.useProgram(modelProgram);
+          if (modelPointLightCountLoc) gl.uniform1i(modelPointLightCountLoc, activePointLightCount);
+          if (modelPointLightOccluderCountLoc) gl.uniform1i(modelPointLightOccluderCountLoc, activePointLightOccluderCount);
+          if (activePointLightCount > 0) {
+            if (modelPointLightsLoc) gl.uniform4fv(modelPointLightsLoc, f32_pointLights);
+            if (modelPointLightColorsLoc) gl.uniform4fv(modelPointLightColorsLoc, f32_pointLightColors);
+            if (activePointLightOccluderCount > 0 && modelPointLightOccludersLoc) {
+              gl.uniform4fv(modelPointLightOccludersLoc, f32_pointLightOccluders);
+            }
+          }
+        }
+
         // วาดพื้นผิวโลก (Planet) - มีการคำนวณแสงเงาเคลื่อนที่ตามดวงอาทิตย์อย่างสวยงาม
         if (cameraMode !== "sun" && vertexBuffer && colorBuffer && indexBuffer && indicesLength > 0) {
           gl.enable(gl.CULL_FACE);
@@ -9365,6 +10089,15 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           const activeShadowMode = shadowMapEnabled ? (typeof shadowMapQuality === "number" && shadowMapQuality > 0 ? shadowMapQuality : 2.0) : 0.0;
           gl.useProgram(program);
+          if (terrainPointLightCountLoc) gl.uniform1i(terrainPointLightCountLoc, activePointLightCount);
+          if (terrainPointLightOccluderCountLoc) gl.uniform1i(terrainPointLightOccluderCountLoc, activePointLightOccluderCount);
+          if (activePointLightCount > 0) {
+            if (terrainPointLightsLoc) gl.uniform4fv(terrainPointLightsLoc, f32_pointLights);
+            if (terrainPointLightColorsLoc) gl.uniform4fv(terrainPointLightColorsLoc, f32_pointLightColors);
+            if (activePointLightOccluderCount > 0 && terrainPointLightOccludersLoc) {
+              gl.uniform4fv(terrainPointLightOccludersLoc, f32_pointLightOccluders);
+            }
+          }
           gl.uniform1f(terrainShadowsEnabledLoc, activeShadowMode);
           gl.uniform1f(useLightingLoc, 1.0); // เปิดแสงเงาดิฟฟิวส์
           gl.uniform3fv(lightDirLoc, setF32(f32_finalLightDir, finalLightDir));
@@ -9454,6 +10187,15 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
 
           gl.useProgram(charProgram);
+          if (charPointLightCountLoc) gl.uniform1i(charPointLightCountLoc, activePointLightCount);
+          if (charPointLightOccluderCountLoc) gl.uniform1i(charPointLightOccluderCountLoc, activePointLightOccluderCount);
+          if (activePointLightCount > 0) {
+            if (charPointLightsLoc) gl.uniform4fv(charPointLightsLoc, f32_pointLights);
+            if (charPointLightColorsLoc) gl.uniform4fv(charPointLightColorsLoc, f32_pointLightColors);
+            if (activePointLightOccluderCount > 0 && charPointLightOccludersLoc) {
+              gl.uniform4fv(charPointLightOccludersLoc, f32_pointLightOccluders);
+            }
+          }
           gl.uniform1f(charShadowsEnabledLoc, activeShadowQualityVal);
 
           gl.uniformMatrix4fv(charProjLoc, false, setF32(f32_projMatrix, projMatrix));
@@ -10380,6 +11122,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.useProgram(modelProgram);
 
           const isRag = (ragdollEnabled && ragdollInitialized && (typeof window === "undefined" || window.characterModel !== "chibi"));
+          if (!isRag && modelPointLightCountLoc) {
+            gl.uniform1i(modelPointLightCountLoc, 0);
+          }
           const equipCharModelMatrix = isRag ? createIdentity() : getCharacterMatrix();
           const equipModelViewMatrix = multiplyMatrices(viewMatrix, equipCharModelMatrix);
 
@@ -10451,6 +11196,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             );
           }
           gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
+          if (!isRag && modelPointLightCountLoc) {
+            gl.uniform1i(modelPointLightCountLoc, activePointLightCount);
+          }
         }
 
         // วาดสัตว์ครึ่งบกครึ่งน้ำ (Amphibians)

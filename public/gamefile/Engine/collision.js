@@ -1504,7 +1504,17 @@ const CollisionCore = {
       const structList = [];
       for (let i = 0; i < colLen; i++) {
         const item = collectibles[i];
-        if (item && item.position && (item.type === "wood_wall" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_roof" || item.type === "robot_stand")) {
+        if (item && item.position && (
+          item.type === "wood_wall" ||
+          item.type === "wood_window" ||
+          item.type === "wood_door" ||
+          item.type === "wood_roof" ||
+          item.type === "robot_stand" ||
+          item.type === "wood_bed" ||
+          item.type === "wood_chest" ||
+          item.type === "wood_table" ||
+          item.type === "wood_chair"
+        )) {
           structList.push(item);
         }
       }
@@ -2195,10 +2205,12 @@ const CollisionCore = {
         }
       }
 
-      // 6. Wooden Bed (wood_bed) & Wooden Chest (wood_chest) Mesh Collision
-      const staticPropsList = (typeof window !== "undefined" && window.staticCollectiblesList && window.staticCollectiblesList.length > 0)
-        ? window.staticCollectiblesList
-        : collectiblesList;
+      // 6. Furniture Mesh Collision: Bed (wood_bed), Chest (wood_chest), Table (wood_table), Chair (wood_chair)
+      const staticPropsList = (nearbyCollectibles && nearbyCollectibles.length > 0)
+        ? nearbyCollectibles
+        : ((typeof window !== "undefined" && window.staticCollectiblesList && window.staticCollectiblesList.length > 0)
+          ? window.staticCollectiblesList
+          : collectibles);
       const colRawVerts = (typeof window !== "undefined" && window.collectibleRawVertices)
         ? window.collectibleRawVertices
         : null;
@@ -2210,7 +2222,9 @@ const CollisionCore = {
           if (!other || !other.active || other.isPreview || other.isDemolished || !other.position) continue;
           const isBed = (other.type === "wood_bed");
           const isChest = (other.type === "wood_chest");
-          if (!isBed && !isChest) continue;
+          const isTable = (other.type === "wood_table");
+          const isChair = (other.type === "wood_chair");
+          if (!isBed && !isChest && !isTable && !isChair) continue;
 
           const estX = P_new[0] * groundRadius - other.position[0];
           const estY = P_new[1] * groundRadius - other.position[1];
@@ -2230,8 +2244,33 @@ const CollisionCore = {
             other.position[2] / itemCenterRadius
           ];
 
-          const itemHeight = isBed ? 0.125 : 0.090;
-          const itemBoundRadius = isBed ? 0.22 : 0.15;
+          let itemHeight = 0.090;
+          let itemBoundRadius = 0.15;
+          let fallbackHw = 0.132 * 0.45;
+          let fallbackHd = 0.105 * 0.45;
+
+          if (isBed) {
+            itemHeight = 0.125;
+            itemBoundRadius = 0.22;
+            fallbackHw = 0.16 * 0.46;
+            fallbackHd = 0.26 * 0.46;
+          } else if (isTable) {
+            itemHeight = 0.080;
+            itemBoundRadius = 0.12;
+            fallbackHw = 0.135 * 0.46;
+            fallbackHd = 0.105 * 0.46;
+          } else if (isChair) {
+            itemHeight = 0.110;
+            itemBoundRadius = 0.09;
+            fallbackHw = 0.075 * 0.46;
+            fallbackHd = 0.075 * 0.46;
+          } else if (isChest) {
+            itemHeight = 0.090;
+            itemBoundRadius = 0.15;
+            fallbackHw = 0.132 * 0.45;
+            fallbackHd = 0.105 * 0.45;
+          }
+
           const feetRadius = groundRadius - 0.46 * playerScale;
           const headRadius = groundRadius + 0.46 * playerScale;
 
@@ -2256,6 +2295,7 @@ const CollisionCore = {
           if (other.meshStart !== undefined && other.meshEnd !== undefined && colRawVerts) {
             const count = other.meshEnd - other.meshStart;
             let pushedByMesh = false;
+            const charHalfH = isRidingBoat ? 0.25 : (playerScale * 0.46);
 
             for (let pass = 0; pass < 2; pass++) {
               const cDotN = C[0] * itemN[0] + C[1] * itemN[1] + C[2] * itemN[2];
@@ -2269,6 +2309,11 @@ const CollisionCore = {
                 const v0Dot = colRawVerts[v0] * itemN[0] + colRawVerts[v0 + 1] * itemN[1] + colRawVerts[v0 + 2] * itemN[2];
                 const v1Dot = colRawVerts[v1] * itemN[0] + colRawVerts[v1 + 1] * itemN[1] + colRawVerts[v1 + 2] * itemN[2];
                 const v2Dot = colRawVerts[v2] * itemN[0] + colRawVerts[v2 + 1] * itemN[1] + colRawVerts[v2 + 2] * itemN[2];
+
+                const minV = Math.min(v0Dot, v1Dot, v2Dot);
+                const maxV = Math.max(v0Dot, v1Dot, v2Dot);
+                if (cDotN - charHalfH >= maxV || cDotN + charHalfH <= minV) continue;
+
                 const d0 = cDotN - v0Dot;
                 const d1 = cDotN - v1Dot;
                 const d2 = cDotN - v2Dot;
@@ -2336,10 +2381,10 @@ const CollisionCore = {
               }
             }
           } else {
-            let itemR = other.right || [1, 0, 0];
-            let itemF = other.forward || [0, 0, 1];
-            const hw = isBed ? (0.16 * 0.46) : (0.132 * 0.45);
-            const hd = isBed ? (0.26 * 0.46) : (0.105 * 0.45);
+            let itemR = other.R || other.right || [1, 0, 0];
+            let itemF = other.F || other.forward || [0, 0, 1];
+            const hw = fallbackHw;
+            const hd = fallbackHd;
             const dx = hx0 * itemR[0] + hy0 * itemR[1] + hz0 * itemR[2];
             const dz = hx0 * itemF[0] + hy0 * itemF[1] + hz0 * itemF[2];
             const limitX = hw + charColRad;

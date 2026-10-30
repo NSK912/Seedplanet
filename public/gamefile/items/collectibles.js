@@ -89,6 +89,71 @@ function syncTreeAttachedFruits() {
 }
 window.syncTreeAttachedFruits = syncTreeAttachedFruits;
 
+// Shared function to detach dragon fruits from white-red trees (Used by Player and PlayerClones)
+function detachTreeAttachedFruits(tree) {
+  if (!tree) return false;
+  const isWhiteRed = Boolean(tree.isWhiteRedTree || (tree.fruitPositions && tree.fruitPositions.length > 0));
+  if (!isWhiteRed) return false;
+
+  const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []);
+  let detachedAny = false;
+
+  for (let c of colList) {
+    if (c && c.active !== false && c.isAttachedToTree && c.treeId === tree.id) {
+      c.isAttachedToTree = false;
+      c.isDynamic = true;
+      c.vel = [(Math.random() - 0.5) * 0.006, -0.015, (Math.random() - 0.5) * 0.006];
+      c.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05];
+      c.spinSpeed = 0.02;
+      detachedAny = true;
+    }
+  }
+
+  // If tree has fruitPositions but some or none were in colList yet, spawn them directly as dynamic drops
+  if (tree.fruitPositions && tree.fruitPositions.length > 0) {
+    for (let fIdx = 0; fIdx < tree.fruitPositions.length; fIdx++) {
+      const fInfo = tree.fruitPositions[fIdx];
+      const fruitId = "df_" + tree.id + "_" + fIdx;
+      const existing = colList.find(c => c.fruitId === fruitId || (c.treeId === tree.id && c.fruitIdx === fIdx));
+      if (!existing) {
+        colList.push({
+          type: "dragon_fruit",
+          position: [fInfo.pos[0], fInfo.pos[1], fInfo.pos[2]],
+          normal: fInfo.normal ? [fInfo.normal[0], fInfo.normal[1], fInfo.normal[2]] : [0, -1, 0],
+          R: fInfo.R ? [fInfo.R[0], fInfo.R[1], fInfo.R[2]] : [1, 0, 0],
+          F: fInfo.F ? [fInfo.F[0], fInfo.F[1], fInfo.F[2]] : [0, 0, 1],
+          active: true,
+          size: 0.035,
+          seed: 1234 + tree.id * 10 + fIdx,
+          color: [0.92, 0.14, 0.46],
+          isAttachedToTree: false,
+          isDynamic: true,
+          vel: [(Math.random() - 0.5) * 0.006, -0.015, (Math.random() - 0.5) * 0.006],
+          spin: [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05],
+          spinSpeed: 0.02,
+          treeId: tree.id,
+          fruitIdx: fIdx,
+          fruitId: fruitId
+        });
+        detachedAny = true;
+      }
+    }
+    tree.fruitPositions = [];
+  }
+
+  if (detachedAny) {
+    if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+    if (typeof window !== "undefined") {
+      window.pendingCollectibleRefresh = true;
+      window.pendingDynamicCollectibleRefresh = true;
+    }
+    if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO();
+    else if (typeof window.refreshCollectiblesVBO === "function") window.refreshCollectiblesVBO();
+  }
+  return detachedAny;
+}
+window.detachTreeAttachedFruits = detachTreeAttachedFruits;
+
 // Initialize ItemRegistry
 window.ItemRegistry = window.ItemRegistry || window.ITEM_DEFINITIONS || {};
 
@@ -2204,7 +2269,29 @@ function buildCollectibles(count, seed) {
         const isInventoryOpen = document.getElementById("inventoryOverlay")?.classList.contains("open");
         if (isPlacingFloor && !isInventoryOpen) {
           const placingItemName = floorPlacementInfo && floorPlacementInfo.item ? floorPlacementInfo.item.name : "";
-          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase() : (placingItemName === "STONE_FLOOR" ? "stone_floor" : (placingItemName === "WOOD_STAIRS" ? "wood_stairs" : (placingItemName === "FOLDING_LADDER" ? "folding_ladder" : (placingItemName === "CAMPFIRE" ? "campfire" : (placingItemName === "WOOD_BOAT" ? "wood_boat" : (placingItemName === "ELECTRIC_ENGINE" ? "electric_engine" : (placingItemName === "BOAT_WING" ? "boat_wing" : (placingItemName === "WOOD_WHEEL" ? "wood_wheel" : (placingItemName === "WOOD_WALL" ? "wood_wall" : (placingItemName === "WOOD_WINDOW" ? "wood_window" : (placingItemName === "WOOD_DOOR" ? "wood_door" : (placingItemName === "WOOD_ROOF" ? "wood_roof" : (placingItemName === "WOOD_CHEST" ? "wood_chest" : (placingItemName === "WOOD_BED" ? "wood_bed" : (placingItemName === "WOOD_TABLE" ? "wood_table" : (placingItemName === "WOOD_CHAIR" ? "wood_chair" : (placingItemName === "MEGANEURA" ? "meganeura_item" : (placingItemName === "ISOPOD" ? "isopod_item" : (placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD" ? "obsidian_pad_warp_item" : (placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor" : "wood_floor"))))))))))))))))))));
+          const typeToPlace = placingItemName.startsWith("ROBOT_") ? placingItemName.toLowerCase()
+            : placingItemName === "STONE_FLOOR" ? "stone_floor"
+            : placingItemName === "WOOD_STAIRS" ? "wood_stairs"
+            : placingItemName === "FOLDING_LADDER" ? "folding_ladder"
+            : placingItemName === "CAMPFIRE" ? "campfire"
+            : placingItemName === "WOOD_BOAT" ? "wood_boat"
+            : placingItemName === "ELECTRIC_ENGINE" ? "electric_engine"
+            : placingItemName === "BOAT_WING" ? "boat_wing"
+            : placingItemName === "WOOD_WHEEL" ? "wood_wheel"
+            : placingItemName === "WOOD_WALL" ? "wood_wall"
+            : placingItemName === "WOOD_WINDOW" ? "wood_window"
+            : placingItemName === "WOOD_DOOR" ? "wood_door"
+            : placingItemName === "WOOD_ROOF" ? "wood_roof"
+            : placingItemName === "WOOD_CHEST" ? "wood_chest"
+            : placingItemName === "WOOD_BED" ? "wood_bed"
+            : placingItemName === "WOOD_TABLE" ? "wood_table"
+            : placingItemName === "WOOD_CHAIR" ? "wood_chair"
+            : placingItemName === "LANTERN" ? "lantern"
+            : placingItemName === "MEGANEURA" ? "meganeura_item"
+            : placingItemName === "ISOPOD" ? "isopod_item"
+            : (placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") ? "obsidian_pad_warp_item"
+            : placingItemName === "THIN_WOOD_FLOOR" ? "thin_wood_floor"
+            : "wood_floor";
 
           if (!floorPreviewCollectible || floorPreviewCollectible.type !== typeToPlace) {
             // Remove mismatched preview if it exists
@@ -2228,7 +2315,7 @@ function buildCollectibles(count, seed) {
             };
             collectibles.push(floorPreviewCollectible);
             floorPreviewCollectible = collectibles[collectibles.length - 1];
-            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof" || typeToPlace === "folding_ladder") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -2285,16 +2372,28 @@ function buildCollectibles(count, seed) {
             North[2] * cosH + East[2] * sinH,
           ];
 
+          const cosAimH = Math.cos(charHeading);
+          const sinAimH = Math.sin(charHeading);
+          const aimF = [
+            North[0] * cosAimH + East[0] * sinAimH,
+            North[1] * cosAimH + East[1] * sinAimH,
+            North[2] * cosAimH + East[2] * sinAimH,
+          ];
+
           // Set a close forward offset in actual meters (using actionReachDistance with a minimum safety fallback to prevent clipping)
-          const baseOffset = typeToPlace === "campfire" ? 0.20 : 0.35;
-          const forwardOffset = (typeToPlace === "campfire" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace.startsWith("robot_")) 
-            ? Math.max(baseOffset, actionReachDistance) 
-            : baseOffset; 
-          const playerPt = [nx * groundRadius, ny * groundRadius, nz * groundRadius];
+          const baseOffset = typeToPlace === "campfire" ? 0.20 : (typeToPlace === "lantern" ? 0.22 : 0.35);
+          const forwardOffset = typeToPlace === "lantern"
+            ? ((typeof actionReachDistance === "number" && actionReachDistance > 0.05) ? actionReachDistance : 0.25)
+            : ((typeToPlace === "campfire" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace.startsWith("robot_")) 
+              ? Math.max(baseOffset, actionReachDistance) 
+              : baseOffset); 
+          const activePreviewF = (typeToPlace === "lantern") ? aimF : F;
+          const activePlayerRad = (typeToPlace === "lantern" && currentFeetRad > groundRadius - 0.05) ? currentFeetRad : groundRadius;
+          const playerPt = [nx * activePlayerRad, ny * activePlayerRad, nz * activePlayerRad];
           const previewDir = [
-            playerPt[0] + F[0] * forwardOffset,
-            playerPt[1] + F[1] * forwardOffset,
-            playerPt[2] + F[2] * forwardOffset
+            playerPt[0] + activePreviewF[0] * forwardOffset,
+            playerPt[1] + activePreviewF[1] * forwardOffset,
+            playerPt[2] + activePreviewF[2] * forwardOffset
           ];
           const len = Math.sqrt(previewDir[0]*previewDir[0] + previewDir[1]*previewDir[1] + previewDir[2]*previewDir[2]);
           const pnx = previewDir[0] / (len || 1);
@@ -2333,9 +2432,9 @@ function buildCollectibles(count, seed) {
           const slopePhi = Math.abs(h2 - previewHeight) * dhScale;
           const slopeVal = Math.sqrt(slopeTheta*slopeTheta + slopePhi*slopePhi);
           
-          // Valid placement if not on water and not too steep (Stone Floor is valid everywhere, Wood Bed requires wooden floor)
+          // Valid placement if not on water and not too steep (Stone Floor is valid everywhere, Wood Bed requires wooden floor, Lantern requires wooden table or wooden floor)
           const maxSlope = typeToPlace === "campfire" ? 2.0 : 0.8;
-          floorPreviewCollectible.isValidPlacement = (typeToPlace === "wood_bed") ? false : ((typeToPlace === "stone_floor") ? true : (!isUnderWater && (slopeVal < maxSlope)));
+          floorPreviewCollectible.isValidPlacement = (typeToPlace === "wood_bed" || typeToPlace === "lantern") ? false : ((typeToPlace === "stone_floor") ? true : (!isUnderWater && (slopeVal < maxSlope)));
           
           const previewEast = [-Math.sin(previewPhi), 0, Math.cos(previewPhi)];
           const previewNorth = [-Math.cos(previewTheta) * Math.cos(previewPhi), Math.sin(previewTheta), -Math.cos(previewTheta) * Math.sin(previewPhi)];
@@ -2373,7 +2472,7 @@ function buildCollectibles(count, seed) {
           let pN = [pnx, pny, pnz];
 
           // "ลอยสูงจากพื้นเสมอ" -> float slightly above the ground at the preview location
-          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12)));
+          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12)));
           let bob = typeToPlace === "campfire" ? 0.005 : (Math.sin(Date.now() * 0.003) * 0.01 + bobAmt); 
           if (typeToPlace === "robot_cockpit") bob = 0.14;
           else if (typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") bob = 0.14;
@@ -2381,10 +2480,13 @@ function buildCollectibles(count, seed) {
           else if (typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") bob = 0.002;
           else if (typeToPlace.startsWith("robot_")) bob = 0.35;
 
+          const effectivePreviewRad = (typeToPlace === "lantern" && currentFeetRad > previewGroundRadius - 0.05)
+              ? currentFeetRad
+              : previewGroundRadius;
           let targetPos = [
-              (previewGroundRadius + bob) * pnx,
-              (previewGroundRadius + bob) * pny,
-              (previewGroundRadius + bob) * pnz
+              (effectivePreviewRad + bob) * pnx,
+              (effectivePreviewRad + bob) * pny,
+              (effectivePreviewRad + bob) * pnz
           ];
 
           // --- SNAPPING LOGIC ---
@@ -4347,7 +4449,7 @@ function buildCollectibles(count, seed) {
                 }
               }
             }
-          } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
+          } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
             // Direct wall snap for wood_window and wood_door
             if (typeToPlace === "wood_window" || typeToPlace === "wood_door") {
               let nearestWall = null;
@@ -4400,12 +4502,271 @@ function buildCollectibles(count, seed) {
               }
             }
 
+            // Direct table snap for wood_chair (Snap chair neatly into table seating slots)
+            if (!isSnapped && typeToPlace === "wood_chair") {
+              let nearestTable = null;
+              let nearestTableDist = Infinity;
+              for (let other of collectibles) {
+                if (other && other.active && !other.isPreview && other.type === "wood_table") {
+                  const dx = other.position[0] - targetPos[0];
+                  const dy = other.position[1] - targetPos[1];
+                  const dz = other.position[2] - targetPos[2];
+                  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                  if (dist < nearestTableDist && dist < 0.48) {
+                    nearestTableDist = dist;
+                    nearestTable = other;
+                  }
+                }
+              }
+
+              if (nearestTable) {
+                const tR = nearestTable.R || [1, 0, 0];
+                const tF = nearestTable.F || [0, 0, 1];
+                const tN = nearestTable.normal || [0, 1, 0];
+                const tP = nearestTable.position;
+
+                const tdx = targetPos[0] - tP[0];
+                const tdy = targetPos[1] - tP[1];
+                const tdz = targetPos[2] - tP[2];
+                const localX = tdx * tR[0] + tdy * tR[1] + tdz * tR[2];
+                const localZ = tdx * tF[0] + tdy * tF[1] + tdz * tF[2];
+                const localY = tdx * tN[0] + tdy * tN[1] + tdz * tN[2];
+
+                if (Math.abs(localY) < 0.35) {
+                  // Table dimensions: width along tR is 0.12 (half 0.060), depth along tF is 0.092 (half 0.046)
+                  // Chair width: 0.062 (half 0.031).
+                  // Chair backrest is at -f * 0.0248, chair front faces +f.
+                  // Front side (+tF): offset +0.064, chair faces -tF
+                  // Back side (-tF): offset -0.064, chair faces +tF
+                  // Left side (-tR): offset -0.076, chair faces +tR
+                  // Right side (+tR): offset +0.076, chair faces -tR
+                  // The table has only 2 openings (2 ช่องด้านหน้าและด้านหลัง ระหว่างขาโต๊ะ):
+                  // 1) Front slot (ช่องหน้า กึ่งกลางระหว่างขาโต๊ะหน้า): x = 0, z = +0.050
+                  // 2) Back slot (ช่องหลัง กึ่งกลางระหว่างขาโต๊ะหลัง): x = 0, z = -0.050
+                  // Tucked in cleanly under the tabletop (เบาะเก้าอี้สอดเข้าใต้โต๊ะอย่างพอดี ไม่ยื่นล้น และอยู่ตรงกลางพอดี)
+                  const tableSlots = [
+                    {
+                      name: "front",
+                      x: 0.0,
+                      z: 0.050,
+                      dirF: [-tF[0], -tF[1], -tF[2]],
+                      dirR: [-tR[0], -tR[1], -tR[2]],
+                      baseAngle: Math.PI
+                    },
+                    {
+                      name: "back",
+                      x: 0.0,
+                      z: -0.050,
+                      dirF: [tF[0], tF[1], tF[2]],
+                      dirR: [tR[0], tR[1], tR[2]],
+                      baseAngle: 0.0
+                    }
+                  ];
+
+                  let bestSlot = null;
+                  let bestSlotScore = Infinity;
+
+                  for (let s of tableSlots) {
+                    const sWorldPos = [
+                      tP[0] + tR[0] * s.x + tF[0] * s.z,
+                      tP[1] + tR[1] * s.x + tF[1] * s.z,
+                      tP[2] + tR[2] * s.x + tF[2] * s.z
+                    ];
+
+                    // Check if slot already has another chair placed
+                    let isOccupied = false;
+                    for (let other of collectibles) {
+                      if (other && other.active && !other.isPreview && other.type === "wood_chair") {
+                        const odx = other.position[0] - sWorldPos[0];
+                        const ody = other.position[1] - sWorldPos[1];
+                        const odz = other.position[2] - sWorldPos[2];
+                        if (odx * odx + ody * ody + odz * odz < 0.0016) { // ~4cm
+                          isOccupied = true;
+                          break;
+                        }
+                      }
+                    }
+
+                    // Check if slot penetrates an existing wall
+                    let isInsideWall = false;
+                    for (let other of collectibles) {
+                      if (other && other.active && !other.isPreview && (other.type === "wood_wall" || other.type === "wood_window" || other.type === "wood_door")) {
+                        const wdx = other.position[0] - sWorldPos[0];
+                        const wdy = other.position[1] - sWorldPos[1];
+                        const wdz = other.position[2] - sWorldPos[2];
+                        if (wdx * wdx + wdy * wdy + wdz * wdz < 0.0036) { // ~6cm
+                          isInsideWall = true;
+                          break;
+                        }
+                      }
+                    }
+
+                    const dist2D = Math.sqrt((localX - s.x) * (localX - s.x) + (localZ - s.z) * (localZ - s.z));
+                    let score = dist2D;
+                    if (isOccupied) score += 5.0;
+                    if (isInsideWall) score += 10.0;
+
+                    if (score < bestSlotScore) {
+                      bestSlotScore = score;
+                      bestSlot = { ...s, worldPos: sWorldPos, isOccupied, isInsideWall, rawDist: dist2D };
+                    }
+                  }
+
+                  if (bestSlot && bestSlot.rawDist < 0.28) {
+                    targetPos = [bestSlot.worldPos[0], bestSlot.worldPos[1], bestSlot.worldPos[2]];
+                    pN = [tN[0], tN[1], tN[2]];
+
+                    // Allow rotating the chair at the table slot with Q key (placementRotationAngle)
+                    const rotQ = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+                    const cosQ = Math.cos(rotQ);
+                    const sinQ = Math.sin(rotQ);
+
+                    pR = [
+                      bestSlot.dirR[0] * cosQ - bestSlot.dirF[0] * sinQ,
+                      bestSlot.dirR[1] * cosQ - bestSlot.dirF[1] * sinQ,
+                      bestSlot.dirR[2] * cosQ - bestSlot.dirF[2] * sinQ
+                    ];
+                    pF = [
+                      bestSlot.dirF[0] * cosQ + bestSlot.dirR[0] * sinQ,
+                      bestSlot.dirF[1] * cosQ + bestSlot.dirR[1] * sinQ,
+                      bestSlot.dirF[2] * cosQ + bestSlot.dirR[2] * sinQ
+                    ];
+
+                    floorPreviewCollectible.angle = bestSlot.baseAngle + rotQ;
+                    floorPreviewCollectible.isValidPlacement = !bestSlot.isOccupied && !bestSlot.isInsideWall;
+                    floorPreviewCollectible.size = 0.25;
+                    isSnapped = true;
+                  }
+                }
+              }
+            }
+
+            // Direct tabletop placement for lantern (วางตะเกียงบนโต๊ะไม้)
+            if (!isSnapped && typeToPlace === "lantern") {
+              const reachLim = Math.max((typeof actionReachDistance === "number" ? actionReachDistance : 0.25) + 0.22, 0.48);
+              const aimOrigin = [nx * currentFeetRad, ny * currentFeetRad, nz * currentFeetRad];
+              let bestTableMatch = null;
+              let bestTableScore = Infinity;
+
+              for (let other of collectibles) {
+                if (other && other.active && !other.isPreview && other.type === "wood_table") {
+                  const tR = other.R || [1, 0, 0];
+                  const tF = other.F || [0, 0, 1];
+                  const tN = other.normal || [0, 1, 0];
+                  const tP = other.position;
+
+                  // Vector from player's feet to table base center
+                  const vdx = tP[0] - aimOrigin[0];
+                  const vdy = tP[1] - aimOrigin[1];
+                  const vdz = tP[2] - aimOrigin[2];
+                  const localY = vdx * tN[0] + vdy * tN[1] + vdz * tN[2];
+                  if (Math.abs(localY) > 0.35) continue;
+
+                  // Forward distance along the white aim line (aimF)
+                  const projF = vdx * aimF[0] + vdy * aimF[1] + vdz * aimF[2];
+
+                  // 1) White line tip position in table local coordinates
+                  const tdx = targetPos[0] - tP[0];
+                  const tdy = targetPos[1] - tP[1];
+                  const tdz = targetPos[2] - tP[2];
+                  const tipLocalX = tdx * tR[0] + tdy * tR[1] + tdz * tR[2];
+                  const tipLocalZ = tdx * tF[0] + tdy * tF[1] + tdz * tF[2];
+
+                  // 2) Point along the white aim ray closest to the table's forward depth
+                  const clampedProj = Math.max(0.04, Math.min(reachLim, projF));
+                  const rayPtX = aimOrigin[0] + aimF[0] * clampedProj;
+                  const rayPtY = aimOrigin[1] + aimF[1] * clampedProj;
+                  const rayPtZ = aimOrigin[2] + aimF[2] * clampedProj;
+                  const rdx = rayPtX - tP[0];
+                  const rdy = rayPtY - tP[1];
+                  const rdz = rayPtZ - tP[2];
+                  const rayLocalX = rdx * tR[0] + rdy * tR[1] + rdz * tR[2];
+                  const rayLocalZ = rdx * tF[0] + rdy * tF[1] + rdz * tF[2];
+
+                  const isTipOnTable = (Math.abs(tipLocalX) <= 0.145 && Math.abs(tipLocalZ) <= 0.135);
+                  const isRayOnTable = (projF > 0.02 && projF <= reachLim && Math.abs(rayLocalX) <= 0.120 && Math.abs(rayLocalZ) <= 0.108);
+
+                  if (isTipOnTable || isRayOnTable) {
+                    const score = Math.hypot(rayLocalX, rayLocalZ) + Math.hypot(tipLocalX, tipLocalZ) * 0.5;
+                    if (score < bestTableScore) {
+                      bestTableScore = score;
+                      const useX = (Math.abs(tipLocalX) <= 0.060 && Math.abs(tipLocalZ) <= 0.046)
+                        ? tipLocalX
+                        : (rayLocalX * 0.65 + tipLocalX * 0.35);
+                      const useZ = (Math.abs(tipLocalX) <= 0.060 && Math.abs(tipLocalZ) <= 0.046)
+                        ? tipLocalZ
+                        : (rayLocalZ * 0.65 + tipLocalZ * 0.35);
+                      bestTableMatch = { table: other, localX: useX, localZ: useZ };
+                    }
+                  }
+                }
+              }
+
+              if (bestTableMatch) {
+                const nearestTable = bestTableMatch.table;
+                const tR = nearestTable.R || [1, 0, 0];
+                const tF = nearestTable.F || [0, 0, 1];
+                const tN = nearestTable.normal || [0, 1, 0];
+                const tP = nearestTable.position;
+
+                // Tabletop top surface is at (0.134 + 0.011) * 0.46 = 0.0667
+                const tableTopH = 0.145 * 0.46;
+                const subStep = 0.015;
+                let snapX = Math.round(bestTableMatch.localX / subStep) * subStep;
+                let snapZ = Math.round(bestTableMatch.localZ / subStep) * subStep;
+                // Clamp within tabletop bounds so lantern base (half-width 0.017) never overhangs the table edge
+                snapX = Math.max(-0.040, Math.min(0.040, snapX));
+                snapZ = Math.max(-0.026, Math.min(0.026, snapZ));
+
+                const candPos = [
+                  tP[0] + tR[0] * snapX + tF[0] * snapZ + tN[0] * tableTopH,
+                  tP[1] + tR[1] * snapX + tF[1] * snapZ + tN[1] * tableTopH,
+                  tP[2] + tR[2] * snapX + tF[2] * snapZ + tN[2] * tableTopH
+                ];
+
+                let isOverlapOnTable = false;
+                for (let other of collectibles) {
+                  if (other && other.active && !other.isPreview && other.type === "lantern") {
+                    const odx = other.position[0] - candPos[0];
+                    const ody = other.position[1] - candPos[1];
+                    const odz = other.position[2] - candPos[2];
+                    if (odx * odx + ody * ody + odz * odz < 0.0011) { // ~3.3cm
+                      isOverlapOnTable = true;
+                      break;
+                    }
+                  }
+                }
+
+                targetPos = candPos;
+                pN = [tN[0], tN[1], tN[2]];
+
+                const rotQ = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
+                const cosQ = Math.cos(rotQ);
+                const sinQ = Math.sin(rotQ);
+                pR = [
+                  tR[0] * cosQ - tF[0] * sinQ,
+                  tR[1] * cosQ - tF[1] * sinQ,
+                  tR[2] * cosQ - tF[2] * sinQ
+                ];
+                pF = [
+                  tF[0] * cosQ + tR[0] * sinQ,
+                  tF[1] * cosQ + tR[1] * sinQ,
+                  tF[2] * cosQ + tR[2] * sinQ
+                ];
+
+                floorPreviewCollectible.angle = rotQ;
+                floorPreviewCollectible.isValidPlacement = !isOverlapOnTable;
+                floorPreviewCollectible.size = 0.25;
+                isSnapped = true;
+              }
+            }
+
             // Find nearest wood_floor for grid snapping (Only placeable on wood floors)
             let nearestFloor = null;
             let nearestDist = Infinity;
             if (!isSnapped) {
               for (let other of collectibles) {
-                const isAllowedFloor = (typeToPlace === "wood_bed")
+                const isAllowedFloor = (typeToPlace === "wood_bed" || typeToPlace === "lantern")
                   ? (other.type === "wood_floor" || other.type === "thin_wood_floor")
                   : (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor");
                 if (other.active && isAllowedFloor && !other.isPreview) {
@@ -4421,7 +4782,7 @@ function buildCollectibles(count, seed) {
               }
             }
 
-            const maxFloorDist = (typeToPlace === "thin_wood_floor" || typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") ? 2.5 : (typeToPlace === "wood_bed" ? 1.2 : 0.6);
+            const maxFloorDist = (typeToPlace === "thin_wood_floor" || typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door") ? 2.5 : ((typeToPlace === "wood_bed" || typeToPlace === "lantern") ? 1.2 : 0.6);
             if (nearestFloor && nearestDist < maxFloorDist) {
                 const sR = nearestFloor.R || [1, 0, 0];
                 const sF = nearestFloor.F || [0, 0, 1];
@@ -4437,16 +4798,16 @@ function buildCollectibles(count, seed) {
                 const localZ = dx * sF[0] + dy * sF[1] + dz * sF[2];
 
                 // If within expanded wood_floor bounds (generous snapping)
-                let snapBound = (typeToPlace === "thin_wood_floor" && (nearestFloor.type === "thin_wood_floor" || nearestFloor.type === "wood_floor")) ? 0.65 : (typeToPlace === "wood_bed" ? 0.45 : 0.35);
+                let snapBound = (typeToPlace === "thin_wood_floor" && (nearestFloor.type === "thin_wood_floor" || nearestFloor.type === "wood_floor")) ? 0.65 : ((typeToPlace === "wood_bed" || typeToPlace === "lantern") ? 0.45 : 0.35);
                 if (Math.abs(localX) <= snapBound && Math.abs(localZ) <= snapBound) {
                     // Snap localX and localZ to 0.15 grid (-0.15, 0.0, 0.15)
                     let gridX = Math.round(localX / 0.15);
                     let gridZ = Math.round(localZ / 0.15);
 
                     // Prevent center and corner placement for walls to avoid overlapping side-by-side, unless placing on thin_wood_floor which allows center placement, or if placing thin_wood_floor itself.
-                    if (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
+                    if (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
                         const isWoodFloor = (nearestFloor.type === "wood_floor" || nearestFloor.type === "thin_wood_floor");
-                        let validPlace = (typeToPlace === "wood_bed") ? isWoodFloor : true;
+                        let validPlace = (typeToPlace === "wood_bed" || typeToPlace === "lantern") ? isWoodFloor : true;
                         floorPreviewCollectible.size = 0.25;
 
                         let floorHH = 0;
@@ -4479,6 +4840,9 @@ function buildCollectibles(count, seed) {
                         } else if (typeToPlace === "wood_chair") {
                             halfW = 0.032; // 0.135 * 0.46 / 2
                             halfD = 0.032; // 0.135 * 0.46 / 2
+                        } else if (typeToPlace === "lantern") {
+                            halfW = 0.018; // 0.074 * 0.46 / 2
+                            halfD = 0.018; // 0.074 * 0.46 / 2
                         } else if (typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
                             halfW = 0.085;
                             halfD = 0.085;
@@ -4508,7 +4872,7 @@ function buildCollectibles(count, seed) {
                             if (Math.abs(olX) > 0.55 || Math.abs(olZ) > 0.55) continue;
 
                             // Check adjacent floors at the same height level so items don't overhang into mid-air
-                            const isValidNeighborFloor = (typeToPlace === "wood_bed")
+                            const isValidNeighborFloor = (typeToPlace === "wood_bed" || typeToPlace === "lantern")
                                 ? (other.type === "wood_floor" || other.type === "thin_wood_floor")
                                 : (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor");
                             if (isValidNeighborFloor && Math.abs(olN) < 0.08) {
@@ -4538,7 +4902,8 @@ function buildCollectibles(count, seed) {
                             }
 
                             // Check other placed furniture on this floor to prevent overlapping objects
-                            if ((other.type === "wood_bed" || other.type === "wood_chest" || other.type === "wood_table" || other.type === "wood_chair" || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") && Math.abs(olN - (floorHH / 2)) < 0.12) {
+                            const isFloorLevelLantern = (other.type === "lantern" && Math.abs(olN - (floorHH / 2)) < 0.035);
+                            if ((other.type === "wood_bed" || other.type === "wood_chest" || other.type === "wood_table" || other.type === "wood_chair" || isFloorLevelLantern || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") && Math.abs(olN - (floorHH / 2)) < 0.12) {
                                 const oR = other.R || sR;
                                 const oF = other.F || sF;
                                 let oHalfW = 0.06, oHalfD = 0.06;
@@ -4546,6 +4911,7 @@ function buildCollectibles(count, seed) {
                                 else if (other.type === "wood_chest") { oHalfW = 0.058; oHalfD = 0.048; }
                                 else if (other.type === "wood_table") { oHalfW = 0.060; oHalfD = 0.046; }
                                 else if (other.type === "wood_chair") { oHalfW = 0.032; oHalfD = 0.032; }
+                                else if (other.type === "lantern") { oHalfW = 0.018; oHalfD = 0.018; }
                                 else { oHalfW = 0.085; oHalfD = 0.085; }
                                 const rDotX = Math.abs(oR[0] * sR[0] + oR[1] * sR[1] + oR[2] * sR[2]);
                                 const fDotX = Math.abs(oF[0] * sR[0] + oF[1] * sR[1] + oF[2] * sR[2]);
@@ -4967,7 +5333,7 @@ function buildCollectibles(count, seed) {
                     }
             }
           } else {
-                    if (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
+                    if (!isSnapped && (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_"))) {
                         floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
                         floorPreviewCollectible.size = 0.25;
                         const rotAngleG = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
@@ -4976,7 +5342,7 @@ function buildCollectibles(count, seed) {
                         pN = [pnx, pny, pnz];
                         pR = [previewEast[0] * cosHG - previewNorth[0] * sinHG, previewEast[1] * cosHG - previewNorth[1] * sinHG, previewEast[2] * cosHG - previewNorth[2] * sinHG];
                         pF = [previewNorth[0] * cosHG + previewEast[0] * sinHG, previewNorth[1] * cosHG + previewEast[1] * sinHG, previewNorth[2] * cosHG + previewEast[2] * sinHG];
-                    } else if (typeToPlace === "wood_bed") {
+                    } else if (!isSnapped && (typeToPlace === "wood_bed" || typeToPlace === "lantern")) {
                         floorPreviewCollectible.isValidPlacement = false;
                         floorPreviewCollectible.size = 0.25;
                         pN = [pnx, pny, pnz];
@@ -4989,7 +5355,7 @@ function buildCollectibles(count, seed) {
             }
           } else {
                 // No wood floor found nearby or too far
-                if (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
+                if (!isSnapped && (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_"))) {
                     floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
                     floorPreviewCollectible.size = 0.25;
                     const rotAngleG = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
@@ -4998,7 +5364,7 @@ function buildCollectibles(count, seed) {
                     pN = [pnx, pny, pnz];
                     pR = [previewEast[0] * cosHG - previewNorth[0] * sinHG, previewEast[1] * cosHG - previewNorth[1] * sinHG, previewEast[2] * cosHG - previewNorth[2] * sinHG];
                     pF = [previewNorth[0] * cosHG + previewEast[0] * sinHG, previewNorth[1] * cosHG + previewEast[1] * sinHG, previewNorth[2] * cosHG + previewEast[2] * sinHG];
-                } else if (typeToPlace === "wood_bed") {
+                } else if (!isSnapped && (typeToPlace === "wood_bed" || typeToPlace === "lantern")) {
                     floorPreviewCollectible.isValidPlacement = false;
                     floorPreviewCollectible.size = 0.25;
                     pN = [pnx, pny, pnz];
@@ -6196,6 +6562,18 @@ function buildCollectibles(count, seed) {
           placeType: "wood_chair",
           usage_th: "พรี-วางเป็นเก้าอี้ไม้มีพนักพิงสไตล์โลโพลีสำหรับตกแต่งคู่กับโต๊ะไม้ คราฟต์จากท่อนไม้ 1 อัน",
           usage_en: "Pre-place as a low-poly wooden chair with backrest. Crafted from 1 Wood Log.",
+          maxStack: 99
+        },
+        "LANTERN": {
+          id: "LANTERN",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "ตะเกียง",
+          name_en: "Lantern",
+          icon: "🏮",
+          actionType: "PLACE_FURNITURE",
+          placeType: "lantern",
+          usage_th: "พรี-วางเป็นตะเกียงหินเรืองแสงโลโพลีเพื่อให้แสงสว่างและตกแต่งบ้าน (วางได้บนโต๊ะไม้และพื้นไม้) คราฟต์จากหินเรืองแสง 1 และแร่เหล็ก 1",
+          usage_en: "Pre-place as a low-poly glowing ore lantern for light and decoration (can be placed on wooden tables and wooden floors). Crafted from 1 Glowing Ore and 1 Iron Ore.",
           maxStack: 99
         },
         "CAMPFIRE": {

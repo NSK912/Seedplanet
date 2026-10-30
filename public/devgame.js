@@ -887,6 +887,22 @@ const _devCharUIInitTimer = setInterval(() => {
     // Inject CSS to fix control group sizes
     const styleEl = document.createElement("style");
     styleEl.innerHTML = `
+      #mainControls {
+        scrollbar-width: thin;
+        scrollbar-color: #dfb76c rgba(20, 20, 25, 0.85);
+        overscroll-behavior: contain;
+      }
+      #mainControls::-webkit-scrollbar {
+        width: 8px;
+      }
+      #mainControls::-webkit-scrollbar-track {
+        background: rgba(20, 20, 25, 0.85);
+        border-radius: 4px;
+      }
+      #mainControls::-webkit-scrollbar-thumb {
+        background: #dfb76c;
+        border-radius: 4px;
+      }
       #mainControls .control-group {
         width: 240px !important;
         flex: 1 1 240px !important;
@@ -896,6 +912,19 @@ const _devCharUIInitTimer = setInterval(() => {
         box-sizing: border-box;
         margin: 0 !important;
         padding: 16px !important;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(223, 183, 108, 0.6) rgba(10, 10, 15, 0.6);
+        overscroll-behavior: contain;
+      }
+      #mainControls .control-group::-webkit-scrollbar {
+        width: 5px;
+      }
+      #mainControls .control-group::-webkit-scrollbar-track {
+        background: rgba(10, 10, 15, 0.6);
+      }
+      #mainControls .control-group::-webkit-scrollbar-thumb {
+        background: rgba(223, 183, 108, 0.6);
+        border-radius: 3px;
       }
       /* Hide any genuinely empty control groups */
       #mainControls .control-group:empty {
@@ -915,12 +944,19 @@ const _devCharUIInitTimer = setInterval(() => {
     });
     mainControls.appendChild(closeBtn);
   }
-if (toggleControlsBtn && mainControls) {
-    toggleControlsBtn?.addEventListener("click", () => {
+  if (toggleControlsBtn && mainControls) {
+    toggleControlsBtn.dataset.hasToggleListener = "true";
+    toggleControlsBtn.addEventListener("click", () => {
       controlsVisible = !controlsVisible;
       if (controlsVisible) {
         mainControls.style.display = "flex";
         toggleControlsBtn.textContent = "⚙️ ซ่อนเมนู";
+        if (document.exitPointerLock) {
+          try { document.exitPointerLock(); } catch(e){}
+        }
+        if (typeof window.simulatedPointerLock !== "undefined") {
+          window.simulatedPointerLock = false;
+        }
         if (typeof window.updateDevCharacterModelUI === "function") {
           window.updateDevCharacterModelUI();
         }
