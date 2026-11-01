@@ -9,7 +9,9 @@
     <meta name="description" content="A planet-seeding simulation game with procedural terrain, adaptive environments, hierarchical finger and knuckle rigging, physics, and devgame character customization." />
     <meta property="og:title" content="seedplanet" />
     <meta property="og:description" content="A planet-seeding simulation game with procedural terrain, adaptive environments, hierarchical finger and knuckle rigging, physics, and devgame character customization." />
+    <meta name="theme-color" content="#18212b" />
     <title>seedplanet</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="icon" type="image/png" href="assets/Flower Spiral Fibonacci.png?v=2.0.0.8" />
@@ -19,5 +21,14 @@
   </head>
   <body>
     <script src="loader.js?v=1789149500000"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch((error) => {
+            console.error('Service worker registration failed:', error);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

@@ -78,15 +78,13 @@ export default function App() {
                 <StatCard title="Network" value="128 KB/s" trend="Stable" />
               </div>
               <div className="mt-8 p-6 bg-[#121215] border border-white/5 rounded-xl shadow-sm">
-                <h3 className="text-sm font-medium text-white mb-2">Desktop App Ready (Electron)</h3>
+                <h3 className="text-sm font-medium text-white mb-2">Desktop PWA Packaging</h3>
                 <p className="text-slate-400 text-sm leading-relaxed mb-4">
-                  Full hardware acceleration enabled with native Wayland/X11 and unlocked 120 FPS+ refresh rate.
+                  Full hardware acceleration enabled with native Wayland/X11 and unlocked refresh rate via Chromium standalone mode.
                 </p>
                 <div className="bg-zinc-900/50 p-4 rounded-lg font-mono text-xs text-indigo-300 overflow-x-auto border border-white/5">
-                  <span className="text-slate-500"># Run desktop app locally:</span><br />
-                  npm run dev:electron<br />
-                  <span className="text-slate-500"># Build Linux AppImage:</span><br />
-                  npm run build:electron
+                  <span className="text-slate-500"># Build Linux AppImage / Windows package:</span><br />
+                  bash scripts/build-appimage.sh
                 </div>
               </div>
             </div>
