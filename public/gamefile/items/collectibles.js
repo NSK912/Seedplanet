@@ -147,8 +147,6 @@ function detachTreeAttachedFruits(tree) {
       window.pendingCollectibleRefresh = true;
       window.pendingDynamicCollectibleRefresh = true;
     }
-    if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO();
-    else if (typeof window.refreshCollectiblesVBO === "function") window.refreshCollectiblesVBO();
   }
   return detachedAny;
 }
@@ -1946,7 +1944,7 @@ function buildCollectibles(count, seed) {
             return buf.subarray(0, arr.length);
         }
 
-        const flatGeom = makeFlatShadedGeometry(vertices, colors, indices, targetBuffer === 'dynamic' || targetBuffer === 'preview');
+        const flatGeom = makeFlatShadedGeometry(vertices, colors, indices, true);
         const isUint32 = supportUint32 && flatGeom && flatGeom.indices && flatGeom.indices.length > 65535;
 
         if (targetBuffer === 'main') {
@@ -1958,7 +1956,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              new Float32Array(flatGeom.vertices),
+              flatGeom.vertices instanceof Float32Array ? flatGeom.vertices : new Float32Array(flatGeom.vertices),
               gl.STATIC_DRAW,
             );
 
@@ -1966,7 +1964,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleColorBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              new Float32Array(flatGeom.colors),
+              flatGeom.colors instanceof Float32Array ? flatGeom.colors : new Float32Array(flatGeom.colors),
               gl.STATIC_DRAW,
             );
 
@@ -1975,7 +1973,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleNormalBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              new Float32Array(flatGeom.normals),
+              flatGeom.normals instanceof Float32Array ? flatGeom.normals : new Float32Array(flatGeom.normals),
               gl.STATIC_DRAW,
             );
 
@@ -1983,7 +1981,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
             gl.bufferData(
               gl.ELEMENT_ARRAY_BUFFER,
-              isUint32 ? new Uint32Array(flatGeom.indices) : new Uint16Array(flatGeom.indices),
+              isUint32 ? (flatGeom.indices instanceof Uint32Array ? flatGeom.indices : new Uint32Array(flatGeom.indices)) : (flatGeom.indices instanceof Uint16Array ? flatGeom.indices : new Uint16Array(flatGeom.indices)),
               gl.STATIC_DRAW,
             );
         } else if (targetBuffer === 'dynamic') {

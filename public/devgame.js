@@ -938,31 +938,25 @@ const _devCharUIInitTimer = setInterval(() => {
     closeBtn.textContent = "❌ ปิด";
     closeBtn.style.cssText = "position: absolute; top: 10px; right: 10px; background: #333; border: 1px solid #555; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; z-index: 10000;";
     closeBtn.addEventListener("click", () => {
-      controlsVisible = false;
-      mainControls.style.display = "none";
-      toggleControlsBtn.textContent = "⚙️ แสดงเมนู";
+      if (typeof window.toggleDevControls === "function") {
+        window.toggleDevControls(false);
+      } else {
+        controlsVisible = false;
+        mainControls.style.display = "none";
+        if (toggleControlsBtn) toggleControlsBtn.textContent = "⚙️ แสดงเมนู";
+      }
     });
     mainControls.appendChild(closeBtn);
   }
-  if (toggleControlsBtn && mainControls) {
+  if (toggleControlsBtn && mainControls && !toggleControlsBtn.dataset.hasToggleListener) {
     toggleControlsBtn.dataset.hasToggleListener = "true";
     toggleControlsBtn.addEventListener("click", () => {
-      controlsVisible = !controlsVisible;
-      if (controlsVisible) {
-        mainControls.style.display = "flex";
-        toggleControlsBtn.textContent = "⚙️ ซ่อนเมนู";
-        if (document.exitPointerLock) {
-          try { document.exitPointerLock(); } catch(e){}
-        }
-        if (typeof window.simulatedPointerLock !== "undefined") {
-          window.simulatedPointerLock = false;
-        }
-        if (typeof window.updateDevCharacterModelUI === "function") {
-          window.updateDevCharacterModelUI();
-        }
+      if (typeof window.toggleDevControls === "function") {
+        window.toggleDevControls();
       } else {
-        mainControls.style.display = "none";
-        toggleControlsBtn.textContent = "⚙️ แสดงเมนู";
+        controlsVisible = !controlsVisible;
+        mainControls.style.display = controlsVisible ? "flex" : "none";
+        toggleControlsBtn.textContent = controlsVisible ? "⚙️ ซ่อนเมนู" : "⚙️ แสดงเมนู";
       }
     });
   }

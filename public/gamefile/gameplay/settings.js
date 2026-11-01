@@ -23,6 +23,8 @@ let frameTime = 1000 / targetFps;
 
 let shadowMapQuality = isAndroidProfile ? 1 : 2;
 let shadowMapEnabled = shadowMapQuality > 0;
+const isMobileSSRProfile = isAndroidProfile || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+let ssrQuality = isMobileSSRProfile ? 0 : 2;
 let antialiasEnabled = false;
 let fxaaEnabled = true;
 let taauEnabled = fxaaEnabled;
@@ -36,6 +38,9 @@ try {
       if (typeof parsedOptions.shadowMapEnabled === "boolean") {
         shadowMapEnabled = parsedOptions.shadowMapEnabled; if(typeof parsedOptions.shadowMapQuality === "number") { shadowMapQuality = Math.max(1, parsedOptions.shadowMapQuality); }
         shadowMapEnabled = true;
+      }
+      if (typeof parsedOptions.ssrQuality === "number") {
+        ssrQuality = Math.max(0, Math.min(3, Math.round(parsedOptions.ssrQuality)));
       }
       if (typeof parsedOptions.antialiasEnabled === "boolean") {
         antialiasEnabled = parsedOptions.antialiasEnabled;
@@ -56,6 +61,9 @@ try {
         if (typeof parsedSettings.shadowMapEnabled === "boolean") {
           shadowMapEnabled = parsedSettings.shadowMapEnabled;
         }
+        if (typeof parsedSettings.ssrQuality === "number") {
+          ssrQuality = Math.max(0, Math.min(3, Math.round(parsedSettings.ssrQuality)));
+        }
         if (typeof parsedSettings.antialiasEnabled === "boolean") {
           antialiasEnabled = parsedSettings.antialiasEnabled;
         }
@@ -73,6 +81,7 @@ try {
   console.error("Failed to pre-load settings in settings.js:", e);
 }
 
+window.ssrQuality = ssrQuality;
 window.fxaaEnabled = fxaaEnabled;
 window.taauEnabled = fxaaEnabled;
 window.antialiasEnabled = antialiasEnabled;
@@ -585,6 +594,7 @@ function syncInventorySettingsUI() {
   if (typeof updateFpsToggleUI === 'function') updateFpsToggleUI();
   if (typeof updateFpsLimitUI === 'function') updateFpsLimitUI();
   if (typeof updateShadowMapUI === 'function') updateShadowMapUI();
+  if (typeof window.updateSSRQualityUI === 'function') window.updateSSRQualityUI();
   if (typeof updateAntialiasUI === 'function') updateAntialiasUI();
   updateFxaaUI();
 

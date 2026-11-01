@@ -205,21 +205,33 @@ function ensureCustomCursor() {
   }
 
   const originalExitPointerLock = Document.prototype.exitPointerLock;
-  document.exitPointerLock = function() {
-    // Only allow exit pointer lock if requested during window blur / switching app
-    if (!window.isSwitchingApp) {
-      return; // Ignore internal exit calls from game menus so pointer lock stays locked!
+  document.exitPointerLock = function(force) {
+    const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
+    const isDevOpen = window.controlsVisible || (mainControls && (mainControls.style.display === "flex" || (window.getComputedStyle && window.getComputedStyle(mainControls).display !== "none")) && mainControls.offsetParent !== null);
+    const isGameUIOpen = typeof isUIOpen === "function" && isUIOpen();
+
+    // Only ignore exit pointer lock during active gameplay without any UI open
+    if (!force && !window.isSwitchingApp && !isDevOpen && !isGameUIOpen) {
+      return;
     }
     simulatedPointerLock = false;
+    window.simulatedPointerLock = false;
     const nativeEl = originalPointerLockElementDesc ? originalPointerLockElementDesc.get.call(document) : null;
     if (nativeEl && originalExitPointerLock) {
       try { originalExitPointerLock.call(document); } catch(err){}
     }
+    if (document.body) document.body.classList.remove("custom-cursor-active");
     document.dispatchEvent(new Event('pointerlockchange'));
   };
 })();
 
 function requestPointerLockSafe() {
+  const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
+  const isDevOpen = window.controlsVisible || (mainControls && (mainControls.style.display === "flex" || (window.getComputedStyle && window.getComputedStyle(mainControls).display !== "none")) && mainControls.offsetParent !== null);
+  if (isDevOpen || (typeof isUIOpen === "function" && isUIOpen())) {
+    return;
+  }
+
   ensureCustomCursor();
   simulatedPointerLock = true;
 
@@ -240,9 +252,13 @@ function requestPointerLockSafeLegacy() {
   requestPointerLockSafe();
 }
 
-// Lock on first click from start screen or page
+// Lock on first click from start screen or page (only during active gameplay, never when UI or DevGame is open)
 window.addEventListener("pointerdown", (e) => {
   if (e.pointerType !== "mouse") return;
+  const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
+  const isDevOpen = mainControls && (mainControls.style.display === "flex" || (window.getComputedStyle && window.getComputedStyle(mainControls).display !== "none")) && mainControls.offsetParent !== null;
+  if (isDevOpen || (typeof isUIOpen === "function" && isUIOpen())) return;
+  if (e.target && e.target.closest && e.target.closest("#mainControls, .controls, .control-group, [id^='dev'], #toggleControlsBtn, .game-ui")) return;
   requestPointerLockSafe();
 }, { capture: true });
 
@@ -714,6 +730,37 @@ window.addEventListener("pointermove", handleVirtualMouseMove, { capture: true, 
 let lastVirtualMouseUpTime = 0;
 
 // Setup click listener for toggleControlsBtn if present
+window.toggleDevControls = function(forceState) {
+  const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
+  const toggleBtn = document.getElementById("toggleControlsBtn");
+  if (!mainControls) return;
+  const isHidden = mainControls.style.display === "none" || (window.getComputedStyle && window.getComputedStyle(mainControls).display === "none");
+  const show = typeof forceState === "boolean" ? forceState : isHidden;
+
+  if (show) {
+    mainControls.style.display = "flex";
+    if (toggleBtn) toggleBtn.textContent = "⚙️ ซ่อนเมนู";
+    window.controlsVisible = true;
+    if (document.exitPointerLock) {
+      try { document.exitPointerLock(true); } catch(err){}
+    }
+    if (typeof simulatedPointerLock !== "undefined") {
+      simulatedPointerLock = false;
+    }
+    if (typeof window.simulatedPointerLock !== "undefined") {
+      window.simulatedPointerLock = false;
+    }
+    if (document.body) document.body.classList.remove("custom-cursor-active");
+    if (typeof window.updateDevCharacterModelUI === "function") {
+      try { window.updateDevCharacterModelUI(); } catch(err){}
+    }
+  } else {
+    mainControls.style.display = "none";
+    if (toggleBtn) toggleBtn.textContent = "⚙️ แสดงเมนู";
+    window.controlsVisible = false;
+  }
+};
+
 function setupToggleControlsBtnListener() {
   const toggleBtn = document.getElementById("toggleControlsBtn");
   if (toggleBtn && !toggleBtn.dataset.hasToggleListener) {
@@ -722,22 +769,7 @@ function setupToggleControlsBtnListener() {
     toggleBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const mainControls = document.getElementById("mainControls");
-      if (!mainControls) return;
-      const isHidden = mainControls.style.display === "none" || (window.getComputedStyle && window.getComputedStyle(mainControls).display === "none");
-      if (isHidden) {
-        mainControls.style.display = "flex";
-        toggleBtn.textContent = "⚙️ ซ่อนเมนู";
-        if (document.exitPointerLock) {
-          try { document.exitPointerLock(); } catch(err){}
-        }
-        if (typeof simulatedPointerLock !== "undefined") {
-          simulatedPointerLock = false;
-        }
-      } else {
-        mainControls.style.display = "none";
-        toggleBtn.textContent = "⚙️ แสดงเมนู";
-      }
+      window.toggleDevControls();
     });
   }
 }
@@ -1013,20 +1045,40 @@ window.addEventListener("pointerup", () => {
 window.addEventListener("wheel", (e) => {
   if (isSyntheticEvent) return;
 
-  // 1. Resolve element under mouse or virtual cursor
-  let targetEl = null;
-  if (typeof e.clientX === "number" && !isNaN(e.clientX) && (e.clientX > 0 || e.clientY > 0)) {
-    targetEl = document.elementFromPoint(e.clientX, e.clientY) || e.target;
-  } else if (typeof virtualCursorX !== "undefined" && typeof virtualCursorY !== "undefined") {
-    targetEl = document.elementFromPoint(virtualCursorX, virtualCursorY) || e.target;
-  } else {
-    targetEl = e.target;
+  // 1. Resolve coordinates & element under mouse or virtual cursor
+  let ptX = e.clientX;
+  let ptY = e.clientY;
+  const isPointerLocked = !!(document.pointerLockElement || (typeof simulatedPointerLock !== "undefined" && simulatedPointerLock));
+  if (isPointerLocked && typeof virtualCursorX === "number" && typeof virtualCursorY === "number") {
+    ptX = virtualCursorX;
+    ptY = virtualCursorY;
+  } else if ((ptX === undefined || ptY === undefined || (ptX === 0 && ptY === 0)) && typeof virtualCursorX === "number" && typeof virtualCursorY === "number") {
+    ptX = virtualCursorX;
+    ptY = virtualCursorY;
   }
+
+  let targetEl = null;
+  if (typeof ptX === "number" && !isNaN(ptX) && typeof ptY === "number" && !isNaN(ptY)) {
+    try { targetEl = document.elementFromPoint(ptX, ptY); } catch(err){}
+  }
+  if (!targetEl) targetEl = e.target;
 
   // 2. DevGame & Dev UI (RAW INPUT):
   // Directly handle native scrolling for #mainControls, .control-group, and dev panels without simulated scrollbar interference
-  const isDevTarget = !!((targetEl && targetEl.closest && targetEl.closest("#mainControls, .controls, .control-group, [id^='dev'], [class*='dev']")) ||
-                         (e.target && e.target.closest && e.target.closest("#mainControls, .controls, .control-group, [id^='dev'], [class*='dev']")));
+  const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
+  const isDevOpen = !!(window.controlsVisible || (mainControls && (mainControls.style.display === "flex" || (window.getComputedStyle && window.getComputedStyle(mainControls).display !== "none")) && mainControls.offsetParent !== null));
+
+  let isDevTarget = false;
+  if (isDevOpen && mainControls) {
+    const rect = mainControls.getBoundingClientRect();
+    if (typeof ptX === "number" && ptX >= rect.left && ptX <= rect.right && ptY >= rect.top && ptY <= rect.bottom) {
+      isDevTarget = true;
+    }
+  }
+  if (!isDevTarget) {
+    isDevTarget = !!((targetEl && targetEl.closest && targetEl.closest("#mainControls, .controls, .control-group, [id^='dev'], [class*='dev']")) ||
+                     (e.target && e.target.closest && e.target.closest("#mainControls, .controls, .control-group, [id^='dev'], [class*='dev']")));
+  }
 
   if (isDevTarget) {
     e.preventDefault();
@@ -1036,6 +1088,7 @@ window.addEventListener("wheel", (e) => {
     let scrollEl = null;
     let curr = targetEl || e.target;
     while (curr && curr !== document.body && curr !== document.documentElement) {
+      if (curr === mainControls) break; // Check inner containers first before the outer main window
       if (curr.scrollHeight > curr.clientHeight + 1) {
         const overflowY = window.getComputedStyle(curr).overflowY;
         if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
@@ -1044,26 +1097,21 @@ window.addEventListener("wheel", (e) => {
           if (canScrollDown || canScrollUp) {
             scrollEl = curr;
             break;
-          } else if (!scrollEl) {
-            scrollEl = curr; // Candidate if outer containers cannot scroll either
           }
         }
       }
       curr = curr.parentElement;
     }
 
-    // Fallback: If an inner group reached its scroll boundary, bubble scroll to the parent #mainControls
-    if (!scrollEl || (e.deltaY > 0 && scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1) || (e.deltaY < 0 && scrollEl.scrollTop <= 1)) {
-      const mainControls = document.getElementById("mainControls") || document.querySelector(".controls");
-      if (mainControls && mainControls.scrollHeight > mainControls.clientHeight + 1) {
-        scrollEl = mainControls;
-      }
+    // Fallback: If no inner container can scroll in this direction (or inner reached edge), bubble scroll to #mainControls
+    if (!scrollEl && mainControls && (mainControls.scrollHeight > mainControls.clientHeight + 1)) {
+      scrollEl = mainControls;
     }
 
     if (scrollEl) {
       scrollEl.scrollTop += e.deltaY;
     }
-    // Raw input: NEVER invoke simulated inventory scrollbars and NEVER switch hotbar action slots
+    // Raw input: NEVER invoke simulated inventory scrollbars and NEVER switch hotbar action slots or zoom camera
     return;
   }
 

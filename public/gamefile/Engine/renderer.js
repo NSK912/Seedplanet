@@ -187,6 +187,11 @@
             uniform vec4 uPointLights[16];
             uniform vec4 uPointLightColors[16];
             uniform int uPointLightCount;
+            
+            // Unified Screen-Space Reflection (SSR) Uniforms
+            uniform sampler2D uSSRSceneTex;
+            uniform mat4 uViewProjMatrix;
+            uniform float uSSREnabled;
 
             ${window.SHARED_SHADOW_GLSL = `
             float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
@@ -494,67 +499,52 @@
                     vec3 normalWorld = normalize(vWorldNormal);
                     vec3 reflVecWorld = reflect(viewDirWorld, normalWorld);
 
-                    // local coordinate frame for the window pane
-                    vec3 localUp = normalize(vWorldPos); // Radially outward from planet center
-                    vec3 localTangent = normalize(cross(localUp, normalWorld));
+                    // --- UNIFIED SCREEN-SPACE REFLECTION (SSR) FOR GLASS ---
+                    vec4 ssrResult = vec4(0.0);
+                    if (uSSREnabled > 0.5) {
+                        vec4 screenGlassPos = uViewProjMatrix * vec4(vWorldPos, 1.0);
+                        vec2 glassUV = (screenGlassPos.w > 0.001) ? ((screenGlassPos.xy / screenGlassPos.w) * 0.5 + 0.5) : vec2(0.5);
 
-                    // Project reflection ray onto the local frame
-                    float reflUp = dot(reflVecWorld, localUp);
-                    float reflTangent = dot(reflVecWorld, localTangent);
-                    float reflNormal = dot(reflVecWorld, normalWorld);
+                        const int SSR_STEPS = 24;
+                        float tDist = 0.02;
+                        float tStep = 0.035;
+                        for (int s = 0; s < SSR_STEPS; s++) {
+                            tDist += tStep;
+                            tStep *= 1.15;
+                            vec3 rayPos = vWorldPos + reflVecWorld * tDist;
+                            vec4 clipPos = uViewProjMatrix * vec4(rayPos, 1.0);
+                            if (clipPos.w <= 0.001) continue;
+                            vec3 ndc = clipPos.xyz / clipPos.w;
+                            vec2 sUV = ndc.xy * 0.5 + 0.5;
+                            if (sUV.x >= 0.005 && sUV.x <= 0.995 && sUV.y >= 0.005 && sUV.y <= 0.995) {
+                                float screenDist = length(sUV - glassUV);
+                                if (screenDist > 0.004) {
+                                    vec2 edgeDist = min(sUV, vec2(1.0) - sUV);
+                                    float edgeFadeFactor = smoothstep(0.005, 0.10, min(edgeDist.x, edgeDist.y));
+                                    float progress = float(s) / float(SSR_STEPS);
+                                    float distFade = 1.0 - smoothstep(0.75, 1.0, progress);
+                                    float weight = edgeFadeFactor * distFade;
+                                    if (weight > 0.08) {
+                                        vec3 sampleColor = texture2D(uSSRSceneTex, sUV).rgb;
+                                        ssrResult = vec4(sampleColor, weight);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                    vec3 reflectedColor = vec3(0.0);
-
-                    // 1. SKY / ATMOSPHERE REFLECTION (Upwards direction)
+                    // Fallback environment (Sky / Atmosphere / Ground)
                     vec3 skyColor = mix(vec3(0.12, 0.18, 0.35), vec3(0.55, 0.75, 1.0), max(0.0, dot(reflVecWorld, lightDir)) * 0.4 + 0.6);
-                    // Add soft clouds
                     float cloudPattern = sin(reflVecWorld.x * 3.5 + uTime * 0.05) * cos(reflVecWorld.z * 3.5 + uTime * 0.04) * 0.5 + 0.5;
                     if (cloudPattern > 0.58) {
                         skyColor = mix(skyColor, vec3(0.96, 0.98, 1.0), (cloudPattern - 0.58) * 1.6);
                     }
+                    vec3 groundColor = vec3(0.38, 0.28, 0.18);
+                    float reflUp = dot(reflVecWorld, normalize(vWorldPos));
+                    vec3 fallbackEnv = reflUp >= 0.0 ? mix(groundColor, skyColor, smoothstep(0.0, 0.35, reflUp)) : groundColor;
 
-                    // 2. GROUND / TERRAIN / WATER REFLECTION (Downwards direction)
-                    vec3 groundColor = vec3(0.48, 0.32, 0.18); // Wood floor / earth brown
-                    // Check if it's below water level (ocean reflection)
-                    float reflectDistToCenter = length(vWorldPos + reflVecWorld * 2.0);
-                    if (reflectDistToCenter < uWaterRadius) {
-                        groundColor = mix(groundColor, vec3(0.12, 0.48, 0.58), 0.85); // Beautiful turquoise water reflection
-                    } else {
-                        // Procedural wood/grass tiles on ground reflection
-                        float grassTile = sin(vWorldPos.x * 2.0 + reflVecWorld.x * 4.0) * cos(vWorldPos.z * 2.0 + reflVecWorld.z * 4.0);
-                        if (grassTile > 0.1) {
-                            groundColor = mix(groundColor, vec3(0.28, 0.46, 0.16), 0.75); // Grass/tree reflection
-                        }
-                    }
-
-                    // 3. ADJACENT WOOD WALLS / COLUMNS / WINDOW FRAMES (Horizontal sides)
-                    // We project virtual adjacent walls at regular intervals along the wall direction
-                    float wallU = reflTangent / (abs(reflNormal) + 0.01);
-                    float wallV = reflUp / (abs(reflNormal) + 0.01);
-
-                    // Wooden walls have vertical planks (wood panels) and horizontal joints
-                    float verticalPlanks = step(0.88, abs(sin(wallU * 6.28)));
-                    float horizontalPlanks = step(0.93, abs(sin(wallV * 3.14)));
-                    
-                    // Dark brown wood structure reflection
-                    vec3 structureColor = mix(vec3(0.38, 0.22, 0.12), vec3(0.20, 0.11, 0.06), max(verticalPlanks, horizontalPlanks));
-                    
-                    // Add some natural green wood moss / forest reflection spots
-                    float leafSpots = sin(wallU * 1.5 + wallV * 2.0) * cos(wallV * 1.2 - wallU * 0.8);
-                    if (leafSpots > 0.4) {
-                        structureColor = mix(structureColor, vec3(0.18, 0.38, 0.12), 0.65); // Surrounding leaves / bushes
-                    }
-
-                    // Blend different components based on reflection ray angles
-                    if (reflUp >= 0.0) {
-                        // Upper half: blend sky with adjacent walls
-                        float skyFactor = smoothstep(0.0, 0.4, reflUp);
-                        reflectedColor = mix(structureColor, skyColor, skyFactor);
-                    } else {
-                        // Lower half: blend ground/water with structures
-                        float groundFactor = smoothstep(0.0, -0.4, reflUp);
-                        reflectedColor = mix(structureColor, groundColor, groundFactor);
-                    }
+                    vec3 reflectedColor = mix(fallbackEnv, ssrResult.rgb, ssrResult.a * 0.92);
 
                     // Soft specular glow on the reflection
                     reflectedColor += vec3(1.0, 1.0, 1.0) * spec * 0.5;
@@ -571,9 +561,9 @@
                     finalColor += vec3(1.0, 1.0, 1.0) * shineStripe * 0.38;
                 }
 
-                // Atmospheric Fog / Mist at Terrain Max Render Distance
+                // Atmospheric Fog / Mist at Object Max Render Distance
                 if (uRenderDistEnabled > 0.5) {
-                    float fogStart = uMaxRenderDist * 0.55;
+                    float fogStart = uMaxRenderDist * 0.78;
                     float fogFactor = smoothstep(fogStart, uMaxRenderDist, vDist);
                     vec3 fogDir = normalize(vWorldPos - uCameraPos);
                     float sunDot = max(dot(fogDir, lightDir), 0.0);
@@ -586,6 +576,9 @@
                     finalColor = mix(finalColor, atmosphericFog, fogFactor * 0.98);
                 }
 
+                if (!isGlass && dist < uWaterRadius - 0.002) {
+                    glassAlpha = 250.0 / 255.0;
+                }
                 gl_FragColor = vec4(finalColor, glassAlpha);
             }
         `;
@@ -890,7 +883,14 @@
 
                 // Apply Water Volume Tint & Fog
                 float dist = length(vWorldPos);
-                if (dist < uWaterRadius) {
+                vec3 nPosMask = normalize(vWorldPos);
+                float maskTheta = acos(clamp(nPosMask.y, -1.0, 1.0));
+                float maskPhi = atan(nPosMask.z, nPosMask.x);
+                if (maskPhi < 0.0) maskPhi += 6.28318530718;
+                vec2 maskUV = vec2(maskPhi / 6.28318530718, maskTheta / 3.14159265359);
+                float maskWater = texture2D(uWaterMaskTex, maskUV).r;
+                bool isUnderwaterTerrain = (dist < uWaterRadius - 0.001) && (maskWater > 0.001);
+                if (isUnderwaterTerrain) {
                     float depth = uWaterRadius - dist;
                     float tintFactor = 1.0 - exp(-depth * 5.0);
                     tintFactor = clamp(tintFactor * uWaterOpacity, 0.0, 0.85);
@@ -907,13 +907,16 @@
                     vec3 baseSkyFog = vec3(0.012, 0.035, 0.09);
                     vec3 litSkyFog = vec3(0.08, 0.14, 0.24);
                     vec3 atmosphericFog = mix(baseSkyFog, litSkyFog, sunDot * 0.5 + 0.1);
-                    if (length(uCameraPos) < uWaterRadius || dist < uWaterRadius) {
+                    if (length(uCameraPos) < uWaterRadius || isUnderwaterTerrain) {
                         atmosphericFog = mix(atmosphericFog, uWaterColor * 0.6, 0.85);
                     }
                     finalColor = mix(finalColor, atmosphericFog, fogFactor * 0.98);
                 }
 
-                gl_FragColor = vec4(finalColor, 1.0);
+                float terrainAlpha = (uUseLighting > 0.5)
+                    ? (isUnderwaterTerrain ? (250.0 / 255.0) : (252.0 / 255.0))
+                    : 1.0;
+                gl_FragColor = vec4(finalColor, terrainAlpha);
             }
         `;
 
@@ -994,7 +997,7 @@ const skyVertexShaderSource = `
                 skyColor *= uGasIntensity;
                 vec3 finalColor = skyColor + vec3(stars);
                 
-                gl_FragColor = vec4(finalColor, 1.0);
+                gl_FragColor = vec4(finalColor, 250.0 / 255.0);
             }
         `;
 
@@ -1080,7 +1083,7 @@ const skyVertexShaderSource = `
                     sunCol *= mix(vec3(1.0), vColor, 0.4);
 
                     vec3 tint = (length(uTint) > 0.01) ? uTint : vec3(1.0);
-                    gl_FragColor = vec4(clamp(sunCol * tint * pulse, 0.0, 1.0), 1.0);
+                    gl_FragColor = vec4(clamp(sunCol * tint * pulse, 0.0, 1.0), 250.0 / 255.0);
                 } else {
                     // Shaded background planet
                     vec3 normal = normalize(vNormal);
@@ -1090,7 +1093,7 @@ const skyVertexShaderSource = `
                     float lit = diff * 0.82 + ambient;
                     
                     vec3 baseCol = (length(uTint) > 0.01) ? uTint : vColor;
-                    gl_FragColor = vec4(baseCol * lit, 1.0);
+                    gl_FragColor = vec4(baseCol * lit, 250.0 / 255.0);
                 }
             }
       `;
@@ -3571,6 +3574,60 @@ if (gl) {
       const modelPointLightCountLoc = gl.getUniformLocation(modelProgram, "uPointLightCount");
       const modelPointLightOccludersLoc = gl.getUniformLocation(modelProgram, "uPointLightOccluders");
       const modelPointLightOccluderCountLoc = gl.getUniformLocation(modelProgram, "uPointLightOccluderCount");
+      const modelSSRSceneTexLoc = gl.getUniformLocation(modelProgram, "uSSRSceneTex");
+      const modelSSREnabledLoc = gl.getUniformLocation(modelProgram, "uSSREnabled");
+      const modelViewProjLoc = gl.getUniformLocation(modelProgram, "uViewProjMatrix");
+
+      let ssrTexture = null;
+      let ssrTexWidth = 0;
+      let ssrTexHeight = 0;
+      let dummySSRTexture = null;
+
+      function getDummySSRTexture() {
+        if (!dummySSRTexture && gl) {
+          dummySSRTexture = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, dummySSRTexture);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([20, 30, 50, 255]));
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        }
+        return dummySSRTexture;
+      }
+
+      function captureSSRScene() {
+        if (!gl) return null;
+        const activeSSRQuality = typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : 2);
+        if (activeSSRQuality <= 0) {
+          window._SSRSceneTexture = null;
+          return null;
+        }
+        const w = gl.drawingBufferWidth || (gl.canvas ? gl.canvas.width : 0);
+        const h = gl.drawingBufferHeight || (gl.canvas ? gl.canvas.height : 0);
+        if (w <= 0 || h <= 0) return null;
+
+        if (!ssrTexture) {
+          ssrTexture = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, ssrTexture);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          ssrTexWidth = w;
+          ssrTexHeight = h;
+        } else {
+          gl.bindTexture(gl.TEXTURE_2D, ssrTexture);
+          if (ssrTexWidth !== w || ssrTexHeight !== h) {
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            ssrTexWidth = w;
+            ssrTexHeight = h;
+          }
+        }
+
+        gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        window._SSRSceneTexture = ssrTexture;
+        return ssrTexture;
+      }
 
       let charLocalPosLoc, charColorLoc, charTexCoordLoc;
       let charMainTexLoc, charHasMainTexLoc;
@@ -5114,8 +5171,10 @@ window.cloud3DProgram = cloud3DProgram;
           if (typeof pendingDynamicCollectibleRefresh !== 'undefined') window.pendingDynamicCollectibleRefresh = false;
         }
 
-        if (pendingCollectibleRefresh) {
-          pendingCollectibleRefresh = false;
+        const hasPendingCollectibles = (typeof pendingCollectibleRefresh !== 'undefined' && pendingCollectibleRefresh) || (typeof window !== 'undefined' && window.pendingCollectibleRefresh);
+        if (hasPendingCollectibles) {
+          if (typeof pendingCollectibleRefresh !== 'undefined') pendingCollectibleRefresh = false;
+          if (typeof window !== 'undefined') window.pendingCollectibleRefresh = false;
           refreshCollectiblesVBO(); // Rebuild both main and dynamic
           if (typeof SpatialGrid !== "undefined" && typeof collectibles !== "undefined") {
             SpatialGrid.rebuild(collectibles);
@@ -8807,7 +8866,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                         const phi = Math.atan2(uz, ux);
                         const h = getHeightOnSphere(theta, phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
                         const tRad = RADIUS + h * HEIGHT_SCALE;
-                        const wRad = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel * 0.15 : 0);
+                        const wRad = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel * (HEIGHT_SCALE * 0.25) : 0);
                         const checkR = (typeof waterEnabled !== "undefined" && waterEnabled) ? Math.max(tRad, wRad) : tRad;
                         if (dC <= checkR + 0.08) {
                             aimTargetWorld = testP;
@@ -8975,7 +9034,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         );
         gl.uniform1f(depthTimeLoc, leafAnimTime);
         gl.uniform1f(depthPlanetRadiusLoc, RADIUS);
-        gl.uniform1f(depthWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+        const activeWaterSurfaceRadius = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
+        gl.uniform1f(depthWaterRadiusLoc, activeWaterSurfaceRadius);
 
         // Cubes to depth (Cull by object render distance)
         if (cubeVertexBuffer && cubeIndexBuffer && cubeIndicesLength > 0) {
@@ -9271,7 +9331,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         gl.disable(gl.POLYGON_OFFSET_FILL);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, canvas.width, canvas.height);
-        gl.enable(gl.BLEND);
+        gl.disable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         // Bind shadow depth texture to TEXTURE1 for main render pass
@@ -10134,7 +10194,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               terrainRenderDistEnabledLoc,
               terrainMaxRenderDistLoc,
               terrainCameraPosLoc,
-              waterRadius: RADIUS + waterLevel * 0.15,
+              waterRadius: RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15),
               waterColor,
               waterOpacity,
               renderDistEnabled,
@@ -10210,7 +10270,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform2f(charShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform1i(charWaterMaskLoc, 2);
 
-          gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(charWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(charWaterOpacityLoc, waterOpacity);
 
@@ -10316,14 +10376,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             });
           }
 
-           // Object Cloning: Render a mirrored clone of the player, static structures, trees, rocks, and creatures for each nearby active wood_window (disabled as wood_window is now solid wood)
-          const px = charModelMatrix[12];
-          const py = charModelMatrix[13];
-          const pz = charModelMatrix[14];
-
-          const mirrorCandidates = (typeof SpatialGrid !== "undefined")
-            ? SpatialGrid.queryRadius(px, py, pz, 3.0, item => item.active && !item.isPreview && item.type === "wood_window_mirror_disabled")
-            : collectibles;
+          // Unified Screen-Space Reflection (SSR): All surface reflections (water, windows, glass) are unified under the Screen-Space Reflection pipeline.
+          const mirrorCandidates = [];
 
           for (let i = 0; i < mirrorCandidates.length; i++) {
             const item = mirrorCandidates[i];
@@ -10509,7 +10563,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 );
                 gl.uniform1i(gl.getUniformLocation(charProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(charProgram, "uWaterMaskTex"), 2);
-                gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+                gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
                 gl.uniform3fv(charWaterColorLoc, setF32(f32_waterColor, waterColor));
                 gl.uniform1f(charWaterOpacityLoc, waterOpacity);
                 if (charUseFaceTexLoc) {
@@ -10578,7 +10632,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
                   gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
-                  gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+                  gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
                   gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
                   gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
                   gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
@@ -10662,7 +10716,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
                   gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
-                  gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+                  gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
                   gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
                   gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
                   gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
@@ -10708,7 +10762,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
                   gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
-                  gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+                  gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
                   gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
                   gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
                   gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
@@ -10780,8 +10834,14 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1i(modelShadowMapLoc, 1);
           gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
           gl.uniform1i(modelWaterMaskLoc, 2);
+          gl.activeTexture(gl.TEXTURE3);
+          gl.bindTexture(gl.TEXTURE_2D, window._SSRSceneTexture || getDummySSRTexture());
+          if (modelSSRSceneTexLoc) gl.uniform1i(modelSSRSceneTexLoc, 3);
+          const curSSRQualityCube = typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : 2);
+          if (modelSSREnabledLoc) gl.uniform1f(modelSSREnabledLoc, (window._SSRSceneTexture && curSSRQualityCube >= 2) ? 1.0 : 0.0);
+          if (modelViewProjLoc && f32_gpuViewProj) gl.uniformMatrix4fv(modelViewProjLoc, false, f32_gpuViewProj);
 
-          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
@@ -10971,8 +11031,14 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           );
           gl.uniform1i(modelShadowMapLoc, 1);
           gl.uniform1i(modelWaterMaskLoc, 2);
+          gl.activeTexture(gl.TEXTURE3);
+          gl.bindTexture(gl.TEXTURE_2D, window._SSRSceneTexture || getDummySSRTexture());
+          if (modelSSRSceneTexLoc) gl.uniform1i(modelSSRSceneTexLoc, 3);
+          const curSSRQualityColl = typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : 2);
+          if (modelSSREnabledLoc) gl.uniform1f(modelSSREnabledLoc, (window._SSRSceneTexture && curSSRQualityColl >= 2) ? 1.0 : 0.0);
+          if (modelViewProjLoc && f32_gpuViewProj) gl.uniformMatrix4fv(modelViewProjLoc, false, f32_gpuViewProj);
 
-          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
@@ -11075,7 +11141,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniformMatrix4fv(modelLightSpaceLoc, false, setF32(f32_lightSpaceMatrix, lightSpaceMatrix));
           gl.uniform1i(modelShadowMapLoc, 1);
           gl.uniform1i(modelWaterMaskLoc, 2);
-          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
@@ -11141,7 +11207,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           // For local space vertices, prevent underwater fog unless player is actually underwater
           const isPlayerUnderwater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.5);
-          gl.uniform1f(modelWaterRadiusLoc, isRag ? (RADIUS + waterLevel * 0.15) : (isPlayerUnderwater ? 999.0 : -999.0));
+          gl.uniform1f(modelWaterRadiusLoc, isRag ? (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15)) : (isPlayerUnderwater ? 999.0 : -999.0));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(modelRenderDistEnabledLoc, 0.0);
@@ -11234,7 +11300,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
 
-          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
@@ -11308,7 +11374,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
           gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
 
-          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * 0.15);
+          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(
@@ -11353,6 +11419,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             );
           }
         }
+
+        // ---- SCREEN-SPACE REFLECTION (SSR) SCENE CAPTURE ----
+        // Capture the rendered 3D scene (terrain, player, trees, buildings, boats, sky) before debug lines and 3D UI
+        captureSSRScene();
 
         // วาดเส้นกริดภูมิประเทศ (Wireframe) - ไม่รับแสงเงา (Unlit)
         gl.useProgram(program);
@@ -11721,12 +11791,14 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         // ---- ENABLE BLENDING FOR TRANSPARENT PASSES ----
         gl.enable(gl.BLEND);
 
-        // วาดผิวน้ำ (Water)
+        // วาดผิวน้ำ (Water with Unified SSR & Distance-based SSR LOD)
         if (cameraMode !== "sun" && typeof WaterSystem !== "undefined" && WaterSystem.drawWater) {
           WaterSystem.drawWater(gl, {
             waterEnabled: waterEnabled,
+            ssrQuality: typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : 2),
             modelViewMatrix: modelViewMatrix,
             projMatrix: projMatrix,
+            viewProjMatrix: f32_gpuViewProj,
             waterColor: waterColor,
             waterOpacity: waterOpacity,
             waterAnimTime: waterAnimTime,
@@ -11734,6 +11806,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             waterLevel: waterLevel,
             finalLightDir: finalLightDir,
             eyePos: eyePos,
+            playerPos: [px, py, pz],
+            playerScale: (typeof activeRidingBoat !== 'undefined' && activeRidingBoat) ? 0.0 : (typeof playerScale !== 'undefined' ? playerScale : 1.0),
             renderDistEnabled: renderDistEnabled,
             renderDistValue: curTerrainDist,
             collectibles: collectibles,

@@ -42,6 +42,7 @@
             targetFps,
             shadowMapEnabled,
             shadowMapQuality,
+            ssrQuality: typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 0 : 2)),
             antialiasEnabled,
             fxaaEnabled: currentFxaa,
             taauEnabled: currentFxaa,
@@ -85,6 +86,7 @@
             targetFps,
             shadowMapEnabled,
             shadowMapQuality,
+            ssrQuality: typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 0 : 2)),
             antialiasEnabled,
             fxaaEnabled: currentFxaa,
             taauEnabled: currentFxaa,
@@ -263,6 +265,11 @@
             shadowMapQuality = Math.max(1, settings.shadowMapQuality);
             shadowMapEnabled = true;
             if (typeof updateShadowMapUI === 'function') updateShadowMapUI(); if(typeof window.resizeShadowMap === 'function') window.resizeShadowMap();
+          }
+          if (typeof settings.ssrQuality === "number") {
+            ssrQuality = Math.max(0, Math.min(3, Math.round(settings.ssrQuality)));
+            window.ssrQuality = ssrQuality;
+            if (typeof window.updateSSRQualityUI === "function") window.updateSSRQualityUI();
           }
           if (typeof settings.antialiasEnabled === "boolean") {
             antialiasEnabled = settings.antialiasEnabled;
@@ -956,6 +963,7 @@
         targetFps: /Android/i.test(navigator.userAgent) ? 30 : 120,
         shadowMapEnabled: true,
         shadowMapQuality: /Android/i.test(navigator.userAgent) ? 1 : 2,
+        ssrQuality: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 0 : 2,
         antialiasEnabled: false,
         fxaaEnabled: true,
         taauEnabled: true,
@@ -1434,6 +1442,10 @@
             shadowMapQuality = DEFAULT_SETTINGS.shadowMapQuality;
             if (typeof updateShadowMapUI === "function") updateShadowMapUI();
             if (typeof window.resizeShadowMap === "function") window.resizeShadowMap();
+
+            ssrQuality = DEFAULT_SETTINGS.ssrQuality;
+            window.ssrQuality = ssrQuality;
+            if (typeof window.updateSSRQualityUI === "function") window.updateSSRQualityUI();
 
             antialiasEnabled = DEFAULT_SETTINGS.antialiasEnabled;
             if (typeof window !== "undefined") window.antialiasEnabled = antialiasEnabled;

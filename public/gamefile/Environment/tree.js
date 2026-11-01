@@ -99,7 +99,8 @@
     if (opts.modelMVLoc && opts.reflectedModelViewMatrixStatic) gl.uniformMatrix4fv(opts.modelMVLoc, false, setMat4(_f32_modelView, opts.reflectedModelViewMatrixStatic));
     if (opts.modelProjLoc && opts.projMatrix) gl.uniformMatrix4fv(opts.modelProjLoc, false, setMat4(_f32_proj, opts.projMatrix));
     if (opts.modelWaterRadiusLoc && opts.RADIUS !== undefined && opts.waterLevel !== undefined) {
-      gl.uniform1f(opts.modelWaterRadiusLoc, opts.RADIUS + opts.waterLevel * 0.15);
+      const hScale = typeof global.HEIGHT_SCALE !== "undefined" ? global.HEIGHT_SCALE : (0.6 * Math.pow(opts.RADIUS / 8.0, 0.70));
+      gl.uniform1f(opts.modelWaterRadiusLoc, opts.RADIUS + opts.waterLevel * (hScale * 0.25));
     }
     if (opts.modelWaterColorLoc && opts.waterColor) gl.uniform3fv(opts.modelWaterColorLoc, setVec3(_f32_waterColor, opts.waterColor));
     if (opts.modelWaterOpacityLoc && opts.waterOpacity !== undefined) gl.uniform1f(opts.modelWaterOpacityLoc, opts.waterOpacity);
@@ -208,7 +209,8 @@
     }
 
     if (opts.modelWaterRadiusLoc && opts.RADIUS !== undefined && opts.waterLevel !== undefined) {
-      gl.uniform1f(opts.modelWaterRadiusLoc, opts.RADIUS + opts.waterLevel * 0.15);
+      const hScale = typeof global.HEIGHT_SCALE !== "undefined" ? global.HEIGHT_SCALE : (0.6 * Math.pow(opts.RADIUS / 8.0, 0.70));
+      gl.uniform1f(opts.modelWaterRadiusLoc, opts.RADIUS + opts.waterLevel * (hScale * 0.25));
     }
     if (opts.modelWaterColorLoc && opts.waterColor) gl.uniform3fv(opts.modelWaterColorLoc, setVec3(_f32_waterColor, opts.waterColor));
     if (opts.modelWaterOpacityLoc && opts.waterOpacity !== undefined) gl.uniform1f(opts.modelWaterOpacityLoc, opts.waterOpacity);

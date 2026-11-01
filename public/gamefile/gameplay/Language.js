@@ -71,6 +71,8 @@
       mode_fullscreen: "เต็มจอ",
       fps_display_toggle: "แสดงตัวนับ FPS",
       shadow_quality: "คุณภาพเงา",
+      ssr_quality: "ความละเอียดการสะท้อน (SSR)",
+      ssr_medium: "กลาง",
       fxaa_label: "FXAA (ลดรอยหยัก)",
       fxaa_sub: "(ลดรอยหยักขอบภาพ)",
       taau_label: "FXAA (ลดรอยหยัก)",
@@ -319,6 +321,8 @@
       mode_fullscreen: "Fullscreen",
       fps_display_toggle: "FPS Counter",
       shadow_quality: "Shadow Quality",
+      ssr_quality: "SSR Reflection Quality",
+      ssr_medium: "Medium",
       fxaa_label: "FXAA (Anti-Aliasing)",
       fxaa_sub: "(Smooth Jagged Edges)",
       taau_label: "FXAA (Anti-Aliasing)",
@@ -568,6 +572,8 @@
       mode_fullscreen: "フルスクリーン",
       fps_display_toggle: "FPS表示",
       shadow_quality: "影の品質",
+      ssr_quality: "SSR 反射品質",
+      ssr_medium: "中",
       fxaa_label: "FXAA (アンチエイリアス)",
       fxaa_sub: "(輪郭のギザギザを軽減)",
       taau_label: "FXAA (アンチエイリアス)",
@@ -971,6 +977,9 @@
     }
     if (typeof window.updateShadowMapUI === "function") {
       window.updateShadowMapUI();
+    }
+    if (typeof window.updateSSRQualityUI === "function") {
+      window.updateSSRQualityUI();
     }
     if (typeof window.syncInputDeviceSettingsUI === "function") {
       window.syncInputDeviceSettingsUI();

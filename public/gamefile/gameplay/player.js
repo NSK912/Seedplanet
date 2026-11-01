@@ -291,7 +291,8 @@ window.characterVertexShaderSource = `
                     finalColor = mix(finalColor, uWaterColor, tintFactor);
                 }
 
-                gl_FragColor = vec4(finalColor, 1.0);
+                float charAlpha = (dist < uWaterRadius - 0.002) ? (250.0 / 255.0) : 1.0;
+                gl_FragColor = vec4(finalColor, charAlpha);
             }
         `;
 

@@ -1004,6 +1004,25 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             />
           </div>
 
+          <!-- การตั้งค่าความละเอียดการสะท้อนน้ำ SSR (SSR Reflection Quality & LOD) -->
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between">
+              <span data-i18n="ssr_quality" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+                >ความละเอียดการสะท้อน (SSR)</span
+              >
+              <span id="ssrQualityVal" style="font-size: 13px; font-family: 'Google Sans', sans-serif; color: #dfb76c;">กลาง</span>
+            </div>
+            <input
+              type="range"
+              id="ssrQualitySlider"
+              style="width: 100%; cursor: pointer; accent-color: #dfb76c"
+              min="0"
+              max="3"
+              value="2"
+              step="1"
+            />
+          </div>
+
           <!-- การตั้งค่า Anti-Aliasing (Hidden) -->
           <div style="display: none !important;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -3482,6 +3501,25 @@ window.addEventListener("keyup", (e) => {
         }
       }
 
+      // SSR Reflection Quality UI (4 levels: 0=Off/ปิด, 1=Low/ต่ำ, 2=Medium/กลาง, 3=High/สูง)
+      window.updateSSRQualityUI = function() {
+        const slider = document.getElementById("ssrQualitySlider");
+        const valLabel = document.getElementById("ssrQualityVal");
+        if (slider && valLabel) {
+          const defaultSSR = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 0 : 2;
+          const curQ = typeof window.ssrQuality === "number" ? window.ssrQuality : (typeof ssrQuality === "number" ? ssrQuality : defaultSSR);
+          slider.value = curQ;
+          const tr = typeof t === "function" ? t : (k => k);
+          const labels = [tr("off"), tr("low"), tr("ssr_medium"), tr("high")];
+          const textVal = labels[curQ] !== undefined ? labels[curQ] : tr("ssr_medium");
+          if (typeof setElementTextOrHTML === "function") {
+            setElementTextOrHTML(valLabel, textVal);
+          } else {
+            valLabel.textContent = textVal;
+          }
+        }
+      };
+
       // Anti-Aliasing Toggle UI
       window.updateAntialiasUI = function() {
         const btnOn = document.getElementById("antialiasToggleOn");
@@ -3511,7 +3549,7 @@ window.addEventListener("keyup", (e) => {
             btnOn.style.background = "rgba(255,255,255,0.05)";
             btnOn.style.borderColor = "rgba(255,255,255,0.2)";
             btnOn.style.color = "rgba(255,255,255,0.6)";
-            btnOn.style.textShadow = "none";
+            btnOff.style.textShadow = "none";
           }
         }
       }
@@ -3523,6 +3561,16 @@ window.addEventListener("keyup", (e) => {
           shadowMapEnabled = true;
           updateShadowMapUI();
           if (typeof window.resizeShadowMap === 'function') window.resizeShadowMap();
+          if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
+        });
+      }
+
+      if (document.getElementById("ssrQualitySlider")) {
+        document.getElementById("ssrQualitySlider")?.addEventListener("input", (e) => {
+          const val = Math.max(0, Math.min(3, parseInt(e.target.value, 10)));
+          ssrQuality = val;
+          window.ssrQuality = val;
+          if (typeof window.updateSSRQualityUI === "function") window.updateSSRQualityUI();
           if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
         });
       }

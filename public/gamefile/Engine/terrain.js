@@ -3331,7 +3331,6 @@
               continue;
             }
 
-            const clusterStartIdx = indices.length;
             // คำนวณจำนวนปะการัง/พืชใต้น้ำในกลุ่ม (ยิ่งกลางกลุ่ม ยิ่งแน่น 8 ถึง 18 ต้นต่อกลุ่ม)
             const normalizedDensity = Math.min(1.0, Math.max(0, (reefDensity - 0.15) / 0.65));
             const areaScale = Math.max(1.0, (typeof RADIUS !== 'undefined' ? RADIUS : 8.0) / 8.0);
@@ -3366,6 +3365,7 @@
               pWy = pR * pNy;
               pWz = pR * pNz;
 
+              const plantStartIdx = indices.length;
               buildUnderwaterPlant(
                 pWx,
                 pWy,
@@ -3381,19 +3381,19 @@
                 colors,
                 indices,
               );
-            }
-            const clusterEndIdx = indices.length;
-            if (clusterEndIdx > clusterStartIdx) {
-              natureObstacles.push({
-                id: i * 1000,
-                type: "underwater_plant",
-                layer: 0, // Layer 0: ไม่ชนผู้เล่น/กล้อง ลดภาระ raycast collision
-                normal: [nx, ny, nz],
-                position: [wx, wy, wz],
-                radius: 4.0,
-                meshStart: clusterStartIdx,
-                meshEnd: clusterEndIdx
-              });
+              const plantEndIdx = indices.length;
+              if (plantEndIdx > plantStartIdx) {
+                natureObstacles.push({
+                  id: i * 1000 + p,
+                  type: "underwater_plant",
+                  layer: 0, // Layer 0: ไม่ชนผู้เล่น/กล้อง ลดภาระ raycast collision
+                  normal: [pNx, pNy, pNz],
+                  position: [pWx, pWy, pWz],
+                  radius: 2.0,
+                  meshStart: plantStartIdx,
+                  meshEnd: plantEndIdx
+                });
+              }
             }
             continue;
           }
