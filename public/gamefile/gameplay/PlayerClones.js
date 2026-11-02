@@ -2951,7 +2951,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         gl.uniform1f(charUseFaceTexLoc, 1.0);
       }
 
-      if (supportUint32 && currentIndicesLen > 65535) {
+      if (currentIndicesLen > 65535) {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_INT, 0);
       } else {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_SHORT, 0);
@@ -3035,7 +3035,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
       gl.uniformMatrix4fv(depthModelLoc, false, f32_cloneModel);
 
-      if (supportUint32 && currentIndicesLen > 65535) {
+      if (currentIndicesLen > 65535) {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_INT, 0);
       } else {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_SHORT, 0);

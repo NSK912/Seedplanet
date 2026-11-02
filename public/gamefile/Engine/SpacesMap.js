@@ -324,8 +324,7 @@
       global.satelliteIndexBuffer = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, global.satelliteIndexBuffer);
       
-      const supportUint32 = global.supportUint32;
-      if (supportUint32 && indices.length > 65535) {
+      if (indices.length > 65535) {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
       } else {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
@@ -442,8 +441,7 @@
 
         const ibo = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-        const supportUint32 = global.supportUint32;
-        if (supportUint32 && indices.length > 65535) {
+        if (indices.length > 65535) {
           gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
         } else {
           gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);

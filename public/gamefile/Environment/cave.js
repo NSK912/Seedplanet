@@ -3,7 +3,7 @@
 (function(global) {
   // WebGL context and capabilities reference
   let _gl = null;
-  let _supportUint32 = false;
+  let _supportUint32 = true;
 
   // Buffer references
   let tunnelVertexBuffer = null;
@@ -1117,8 +1117,7 @@
       const colorLoc = locations.colorLoc;
       const isTunnelMeshLoc = locations.isTunnelMeshLoc;
       const terrainRadiusAttrLoc = locations.terrainRadiusAttrLoc;
-      const tunnelCenterAttrLoc = locations.tunnelCenterAttrLoc;
-      const useUint32 = locations.supportUint32 && tunnelIndicesCount > 65535;
+      const useUint32 = tunnelIndicesCount > 65535;
 
       gl.disable(gl.CULL_FACE);
 
@@ -1150,7 +1149,7 @@
 
       // --- 2. Draw Cave Outer Shell (เปลือกถ้ำ) ---
       if (tunnelShellIndicesCount > 0 && tunnelShellVertexBuffer && tunnelShellColorBuffer && tunnelShellIndexBuffer) {
-        const useUint32Shell = locations.supportUint32 && tunnelShellIndicesCount > 65535;
+        const useUint32Shell = tunnelShellIndicesCount > 65535;
         if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 2.0);
 
         if (terrainRadiusAttrLoc !== -1 && tunnelShellTerrainRadiusBuffer) {
@@ -1197,7 +1196,7 @@
       const isTunnelMeshLoc = locations.isTunnelMeshLoc;
       const terrainRadiusAttrLoc = locations.terrainRadiusAttrLoc;
       const tunnelCenterAttrLoc = locations.tunnelCenterAttrLoc;
-      const useUint32Shell = locations.supportUint32 && tunnelShellIndicesCount > 65535;
+      const useUint32Shell = tunnelShellIndicesCount > 65535;
 
       gl.disable(gl.CULL_FACE);
       if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 2.0);
@@ -1245,7 +1244,7 @@
       const isTunnelMeshLoc = locations.isTunnelMeshLoc;
       const terrainRadiusAttrLoc = locations.terrainRadiusAttrLoc;
       const tunnelCenterAttrLoc = locations.tunnelCenterAttrLoc;
-      const useUint32 = locations.supportUint32 && tunnelWireframeIndicesCount > 65535;
+      const useUint32 = tunnelWireframeIndicesCount > 65535;
 
       if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 1.0);
 

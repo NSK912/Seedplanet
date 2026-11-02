@@ -917,7 +917,7 @@
           const vertices = new Float32Array(vertexCount * 3);
           const colors = new Float32Array(vertexCount * 3);
           const indexCount = latSeg * longSeg * 6;
-          const isUint32 = supportUint32 && indexCount > 65535;
+          const isUint32 = indexCount > 65535;
           const indices = isUint32 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
 
           let lat = 0;
@@ -1237,7 +1237,7 @@
         const vertices = new Float32Array(vertexCount * 3);
         const colors = new Float32Array(vertexCount * 3);
         const indexCount = latSeg * longSeg * 6;
-        const isUint32 = supportUint32 && indexCount > 65535;
+        const isUint32 = indexCount > 65535;
         const indices = isUint32 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
 
         if (gridSize > 300) {
@@ -1473,7 +1473,7 @@
         sunIndexBuffer = gl.createBuffer();
         window.sunIndexBuffer = sunIndexBuffer;
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sunIndexBuffer);
-        if (supportUint32 && sunIndicesLength > 65535) {
+        if (sunIndicesLength > 65535) {
           gl.bufferData(
             gl.ELEMENT_ARRAY_BUFFER,
             new Uint32Array(indices),
@@ -1580,7 +1580,7 @@
         const flatVertices = new Float32Array(numVertices * 3);
         const flatColors = new Float32Array(numVertices * 3);
         const flatNormals = new Float32Array(numVertices * 3);
-        const isUint32 = supportUint32 && numVertices > 65535;
+        const isUint32 = numVertices > 65535;
         const flatIndices = isUint32 ? new Uint32Array(numVertices) : new Uint16Array(numVertices);
 
         let vIdx = 0;
@@ -1648,13 +1648,13 @@
           flatVertices = getReusableFloat32Array(1, vertFloatCount).subarray(0, vertFloatCount);
           flatColors = getReusableFloat32Array(2, vertFloatCount).subarray(0, vertFloatCount);
           flatNormals = getReusableFloat32Array(3, vertFloatCount).subarray(0, vertFloatCount);
-          const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && indCount > 65535;
+          const isUint32 = indCount > 65535;
           flatIndices = isUint32 ? getReusableUint32Array(indCount).subarray(0, indCount) : getReusableUint16Array(indCount).subarray(0, indCount);
         } else {
           flatVertices = new Float32Array(vertFloatCount);
           flatColors = new Float32Array(vertFloatCount);
           flatNormals = new Float32Array(vertFloatCount);
-          const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && indCount > 65535;
+          const isUint32 = indCount > 65535;
           flatIndices = isUint32 ? new Uint32Array(indCount) : new Uint16Array(indCount);
         }
 
@@ -1888,7 +1888,7 @@
 
         cubeIndexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
-        if (supportUint32 && cubeIndicesLength > 65535) {
+        if (cubeIndicesLength > 65535) {
           gl.bufferData(
             gl.ELEMENT_ARRAY_BUFFER,
             flatGeom.indices,
@@ -4753,7 +4753,7 @@
 
         natureIndexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, natureIndexBuffer);
-        if (supportUint32 && natureIndicesLength > 65535) {
+        if (natureIndicesLength > 65535) {
           gl.bufferData(
             gl.ELEMENT_ARRAY_BUFFER,
             flatGeom.indices,
@@ -4883,7 +4883,7 @@
           if (!fireIndexBuffer) fireIndexBuffer = gl.createBuffer();
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, fireIndexBuffer);
           const iCount = flatGeom.indices.length;
-          if (supportUint32 && iCount > 65535) {
+          if (iCount > 65535) {
             const indTyped = getReusableUint32Array(iCount).subarray(0, iCount);
             indTyped.set(flatGeom.indices);
             gl.bufferData(
@@ -4920,7 +4920,7 @@
         const vertexCount = (latSeg + 1) * (longSeg + 1);
         const vertices = new Float32Array(vertexCount * 3);
         const indexCount = latSeg * longSeg * 6;
-        const isUint32 = supportUint32 && indexCount > 65535;
+        const isUint32 = indexCount > 65535;
         const indices = isUint32 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
 
         // ทรงกลมท้องฟ้าอวกาศมาตรฐาน (Normalized Unit Sphere สำหรับ Infinite Projection)
@@ -5010,7 +5010,7 @@
         const vertexCount = (latSeg + 1) * (longSeg + 1);
         const vertices = new Float32Array(vertexCount * 3);
         const indexCount = latSeg * longSeg * 6;
-        const isUint32 = supportUint32 && indexCount > 65535;
+        const isUint32 = indexCount > 65535;
         const indices = isUint32 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
 
         const sinPhiTable = new Float64Array(longSeg + 1);

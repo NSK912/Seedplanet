@@ -9,7 +9,7 @@
     
     if (!vBuf || !cBuf || !iBuf || !idxLen || idxLen <= 0 || grassStartIdx === undefined || grassStartIdx >= idxLen) return;
 
-    const isUint32 = useUint32 && idxLen > 65535;
+    const isUint32 = idxLen > 65535;
     const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const bytesPerIndex = isUint32 ? 4 : 2;
     
@@ -68,7 +68,7 @@
     
     if (!vBuf || !cBuf || !iBuf || !idxLen || idxLen <= 0 || grassStartIdx === undefined || grassStartIdx >= idxLen) return;
 
-    const isUint32 = useUint32 && idxLen > 65535;
+    const isUint32 = idxLen > 65535;
     const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const bytesPerIndex = isUint32 ? 4 : 2;
     

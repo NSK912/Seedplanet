@@ -1,23 +1,23 @@
 
 // --- Character Shaders ---
-window.characterVertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aLocalPos;
-            attribute vec3 aNormal;
-            attribute vec3 aColor;
-            attribute vec2 aTexCoord;
+window.characterVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
+            in vec3 aLocalPos;
+            in vec3 aNormal;
+            in vec3 aColor;
+            in vec2 aTexCoord;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
             uniform mat4 uModelMatrix;
             uniform mat4 uLightSpaceMatrix;
-            varying vec3 vPosition;
-            varying vec3 vNormal;
-            varying vec3 vLocalPos;
-            varying vec3 vWorldNormal;
-            varying vec3 vWorldPos;
-            varying vec4 vPositionLightSpace;
-            varying vec3 vColor;
-            varying vec2 vTexCoord;
+            out vec3 vPosition;
+            out vec3 vNormal;
+            out vec3 vLocalPos;
+            out vec3 vWorldNormal;
+            out vec3 vWorldPos;
+            out vec4 vPositionLightSpace;
+            out vec3 vColor;
+            out vec2 vTexCoord;
             void main() {
                 vec4 mvPosition = uModelViewMatrix * vec4(aPosition, 1.0);
                 gl_Position = uProjectionMatrix * mvPosition;
@@ -34,16 +34,16 @@ window.characterVertexShaderSource = `
             }
         `;
 
-      window.characterFragmentShaderSource = `
+      window.characterFragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vPosition;
-            varying vec3 vNormal;
-            varying vec3 vLocalPos;
-            varying vec3 vWorldNormal;
-            varying vec3 vWorldPos;
-            varying vec4 vPositionLightSpace;
-            varying vec3 vColor;
-            varying vec2 vTexCoord;
+            in vec3 vPosition;
+            in vec3 vNormal;
+            in vec3 vLocalPos;
+            in vec3 vWorldNormal;
+            in vec3 vWorldPos;
+            in vec4 vPositionLightSpace;
+            in vec3 vColor;
+            in vec2 vTexCoord;
             uniform vec3 uLightDir;
             uniform vec3 uCameraPos;
             uniform sampler2D uShadowMap;
@@ -62,6 +62,8 @@ window.characterVertexShaderSource = `
             uniform vec4 uPointLights[16];
             uniform vec4 uPointLightColors[16];
             uniform int uPointLightCount;
+
+            out vec4 fragColor;
 
             float hash12(vec2 p) {
                 vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -106,7 +108,7 @@ window.characterVertexShaderSource = `
                 // Character does not reflect light (matte surface, no specular or fresnel reflection)
                 vec3 baseColor = vColor;
                 if (uHasMainTex > 0.5) {
-                    baseColor = texture2D(uMainTex, vTexCoord).rgb;
+                    baseColor = texture(uMainTex, vTexCoord).rgb;
                 }
 
                 if (uHasMainTex < 0.5 && vLocalPos.x > 5.0) {
@@ -156,7 +158,7 @@ window.characterVertexShaderSource = `
                         float texU = (uv.x / (halfW * 2.0)) + 0.5;
                         float texV = 0.5 - ((uv.y - (-0.01)) / (halfH * 2.0));
                         if (texU >= 0.0 && texU <= 1.0 && texV >= 0.0 && texV <= 1.0) {
-                            vec4 faceCol = texture2D(uFaceTex, vec2(texU, texV));
+                            vec4 faceCol = texture(uFaceTex, vec2(texU, texV));
                             baseColor = mix(baseColor, faceCol.rgb, faceCol.a);
                         }
                     } else {
@@ -292,16 +294,16 @@ window.characterVertexShaderSource = `
                 }
 
                 float charAlpha = (dist < uWaterRadius - 0.002) ? (250.0 / 255.0) : 1.0;
-                gl_FragColor = vec4(finalColor, charAlpha);
+                fragColor = vec4(finalColor, charAlpha);
             }
         `;
 
-      const atmosphereVertexShaderSource = `
-            attribute vec3 aPosition;
+      const atmosphereVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
-            varying vec3 vNormal;
-            varying vec3 vPosition;
+            out vec3 vNormal;
+            out vec3 vPosition;
             void main() {
                 gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
                 vNormal = normalize(aPosition);
@@ -309,14 +311,15 @@ window.characterVertexShaderSource = `
             }
         `;
 
-      const atmosphereFragmentShaderSource = `
+      const atmosphereFragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vNormal;
-            varying vec3 vPosition;
+            in vec3 vNormal;
+            in vec3 vPosition;
             uniform vec3 uColor;
             uniform float uAlpha;
             uniform vec3 uLightDir;
             uniform vec3 uCameraPos;
+            out vec4 fragColor;
             void main() {
                 vec3 normal = normalize(vNormal);
                 vec3 viewDir = normalize(uCameraPos - vPosition);
@@ -341,23 +344,23 @@ window.characterVertexShaderSource = `
                 // Allow ambient scattering glow even on the shadow/night side
                 float finalAlpha = rim * uAlpha * (0.15 + 0.85 * intensity);
                 
-                gl_FragColor = vec4(uColor, finalAlpha);
+                fragColor = vec4(uColor, finalAlpha);
             }
         `;
 
       
       // --- Clouds 3D Shaders ---
-      window.cloud3DVertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aLocalPos;
+      window.cloud3DVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
+            in vec3 aLocalPos;
 
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
             uniform mat4 uCloudOrbitMatrix;
             uniform float uAnimTime;
 
-            varying vec3 vWorldPos;
-            varying vec3 vLocalPos;
+            out vec3 vWorldPos;
+            out vec3 vLocalPos;
 
             // Procedural sine/cosine noise for organic cloud puff animation
             float puffNoise(vec3 p, float t) {
@@ -381,10 +384,11 @@ window.characterVertexShaderSource = `
             }
       `;
 
-      window.cloud3DFragmentShaderSource = `
+      window.cloud3DFragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vWorldPos;
-            varying vec3 vLocalPos;
+            in vec3 vWorldPos;
+            in vec3 vLocalPos;
+            out vec4 fragColor;
 
             uniform vec3 uColor;
             uniform float uAlpha;
@@ -468,7 +472,7 @@ window.characterVertexShaderSource = `
                 
                 vec3 finalColor = mix(shadowColor, baseColor, lightIntensity * shadow);
                 
-                gl_FragColor = vec4(finalColor, density * uAlpha);
+                fragColor = vec4(finalColor, density * uAlpha);
             }
 `;
 
@@ -4615,7 +4619,7 @@ window.characterVertexShaderSource = `
           if (!equipIndexBuffer) equipIndexBuffer = gl.createBuffer();
           if (equipIndexBuffer._uploadedCount !== equipIndicesLength) {
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
-            const idxData = (supportUint32 && equipIndicesLength > 65535)
+            const idxData = (equipIndicesLength > 65535)
               ? (flatEquip.indices instanceof Uint32Array ? flatEquip.indices : new Uint32Array(flatEquip.indices))
               : (flatEquip.indices instanceof Uint16Array ? flatEquip.indices : new Uint16Array(flatEquip.indices));
             gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
@@ -4673,7 +4677,7 @@ window.characterVertexShaderSource = `
             if (!charIndexBuffer) charIndexBuffer = gl.createBuffer();
             if (charIndexBuffer._uploadedCount !== charIndicesLength || charIndexBuffer._sourceType !== "chibi") {
               gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
-              const idxData = (supportUint32 && charIndicesLength > 65535)
+              const idxData = (charIndicesLength > 65535)
                 ? (glbData.indices instanceof Uint32Array ? glbData.indices : new Uint32Array(glbData.indices))
                 : (glbData.indices instanceof Uint16Array ? glbData.indices : new Uint16Array(glbData.indices));
               gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.STATIC_DRAW);
@@ -6575,7 +6579,7 @@ window.characterVertexShaderSource = `
                 if (!equipIndexBuffer) equipIndexBuffer = gl.createBuffer();
                 if (equipIndexBuffer._uploadedCount !== equipIndicesLength) {
                   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
-                  const idxData = (supportUint32 && equipIndicesLength > 65535)
+                  const idxData = (equipIndicesLength > 65535)
                     ? (flatEquip.indices instanceof Uint32Array ? flatEquip.indices : new Uint32Array(flatEquip.indices))
                     : (flatEquip.indices instanceof Uint16Array ? flatEquip.indices : new Uint16Array(flatEquip.indices));
                   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
@@ -6622,7 +6626,7 @@ window.characterVertexShaderSource = `
           if (!cb.indexBuffer) cb.indexBuffer = gl.createBuffer();
           if (cb.indexBuffer._uploadedCount !== cb.indicesLength) {
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cb.indexBuffer);
-            const idxData = (supportUint32 && cb.indicesLength > 65535)
+            const idxData = (cb.indicesLength > 65535)
               ? (merged.indices instanceof Uint32Array ? merged.indices : new Uint32Array(merged.indices))
               : (merged.indices instanceof Uint16Array ? merged.indices : new Uint16Array(merged.indices));
             gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
@@ -6662,7 +6666,7 @@ window.characterVertexShaderSource = `
         if (!charIndexBuffer) charIndexBuffer = gl.createBuffer();
         if (charIndexBuffer._uploadedCount !== charIndicesLength || charIndexBuffer._sourceType !== "classic") {
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
-          const idxData = (supportUint32 && charIndicesLength > 65535)
+          const idxData = (charIndicesLength > 65535)
             ? (merged.indices instanceof Uint32Array ? merged.indices : new Uint32Array(merged.indices))
             : (merged.indices instanceof Uint16Array ? merged.indices : new Uint16Array(merged.indices));
           gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);

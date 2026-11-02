@@ -51,7 +51,7 @@
     }
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
-    const type = (useUint32 && idxLen > 65535) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+    const type = (idxLen > 65535) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const bytesPerIndex = type === gl.UNSIGNED_INT ? 4 : 2;
 
     // Draw trees and rocks (non-grass nature) with distance culling
@@ -130,7 +130,7 @@
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
 
-    const type = (useUint32 && idxLen > 65535) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+    const type = (idxLen > 65535) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const bytesPerIndex = type === gl.UNSIGNED_INT ? 4 : 2;
 
     const grassStartIdx = opts.natureGrassStartIndex !== undefined ? opts.natureGrassStartIndex : global.natureGrassStartIndex;
@@ -238,7 +238,7 @@
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
 
-    const isUint32 = useUint32 && idxLen > 65535;
+    const isUint32 = idxLen > 65535;
     const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const bytesPerIndex = isUint32 ? 4 : 2;
 

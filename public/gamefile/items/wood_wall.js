@@ -29,6 +29,10 @@ window.ItemRegistry["wood_wall"] = {
     const bCol = baseColor[2];
 
     const isWindow = item.type === "wood_window";
+    if (isWindow && window.ItemRegistry && window.ItemRegistry["wood_window"] && window.ItemRegistry["wood_window"] !== window.ItemRegistry["wood_wall"] && typeof window.ItemRegistry["wood_window"].render === "function") {
+      window.ItemRegistry["wood_window"].render(item, vertices, colors, indices, targetBuffer);
+      return;
+    }
 
     const itemsList = window.collectibles || [];
     const colLen = itemsList.length;
@@ -286,7 +290,7 @@ window.ItemRegistry["wood_wall"] = {
     const topTrimRight = getTrimHeight(0.15, 0.25);
     const topTrimMid = getTrimHeight(0.0, 0.25);
 
-    if (!isWindow || item.isPreview) {
+    if (!isWindow) {
       // 1) Bottom horizontal support beam & doorway stumps (non-overlapping width 0.300, extends 2mm into floor to prevent light leaks)
       if (hasCoLocatedDoor) {
         // Left bottom stump: width 0.060, centered at t = -0.120 (meets door post at t = -0.090 cleanly)
@@ -603,4 +607,4 @@ window.ItemRegistry["wood_wall"] = {
   }
 };
 
-window.ItemRegistry["wood_window"] = window.ItemRegistry["wood_wall"];
+window.ItemRegistry["wood_window"] = window.ItemRegistry["wood_window"] || window.ItemRegistry["wood_wall"];

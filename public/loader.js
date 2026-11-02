@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789149500000';
+  const version = '1789150100000';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -67,6 +67,7 @@
     'gamefile/items/folding_ladder.js',
     'gamefile/items/wood_wall.js',
     'gamefile/items/wood_door.js',
+    'gamefile/items/wood_window.js',
     'gamefile/items/wood_roof.js',
     'gamefile/items/meganeura_item.js',
     'gamefile/items/isopod_item.js',

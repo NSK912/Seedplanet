@@ -1698,7 +1698,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ARRAY_BUFFER, hitboxColorBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
 
-            const isUint32 = supportUint32 && indices.length > 65535;
+            const isUint32 = indices.length > 65535;
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, hitboxIndexBuffer);
             gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, isUint32 ? new Uint32Array(indices) : new Uint16Array(indices), gl.STATIC_DRAW);
         }
@@ -1945,7 +1945,7 @@ function buildCollectibles(count, seed) {
         }
 
         const flatGeom = makeFlatShadedGeometry(vertices, colors, indices, true);
-        const isUint32 = supportUint32 && flatGeom && flatGeom.indices && flatGeom.indices.length > 65535;
+        const isUint32 = flatGeom && flatGeom.indices && flatGeom.indices.length > 65535;
 
         if (targetBuffer === 'main') {
             collectibleIndicesLength = flatGeom.indices.length;
@@ -2313,6 +2313,7 @@ function buildCollectibles(count, seed) {
             };
             collectibles.push(floorPreviewCollectible);
             floorPreviewCollectible = collectibles[collectibles.length - 1];
+            window.floorPreviewCollectible = floorPreviewCollectible;
             if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof" || typeToPlace === "folding_ladder") {
@@ -5409,6 +5410,7 @@ function buildCollectibles(count, seed) {
           } else {
               floorPreviewCollectible.color = [0.95, 0.85, 0.45]; // yellow if valid
           }
+          window.floorPreviewCollectible = floorPreviewCollectible;
 
           refreshCollectiblesVBO('preview');
         } else {
@@ -5417,6 +5419,7 @@ function buildCollectibles(count, seed) {
             const idx = collectibles.indexOf(floorPreviewCollectible);
             if (idx !== -1) collectibles.splice(idx, 1);
             floorPreviewCollectible = null;
+            window.floorPreviewCollectible = null;
             refreshCollectiblesVBO('preview');
           }
         }

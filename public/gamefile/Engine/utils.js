@@ -1,8 +1,8 @@
 // Global references declared early to avoid load-time reference errors in other modules
 var canvas = null;
 var gl = null;
-var isWebGL2 = false;
-var supportUint32 = false;
+var isWebGL2 = true;
+var supportUint32 = true;
 var RADIUS = 32.0;
 var HEIGHT_SCALE = 0.6 * Math.pow(32.0 / 8.0, 0.70);
 var globalSeed = 0;

@@ -2,19 +2,19 @@
 
 (function(global) {
   // --- Water Shader Sources ---
-  const waterVertexShaderSource = `
-        attribute vec3 aPosition;
+  const waterVertexShaderSource = `#version 300 es
+        in vec3 aPosition;
         uniform mat4 uModelViewMatrix;
         uniform mat4 uProjectionMatrix;
         uniform float uTime;
         uniform float uWaveStrength;
         uniform float uWaterLevel;
         
-        varying vec3 vPosition;
-        varying vec3 vNormal;
-        varying float vDist;
-        varying vec4 vClipPos;
-        varying vec4 vNormClipPos;
+        out vec3 vPosition;
+        out vec3 vNormal;
+        out float vDist;
+        out vec4 vClipPos;
+        out vec4 vNormClipPos;
         
         void main() {
             float wave1 = sin(aPosition.x * 6.0 + uTime * 2.3) * 0.04;
@@ -37,8 +37,9 @@
         }
   `;
 
-  const waterFragmentShaderSource = `
+  const waterFragmentShaderSource = `#version 300 es
         precision highp float;
+        precision highp int;
         uniform vec3 uWaterColor;
         uniform float uOpacity;
         uniform float uTime;
@@ -69,11 +70,12 @@
         uniform vec4 uTunnels[64];
         uniform int uTunnelCount;
         
-        varying vec3 vPosition;
-        varying vec3 vNormal;
-        varying float vDist;
-        varying vec4 vClipPos;
-        varying vec4 vNormClipPos;
+        in vec3 vPosition;
+        in vec3 vNormal;
+        in float vDist;
+        in vec4 vClipPos;
+        in vec4 vNormClipPos;
+        out vec4 fragColor;
         
         // --- GLSL Noise ---
         float hash(vec3 p) {
@@ -114,12 +116,12 @@
             }
             
             vec3 nPos = normalize(vPosition);
-            float theta = acos(nPos.y);
+            float theta = acos(clamp(nPos.y, -1.0, 1.0));
             float phi = atan(nPos.z, nPos.x);
             if (phi < 0.0) phi += 2.0 * 3.14159265359;
             vec2 uv = vec2(phi / (2.0 * 3.14159265359), theta / 3.14159265359);
-            float isWater = texture2D(uWaterMaskTex, uv).r;
-            if (isWater <= 0.001) {
+            float isWater = texture(uWaterMaskTex, uv).r;
+            if (isWater <= 0.0001) {
                 discard;
             }
             float edgeFade = smoothstep(0.0, 0.08, isWater);
@@ -159,6 +161,9 @@
             }
             
             vec3 normal = normalize(vNormal);
+            if (!gl_FrontFacing) {
+                normal = -normal;
+            }
             
             // Ripple wave calculation
             float ripple = sin(vPosition.x * 25.0 + uTime * 4.0) * 0.02 
@@ -175,7 +180,7 @@
             vec2 normUV = (vNormClipPos.w > 0.001) ? ((vNormClipPos.xy / vNormClipPos.w) * 0.5 + 0.5) : (waterUV + vec2(0.0, 0.01));
             vec2 screenUp = normalize(normUV - waterUV + vec2(0.0, 1e-5));
             vec2 screenRight = vec2(-screenUp.y, screenUp.x);
-            vec2 reflRipple = vec2(ripple, ripple * 0.5) * 0.006;
+            vec2 reflRipple = vec2(ripple, ripple * 0.35) * 0.0018;
 
             // 1. Twinkling Cosmic Stars & Atmosphere Fallback (Sky / Horizon)
             vec3 skyColor = vec3(0.02, 0.03, 0.07) * (1.0 - max(0.0, reflectDir.y));
@@ -191,11 +196,12 @@
             bool isCamAboveWater = (length(uCameraPos) > waterRadius + 0.01);
             vec4 ssrHit = vec4(0.0);
 
-            // Distance cutoff per SSR quality level (Low = 12m, Medium = 20m, High = 32m)
-            float maxSSRDist = (uSSREnabled < 1.5) ? 12.0 : ((uSSREnabled < 2.5) ? 20.0 : 32.0);
+            // Distance cutoff per SSR quality level (Low = 35m, Medium = 65m, High = 110m)
+            float maxSSRDist = (uSSREnabled < 1.5) ? 35.0 : ((uSSREnabled < 2.5) ? 65.0 : 110.0);
 
             if (uSSREnabled > 0.5 && isCamAboveWater && vDist < maxSSRDist) {
-                float ssrLodFade = 1.0 - smoothstep(maxSSRDist * 0.90, maxSSRDist, vDist);
+                // Smooth distance LOD fade: stays full clarity until 80% of max distance, then gradually fades to 0
+                float ssrLodFade = 1.0 - smoothstep(maxSSRDist * 0.80, maxSSRDist, vDist);
                 float hitWeight = 0.0;
                 vec3 hitColor = vec3(0.0);
                 bool inForegroundObjZone = false;
@@ -242,13 +248,13 @@
                                 float curS = maxSpan * (float(s) / 6.0);
                                 vec2 sUV = waterUV + screenUp * curS;
                                 if (sUV.y > 0.995 || sUV.x < 0.002 || sUV.x > 0.998) break;
-                                float sA = texture2D(uSSRSceneTex, sUV).a;
+                                float sA = texture(uSSRSceneTex, sUV).a;
                                 if (sA > 0.994) {
                                     float loS = prevS;
                                     float hiS = curS;
                                     for (int b = 0; b < 4; b++) {
                                         float midS = 0.5 * (loS + hiS);
-                                        float mA = texture2D(uSSRSceneTex, waterUV + screenUp * midS).a;
+                                        float mA = texture(uSSRSceneTex, waterUV + screenUp * midS).a;
                                         if (mA > 0.994) hiS = midS;
                                         else loS = midS;
                                     }
@@ -259,19 +265,19 @@
                             }
                             if (hitS >= 0.0) {
                                 // Verify solid above-water boat body slightly above waterline so rear top edges behind the boat are ignored
-                                float bodyA = texture2D(uSSRSceneTex, waterUV + screenUp * (hitS + 0.008)).a;
+                                float bodyA = texture(uSSRSceneTex, waterUV + screenUp * (hitS + 0.008)).a;
                                 if (bodyA > 0.994) {
-                                    vec2 invertedUV = waterUV + screenUp * (2.0 * hitS) + reflRipple;
-                                  if (invertedUV.x >= 0.002 && invertedUV.x <= 0.998 && invertedUV.y >= 0.002 && invertedUV.y <= 0.995) {
-                                    vec2 edgeDistanceToScreen = min(invertedUV, 1.0 - invertedUV);
+                                    vec2 invertedUV = waterUV + screenUp * (2.0 * hitS) + reflRipple * clamp(hitS * 10.0, 0.0, 1.0);
+                                    if (invertedUV.x >= 0.002 && invertedUV.x <= 0.998 && invertedUV.y >= 0.002 && invertedUV.y <= 0.995) {
+                                        vec2 edgeDistanceToScreen = min(invertedUV, 1.0 - invertedUV);
                                         float edgeFade = smoothstep(0.0, 0.06, edgeDistanceToScreen.x);
-                                        vec4 sceneSample = texture2D(uSSRSceneTex, invertedUV);
+                                        vec4 sceneSample = texture(uSSRSceneTex, invertedUV);
                                         float objMask = smoothstep(0.991, 0.997, sceneSample.a);
                                         if (objMask > 0.01) {
                                             float fadeY = smoothstep(0.002, 0.04, 1.0 - invertedUV.y);
                                             float spanFade = 1.0 - smoothstep(maxSpan * 0.75, maxSpan, hitS);
                                             hitColor = sceneSample.rgb;
-                                      hitWeight = fadeY * (0.65 + 0.35 * spanFade) * objMask * edgeFade;
+                                            hitWeight = fadeY * (0.65 + 0.35 * spanFade) * objMask * edgeFade;
                                             break;
                                         }
                                     }
@@ -299,13 +305,13 @@
                                 float curS = pMaxSpan * (float(s) / 6.0);
                                 vec2 sUV = waterUV + screenUp * curS;
                                 if (sUV.y > 0.995 || sUV.x < 0.002 || sUV.x > 0.998) break;
-                                float sA = texture2D(uSSRSceneTex, sUV).a;
+                                float sA = texture(uSSRSceneTex, sUV).a;
                                 if (sA > 0.994) {
                                     float loS = prevS;
                                     float hiS = curS;
                                     for (int b = 0; b < 4; b++) {
                                         float midS = 0.5 * (loS + hiS);
-                                        float mA = texture2D(uSSRSceneTex, waterUV + screenUp * midS).a;
+                                        float mA = texture(uSSRSceneTex, waterUV + screenUp * midS).a;
                                         if (mA > 0.994) hiS = midS;
                                         else loS = midS;
                                     }
@@ -315,21 +321,20 @@
                                 prevS = curS;
                             }
                             if (hitS >= 0.0) {
-                                float bodyA = texture2D(uSSRSceneTex, waterUV + screenUp * (hitS + 0.006)).a;
-                                vec4 currSample = texture2D(uSSRSceneTex, waterUV);
+                                float bodyA = texture(uSSRSceneTex, waterUV + screenUp * (hitS + 0.006)).a;
+                                vec4 currSample = texture(uSSRSceneTex, waterUV);
                                 if (bodyA > 0.994 && currSample.a < 0.993) {
-                                    vec2 invertedUV = waterUV + screenUp * (2.0 * hitS) + reflRipple;
-                                  if (invertedUV.x >= 0.002 && invertedUV.x <= 0.998 && invertedUV.y >= 0.002 && invertedUV.y <= 0.995) {
-                                    vec2 edgeDistanceToScreen = min(invertedUV, 1.0 - invertedUV);
+                                    vec2 invertedUV = waterUV + screenUp * (2.0 * hitS) + reflRipple * clamp(hitS * 10.0, 0.0, 1.0);
+                                    if (invertedUV.x >= 0.002 && invertedUV.x <= 0.998 && invertedUV.y >= 0.002 && invertedUV.y <= 0.995) {
+                                        vec2 edgeDistanceToScreen = min(invertedUV, 1.0 - invertedUV);
                                         float edgeFade = smoothstep(0.0, 0.06, edgeDistanceToScreen.x);
-                                        vec4 sceneSample = texture2D(uSSRSceneTex, invertedUV);
+                                        vec4 sceneSample = texture(uSSRSceneTex, invertedUV);
                                         float objMask = smoothstep(0.991, 0.997, sceneSample.a);
-                                        float steepFade = 1.0 - smoothstep(0.65, 0.92, camSteep);
-                                        if (objMask * steepFade > 0.01) {
+                                        if (objMask > 0.01) {
                                             float fadeY = smoothstep(0.002, 0.04, 1.0 - invertedUV.y);
                                             float spanFade = 1.0 - smoothstep(pMaxSpan * 0.75, pMaxSpan, hitS);
                                             hitColor = sceneSample.rgb;
-                                            hitWeight = fadeY * (0.70 + 0.30 * spanFade) * objMask * steepFade * edgeFade;
+                                            hitWeight = fadeY * (0.70 + 0.30 * spanFade) * objMask * edgeFade;
                                         }
                                     }
                                 }
@@ -341,85 +346,67 @@
                 // C) Shoreline / Terrain / Trees / Hills Screen-Space Waterline Bisection & SSR LOD
                 if (hitWeight < 0.05) {
                     int activeSteps = 0;
-                  const float maxRayDist = 6.0;
                     if (uSSREnabled > 2.5) {
-                      // High Quality (สูง): keep enough samples across each distance LOD.
-                      activeSteps = (vDist < 14.0) ? 8 : ((vDist < 24.0) ? 6 : 4);
+                        activeSteps = 10;
                     } else if (uSSREnabled > 1.5) {
-                      // Medium Quality (กลาง): avoid a sample-density drop in the mid-distance band.
-                    activeSteps = 8;
+                        activeSteps = 8;
                     } else {
-                      // Low Quality (ต่ำ): keep its four samples through the full SSR range.
-                      activeSteps = (vDist < maxSSRDist) ? 4 : 0;
+                        activeSteps = 5;
                     }
 
                     if (activeSteps > 0) {
-                        // Project both max coastal hill/tree height (1.8m) and max 3D water surface reach (4.2m) to screen space
-                        vec3 shoreTopWorld = vPosition + vNorm * 1.8;
-                        vec3 maxWaterWorld = normalize(vPosition + reflHoriz * maxRayDist) * waterRadius;
-                        vec4 shoreTopClip = uViewProjMatrix * vec4(shoreTopWorld, 1.0);
-                        vec4 maxWaterClip = uViewProjMatrix * vec4(maxWaterWorld, 1.0);
+                        // Smooth screen-space search span from water fragment towards top of screen (no spherical reachSpan collapse)
+                        float searchSpan = clamp((0.98 - waterUV.y) / max(screenUp.y, 0.12), 0.10, 0.60);
 
-                        // Points behind the camera plane have no valid screen position; use the capped span instead of skipping SSR on a whole screen row.
-                        {
-                            float maxShoreSpan = 0.25;
-                            if (shoreTopClip.w > 0.05) {
-                                vec2 shoreTopUV = shoreTopClip.xy / shoreTopClip.w * 0.5 + 0.5;
-                                maxShoreSpan = clamp(dot(shoreTopUV - waterUV, screenUp), 0.012, 0.25);
-                            }
-                            float maxWaterlineSpan = 0.25;
-                            if (maxWaterClip.w > 0.05) {
-                                vec2 maxWaterUV = maxWaterClip.xy / maxWaterClip.w * 0.5 + 0.5;
-                                maxWaterlineSpan = clamp(dot(maxWaterUV - waterUV, screenUp), 0.008, 0.25);
-                            }
-                            float searchSpan = min(maxShoreSpan, maxWaterlineSpan);
+                        float invSteps = 1.0 / float(activeSteps);
+                        float prevS = 0.0;
+                        float hitS = -1.0;
 
-                            float invSteps = 1.0 / float(activeSteps);
-                            float prevS = 0.0;
-                            float hitS = -1.0;
-
-                            for (int s = 1; s <= 8; s++) {
-                                if (s > activeSteps) break;
-                                float curS = searchSpan * (float(s) * invSteps);
-                                vec2 sUV = waterUV + screenUp * curS;
-                                if (sUV.y > 0.995 || sUV.x < 0.002 || sUV.x > 0.998) break;
-                                float sA = texture2D(uSSRSceneTex, sUV).a;
-                                // If ray passes behind a foreground boat/player, require terrain shoreline alpha (252/255 = 0.9882) so it skips the boat (1.0)
-                                bool isShore = inForegroundObjZone
-                                    ? (sA >= 0.984 && sA <= 0.992 && texture2D(uSSRSceneTex, sUV + screenUp * 0.005).a <= 0.992)
-                                    : (sA >= 0.984);
-                                if (isShore) {
-                                    float loS = prevS;
-                                    float hiS = curS;
-                                    for (int b = 0; b < 4; b++) {
-                                        float midS = 0.5 * (loS + hiS);
-                                        float mA = texture2D(uSSRSceneTex, waterUV + screenUp * midS).a;
-                                        bool midHit = inForegroundObjZone ? (mA >= 0.984 && mA <= 0.992) : (mA >= 0.984);
-                                        if (midHit) hiS = midS;
-                                        else loS = midS;
-                                    }
-                                    hitS = 0.5 * (loS + hiS);
-                                    break;
+                        for (int s = 1; s <= 10; s++) {
+                            if (s > activeSteps) break;
+                            float curS = searchSpan * (float(s) * invSteps);
+                            vec2 sUV = waterUV + screenUp * curS;
+                            if (sUV.y > 0.995 || sUV.x < 0.002 || sUV.x > 0.998) break;
+                            float sA = texture(uSSRSceneTex, sUV).a;
+                            // If ray passes behind a foreground boat/player, require terrain shoreline alpha (252/255 = 0.9882) so it skips the boat (1.0)
+                            bool isShore = inForegroundObjZone
+                                ? (sA >= 0.984 && sA <= 0.992 && texture(uSSRSceneTex, sUV + screenUp * 0.004).a <= 0.992)
+                                : (sA >= 0.984);
+                            if (isShore) {
+                                float loS = prevS;
+                                float hiS = curS;
+                                for (int b = 0; b < 4; b++) {
+                                    float midS = 0.5 * (loS + hiS);
+                                    float mA = texture(uSSRSceneTex, waterUV + screenUp * midS).a;
+                                    bool midHit = inForegroundObjZone ? (mA >= 0.984 && mA <= 0.992) : (mA >= 0.984);
+                                    if (midHit) hiS = midS;
+                                    else loS = midS;
                                 }
-                                prevS = curS;
+                                hitS = 0.5 * (loS + hiS);
+                                break;
                             }
+                            prevS = curS;
+                        }
 
-                            if (hitS >= 0.0) {
-                                vec2 invertedUV = waterUV + screenUp * (2.0 * hitS) + reflRipple;
-                              if (invertedUV.x >= 0.002 && invertedUV.x <= 0.998 && invertedUV.y >= 0.002 && invertedUV.y <= 0.995) {
+                        if (hitS >= 0.0) {
+                            // Wave normal ripple distortion so reflection edges shimmer organically rather than slicing straight lines
+                            vec2 wavePerturb = (normal.xz * 0.5 + vec2(ripple, ripple * 0.35) * 1.2) * 0.012;
+                            vec2 invertedUV = waterUV + screenUp * (2.0 * hitS) + wavePerturb * clamp(hitS * 6.0, 0.25, 1.0);
+                            if (invertedUV.x >= 0.002 && invertedUV.x <= 0.998 && invertedUV.y >= 0.002 && invertedUV.y <= 0.995) {
                                 vec2 edgeDistanceToScreen = min(invertedUV, 1.0 - invertedUV);
-                                    float edgeFade = smoothstep(0.0, 0.06, edgeDistanceToScreen.x);
-                                    vec4 sceneSample = texture2D(uSSRSceneTex, invertedUV);
-                                    // Reflect only above-water terrain (252/255) and coastal trees/grass/models (255/255), never sky or underwater seabed (250/255)
-                                    float landMask = smoothstep(0.983, 0.987, sceneSample.a);
-                                    float steepFade = 1.0 - smoothstep(0.55, 0.92, camSteep);
-                                    float fadeY = smoothstep(0.002, 0.04, 1.0 - invertedUV.y);
-                                    float spanFade = 1.0 - smoothstep(searchSpan * 0.90, searchSpan, hitS);
-                                    float weight = fadeY * spanFade * landMask * steepFade * edgeFade;
-                                    if (weight > 0.001) {
-                                        hitColor = sceneSample.rgb;
-                                        hitWeight = weight;
-                                    }
+                                float edgeFade = smoothstep(0.0, 0.06, edgeDistanceToScreen.x);
+                                vec4 sceneSample = texture(uSSRSceneTex, invertedUV);
+                                // Soft silhouette feathering on left/right edges so terrain reflections merge smoothly without knife-cut seams
+                                float landMaskCenter = smoothstep(0.983, 0.988, sceneSample.a);
+                                float landMaskL = smoothstep(0.983, 0.988, texture(uSSRSceneTex, invertedUV - screenRight * 0.010).a);
+                                float landMaskR = smoothstep(0.983, 0.988, texture(uSSRSceneTex, invertedUV + screenRight * 0.010).a);
+                                float landMask = min(landMaskCenter, (landMaskL + landMaskR) * 0.45 + landMaskCenter * 0.55);
+                                float fadeY = smoothstep(0.002, 0.04, 1.0 - invertedUV.y);
+                                float spanFade = 1.0 - smoothstep(searchSpan * 0.92, searchSpan * 1.05, hitS);
+                                float weight = fadeY * spanFade * landMask * edgeFade;
+                                if (weight > 0.001) {
+                                    hitColor = sceneSample.rgb;
+                                    hitWeight = weight;
                                 }
                             }
                         }
@@ -433,20 +420,24 @@
             }
 
             
-            // Blend SSR hit with fallback environment based on hit weight
-            vec3 reflectedScene = mix(fallbackEnv, ssrHit.rgb, ssrHit.a * 0.95);
+            // Blend SSR hit with fallback environment while preserving a clean water ambient baseline
+            // (prevents shadowed terrain reflections from extinguishing water color into a dark murky void)
+            vec3 waterAmbientRefl = mix(fallbackEnv, vec3(0.05, 0.15, 0.25), 0.45);
+            vec3 reflectedScene = mix(waterAmbientRefl, max(ssrHit.rgb, waterAmbientRefl * 0.70), ssrHit.a * 0.82);
             
             // 3. Specular Sun Highlight
             vec3 lightDir = normalize(uLightDir);
             float sunSpec = pow(max(dot(reflectDir, lightDir), 0.0), 120.0);
             reflectedScene += vec3(1.0, 0.96, 0.85) * sunSpec * 2.0;
             
-            // 4. Fresnel: water reflects little head-on and strongly at grazing angles.
+            // 4. Natural Fresnel & Reflection Strength:
+            // Grazing angle (NdotV -> 0): crisp, mirror-like reflection (~0.62)
+            // Steep angle / Looking down (NdotV -> 1): soft, translucent reflection (~0.22) revealing seabed depth
             float NdotV = max(dot(normal, -viewDir), 0.0);
-            float fresnel = 0.08 + 0.92 * pow(1.0 - clamp(NdotV, 0.0, 1.0), 5.0);
-            float reflAlpha = clamp(fresnel + ssrHit.a * 0.12, 0.0, 0.96);
+            float fresnel = pow(1.0 - clamp(NdotV, 0.0, 1.0), 2.5);
+            float reflAlpha = clamp(fresnel * 0.44 + 0.20, 0.0, 0.68);
             if (!isCamAboveWater) {
-              reflAlpha *= 0.45;
+              reflAlpha *= 0.40;
             }
             
             // 5. Natural Water Transparency & Depth Gradient (Clear shallow water over sand -> Deep navy blue sea)
@@ -501,13 +492,13 @@
                 alpha = mix(alpha, 0.0, fogFactor * 0.95);
             }
             
-            gl_FragColor = vec4(finalColor, alpha);
+            fragColor = vec4(finalColor, alpha);
         }
   `;
 
   // --- Internal State & WebGL Handles ---
   let glContext = null;
-  let supportUint32Ext = false;
+  let supportUint32Ext = true;
 
   let waterProgram = null;
   let waterPosLoc = -1;
@@ -666,13 +657,14 @@
     let phi = Math.atan2(nz, nx);
     if (phi < 0) phi += Math.PI * 2;
     
-    const gridSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 400;
-    const maxGrid = Math.min(gridSize, 200);
-    const lat = Math.round((theta / Math.PI) * maxGrid);
-    const long = Math.round((phi / (Math.PI * 2)) * maxGrid);
-    const gridIdx = lat * (maxGrid + 1) + long;
-    
-    if (waterMask && waterMask[gridIdx] === 0) {
+    const seed = typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 0;
+    const groundH = (typeof getVisualHeightOnSphere === 'function')
+      ? getVisualHeightOnSphere(theta, phi, seed)
+      : (typeof getHeightOnSphere === 'function' ? getHeightOnSphere(theta, phi, seed) : 0);
+    const groundRad = planetR + groundH * hScale;
+
+    // If natural terrain is above water surface, this position is dry land
+    if (groundRad >= baseWaterRadius + 0.015) {
       return 0;
     }
     
@@ -706,7 +698,7 @@
     const vertexCount = (latSeg + 1) * (longSeg + 1);
     const vertices = new Float32Array(vertexCount * 3);
     const indexCount = latSeg * longSeg * 6;
-    const isUint32 = supportUint32Ext && indexCount > 65535;
+    const isUint32 = indexCount > 65535;
     const indices = isUint32 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
 
     const hScale = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(rad / 8.0, 0.70));
@@ -908,7 +900,7 @@
     }
     gl.bindTexture(gl.TEXTURE_2D, waterMaskTex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, longSeg + 1, latSeg + 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, waterMask);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, longSeg + 1, latSeg + 1, 0, gl.RED, gl.UNSIGNED_BYTE, waterMask);
     if (typeof Graphics !== 'undefined' && Graphics.webgpu && Graphics.webgpu.device) {
         if (!Graphics.webgpu.waterMaskTexture) {
             Graphics.webgpu.waterMaskTexture = Graphics.webgpu.device.createTexture({
@@ -1176,14 +1168,17 @@
 
     // Transparent water pass should not write to depth buffer so 3D UI and other transparent passes are not clipped
     gl.depthMask(false);
+    const prevCull = gl.isEnabled(gl.CULL_FACE);
+    if (prevCull) gl.disable(gl.CULL_FACE);
 
-    if (isUint32 && waterIndicesLength > 65535) {
+    if (waterIndicesLength > 65535) {
       gl.drawElements(gl.TRIANGLES, waterIndicesLength, gl.UNSIGNED_INT, 0);
     } else {
       gl.drawElements(gl.TRIANGLES, waterIndicesLength, gl.UNSIGNED_SHORT, 0);
     }
 
     gl.depthMask(true);
+    if (prevCull) gl.enable(gl.CULL_FACE);
   }
 
   function getMaskTexture() {

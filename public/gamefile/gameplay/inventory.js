@@ -2804,6 +2804,7 @@ function cancelFloorPlacement() {
         } else if (placingItemName === "WOOD_WINDOW") {
           floorPreviewCollectible.type = "wood_window";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.windowAngle = 0.0;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
         } else if (placingItemName === "WOOD_DOOR") {
           floorPreviewCollectible.type = "wood_door";

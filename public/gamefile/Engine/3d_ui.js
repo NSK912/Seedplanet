@@ -262,28 +262,29 @@ const World3DUI = {
       parent: this,
       
       init() {
-        const vsSource = `
-          attribute vec3 aPosition;
-          attribute vec2 aUV;
+        const vsSource = `#version 300 es
+          in vec3 aPosition;
+          in vec2 aUV;
           uniform mat4 uViewProj;
           uniform mat4 uModel;
-          varying vec2 vUV;
+          out vec2 vUV;
           void main() {
             vUV = aUV;
             gl_Position = uViewProj * uModel * vec4(aPosition, 1.0);
           }
         `;
-        const fsSource = `
+        const fsSource = `#version 300 es
           precision mediump float;
-          varying vec2 vUV;
+          in vec2 vUV;
           uniform sampler2D uSampler;
           uniform vec4 uColor;
+          out vec4 fragColor;
           void main() {
-            vec4 texColor = texture2D(uSampler, vUV);
+            vec4 texColor = texture(uSampler, vUV);
             if (texColor.a < 0.05) {
               discard;
             }
-            gl_FragColor = texColor * uColor;
+            fragColor = texColor * uColor;
           }
         `;
         const vertexShader = this.loadShader(gl.VERTEX_SHADER, vsSource);
@@ -356,16 +357,10 @@ const World3DUI = {
           this.gl.texParameterf(this.gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(16, maxAniso));
         }
 
-        const isPOT = (width & (width - 1)) === 0 && (height & (height - 1)) === 0;
-        const isWebGL2 = (typeof WebGL2RenderingContext !== 'undefined' && this.gl instanceof WebGL2RenderingContext);
-        if (isPOT || isWebGL2) {
-          try {
-            this.gl.generateMipmap(this.gl.TEXTURE_2D);
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
-          } catch(e) {
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
-          }
-        } else {
+        try {
+          this.gl.generateMipmap(this.gl.TEXTURE_2D);
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
+        } catch(e) {
           this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
         }
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
@@ -412,15 +407,9 @@ const World3DUI = {
             this.gl.bindTexture(this.gl.TEXTURE_2D, sign.texture);
             this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, sign.canvas);
 
-            const w = sign.canvas.width;
-            const h = sign.canvas.height;
-            const isPOT = (w & (w - 1)) === 0 && (h & (h - 1)) === 0;
-            const isWebGL2 = (typeof WebGL2RenderingContext !== 'undefined' && this.gl instanceof WebGL2RenderingContext);
-            if (isPOT || isWebGL2) {
-              try {
-                this.gl.generateMipmap(this.gl.TEXTURE_2D);
-              } catch(e) {}
-            }
+            try {
+              this.gl.generateMipmap(this.gl.TEXTURE_2D);
+            } catch(e) {}
             sign.needsTextureUpdate = false;
           }
         }

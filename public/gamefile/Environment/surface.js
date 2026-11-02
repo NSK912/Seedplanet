@@ -423,7 +423,7 @@
     gl.enableVertexAttribArray(opts.depthPosLoc);
     gl.vertexAttribPointer(opts.depthPosLoc, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
-    if (useUint32 && idxLen > 65535) {
+    if (idxLen > 65535) {
       gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_INT, 0);
     } else {
       gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_SHORT, 0);
@@ -484,7 +484,7 @@
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
 
-    if (useUint32 && idxLen > 65535) {
+    if (idxLen > 65535) {
       gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_INT, 0);
     } else {
       gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_SHORT, 0);

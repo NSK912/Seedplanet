@@ -1,10 +1,10 @@
 
 
       // --- Shaders ---
-      const modelVertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aColor;
-            attribute vec3 aNormal;
+      const modelVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
+            in vec3 aColor;
+            in vec3 aNormal;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
             uniform mat4 uLightSpaceMatrix;
@@ -18,14 +18,14 @@
             uniform float uMaxRenderDist;
             uniform vec3 uLightDir;
             
-            varying vec3 vColor;
-            varying vec3 vNormal;
-            varying vec3 vViewPos;
-            varying vec3 vWorldNormal;
-            varying vec3 vWorldPos;
-            varying vec4 vPositionLightSpace;
-            varying float vDist;
-            varying float vIsGrass;
+            out vec3 vColor;
+            out vec3 vNormal;
+            out vec3 vViewPos;
+            out vec3 vWorldNormal;
+            out vec3 vWorldPos;
+            out vec4 vPositionLightSpace;
+            out float vDist;
+            out float vIsGrass;
             
             void main() {
                 vec3 pos = aPosition;
@@ -148,28 +148,29 @@
                 vec3 nWorld = normalize(vWorldNormal);
                 vec3 radialUp = length(pos) > 0.001 ? normalize(pos) : vec3(0.0, 1.0, 0.0);
                 vec3 lDir = length(uLightDir) > 0.001 ? normalize(uLightDir) : radialUp;
-                float upAlign = abs(dot(nWorld, radialUp));
-                // nonFloor is 0.0 on horizontal floors/baseboards (upAlign > 0.93) and 1.0 on sloped roofs (upAlign ~0.77) and vertical walls (upAlign ~0.0)
-                float nonFloor = 1.0 - smoothstep(0.82, 0.93, upAlign);
                 float cosTheta = clamp(dot(nWorld, lDir), 0.0, 1.0);
                 float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-                float normalOffset = isGrass ? 0.0 : mix(0.0015, 0.011 + 0.008 * sinTheta, nonFloor);
+                // Pure normal offset (5.5mm - 12.0mm) along surface normal:
+                // Shifts receiver outward along N to eliminate self-shadow acne on all tilted/sloped surfaces
+                // without pushing depth along the light ray into interior ceilings or rafters.
+                float normalOffset = isGrass ? 0.0 : (0.0055 + 0.0065 * sinTheta);
                 vec3 shadowPos = pos + nWorld * normalOffset;
                 vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
                 vDist = length(mvPosition.xyz);
             }
         `;
 
-      const modelFragmentShaderSource = `
+      const modelFragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vColor;
-            varying vec3 vNormal;
-            varying vec3 vViewPos;
-            varying vec3 vWorldNormal;
-            varying vec3 vWorldPos;
-            varying vec4 vPositionLightSpace;
-            varying float vDist;
-            varying float vIsGrass;
+            precision highp int;
+            in vec3 vColor;
+            in vec3 vNormal;
+            in vec3 vViewPos;
+            in vec3 vWorldNormal;
+            in vec3 vWorldPos;
+            in vec4 vPositionLightSpace;
+            in float vDist;
+            in float vIsGrass;
             uniform vec3 uLightDir;
             uniform sampler2D uShadowMap;
             
@@ -192,6 +193,7 @@
             uniform sampler2D uSSRSceneTex;
             uniform mat4 uViewProjMatrix;
             uniform float uSSREnabled;
+            out vec4 fragColor;
 
             ${window.SHARED_SHADOW_GLSL = `
             float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
@@ -209,20 +211,17 @@
                 vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1536.0);
                 float currentDepth = projCoords.z;
 
-                vec3 radialUp = length(vWorldPos) > 0.001 ? normalize(vWorldPos) : vec3(0.0, 1.0, 0.0);
-                float upAlign = abs(dot(normal, radialUp));
-                float nonFloor = 1.0 - smoothstep(0.82, 0.93, upAlign);
-
-                float cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
+                vec3 lDir = length(lightDir) > 0.001 ? normalize(lightDir) : vec3(0.0, 1.0, 0.0);
+                float cosTheta = clamp(dot(normal, lDir), 0.0, 1.0);
                 float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-                float tanTheta = min(3.0, sinTheta / max(cosTheta, 0.1));
 
-                // Decoupled bias: ultra-tight on horizontal floors (prevents light leak under walls),
-                // slope-stabilized on vertical walls and sloped roofs (prevents self-shadowing bands while staying < wall thickness).
-                float biasFloor = clamp(0.00008 + 0.00010 * tanTheta, 0.00008, 0.00022);
-                float biasWall  = clamp(0.00018 + 0.00022 * tanTheta, 0.00015, 0.00044);
-                float bias = mix(biasFloor, biasWall, nonFloor);
-                float cmpDepth = currentDepth - bias;
+                // Calibrated Micro-Depth Bias:
+                // Because Normal Offset in the vertex shader eliminates self-shadow acne on the surface,
+                // the scalar depth bias here only needs to cover ~6mm, ensuring zero Peter Panning / zero light leaks
+                // even on thin 18mm boards, ceilings, and plank seams.
+                float tanTheta = min(sinTheta / max(cosTheta, 0.12), 3.5);
+                float slopeBias = min(tanTheta * texelSize.x * 0.45, 0.00022);
+                float bias = 0.00006 + 0.00003 * sinTheta + slopeBias;
 
                 vec2 res = 1.0 / texelSize;
                 vec2 st = projCoords.xy * res;
@@ -230,102 +229,63 @@
                 vec2 f = fract(st);
                 vec2 centerUv = (baseIdx + 0.5) * texelSize;
 
-                // Quality 1 (Low): 9-tap 3x3 Quadratic B-Spline with 5-tap Early-Out
-                if (uShadowsEnabled < 1.5) {
-                    float s11 = step(cmpDepth, texture2D(uShadowMap, centerUv).r);
-                    float s00 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-texelSize.x, -texelSize.y)).r);
-                    float s20 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( texelSize.x, -texelSize.y)).r);
-                    float s02 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-texelSize.x,  texelSize.y)).r);
-                    float s22 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( texelSize.x,  texelSize.y)).r);
-                    float earlySum = s11 + s00 + s20 + s02 + s22;
-                    if (earlySum > 4.99) return 1.0;
-                    if (earlySum < 0.01) return 1.0 - edgeFade;
+                float depthCenter = texture(uShadowMap, centerUv).r;
+                float c00 = step(currentDepth - bias, depthCenter);
 
-                    float s10 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,         -texelSize.y)).r);
-                    float s01 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-texelSize.x,  0.0        )).r);
-                    float s21 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( texelSize.x,  0.0        )).r);
-                    float s12 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,          texelSize.y)).r);
+                float d_m1m1 = texture(uShadowMap, centerUv + vec2(-texelSize.x, -texelSize.y)).r;
+                float d_p1m1 = texture(uShadowMap, centerUv + vec2( texelSize.x, -texelSize.y)).r;
+                float d_m1p1 = texture(uShadowMap, centerUv + vec2(-texelSize.x,  texelSize.y)).r;
+                float d_p1p1 = texture(uShadowMap, centerUv + vec2( texelSize.x,  texelSize.y)).r;
 
-                    vec3 wx = vec3(
-                        0.5 * (1.0 - f.x) * (1.0 - f.x),
-                        0.75 - (f.x - 0.5) * (f.x - 0.5),
-                        0.5 * f.x * f.x
-                    );
-                    vec3 wy = vec3(
-                        0.5 * (1.0 - f.y) * (1.0 - f.y),
-                        0.75 - (f.y - 0.5) * (f.y - 0.5),
-                        0.5 * f.y * f.y
-                    );
-                    float row0 = wx.x * s00 + wx.y * s10 + wx.z * s20;
-                    float row1 = wx.x * s01 + wx.y * s11 + wx.z * s21;
-                    float row2 = wx.x * s02 + wx.y * s12 + wx.z * s22;
-                    float shadow = wy.x * row0 + wy.y * row1 + wy.z * row2;
-                    return mix(1.0, shadow, edgeFade);
+                if (c00 < 0.5) {
+                    float maxOccludedDepth = depthCenter + 0.0010;
+                    d_m1m1 = min(d_m1m1, maxOccludedDepth);
+                    d_p1m1 = min(d_p1m1, maxOccludedDepth);
+                    d_m1p1 = min(d_m1p1, maxOccludedDepth);
+                    d_p1p1 = min(d_p1p1, maxOccludedDepth);
                 }
 
-                // Quality 2-4 (Medium / High / Ultra): C1-continuous B-Spline at exact integer texel steps
-                vec2 t1 = texelSize;
-                vec2 t2 = texelSize * 2.0;
+                float cm1m1 = step(currentDepth - bias, d_m1m1);
+                float cp1m1 = step(currentDepth - bias, d_p1m1);
+                float cm1p1 = step(currentDepth - bias, d_m1p1);
+                float cp1p1 = step(currentDepth - bias, d_p1p1);
 
-                float c00   = step(cmpDepth, texture2D(uShadowMap, centerUv).r);
-                float cm2m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x, -t2.y)).r);
-                float c0m2  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,  -t2.y)).r);
-                float cp2m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x, -t2.y)).r);
-                float cm20  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x,  0.0 )).r);
-                float cp20  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x,  0.0 )).r);
-                float cm2p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x,  t2.y)).r);
-                float c0p2  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,   t2.y)).r);
-                float cp2p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x,  t2.y)).r);
+                float earlySum5 = c00 + cm1m1 + cp1m1 + cm1p1 + cp1p1;
+                if (earlySum5 > 4.99) return 1.0;
+                if (earlySum5 < 0.01) return 1.0 - edgeFade;
 
-                float earlySum9 = c00 + cm2m2 + c0m2 + cp2m2 + cm20 + cp20 + cm2p2 + c0p2 + cp2p2;
-                if (earlySum9 > 8.99) return 1.0;
-                if (earlySum9 < 0.01) return 1.0 - edgeFade;
+                float d_0m1 = texture(uShadowMap, centerUv + vec2( 0.0,         -texelSize.y)).r;
+                float d_m10 = texture(uShadowMap, centerUv + vec2(-texelSize.x,  0.0        )).r;
+                float d_p10 = texture(uShadowMap, centerUv + vec2( texelSize.x,  0.0        )).r;
+                float d_0p1 = texture(uShadowMap, centerUv + vec2( 0.0,          texelSize.y)).r;
 
-                float cm1m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x, -t2.y)).r);
-                float cp1m2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x, -t2.y)).r);
+                if (c00 < 0.5) {
+                    float maxOccludedDepth = depthCenter + 0.0022;
+                    d_0m1 = min(d_0m1, maxOccludedDepth);
+                    d_m10 = min(d_m10, maxOccludedDepth);
+                    d_p10 = min(d_p10, maxOccludedDepth);
+                    d_0p1 = min(d_0p1, maxOccludedDepth);
+                }
 
-                float cm2m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x, -t1.y)).r);
-                float cm1m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x, -t1.y)).r);
-                float c0m1  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,  -t1.y)).r);
-                float cp1m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x, -t1.y)).r);
-                float cp2m1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x, -t1.y)).r);
+                float c0m1 = step(currentDepth - bias, d_0m1);
+                float cm10 = step(currentDepth - bias, d_m10);
+                float cp10 = step(currentDepth - bias, d_p10);
+                float c0p1 = step(currentDepth - bias, d_0p1);
 
-                float cm10  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x,  0.0 )).r);
-                float cp10  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x,  0.0 )).r);
-
-                float cm2p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t2.x,  t1.y)).r);
-                float cm1p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x,  t1.y)).r);
-                float c0p1  = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( 0.0,   t1.y)).r);
-                float cp1p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x,  t1.y)).r);
-                float cp2p1 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t2.x,  t1.y)).r);
-
-                float cm1p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2(-t1.x,  t2.y)).r);
-                float cp1p2 = step(cmpDepth, texture2D(uShadowMap, centerUv + vec2( t1.x,  t2.y)).r);
-
-                vec2 u = 1.0 - f;
-                vec2 b_m1 = 0.5 * u * u;
-                vec2 b_0  = 0.75 - (f - 0.5) * (f - 0.5);
-                vec2 b_p1 = 0.5 * f * f;
-
-                // Pure 3x3 B-Spline on walls/roofs (alpha = 0) so outer 2-texel taps never sample up-slope texels;
-                // compact convolved B-Spline on flat ground/floors so penumbra stays narrower than wall base.
-                float baseAlpha = clamp(0.03 + (uShadowsEnabled - 1.0) * 0.035, 0.03, 0.12);
-                float alpha = baseAlpha * (1.0 - nonFloor);
-                float centerW = 1.0 - 2.0 * alpha;
-
-                vec2 wm2 = alpha * b_m1;
-                vec2 wm1 = centerW * b_m1 + alpha * b_0;
-                vec2 w0  = alpha * (b_m1 + b_p1) + centerW * b_0;
-                vec2 wp1 = alpha * b_0 + centerW * b_p1;
-                vec2 wp2 = alpha * b_p1;
-
-                float r_m2 = wm2.x * cm2m2 + wm1.x * cm1m2 + w0.x * c0m2 + wp1.x * cp1m2 + wp2.x * cp2m2;
-                float r_m1 = wm2.x * cm2m1 + wm1.x * cm1m1 + w0.x * c0m1 + wp1.x * cp1m1 + wp2.x * cp2m1;
-                float r_0  = wm2.x * cm20  + wm1.x * cm10  + w0.x * c00  + wp1.x * cp10  + wp2.x * cp20;
-                float r_p1 = wm2.x * cm2p1 + wm1.x * cm1p1 + w0.x * c0p1 + wp1.x * cp1p1 + wp2.x * cp2p1;
-                float r_p2 = wm2.x * cm2p2 + wm1.x * cm1p2 + w0.x * c0p2 + wp1.x * cp1p2 + wp2.x * cp2p2;
-
-                float shadow = wm2.y * r_m2 + wm1.y * r_m1 + w0.y * r_0 + wp1.y * r_p1 + wp2.y * r_p2;
+                vec3 wx = vec3(
+                    0.5 * (1.0 - f.x) * (1.0 - f.x),
+                    0.75 - (f.x - 0.5) * (f.x - 0.5),
+                    0.5 * f.x * f.x
+                );
+                vec3 wy = vec3(
+                    0.5 * (1.0 - f.y) * (1.0 - f.y),
+                    0.75 - (f.y - 0.5) * (f.y - 0.5),
+                    0.5 * f.y * f.y
+                );
+                float row0 = wx.x * cm1m1 + wx.y * c0m1 + wx.z * cp1m1;
+                float row1 = wx.x * cm10  + wx.y * c00  + wx.z * cp10;
+                float row2 = wx.x * cm1p1 + wx.y * c0p1 + wx.z * cp1p1;
+                float shadow = wy.x * row0 + wy.y * row1 + wy.z * row2;
                 return mix(1.0, shadow, edgeFade);
             }
 
@@ -525,7 +485,7 @@
                                     float distFade = 1.0 - smoothstep(0.75, 1.0, progress);
                                     float weight = edgeFadeFactor * distFade;
                                     if (weight > 0.08) {
-                                        vec3 sampleColor = texture2D(uSSRSceneTex, sUV).rgb;
+                                        vec3 sampleColor = texture(uSSRSceneTex, sUV).rgb;
                                         ssrResult = vec4(sampleColor, weight);
                                         break;
                                     }
@@ -579,13 +539,13 @@
                 if (!isGlass && dist < uWaterRadius - 0.002) {
                     glassAlpha = 250.0 / 255.0;
                 }
-                gl_FragColor = vec4(finalColor, glassAlpha);
+                fragColor = vec4(finalColor, glassAlpha);
             }
         `;
 
-      const depthVertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aColor;
+      const depthVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
+            in vec3 aColor;
             uniform mat4 uModelMatrix;
             uniform mat4 uLightSpaceMatrix;
             uniform float uTime;
@@ -692,28 +652,29 @@
             }
         `;
 
-      const depthFragmentShaderSource = `
+      const depthFragmentShaderSource = `#version 300 es
             precision highp float;
+            out vec4 fragColor;
             void main() {
-                gl_FragColor = vec4(gl_FragCoord.z, gl_FragCoord.z, gl_FragCoord.z, 1.0);
+                fragColor = vec4(gl_FragCoord.z, gl_FragCoord.z, gl_FragCoord.z, 1.0);
             }
         `;
 
-      const vertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aColor;
-            attribute float aTerrainRadius;
-            attribute vec3 aTunnelCenter;
+      const vertexShaderSource = `#version 300 es
+            in vec3 aPosition;
+            in vec3 aColor;
+            in float aTerrainRadius;
+            in vec3 aTunnelCenter;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
             uniform mat4 uLightSpaceMatrix;
-            varying vec3 vColor;
-            varying vec3 vNormal;
-            varying vec3 vWorldPos;
-            varying vec4 vPositionLightSpace;
-            varying float vDist;
-            varying float vTerrainRadius;
-            varying vec3 vTunnelCenter;
+            out vec3 vColor;
+            out vec3 vNormal;
+            out vec3 vWorldPos;
+            out vec4 vPositionLightSpace;
+            out float vDist;
+            out float vTerrainRadius;
+            out vec3 vTunnelCenter;
             
             void main() {
                 if (length(aPosition) < 0.01) {
@@ -733,18 +694,20 @@
             }
         `;
 
-      const fragmentShaderSource = `
+      const fragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vColor;
-            varying vec3 vNormal;
-            varying vec3 vWorldPos;
-            varying vec4 vPositionLightSpace;
-            varying float vDist;
-            varying float vTerrainRadius;
-            varying vec3 vTunnelCenter;
+            precision highp int;
+            in vec3 vColor;
+            in vec3 vNormal;
+            in vec3 vWorldPos;
+            in vec4 vPositionLightSpace;
+            in float vDist;
+            in float vTerrainRadius;
+            in vec3 vTunnelCenter;
             uniform vec3 uLightDir;
             uniform float uUseLighting;
             uniform sampler2D uShadowMap;
+            out vec4 fragColor;
             
             uniform float uRenderDistEnabled;
             uniform float uMaxRenderDist;
@@ -888,7 +851,7 @@
                 float maskPhi = atan(nPosMask.z, nPosMask.x);
                 if (maskPhi < 0.0) maskPhi += 6.28318530718;
                 vec2 maskUV = vec2(maskPhi / 6.28318530718, maskTheta / 3.14159265359);
-                float maskWater = texture2D(uWaterMaskTex, maskUV).r;
+                float maskWater = texture(uWaterMaskTex, maskUV).r;
                 bool isUnderwaterTerrain = (dist < uWaterRadius - 0.001) && (maskWater > 0.001);
                 if (isUnderwaterTerrain) {
                     float depth = uWaterRadius - dist;
@@ -916,16 +879,16 @@
                 float terrainAlpha = (uUseLighting > 0.5)
                     ? (isUnderwaterTerrain ? (250.0 / 255.0) : (252.0 / 255.0))
                     : 1.0;
-                gl_FragColor = vec4(finalColor, terrainAlpha);
+                fragColor = vec4(finalColor, terrainAlpha);
             }
         `;
 
       
-const skyVertexShaderSource = `
-            attribute vec3 aPosition;
+const skyVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
-            varying vec3 vWorldDir;
+            out vec3 vWorldDir;
             void main() {
                 vec4 pos = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
                 gl_Position = pos.xyww;
@@ -933,9 +896,10 @@ const skyVertexShaderSource = `
             }
         `;
 
-      const skyFragmentShaderSource = `
+      const skyFragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vWorldDir;
+            in vec3 vWorldDir;
+            out vec4 fragColor;
             uniform float uTime;
             uniform float uGasIntensity;
             uniform vec3 uCameraPos;
@@ -997,20 +961,20 @@ const skyVertexShaderSource = `
                 skyColor *= uGasIntensity;
                 vec3 finalColor = skyColor + vec3(stars);
                 
-                gl_FragColor = vec4(finalColor, 250.0 / 255.0);
+                fragColor = vec4(finalColor, 250.0 / 255.0);
             }
         `;
 
       // --- Sun & Celestial Shader ---
-      const sunVertexShaderSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aColor;
+      const sunVertexShaderSource = `#version 300 es
+            in vec3 aPosition;
+            in vec3 aColor;
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
-            varying vec3 vColor;
-            varying vec3 vNormal;
-            varying vec3 vViewNormal;
-            varying vec3 vLocalPos;
+            out vec3 vColor;
+            out vec3 vNormal;
+            out vec3 vViewNormal;
+            out vec3 vLocalPos;
             
             void main() {
                 vColor = aColor;
@@ -1021,12 +985,13 @@ const skyVertexShaderSource = `
             }
       `;
 
-      const sunFragmentShaderSource = `
+      const sunFragmentShaderSource = `#version 300 es
             precision highp float;
-            varying vec3 vColor;
-            varying vec3 vNormal;
-            varying vec3 vViewNormal;
-            varying vec3 vLocalPos;
+            in vec3 vColor;
+            in vec3 vNormal;
+            in vec3 vViewNormal;
+            in vec3 vLocalPos;
+            out vec4 fragColor;
             uniform float uTime;
             uniform vec3 uTint;
             uniform float uIsSun; // 1.0 = Glowing Sun, 0.0 = Shaded Planet
@@ -1083,7 +1048,7 @@ const skyVertexShaderSource = `
                     sunCol *= mix(vec3(1.0), vColor, 0.4);
 
                     vec3 tint = (length(uTint) > 0.01) ? uTint : vec3(1.0);
-                    gl_FragColor = vec4(clamp(sunCol * tint * pulse, 0.0, 1.0), 250.0 / 255.0);
+                    fragColor = vec4(clamp(sunCol * tint * pulse, 0.0, 1.0), 250.0 / 255.0);
                 } else {
                     // Shaded background planet
                     vec3 normal = normalize(vNormal);
@@ -1093,7 +1058,7 @@ const skyVertexShaderSource = `
                     float lit = diff * 0.82 + ambient;
                     
                     vec3 baseCol = (length(uTint) > 0.01) ? uTint : vColor;
-                    gl_FragColor = vec4(baseCol * lit, 250.0 / 255.0);
+                    fragColor = vec4(baseCol * lit, 250.0 / 255.0);
                 }
             }
       `;
@@ -1168,37 +1133,20 @@ function setF32(target, source) {
 // === SEEDPLANET MODULE: JS/RENDERER.JS ===
 
 // ============================================
-// Graphics API Manager (WebGPU + WebGL Fallback)
+// Graphics API Manager (Pure WebGL 2 Mode - WebGPU Disabled)
 // ============================================
 const Graphics = {
-  mode: 'unknown', // 'webgpu', 'webgl', or 'hybrid'
+  mode: 'webgl',
   webgpu: {
     device: null,
     context: null,
     format: 'bgra8unorm',
     ready: false,
-    skyPipeline: null,
-    skyBindGroup: null,
-    skyUniformBuffer: null,
-    terrainPipeline: null,
-    terrainShadowPipeline: null,
-    terrainBindGroup: null,
-    terrainUniformBuffer: null,
-    terrainShadowBindGroup: null,
-    terrainVertexBuffer: null,
-    terrainColorBuffer: null,
-    terrainIndexBuffer: null,
-    terrainIndicesLength: 0,
-    mainDepthTexture: null,
-    mainDepthTextureView: null,
-    shadowDepthTexture: null,
-    shadowDepthTextureView: null,
-    shadowSampler: null,
   },
   webgl: {
     gl: null,
-    isWebGL2: false,
-    supportUint32: false
+    isWebGL2: true,
+    supportUint32: true
   },
 
   multiplyMatrices4(a, b, out) {
@@ -1245,2041 +1193,24 @@ const Graphics = {
     return out;
   },
 
-  async init(gpuCanvas, glCanvas) {
-    console.log("Graphics API: Initializing...");
-    
-    // 1. Try to initialize WebGPU (Primary Target)
-    if (navigator.gpu) {
-      try {
-        const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-        if (adapter) {
-          this.webgpu.device = await adapter.requestDevice();
-          this.webgpu.context = gpuCanvas.getContext('webgpu');
-          if (this.webgpu.context) {
-            this.webgpu.format = navigator.gpu.getPreferredCanvasFormat();
-            this.webgpu.context.configure({
-              device: this.webgpu.device,
-              format: this.webgpu.format,
-              alphaMode: 'opaque'
-            });
-
-            
-            const modelWGSL = `
-struct ModelUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projMatrix : mat4x4<f32>,
-    lightSpaceMatrix : mat4x4<f32>,
-    cameraPos : vec4<f32>,
-    lightDir : vec4<f32>,
-    waterColor : vec4<f32>,
-    params : vec4<f32>,
-    params2 : vec4<f32>,
-    shadowTexelSize : vec2<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : ModelUniforms;
-@group(0) @binding(1) var shadowMap : texture_depth_2d;
-@group(0) @binding(2) var shadowSampler : sampler_comparison;
-
-struct VertexInput {
-    @location(0) position : vec3<f32>,
-    @location(1) color : vec3<f32>,
-    @location(2) normal : vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) color : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) viewPos : vec3<f32>,
-    @location(3) worldNormal : vec3<f32>,
-    @location(4) worldPos : vec3<f32>,
-    @location(5) lightSpacePos : vec4<f32>,
-    @location(6) dist : f32,
-    @location(7) isGrass : f32,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    var pos = in.position;
-    var actualColor = in.color;
-    var isGrass = 0.0;
-    var vertexType = 1.0;
-    
-    if (in.color.r < 0.0) {
-        isGrass = 1.0;
-        if (in.color.r < -9.0) {
-            actualColor.r = -in.color.r - 10.0;
-            vertexType = 0.0;
-        } else {
-            actualColor.r = -in.color.r;
-            vertexType = 1.0;
-        }
-    }
-    
-    var isTree = false;
-    var isTreeLeaf = false;
-    var treeSwayWeight = 0.0;
-    if (in.color.b < -0.5) {
-        isTree = true;
-        let encoded = -in.color.b;
-        actualColor.b = encoded - 2.0 * floor(encoded / 2.0);
-        var rawSway = floor(encoded / 2.0) - 10.0;
-        if (rawSway >= 500.0) {
-            isTreeLeaf = true;
-            rawSway -= 1000.0;
-        }
-        treeSwayWeight = max(0.0, rawSway / 100.0);
-    }
-    
-    let isLeaf = (isGrass > 0.5) || isTreeLeaf;
-    let distToCenter = length(pos);
-    let isSeaweed = (isTree == false) && (isGrass < 0.5) && (distToCenter < uniforms.params2.y) && (actualColor.g > 0.38 && actualColor.g > actualColor.r * 1.35 && actualColor.g > actualColor.b * 1.15);
-    
-    if ((isLeaf || isTree) && uniforms.params.y > 0.0) {
-        let h = distToCenter - uniforms.params2.x;
-        if (isGrass > 0.5 || isTree || h > 0.01) {
-            let up = normalize(pos);
-            var tangent = vec3<f32>(1.0, 0.0, 0.0);
-            if (abs(up.x) > 0.9) { tangent = vec3<f32>(0.0, 1.0, 0.0); }
-            let bitangent = cross(up, tangent);
-            tangent = cross(bitangent, up);
-            
-            if (isTree) {
-                let swayAmount = treeSwayWeight * 0.03 * uniforms.params.y;
-                let windPhase = uniforms.params.x * 0.45 + (pos.x + pos.y + pos.z) * 0.05;
-                let branchWind = sin(windPhase);
-                let windDir = normalize(tangent * 1.0 + bitangent * 0.3);
-                pos += windDir * branchWind * swayAmount;
-                
-                if (isTreeLeaf) {
-                    let leafPhase = uniforms.params.x * 1.4 + (pos.x + pos.y + pos.z) * 0.1;
-                    let leafWind = sin(leafPhase);
-                    let lSway = 0.0025 * treeSwayWeight * uniforms.params.y;
-                    let flutterDir = normalize(tangent * -0.3 + bitangent * 1.0);
-                    pos += flutterDir * leafWind * lSway;
-                }
-            } else {
-                var swayAmount = 0.0;
-                if (isGrass > 0.5) {
-                    swayAmount = vertexType * 0.15 * uniforms.params.y;
-                }
-                let windX = sin(uniforms.params.x * 1.5 + pos.y * 5.0 + pos.x * 2.0);
-                let windZ = cos(uniforms.params.x * 1.5 + pos.y * 5.0 + pos.z * 2.0);
-                let macroWindX = sin(uniforms.params.x * 0.15) * 0.5 - 1.5;
-                let macroWindZ = cos(uniforms.params.x * 0.15) * 0.5 + 1.2;
-                pos.x += (windX * 0.2 + macroWindX * 0.3) * swayAmount;
-                pos.z += (windZ * 0.2 + macroWindZ * 0.3) * swayAmount;
-            }
-        }
-    } else if (isSeaweed && uniforms.params.z > 0.0) {
-        let h = max(0.0, distToCenter - uniforms.params2.x);
-        let swayAmount = max(0.0, h - 0.015) * 0.9 * uniforms.params.z;
-        let waterSwayX = sin(uniforms.params.x * 0.7 + pos.y * 14.0 + pos.x * 5.0);
-        let waterSwayZ = cos(uniforms.params.x * 0.7 + pos.y * 14.0 + pos.z * 5.0);
-        let currentX = sin(uniforms.params.x * 0.15) * 0.5;
-        let currentZ = cos(uniforms.params.x * 0.15) * 0.5;
-        pos.x += (waterSwayX * 0.14 + currentX * 0.15) * swayAmount;
-        pos.z += (waterSwayZ * 0.14 + currentZ * 0.15) * swayAmount;
-    }
-    
-    let mvPosition = uniforms.modelViewMatrix * vec4<f32>(pos, 1.0);
-    out.position = uniforms.projMatrix * mvPosition;
-    out.color = actualColor;
-    
-    let normalMatrix = mat3x3<f32>(
-        uniforms.modelViewMatrix[0].xyz,
-        uniforms.modelViewMatrix[1].xyz,
-        uniforms.modelViewMatrix[2].xyz
-    );
-    out.normal = normalMatrix * in.normal;
-    
-    if (isGrass > 0.5) {
-        out.worldNormal = normalize(pos);
-        out.isGrass = 1.0;
-    } else {
-        out.worldNormal = in.normal;
-        out.isGrass = 0.0;
-    }
-    
-    out.viewPos = mvPosition.xyz;
-    out.worldPos = pos;
-    let nWorld = normalize(out.worldNormal);
-    let radialUp = select(vec3<f32>(0.0, 1.0, 0.0), normalize(pos), length(pos) > 0.001);
-    let lDir = select(radialUp, normalize(uniforms.lightDir.xyz), length(uniforms.lightDir.xyz) > 0.001);
-    let upAlign = abs(dot(nWorld, radialUp));
-    let nonFloor = 1.0 - smoothstep(0.82, 0.93, upAlign);
-    let cosTheta = clamp(dot(nWorld, lDir), 0.0, 1.0);
-    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-    let normalOffset = select(mix(0.0015, 0.011 + 0.008 * sinTheta, nonFloor), 0.0, isGrass > 0.5);
-    let shadowPos = pos + nWorld * normalOffset;
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
-    out.dist = length(mvPosition.xyz);
-    
-    return out;
-}
-
-${window.sharedShadowWGSL = (enableExpr) => `
-fn calculateShadow(lightSpacePos: vec4<f32>, normal: vec3<f32>, lightDir: vec3<f32>) -> f32 {
-    if (${enableExpr} < 0.5) { return 1.0; }
-    var projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords = projCoords * 0.5 + vec3<f32>(0.5);
-    projCoords.y = 1.0 - projCoords.y;
-    
-    if (projCoords.z > 1.0 || projCoords.z < 0.0) { return 1.0; }
-    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) { return 1.0; }
-    
-    var texelSize = uniforms.shadowTexelSize;
-    if (texelSize.x <= 0.0) { texelSize = vec2<f32>(1.0 / 1536.0); }
-
-    let cosTheta = clamp(dot(normal, lightDir), 0.0, 1.0);
-    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-    let tanTheta = min(3.0, sinTheta / max(cosTheta, 0.1));
-
-    let bias = clamp(0.00012 + 0.00018 * tanTheta, 0.00010, 0.00038);
-    let cmpDepth = projCoords.z - bias;
-    let ts = texelSize * 0.65;
-
-    var shadow = 0.0;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy, cmpDepth) * 0.25;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-ts.x,  0.0), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( ts.x,  0.0), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0, -ts.y), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( 0.0,  ts.y), cmpDepth) * 0.125;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-ts.x, -ts.y), cmpDepth) * 0.0625;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( ts.x, -ts.y), cmpDepth) * 0.0625;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>(-ts.x,  ts.y), cmpDepth) * 0.0625;
-    shadow += textureSampleCompare(shadowMap, shadowSampler, projCoords.xy + vec2<f32>( ts.x,  ts.y), cmpDepth) * 0.0625;
-    
-    let distFromCenter = length(projCoords.xy - vec2<f32>(0.5));
-    let edgeFade = 1.0 - smoothstep(0.36, 0.49, distFromCenter);
-    return mix(1.0, shadow, edgeFade);
-}
-`("uniforms.params.w")}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    if (uniforms.params2.z > 0.5 && in.dist > uniforms.params2.w) {
-        discard;
-    }
-    
-    let normal = normalize(in.worldNormal);
-    let lightDir = normalize(uniforms.lightDir.xyz);
-    let rawDiffuse = max(dot(normal, lightDir), 0.0);
-    let grazingTerminator = smoothstep(0.01, 0.12, rawDiffuse);
-    let diffuseVal = rawDiffuse * grazingTerminator;
-    
-    var shadow = 0.0;
-    if (in.isGrass < 0.5 && diffuseVal > 0.001) {
-        shadow = calculateShadow(in.lightSpacePos, normal, lightDir);
-    }
-    let radialUp = normalize(in.worldPos);
-    let hemi = clamp(dot(normal, radialUp) * 0.5 + 0.5, 0.0, 1.0);
-    let ambient = 0.22 + 0.06 * hemi;
-    let diffuse = ambient + diffuseVal * shadow * 0.72;
-    
-    let viewDir = normalize(uniforms.cameraPos.xyz - in.worldPos);
-    let halfDir = normalize(lightDir + viewDir);
-    let spec = pow(max(dot(normal, halfDir), 0.0), 16.0) * 0.25 * shadow;
-    
-    let fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.15 * (0.15 + 0.85 * shadow);
-    
-    var finalColor = in.color * diffuse + vec3<f32>(1.0) * spec + vec3<f32>(0.95, 0.97, 1.0) * fresnel;
-    if (in.isGrass > 0.5) {
-        finalColor = in.color * diffuseVal * 1.2 + vec3<f32>(0.1, 0.2, 0.05);
-    }
-    
-    let isGlowingOre = (abs(in.color.r - 0.22) < 0.08 && abs(in.color.g - 0.95) < 0.08 && abs(in.color.b - 0.88) < 0.08);
-    if (isGlowingOre) {
-        let pulse = 0.94 + 0.12 * sin(in.worldPos.x * 2.8 + in.worldPos.y * 2.8 + in.worldPos.z * 2.8);
-        let rimFactor = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5);
-        let crystalGlint = pow(max(dot(normal, halfDir), 0.0), 32.0) * 0.4;
-        let glowColor = in.color * pulse;
-        let rimGlow = in.color * (rimFactor * 0.35);
-        let glintColor = in.color * crystalGlint;
-        finalColor = clamp(glowColor * 1.15 + rimGlow + glintColor, vec3<f32>(0.0), vec3<f32>(1.0));
-    }
-    
-    let dist = length(in.worldPos);
-    if (dist < uniforms.params2.y) {
-        let depth = uniforms.params2.y - dist;
-        var tintFactor = 1.0 - exp(-depth * 5.0);
-        tintFactor = clamp(tintFactor * uniforms.waterColor.w, 0.0, 0.85);
-        finalColor = mix(finalColor, uniforms.waterColor.xyz, tintFactor);
-    }
-    
-    var glassAlpha = 1.0;
-    let isGlass = (abs(in.color.r - 0.6) < 0.01 && abs(in.color.g - 0.8) < 0.01 && abs(in.color.b - 1.0) < 0.01);
-    
-    if (isGlass) {
-        glassAlpha = mix(0.35, 0.75, fresnel);
-        let reflectionProximity = smoothstep(15.0, 1.0, in.dist);
-        let viewDirWorld = normalize(in.worldPos - uniforms.cameraPos.xyz);
-        let normalWorld = normalize(in.worldNormal);
-        let reflVecWorld = reflect(viewDirWorld, normalWorld);
-        
-        let localUp = normalize(in.worldPos);
-        let localTangent = normalize(cross(localUp, normalWorld));
-        let reflUp = dot(reflVecWorld, localUp);
-        let reflTangent = dot(reflVecWorld, localTangent);
-        let reflNormal = dot(reflVecWorld, normalWorld);
-        
-        var skyColor = mix(vec3<f32>(0.12, 0.18, 0.35), vec3<f32>(0.55, 0.75, 1.0), max(0.0, dot(reflVecWorld, lightDir)) * 0.4 + 0.6);
-        let cloudPattern = sin(reflVecWorld.x * 3.5 + uniforms.params.x * 0.05) * cos(reflVecWorld.z * 3.5 + uniforms.params.x * 0.04) * 0.5 + 0.5;
-        if (cloudPattern > 0.58) {
-            skyColor = mix(skyColor, vec3<f32>(0.96, 0.98, 1.0), (cloudPattern - 0.58) * 1.6);
-        }
-        
-        var groundColor = vec3<f32>(0.48, 0.32, 0.18);
-        let reflectDistToCenter = length(in.worldPos + reflVecWorld * 2.0);
-        if (reflectDistToCenter < uniforms.params2.y) {
-            groundColor = mix(groundColor, vec3<f32>(0.12, 0.48, 0.58), 0.85);
-        } else {
-            let grassTile = sin(in.worldPos.x * 2.0 + reflVecWorld.x * 4.0) * cos(in.worldPos.z * 2.0 + reflVecWorld.z * 4.0);
-            if (grassTile > 0.1) {
-                groundColor = mix(groundColor, vec3<f32>(0.28, 0.46, 0.16), 0.75);
-            }
-        }
-        
-        let wallU = reflTangent / (abs(reflNormal) + 0.01);
-        let wallV = reflUp / (abs(reflNormal) + 0.01);
-        
-        let verticalPlanks = step(0.88, abs(sin(wallU * 6.28)));
-        let horizontalPlanks = step(0.93, abs(sin(wallV * 3.14)));
-        var structureColor = mix(vec3<f32>(0.38, 0.22, 0.12), vec3<f32>(0.20, 0.11, 0.06), max(verticalPlanks, horizontalPlanks));
-        
-        let leafSpots = sin(wallU * 1.5 + wallV * 2.0) * cos(wallV * 1.2 - wallU * 0.8);
-        if (leafSpots > 0.4) {
-            structureColor = mix(structureColor, vec3<f32>(0.18, 0.38, 0.12), 0.65);
-        }
-        
-        var reflectedColor = vec3<f32>(0.0);
-        if (reflUp >= 0.0) {
-            let skyFactor = smoothstep(0.0, 0.4, reflUp);
-            reflectedColor = mix(structureColor, skyColor, skyFactor);
-        } else {
-            let groundFactor = smoothstep(0.0, 0.4, -reflUp);
-            reflectedColor = mix(structureColor, groundColor, groundFactor);
-        }
-        
-        finalColor = mix(finalColor, reflectedColor, reflectionProximity * 0.8);
-    }
-    
-    return vec4<f32>(finalColor, glassAlpha);
-}
-`;
-
-            const charWGSL = `
-struct CharUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projMatrix : mat4x4<f32>,
-    modelMatrix : mat4x4<f32>,
-    lightSpaceMatrix : mat4x4<f32>,
-    cameraPos : vec4<f32>,
-    lightDir : vec4<f32>,
-    waterColor : vec4<f32>,
-    params : vec4<f32>,
-    shadowTexelSize : vec2<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : CharUniforms;
-@group(0) @binding(1) var shadowMap : texture_depth_2d;
-@group(0) @binding(2) var shadowSampler : sampler_comparison;
-
-struct VertexInput {
-    @location(0) position : vec3<f32>,
-    @location(1) localPos : vec3<f32>,
-    @location(2) normal : vec3<f32>,
-    @location(3) color : vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) color : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) localPos : vec3<f32>,
-    @location(3) worldNormal : vec3<f32>,
-    @location(4) worldPos : vec3<f32>,
-    @location(5) lightSpacePos : vec4<f32>,
-    @location(6) viewPos : vec3<f32>,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    let mvPosition = uniforms.modelViewMatrix * vec4<f32>(in.position, 1.0);
-    out.position = uniforms.projMatrix * mvPosition;
-    
-    let normalMatrix = mat3x3<f32>(
-        uniforms.modelViewMatrix[0].xyz,
-        uniforms.modelViewMatrix[1].xyz,
-        uniforms.modelViewMatrix[2].xyz
-    );
-    out.normal = normalMatrix * in.normal;
-    out.localPos = in.localPos;
-    out.color = in.color;
-    
-    let worldPos = uniforms.modelMatrix * vec4<f32>(in.position, 1.0);
-    
-    let worldNormalMatrix = mat3x3<f32>(
-        uniforms.modelMatrix[0].xyz,
-        uniforms.modelMatrix[1].xyz,
-        uniforms.modelMatrix[2].xyz
-    );
-    out.worldNormal = normalize(worldNormalMatrix * in.normal);
-    out.worldPos = worldPos.xyz;
-    let shadowPos = worldPos.xyz + out.worldNormal * 0.002;
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
-    out.viewPos = mvPosition.xyz;
-    return out;
-}
-
-fn distToSegment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
-    let pa = p - a;
-    let ba = b - a;
-    let h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);
-    return length(pa - ba*h);
-}
-
-${window.sharedShadowWGSL("uniforms.params.z")}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.worldNormal);
-    let viewDir = normalize(uniforms.cameraPos.xyz - in.worldPos);
-    let lightDir = normalize(uniforms.lightDir.xyz);
-    
-    let diffuseVal = max(dot(normal, lightDir), 0.0);
-    var shadow = calculateShadow(in.lightSpacePos, normal, lightDir);
-    if (diffuseVal <= 0.0) { shadow = 0.0; }
-    let lit = mix(0.3, 1.0, shadow);
-    let diffuse = diffuseVal * lit * 0.75 + 0.25;
-    
-    let halfDir = normalize(lightDir + viewDir);
-    let spec = pow(max(dot(normal, halfDir), 0.0), 38.0) * 0.75 * shadow;
-    
-    let fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0) * 0.25;
-    var baseColor = in.color;
-    
-    if (in.localPos.y > 0.22 && in.localPos.y < 0.67 && in.localPos.z > 0.04 && in.localPos.z < 0.28) {
-        let uv = vec2<f32>(in.localPos.x, in.localPos.y - 0.43) / 0.24;
-        
-        let dLeftCheek = length(vec2<f32>(uv.x - (-0.38), (uv.y - (-0.18)) * 1.3));
-        let dRightCheek = length(vec2<f32>(uv.x - 0.38, (uv.y - (-0.18)) * 1.3));
-        let sCheeks = max(smoothstep(0.14, 0.02, dLeftCheek), smoothstep(0.14, 0.02, dRightCheek)) * 0.55;
-        let cheekColor = vec3<f32>(1.0, 0.52, 0.60);
-        
-        let leftEyeUv = vec2<f32>(uv.x - (-0.23), (uv.y - 0.01) * 0.75);
-        let rightEyeUv = vec2<f32>(uv.x - 0.23, (uv.y - 0.01) * 0.75);
-        let dLeftEye = length(leftEyeUv);
-        let dRightEye = length(rightEyeUv);
-        
-        let eyeRadius = 0.125;
-        let sEyeWhite = max(smoothstep(eyeRadius, eyeRadius - 0.015, dLeftEye), smoothstep(eyeRadius, eyeRadius - 0.015, dRightEye));
-        
-        let dLeftIris = length(vec2<f32>(leftEyeUv.x, leftEyeUv.y * 0.88));
-        let dRightIris = length(vec2<f32>(rightEyeUv.x, rightEyeUv.y * 0.88));
-        let irisRadius = 0.098;
-        let sIris = max(smoothstep(irisRadius, irisRadius - 0.015, dLeftIris), smoothstep(irisRadius, irisRadius - 0.015, dRightIris));
-        
-        let irisY = clamp((uv.y - 0.01) / 0.12, -1.0, 1.0);
-        let irisColor = mix(vec3<f32>(0.85, 0.52, 0.18), vec3<f32>(0.24, 0.11, 0.05), irisY * 0.5 + 0.5);
-        
-        let dLeftPupil = length(vec2<f32>(leftEyeUv.x, leftEyeUv.y - 0.01));
-        let dRightPupil = length(vec2<f32>(rightEyeUv.x, rightEyeUv.y - 0.01));
-        let sPupil = max(smoothstep(0.045, 0.028, dLeftPupil), smoothstep(0.045, 0.028, dRightPupil));
-        let pupilColor = vec3<f32>(0.08, 0.04, 0.02);
-        
-        let dLeftH1 = length(leftEyeUv - vec2<f32>(-0.038, 0.038));
-        let dRightH1 = length(rightEyeUv - vec2<f32>(-0.038, 0.038));
-        let sH1 = max(smoothstep(0.035, 0.018, dLeftH1), smoothstep(0.035, 0.018, dRightH1));
-        
-        let dLeftH2 = length(leftEyeUv - vec2<f32>(0.032, -0.038));
-        let dRightH2 = length(rightEyeUv - vec2<f32>(0.032, -0.038));
-        let sH2 = max(smoothstep(0.020, 0.008, dLeftH2), smoothstep(0.020, 0.008, dRightH2));
-        
-        let dLeftLash = distToSegment(uv, vec2<f32>(-0.35, 0.08), vec2<f32>(-0.11, 0.13));
-        let dRightLash = distToSegment(uv, vec2<f32>(0.11, 0.13), vec2<f32>(0.35, 0.08));
-        let sEyelash = max(smoothstep(0.032, 0.010, dLeftLash), smoothstep(0.032, 0.010, dRightLash));
-        
-        let dLeftBrow = distToSegment(uv, vec2<f32>(-0.32, 0.18), vec2<f32>(-0.14, 0.22));
-        let dRightBrow = distToSegment(uv, vec2<f32>(0.14, 0.22), vec2<f32>(0.32, 0.18));
-        let sEyebrow = max(smoothstep(0.020, 0.006, dLeftBrow), smoothstep(0.020, 0.006, dRightBrow));
-        let browColor = vec3<f32>(0.32, 0.18, 0.10);
-        
-        let mouthUv = vec2<f32>(uv.x, (uv.y - (-0.17)) * 1.3);
-        let dMouthOpen = length(vec2<f32>(mouthUv.x, max(0.0, mouthUv.y)));
-        let sMouthOutline = smoothstep(0.060, 0.042, dMouthOpen) * step(-0.035, mouthUv.y);
-        let sMouthInner = smoothstep(0.042, 0.028, dMouthOpen) * step(-0.025, mouthUv.y);
-        
-        let dTongue = length(vec2<f32>(mouthUv.x, mouthUv.y - (-0.015)));
-        let sTongue = smoothstep(0.032, 0.015, dTongue) * sMouthInner;
-        
-        let mouthBorderColor = vec3<f32>(0.22, 0.08, 0.08);
-        let mouthInnerColor = vec3<f32>(0.88, 0.32, 0.38);
-        let tongueColor = vec3<f32>(0.98, 0.58, 0.65);
-        
-        baseColor = mix(baseColor, cheekColor, sCheeks);
-        baseColor = mix(baseColor, vec3<f32>(1.0, 1.0, 1.0), sEyeWhite);
-        baseColor = mix(baseColor, irisColor, sIris);
-        baseColor = mix(baseColor, pupilColor, sPupil);
-        baseColor = mix(baseColor, vec3<f32>(1.0, 1.0, 1.0), max(sH1, sH2));
-        baseColor = mix(baseColor, vec3<f32>(0.08, 0.04, 0.04), sEyelash);
-        baseColor = mix(baseColor, browColor, sEyebrow);
-        baseColor = mix(baseColor, mouthBorderColor, sMouthOutline);
-        baseColor = mix(baseColor, mouthInnerColor, sMouthInner);
-        baseColor = mix(baseColor, tongueColor, sTongue);
-    }
-    
-    var finalColor = baseColor * diffuse + vec3<f32>(1.0) * spec + vec3<f32>(0.9, 0.95, 1.0) * fresnel;
-    
-    let dist = length(in.worldPos);
-    if (dist < uniforms.params.x) {
-        let depth = uniforms.params.x - dist;
-        var tintFactor = 1.0 - exp(-depth * 5.0);
-        tintFactor = clamp(tintFactor * uniforms.params.y, 0.0, 0.85);
-        finalColor = mix(finalColor, uniforms.waterColor.xyz, tintFactor);
-    }
-    
-    return vec4<f32>(finalColor, 1.0);
-}
-`;
-
-            Graphics.webgpu.modelShaderModule = this.webgpu.device.createShaderModule({ code: modelWGSL });
-            Graphics.webgpu.charShaderModule = this.webgpu.device.createShaderModule({ code: charWGSL });
-            Graphics.webgpu.depthShaderModule = this.webgpu.device.createShaderModule({ code: `
-struct DepthUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projMatrix : mat4x4<f32>,
-    modelMatrix : mat4x4<f32>,
-    params : vec4<f32>, // x: time, y: swayFactor, z: isChar, w: 0
-};
-@group(0) @binding(0) var<uniform> uniforms : DepthUniforms;
-
-struct VertexInput {
-    @location(0) position : vec3<f32>,
-    @location(1) color : vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    var pos = in.position;
-    
-    if (uniforms.params.z < 0.5 && uniforms.params.y > 0.0) {
-        var actualColor = in.color;
-        var isGrass = 0.0;
-        var vertexType = 1.0;
-        if (in.color.r < 0.0) {
-            isGrass = 1.0;
-            if (in.color.r < -9.0) {
-                vertexType = 0.0;
-            }
-        }
-        var isTree = false;
-        var isTreeLeaf = false;
-        var treeSwayWeight = 0.0;
-        if (in.color.b < -0.5) {
-            isTree = true;
-            let encoded = -in.color.b;
-            var rawSway = floor(encoded / 2.0) - 10.0;
-            if (rawSway >= 500.0) {
-                isTreeLeaf = true;
-                rawSway -= 1000.0;
-            }
-            treeSwayWeight = max(0.0, rawSway / 100.0);
-        }
-        let isLeaf = (isGrass > 0.5) || isTreeLeaf;
-        let distToCenter = length(pos);
-        if (isLeaf || isTree) {
-            let up = normalize(pos);
-            var tangent = vec3<f32>(1.0, 0.0, 0.0);
-            if (abs(up.x) > 0.9) { tangent = vec3<f32>(0.0, 1.0, 0.0); }
-            let bitangent = cross(up, tangent);
-            tangent = cross(bitangent, up);
-            if (isTree) {
-                let swayAmount = treeSwayWeight * 0.03 * uniforms.params.y;
-                let windPhase = uniforms.params.x * 0.45 + (pos.x + pos.y + pos.z) * 0.05;
-                let branchWind = sin(windPhase);
-                let windDir = normalize(tangent * 1.0 + bitangent * 0.3);
-                pos += windDir * branchWind * swayAmount;
-                if (isTreeLeaf) {
-                    let leafPhase = uniforms.params.x * 1.4 + (pos.x + pos.y + pos.z) * 0.1;
-                    let leafWind = sin(leafPhase);
-                    let lSway = 0.0025 * treeSwayWeight * uniforms.params.y;
-                    let flutterDir = normalize(tangent * -0.3 + bitangent * 1.0);
-                    pos += flutterDir * leafWind * lSway;
-                }
-            } else {
-                let swayAmount = isGrass > 0.5 ? (vertexType * 0.15 * uniforms.params.y) : 0.0; // simple grass sway
-                let windX = sin(uniforms.params.x * 1.5 + pos.y * 5.0 + pos.x * 2.0);
-                let windZ = cos(uniforms.params.x * 1.5 + pos.y * 5.0 + pos.z * 2.0);
-                let macroWindX = sin(uniforms.params.x * 0.15) * 0.5 - 1.5;
-                let macroWindZ = cos(uniforms.params.x * 0.15) * 0.5 + 1.2;
-                pos.x += (windX * 0.2 + macroWindX * 0.3) * swayAmount;
-                pos.z += (windZ * 0.2 + macroWindZ * 0.3) * swayAmount;
-            }
-        }
-    }
-    
-    var mvPosition : vec4<f32>;
-    if (uniforms.params.z > 0.5) { // isChar
-        mvPosition = uniforms.modelViewMatrix * vec4<f32>(in.position, 1.0);
-    } else { // isModel
-        mvPosition = uniforms.modelViewMatrix * vec4<f32>(pos, 1.0);
-    }
-    
-    out.position = uniforms.projMatrix * mvPosition;
-    return out;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) {
-    // Write depth automatically
-}
-` });
-            
-            Graphics.webgpu.depthBindGroupLayout = this.webgpu.device.createBindGroupLayout({
-                entries: [
-                    { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform', hasDynamicOffset: false, minBindingSize: 208 } }
-                ]
-            });
-
-            
-            Graphics.webgpu.monkeyUniformBuffer = this.webgpu.device.createBuffer({
-                size: 512 * 2000,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
-            Graphics.webgpu.monkeyUniformOffset = 0;
-            
-            Graphics.webgpu.monkeyBindGroupLayout = this.webgpu.device.createBindGroupLayout({
-                entries: [
-                    { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: false, minBindingSize: 288 } },
-                    { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
-                    { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'comparison' } }
-                ]
-            });
-            
-            Graphics.webgpu.pipelineCache = {};
-            
-            Graphics.webgpu.getMonkeyPipeline = function(progName, state) {
-                const key = `${progName}_${state.cullEnabled}_${state.cullFace}_${state.frontFace}_${state.depthTest}_${state.depthMask}`;
-                if (this.pipelineCache[key]) return this.pipelineCache[key];
-                
-                const module = progName === 'depth' ? this.depthShaderModule : (progName === 'model' ? this.modelShaderModule : this.charShaderModule);
-                const desc = {
-                    layout: this.device.createPipelineLayout({ bindGroupLayouts: [progName === 'depth' ? this.depthBindGroupLayout : this.monkeyBindGroupLayout] }),
-                    vertex: {
-                        module: module,
-                        entryPoint: 'vs_main',
-                        buffers: (progName === 'depth') ? [
-                            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] }
-                        ] : (progName === 'atmosphere' || progName === 'water' || progName === 'sky' ? [
-                            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }
-                        ] : (progName === 'cloud3D' ? [
-                            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] }
-                        ] : (progName === 'model' ? [
-                            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x3' }] }
-                        ] : [
-                            { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x3' }] },
-                            { arrayStride: 12, attributes: [{ shaderLocation: 3, offset: 0, format: 'float32x3' }] }
-                        ])))
-                    },
-                    fragment: progName === 'depth' ? { module: module, entryPoint: 'fs_main', targets: [] } : {
-                        module: module,
-                        entryPoint: 'fs_main',
-                        targets: [{ format: this.format, blend: {
-                            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                        } }]
-                    },
-                    primitive: {
-                        topology: 'triangle-list',
-                        cullMode: state.cullEnabled ? (state.cullFace === 1028 ? 'front' : 'back') : 'none', // 1028 is gl.FRONT
-                        frontFace: state.frontFace === 2304 ? 'cw' : 'ccw' // 2304 is gl.CW
-                    },
-                    depthStencil: {
-                        depthWriteEnabled: progName === 'sky' ? false : state.depthMask, // Sky always depthWrite false
-                        depthCompare: progName === 'depth' ? 'less' : (state.depthTest ? 'less' : 'always'),
-                        format: progName === 'depth' ? 'depth32float' : 'depth24plus' 
-                    }
-                };
-                
-                this.pipelineCache[key] = this.device.createRenderPipeline(desc);
-                return this.pipelineCache[key];
-            };
-            
-            Graphics.webgpu.executeMonkeyDraw = function(gl, count, type, offset) {
-                const prog = gl._currentProgram;
-                const isModel = prog._name === 'model';
-                const isChar = prog._name === 'char';
-                const vals = prog._uniformValues;
-                
-                if (this.monkeyUniformOffset >= 512 * 1900) this.monkeyUniformOffset = 0;
-                const currentOffset = this.monkeyUniformOffset;
-                this.monkeyUniformOffset += 512;
-                
-                f32_monkeyUData.fill(0);
-                const uData = f32_monkeyUData;
-                const setMat4 = (name, arrOff) => { if(vals[name]) uData.set(vals[name], arrOff); };
-                const setVec3 = (name, arrOff) => { if(vals[name]) { uData[arrOff] = vals[name][0]; uData[arrOff+1] = vals[name][1]; uData[arrOff+2] = vals[name][2]; } };
-                const setFloat = (name, arrOff) => { if(vals[name]) uData[arrOff] = vals[name][0]; };
-                const setVec2 = (name, arrOff) => { if(vals[name]) { uData[arrOff] = vals[name][0]; uData[arrOff+1] = vals[name][1]; } };
-                
-                const isDepth = prog._name === 'depth';
-                if (isModel) {
-                    setMat4("uModelViewMatrix", 0); setMat4("uProjectionMatrix", 16); setMat4("uLightSpaceMatrix", 32);
-                    setVec3("uCameraPos", 48); setVec3("uLightDir", 52); uData[55] = 1.0;
-                    setVec3("uWaterColor", 56); uData[59] = vals["uWaterOpacity"] ? vals["uWaterOpacity"][0] : 0.0;
-                    setFloat("uTime", 60); setFloat("uSwayFactor", 61); setFloat("uWaterSwayFactor", 62); setFloat("uShadowsEnabled", 63);
-                    setFloat("uPlanetRadius", 64); setFloat("uWaterRadius", 65); setFloat("uRenderDistEnabled", 66); setFloat("uMaxRenderDist", 67);
-                    setVec2("uShadowTexelSize", 68);
-                } else if (isChar) {
-                    setMat4("uModelViewMatrix", 0); setMat4("uProjectionMatrix", 16); setMat4("uModelMatrix", 32); setMat4("uLightSpaceMatrix", 48);
-                    setVec3("uCameraPos", 64); setVec3("uLightDir", 68); uData[71] = 1.0;
-                    setVec3("uWaterColor", 72); uData[75] = vals["uWaterOpacity"] ? vals["uWaterOpacity"][0] : 0.0;
-                    setFloat("uWaterRadius", 76); setFloat("uShadowsEnabled", 78);
-                    setVec2("uShadowTexelSize", 80);
-                }
-                const isAtmosphere = prog._name === 'atmosphere';
-                const isWater = prog._name === 'water';
-                const isCloud3D = prog._name === 'cloud3D';
-                const isSky = prog._name === 'sky';
-                if (isSky) {
-                    setMat4("uModelViewMatrix", 0);
-                    setMat4("uProjectionMatrix", 16);
-                    if(vals["uTime"]) { uData[32] = vals["uTime"][0]; }
-                    if(vals["uGasIntensity"]) { uData[33] = vals["uGasIntensity"][0]; }
-                    if(vals["uWaterRadius"]) { uData[34] = vals["uWaterRadius"][0]; }
-                    setVec3("uCameraPos", 36);
-                } else if (isCloud3D) {
-                    setMat4("uModelViewMatrix", 0);
-                    setMat4("uProjectionMatrix", 16);
-                    if(vals["uCloudOrbitMatrix"]) { uData.set(vals["uCloudOrbitMatrix"], 32); } // Correctly map matrix array
-                    if(vals["uColor"]) { uData[48] = vals["uColor"][0]; uData[49] = vals["uColor"][1]; uData[50] = vals["uColor"][2]; }
-                    if(vals["uAlpha"]) { uData[51] = vals["uAlpha"][0]; }
-                    if(vals["uAnimTime"]) { uData[52] = vals["uAnimTime"][0]; }
-                    if(vals["uTime"]) { uData[53] = vals["uTime"][0]; }
-                    if(vals["uWaterRadius"]) { uData[54] = vals["uWaterRadius"][0]; }
-                    setVec3("uLightDir", 56);
-                    setVec3("uCameraPos", 60);
-                } else if (isWater) {
-                    setMat4("uModelViewMatrix", 0);
-                    setMat4("uProjectionMatrix", 16);
-                    if(vals["uWaterColor"]) { uData[32] = vals["uWaterColor"][0]; uData[33] = vals["uWaterColor"][1]; uData[34] = vals["uWaterColor"][2]; }
-                    if(vals["uOpacity"]) { uData[36] = vals["uOpacity"][0]; }
-                    if(vals["uTime"]) { uData[37] = vals["uTime"][0]; }
-                    if(vals["uWaveStrength"]) { uData[38] = vals["uWaveStrength"][0]; }
-                    if(vals["uWaterLevel"]) { uData[39] = vals["uWaterLevel"][0]; }
-                    setVec3("uLightDir", 40);
-                    setVec3("uCameraPos", 44);
-                    if(vals["uRenderDistEnabled"]) { uData[48] = vals["uRenderDistEnabled"][0]; }
-                    if(vals["uMaxRenderDist"]) { uData[49] = vals["uMaxRenderDist"][0]; }
-                    if(vals["uBoatCount"]) { uData[52] = vals["uBoatCount"][0]; }
-                    // Ignore boats to save space as it's not strictly needed yet
-                } else if (isAtmosphere) {
-                    setMat4("uModelViewMatrix", 0);
-                    setMat4("uProjectionMatrix", 16);
-                    if(vals["uColor"]) { uData[32] = vals["uColor"][0]; uData[33] = vals["uColor"][1]; uData[34] = vals["uColor"][2]; }
-                    if(vals["uAlpha"]) { uData[35] = vals["uAlpha"][0]; }
-                    setVec3("uLightDir", 36);
-                    setVec3("uCameraPos", 40);
-                } else if (isDepth) {
-                    setMat4("uModelMatrix", 0); // mapped to modelViewMatrix in WGSL
-                    setMat4("uLightSpaceMatrix", 16); // mapped to projMatrix in WGSL
-                    setMat4("uModelMatrix", 32); 
-                    setFloat("uTime", 48); 
-                    setFloat("uSwayFactor", 49); 
-                    
-                    let isCharVBO = false;
-                    const aPosLoc = prog._attribNamesInv ? prog._attribNamesInv["aPosition"] : -1;
-                    if (aPosLoc >= 0 && gl._activeAttributes[aPosLoc]) {
-                        const vbo = gl._activeAttributes[aPosLoc].buffer;
-                        if (vbo === window.charVertexBuffer || (typeof window.equipVertexBuffer !== 'undefined' && vbo === window.equipVertexBuffer)) {
-                            isCharVBO = true;
-                        }
-                    }
-                    uData[50] = isCharVBO ? 1.0 : 0.0;
-                    setFloat("uWaterSwayFactor", 51);
-                    setFloat("uPlanetRadius", 52);
-                    setFloat("uWaterRadius", 53);
-                }
-                
-                this.device.queue.writeBuffer(this.monkeyUniformBuffer, currentOffset, uData.buffer);
-                
-                const bgl = isDepth ? this.depthBindGroupLayout : (isAtmosphere ? this.atmosphereBindGroupLayout : (isWater ? this.waterBindGroupLayout : (isCloud3D ? this.cloud3DBindGroupLayout : (isSky ? this.skyBindGroupLayout : this.monkeyBindGroupLayout))));
-                let entries;
-                if (isDepth || isAtmosphere || isCloud3D || isSky) {
-                    entries = [
-                        { binding: 0, resource: { buffer: this.monkeyUniformBuffer, offset: currentOffset, size: 512 } }
-                    ];
-                } else if (isWater) {
-                    entries = [
-                        { binding: 0, resource: { buffer: this.monkeyUniformBuffer, offset: currentOffset, size: 512 } },
-                        { binding: 1, resource: this.waterMaskTextureView },
-                        { binding: 2, resource: this.waterMaskSampler }
-                    ];
-                } else {
-                    entries = [
-                    { binding: 0, resource: { buffer: this.monkeyUniformBuffer, offset: currentOffset, size: 512 } },
-                    { binding: 1, resource: this.shadowDepthTextureView },
-                    { binding: 2, resource: this.shadowSampler }
-                ];
-                }
-                const bindGroup = this.device.createBindGroup({
-                    layout: bgl,
-                    entries: entries
-                });
-                
-                const pipeline = this.getMonkeyPipeline(prog._name, {
-                    cullEnabled: gl._cullEnabled, cullFace: gl._cullFace, frontFace: gl._frontFace, depthTest: gl._depthTest, depthMask: gl._depthMask
-                });
-                
-                const encoder = this.currentPassEncoder;
-                encoder.setPipeline(pipeline);
-                encoder.setBindGroup(0, bindGroup);
-                
-                const aPosLoc = prog._attribNamesInv ? prog._attribNamesInv["aPosition"] : -1;
-                const aColorLoc = prog._attribNamesInv ? prog._attribNamesInv["aColor"] : -1;
-                const aNormLoc = prog._attribNamesInv ? prog._attribNamesInv["aNormal"] : -1;
-                const aLocalPosLoc = (isChar || isCloud3D) && prog._attribNamesInv ? prog._attribNamesInv["aLocalPos"] : -1;
-                
-                if (aPosLoc >= 0 && gl._activeAttributes[aPosLoc] && gl._activeAttributes[aPosLoc].buffer._webgpuBuffer)
-                    encoder.setVertexBuffer(0, gl._activeAttributes[aPosLoc].buffer._webgpuBuffer);
-                    
-                if (isModel) {
-                    if (aColorLoc >= 0 && gl._activeAttributes[aColorLoc] && gl._activeAttributes[aColorLoc].buffer._webgpuBuffer)
-                        encoder.setVertexBuffer(1, gl._activeAttributes[aColorLoc].buffer._webgpuBuffer);
-                    if (aNormLoc >= 0 && gl._activeAttributes[aNormLoc] && gl._activeAttributes[aNormLoc].buffer && gl._activeAttributes[aNormLoc].buffer._webgpuBuffer)
-                        encoder.setVertexBuffer(2, gl._activeAttributes[aNormLoc].buffer._webgpuBuffer);
-                    else
-                        encoder.setVertexBuffer(2, this.dummyNormalBuffer || this.dummyColorBuffer);
-                } else if (isCloud3D) {
-                    if (aLocalPosLoc >= 0 && gl._activeAttributes[aLocalPosLoc] && gl._activeAttributes[aLocalPosLoc].buffer._webgpuBuffer)
-                        encoder.setVertexBuffer(1, gl._activeAttributes[aLocalPosLoc].buffer._webgpuBuffer);
-                } else if (isChar) {
-                    if (aLocalPosLoc >= 0 && gl._activeAttributes[aLocalPosLoc] && gl._activeAttributes[aLocalPosLoc].buffer._webgpuBuffer)
-                        encoder.setVertexBuffer(1, gl._activeAttributes[aLocalPosLoc].buffer._webgpuBuffer);
-                    if (aNormLoc >= 0 && gl._activeAttributes[aNormLoc] && gl._activeAttributes[aNormLoc].buffer._webgpuBuffer)
-                        encoder.setVertexBuffer(2, gl._activeAttributes[aNormLoc].buffer._webgpuBuffer);
-                    if (aColorLoc >= 0 && gl._activeAttributes[aColorLoc] && gl._activeAttributes[aColorLoc].buffer._webgpuBuffer)
-                        encoder.setVertexBuffer(3, gl._activeAttributes[aColorLoc].buffer._webgpuBuffer);
-                } else if (isDepth) {
-                    if (aColorLoc >= 0 && gl._activeAttributes[aColorLoc] && gl._activeAttributes[aColorLoc].buffer && gl._activeAttributes[aColorLoc].buffer._webgpuBuffer) {
-                        encoder.setVertexBuffer(1, gl._activeAttributes[aColorLoc].buffer._webgpuBuffer);
-                    } else {
-                        encoder.setVertexBuffer(1, this.dummyColorBuffer);
-                    }
-                }
-                
-                const indexBuf = gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING);
-                if (indexBuf && indexBuf._webgpuBuffer) {
-                    encoder.setIndexBuffer(indexBuf._webgpuBuffer, type === gl.UNSIGNED_INT ? 'uint32' : 'uint16');
-                    encoder.drawIndexed(count, 1, offset / (type === gl.UNSIGNED_INT ? 4 : 2), 0, 0);
-                }
-            };
-
-            
-            
-            
-            
-            // --- Compile WebGPU Cloud 3D Pipeline ---
-            const cloud3DWGSL = `
-struct Cloud3DUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projectionMatrix : mat4x4<f32>,
-    cloudOrbitMatrix : mat4x4<f32>,
-    colorParams : vec4<f32>, // rgb: color, a: alpha
-    timeParams : vec4<f32>, // x: animTime, y: time, z: waterRadius, w: 0
-    lightDir : vec4<f32>,
-    cameraPos : vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : Cloud3DUniforms;
-
-struct VertexInput {
-    @location(0) position : vec3<f32>,
-    @location(1) localPos : vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) vWorldPos : vec3<f32>,
-    @location(1) vLocalPos : vec3<f32>,
-};
-
-fn puffNoise(p : vec3<f32>, t : f32) -> f32 {
-    return sin(p.x * 0.8 + t * 1.5) * cos(p.y * 1.1 + t * 1.2) * sin(p.z * 0.9 + t * 1.7);
-}
-
-@vertex
-fn vs_main(in : VertexInput) -> VertexOutput {
-    var out : VertexOutput;
-    out.vLocalPos = in.localPos;
-    
-    var animatedPos = in.position;
-    var normLocal = vec3<f32>(0.0, 1.0, 0.0);
-    if (length(in.localPos) > 0.001) {
-        normLocal = normalize(in.localPos);
-    }
-    
-    let puff = puffNoise(in.position * 0.5, uniforms.timeParams.x) * 0.35;
-    animatedPos = animatedPos + normLocal * puff;
-    
-    let rotatedPos = uniforms.cloudOrbitMatrix * vec4<f32>(animatedPos, 1.0);
-    out.vWorldPos = rotatedPos.xyz;
-    out.position = uniforms.projectionMatrix * uniforms.modelViewMatrix * rotatedPos;
-    
-    return out;
-}
-
-fn hash(p_in : vec3<f32>) -> f32 {
-    var p = fract(p_in * vec3<f32>(443.897, 441.423, 437.195));
-    p = p + dot(p, p.yzx + 19.19);
-    return fract((p.x + p.y) * p.z);
-}
-
-fn noise(x : vec3<f32>) -> f32 {
-    let p = floor(x);
-    var f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash(p+vec3<f32>(0.0,0.0,0.0)), hash(p+vec3<f32>(1.0,0.0,0.0)), f.x),
-                   mix(hash(p+vec3<f32>(0.0,1.0,0.0)), hash(p+vec3<f32>(1.0,1.0,0.0)), f.x), f.y),
-               mix(mix(hash(p+vec3<f32>(0.0,0.0,1.0)), hash(p+vec3<f32>(1.0,0.0,1.0)), f.x),
-                   mix(hash(p+vec3<f32>(0.0,1.0,1.0)), hash(p+vec3<f32>(1.0,1.0,1.0)), f.x), f.y), f.z);
-}
-
-fn fbm(p_in : vec3<f32>) -> f32 {
-    var p = p_in;
-    var v = 0.0;
-    var a = 0.5;
-    let shift = vec3<f32>(100.0);
-    for (var i = 0; i < 3; i++) {
-        v += a * noise(p);
-        p = p * 2.0 + shift;
-        a *= 0.5;
-    }
-    return v;
-}
-
-@fragment
-fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
-    let waterRadius = uniforms.timeParams.z;
-    if (waterRadius > 0.0) {
-        let rayDir = normalize(in.vWorldPos - uniforms.cameraPos.xyz);
-        let cloudDist = length(in.vWorldPos - uniforms.cameraPos.xyz);
-        let b = dot(uniforms.cameraPos.xyz, rayDir);
-        let c = dot(uniforms.cameraPos.xyz, uniforms.cameraPos.xyz) - waterRadius * waterRadius;
-        let h = b * b - c;
-        if (h >= 0.0) {
-            let tNear = -b - sqrt(h);
-            if (c > 0.0) {
-                if (tNear > 0.0 && tNear < cloudDist) {
-                    discard;
-                }
-            } else {
-                discard;
-            }
-        }
-    }
-    
-    let viewDir = normalize(uniforms.cameraPos.xyz - in.vWorldPos);
-    let normal = normalize(in.vLocalPos);
-    
-    let rim = max(0.0, dot(normal, viewDir));
-    let env = smoothstep(0.0, 0.6, rim);
-    
-    let time = uniforms.timeParams.y;
-    let coord = in.vWorldPos * 0.8 + vec3<f32>(time * 0.25, time * 0.1, time * 0.18);
-    
-    let n = fbm(coord);
-    let fluffy = smoothstep(0.2, 0.65, n);
-    
-    let density = clamp(fluffy * 1.6 * env, 0.0, 1.0);
-    if (density < 0.02) {
-        discard;
-    }
-    
-    let lightDir = normalize(uniforms.lightDir.xyz);
-    let shadowNoise = fbm(coord + lightDir * 0.5);
-    let shadow = smoothstep(0.2, 0.8, shadowNoise);
-    
-    let baseColor = uniforms.colorParams.rgb;
-    let shadowColor = mix(baseColor * 0.6, vec3<f32>(0.55, 0.65, 0.8), 0.6);
-    
-    let lightDot = dot(normal, lightDir);
-    let lightIntensity = smoothstep(-0.2, 0.8, lightDot);
-    
-    let finalColor = mix(shadowColor, baseColor, lightIntensity * shadow);
-    
-    return vec4<f32>(finalColor, density * uniforms.colorParams.a);
-}
-`;
-            this.cloud3DShaderModule = this.device.createShaderModule({ code: cloud3DWGSL });
-            
-            this.cloud3DBindGroupLayout = this.device.createBindGroupLayout({
-                entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }]
-            });
-
-            // --- Compile WebGPU Water Pipeline ---
-            const waterWGSL = `
-struct WaterUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projectionMatrix : mat4x4<f32>,
-    waterColor : vec4<f32>,
-    opacityTimeWaveLevel : vec4<f32>, // x: opacity, y: time, z: waveStrength, w: waterLevel
-    lightDir : vec4<f32>,
-    cameraPos : vec4<f32>,
-    renderDist : vec4<f32>, // x: enabled, y: maxDist, z: 0, w: 0
-    boatCount : vec4<f32>,  // x: count, yzw: 0
-    boatPos0 : vec4<f32>, boatPos1 : vec4<f32>, boatPos2 : vec4<f32>, boatPos3 : vec4<f32>,
-    boatRight0 : vec4<f32>, boatRight1 : vec4<f32>, boatRight2 : vec4<f32>, boatRight3 : vec4<f32>,
-    boatNormal0 : vec4<f32>, boatNormal1 : vec4<f32>, boatNormal2 : vec4<f32>, boatNormal3 : vec4<f32>,
-    boatForward0 : vec4<f32>, boatForward1 : vec4<f32>, boatForward2 : vec4<f32>, boatForward3 : vec4<f32>,
-    boatSize0 : vec4<f32>, boatSize1 : vec4<f32>, boatSize2 : vec4<f32>, boatSize3 : vec4<f32>,
-    boatOffset0 : vec4<f32>, boatOffset1 : vec4<f32>, boatOffset2 : vec4<f32>, boatOffset3 : vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : WaterUniforms;
-@group(0) @binding(1) var waterMaskTex : texture_2d<f32>;
-@group(0) @binding(2) var waterSampler : sampler;
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) vPosition : vec3<f32>,
-    @location(1) vNormal : vec3<f32>,
-    @location(2) vDist : f32,
-};
-
-@vertex
-fn vs_main(@location(0) aPosition : vec3<f32>) -> VertexOutput {
-    var out : VertexOutput;
-    let mvPosition = uniforms.modelViewMatrix * vec4<f32>(aPosition, 1.0);
-    out.position = uniforms.projectionMatrix * mvPosition;
-    out.vPosition = aPosition;
-    out.vNormal = normalize(aPosition);
-    out.vDist = length(mvPosition.xyz);
-    return out;
-}
-
-fn hash(p : vec3<f32>) -> f32 {
-    let pf = fract(p * vec3<f32>(127.1, 311.7, 74.7));
-    return fract(sin(dot(pf, vec3<f32>(12.9898, 78.233, 37.719))) * 43758.5453);
-}
-
-fn noise3D(p : vec3<f32>) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let u = f * f * (3.0 - 2.0 * f);
-    return mix(
-        mix(mix(hash(i + vec3<f32>(0.0,0.0,0.0)), hash(i + vec3<f32>(1.0,0.0,0.0)), u.x),
-            mix(hash(i + vec3<f32>(0.0,1.0,0.0)), hash(i + vec3<f32>(1.0,1.0,0.0)), u.x), u.y),
-        mix(mix(hash(i + vec3<f32>(0.0,0.0,1.0)), hash(i + vec3<f32>(1.0,0.0,1.0)), u.x),
-            mix(hash(i + vec3<f32>(0.0,1.0,1.0)), hash(i + vec3<f32>(1.0,1.0,1.0)), u.x), u.y), u.z
-    );
-}
-
-fn fbm(p : vec3<f32>) -> f32 {
-    var value = 0.0;
-    var amplitude = 1.0;
-    var frequency = 1.0;
-    var maxVal = 0.0;
-    for (var i = 0; i < 3; i++) {
-        value += amplitude * noise3D(p * frequency);
-        maxVal += amplitude;
-        amplitude *= 0.5;
-        frequency *= 2.0;
-    }
-    return value / maxVal;
-}
-
-fn getBoatPos(i : i32) -> vec3<f32> {
-    if (i == 0) { return uniforms.boatPos0.xyz; }
-    if (i == 1) { return uniforms.boatPos1.xyz; }
-    if (i == 2) { return uniforms.boatPos2.xyz; }
-    return uniforms.boatPos3.xyz;
-}
-fn getBoatRight(i : i32) -> vec3<f32> {
-    if (i == 0) { return uniforms.boatRight0.xyz; }
-    if (i == 1) { return uniforms.boatRight1.xyz; }
-    if (i == 2) { return uniforms.boatRight2.xyz; }
-    return uniforms.boatRight3.xyz;
-}
-fn getBoatNormal(i : i32) -> vec3<f32> {
-    if (i == 0) { return uniforms.boatNormal0.xyz; }
-    if (i == 1) { return uniforms.boatNormal1.xyz; }
-    if (i == 2) { return uniforms.boatNormal2.xyz; }
-    return uniforms.boatNormal3.xyz;
-}
-fn getBoatForward(i : i32) -> vec3<f32> {
-    if (i == 0) { return uniforms.boatForward0.xyz; }
-    if (i == 1) { return uniforms.boatForward1.xyz; }
-    if (i == 2) { return uniforms.boatForward2.xyz; }
-    return uniforms.boatForward3.xyz;
-}
-fn getBoatSize(i : i32) -> vec3<f32> {
-    if (i == 0) { return uniforms.boatSize0.xyz; }
-    if (i == 1) { return uniforms.boatSize1.xyz; }
-    if (i == 2) { return uniforms.boatSize2.xyz; }
-    return uniforms.boatSize3.xyz;
-}
-fn getBoatOffset(i : i32) -> vec3<f32> {
-    if (i == 0) { return uniforms.boatOffset0.xyz; }
-    if (i == 1) { return uniforms.boatOffset1.xyz; }
-    if (i == 2) { return uniforms.boatOffset2.xyz; }
-    return uniforms.boatOffset3.xyz;
-}
-
-@fragment
-fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
-    if (uniforms.renderDist.x > 0.5 && in.vDist > uniforms.renderDist.y) {
-        discard;
-    }
-    
-    let nPos = normalize(in.vPosition);
-    let theta = acos(clamp(nPos.y, -1.0, 1.0));
-    var phi = atan2(nPos.z, nPos.x);
-    if (phi < 0.0) { phi += 2.0 * 3.14159265359; }
-    let uv = vec2<f32>(phi / (2.0 * 3.14159265359), theta / 3.14159265359);
-    
-    let isWater = textureSample(waterMaskTex, waterSampler, uv).r;
-    if (isWater <= 0.001) {
-        discard;
-    }
-
-    // Boat hull clipping
-    let bCount = i32(uniforms.boatCount.x);
-    for (var i = 0; i < 4; i++) {
-        if (i >= bCount) { break; }
-        let rel = in.vPosition - getBoatPos(i);
-        let localX = dot(rel, getBoatRight(i));
-        let localY = dot(rel, getBoatNormal(i));
-        let localZ = dot(rel, getBoatForward(i));
-        
-        let size = getBoatSize(i);
-        let offset = getBoatOffset(i);
-        let offsetY = offset.x;
-        let shapeType = offset.y;
-        
-        let dy = localY - offsetY;
-        if (abs(dy) < size.y) {
-            var halfWidth = size.x;
-            let halfLength = size.z;
-            let t = abs(localZ) / halfLength;
-            if (t <= 1.0) {
-                if (shapeType > 0.5) {
-                    halfWidth = halfWidth * (1.0 - t * t * 0.85);
-                }
-                if (abs(localX) < halfWidth) {
-                    discard;
-                }
-            }
-        }
-    }
-    
-    let time = uniforms.opacityTimeWaveLevel.y;
-    var normal = normalize(in.vNormal);
-    
-    let ripple = sin(in.vPosition.x * 25.0 + time * 4.0) * 0.02
-               + cos(in.vPosition.z * 20.0 + time * 3.5) * 0.02
-               + sin(in.vPosition.y * 15.0 + time * 5.0) * 0.015;
-    normal = normalize(normal + vec3<f32>(ripple, ripple * 0.5, ripple * 0.7));
-    
-    let viewDir = normalize(in.vPosition - uniforms.cameraPos.xyz);
-    let reflectDir = reflect(viewDir, normal);
-    
-    var skyColor = vec3<f32>(0.02, 0.03, 0.07) * (1.0 - max(0.0, reflectDir.y));
-    let starPattern = hash(floor(reflectDir * 160.0));
-    if (starPattern > 0.993) {
-        skyColor += vec3<f32>(1.0, 1.0, 1.0) * (sin(time * 3.0 + starPattern * 10.0) * 0.5 + 0.5);
-    }
-    
-    let landNoise = fbm(reflectDir * 4.5);
-    let treeNoise = fbm(reflectDir * 12.0 + vec3<f32>(1.2, 3.4, 5.6));
-    
-    let horizonFactor = smoothstep(-0.25, 0.35, 0.5 - dot(reflectDir, normalize(in.vPosition)));
-    let landFactor = smoothstep(0.38, 0.65, landNoise) * horizonFactor;
-    
-    var landReflColor = mix(vec3<f32>(0.12, 0.35, 0.15), vec3<f32>(0.38, 0.32, 0.22), smoothstep(0.4, 0.7, landNoise));
-    if (treeNoise > 0.55 && landNoise > 0.42) {
-        landReflColor = mix(landReflColor, vec3<f32>(0.06, 0.22, 0.08), 0.7);
-    }
-    
-    var reflectedScene = mix(skyColor, landReflColor, landFactor);
-    
-    let lightDir = normalize(uniforms.lightDir.xyz);
-    let sunSpec = pow(max(dot(reflectDir, lightDir), 0.0), 120.0);
-    reflectedScene += vec3<f32>(1.0, 0.96, 0.85) * sunSpec * 2.0;
-    
-    var fresnel = pow(1.0 - abs(dot(normal, viewDir)), 4.0);
-    fresnel = clamp(fresnel * 0.75 + 0.12, 0.0, 1.0);
-    
-    let deepNavyColor = vec3<f32>(0.01, 0.08, 0.32);
-    var baseSeaColor = uniforms.waterColor.rgb;
-    if (isWater > 0.35) {
-        let t = clamp((isWater - 0.35) / 0.65, 0.0, 1.0);
-        baseSeaColor = mix(uniforms.waterColor.rgb, deepNavyColor, t);
-    }
-    
-    let spec = pow(max(dot(reflect(-lightDir, normal), -viewDir), 0.0), 32.0) * 0.35;
-    let baseWaterColor = baseSeaColor * (0.85 + 0.15 * spec);
-    
-    var finalColor = mix(baseWaterColor, reflectedScene, fresnel);
-    
-    // Caustics in shallow water
-    if (isWater < 0.40) {
-        let cPos = in.vPosition * 22.0 + vec3<f32>(time * 0.9, time * 0.7, time * 0.8);
-        let c1 = noise3D(cPos);
-        let c2 = noise3D(cPos * 1.4 + vec3<f32>(2.3, 1.7, 4.1));
-        let caustic = pow(min(c1, c2), 2.2) * 1.5;
-        let causticMask = (1.0 - smoothstep(0.05, 0.40, isWater)) * smoothstep(0.01, 0.05, isWater);
-        finalColor += vec3<f32>(0.08, 0.10, 0.12) * caustic * causticMask;
-    }
-    
-    // Shoreline animated foam
-    let edgeFade = smoothstep(0.0, 0.08, isWater);
-    let foamFactor = smoothstep(0.0, 0.03, edgeFade) * (1.0 - smoothstep(0.03, 0.18, edgeFade));
-    var foamNoise = sin(in.vPosition.x * 65.0 + in.vPosition.z * 55.0 + time * 3.8) * 0.5 + 0.5;
-    foamNoise += cos(in.vPosition.y * 110.0 - time * 3.5) * 0.25;
-    foamNoise = clamp(foamNoise, 0.0, 1.0);
-    let foamColor = vec3<f32>(0.96, 0.98, 1.0);
-    finalColor = mix(finalColor, foamColor, foamFactor * 0.75 * foamNoise);
-    
-    // Depth opacity & fresnel alpha
-    let depthOpacity = smoothstep(0.0, 0.40, isWater);
-    var alpha = mix(uniforms.opacityTimeWaveLevel.x * depthOpacity, 0.96, fresnel);
-    alpha += ripple * 0.10;
-    alpha = clamp(alpha, 0.0, 0.98);
-    alpha *= edgeFade;
-
-    // Atmospheric Fog
-    if (uniforms.renderDist.x > 0.5) {
-        let fogStart = uniforms.renderDist.y * 0.55;
-        let fogFactor = smoothstep(fogStart, uniforms.renderDist.y, in.vDist);
-        let fogDir = normalize(in.vPosition - uniforms.cameraPos.xyz);
-        let sunDot = max(dot(fogDir, lightDir), 0.0);
-        let baseSkyFog = vec3<f32>(0.012, 0.035, 0.09);
-        let litSkyFog = vec3<f32>(0.08, 0.14, 0.24);
-        let atmosphericFog = mix(baseSkyFog, litSkyFog, sunDot * 0.5 + 0.1);
-        finalColor = mix(finalColor, atmosphericFog, fogFactor * 0.98);
-        alpha = mix(alpha, 0.0, fogFactor * 0.95);
-    }
-
-    return vec4<f32>(finalColor, alpha);
-}
-`;
-            this.waterShaderModule = this.device.createShaderModule({ code: waterWGSL });
-            
-            this.waterBindGroupLayout = this.device.createBindGroupLayout({
-                entries: [
-                    { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-                    { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
-                    { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } }
-                ]
-            });
-
-            // --- Compile WebGPU Atmosphere Pipeline ---
-            const atmosphereWGSL = `
-struct AtmosphereUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projectionMatrix : mat4x4<f32>,
-    color : vec4<f32>,
-    lightDir : vec4<f32>,
-    cameraPos : vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : AtmosphereUniforms;
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) vNormal : vec3<f32>,
-    @location(1) vPosition : vec3<f32>,
-};
-
-@vertex
-fn vs_main(@location(0) aPosition : vec3<f32>) -> VertexOutput {
-    var out : VertexOutput;
-    out.position = uniforms.projectionMatrix * uniforms.modelViewMatrix * vec4<f32>(aPosition, 1.0);
-    out.vNormal = normalize(aPosition);
-    out.vPosition = aPosition;
-    return out;
-}
-
-@fragment
-fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.vNormal);
-    let viewDir = normalize(uniforms.cameraPos.xyz - in.vPosition);
-    let lightDir = normalize(uniforms.lightDir.xyz);
-    
-    let cosTheta = dot(normal, viewDir);
-    let fresnel = 1.0 - abs(cosTheta);
-    
-    var rim : f32;
-    if (cosTheta < 0.0) {
-        rim = mix(0.42, 1.0, fresnel);
-    } else {
-        rim = pow(fresnel, 3.5) * smoothstep(0.0, 0.20, cosTheta);
-    }
-    
-    let lightInfluence = dot(normal, lightDir);
-    let intensity = smoothstep(-0.4, 0.4, lightInfluence);
-    
-    let finalAlpha = rim * uniforms.color.a * (0.15 + 0.85 * intensity);
-    return vec4<f32>(uniforms.color.rgb, finalAlpha);
-}
-`;
-            this.atmosphereShaderModule = this.device.createShaderModule({ code: atmosphereWGSL });
-            
-            this.atmosphereBindGroupLayout = this.device.createBindGroupLayout({
-                entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }]
-            });
-
-            
-            // --- Compile WebGPU Sky Pipeline ---
-            const skyWGSL2 = `
-struct SkyUniforms {
-    modelViewMatrix : mat4x4<f32>,
-    projectionMatrix : mat4x4<f32>,
-    timeParams : vec4<f32>, // x: time, y: gasIntensity, z: waterRadius, w: 0
-    cameraPos : vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : SkyUniforms;
-
-struct VertexInput {
-    @location(0) position : vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) vWorldDir : vec3<f32>,
-};
-
-@vertex
-fn vs_main(in : VertexInput) -> VertexOutput {
-    var out : VertexOutput;
-    out.position = uniforms.projectionMatrix * uniforms.modelViewMatrix * vec4<f32>(in.position, 1.0);
-    out.vWorldDir = normalize(in.position);
-    return out;
-}
-
-fn hash(p_in : vec3<f32>) -> f32 {
-    var p = fract(p_in * vec3<f32>(443.897, 441.423, 437.195));
-    p = p + dot(p, p.yzx + 19.19);
-    return fract((p.x + p.y) * p.z);
-}
-
-fn noise(x : vec3<f32>) -> f32 {
-    let p = floor(x);
-    var f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash(p+vec3<f32>(0.0,0.0,0.0)), hash(p+vec3<f32>(1.0,0.0,0.0)), f.x),
-                   mix(hash(p+vec3<f32>(0.0,1.0,0.0)), hash(p+vec3<f32>(1.0,1.0,0.0)), f.x), f.y),
-               mix(mix(hash(p+vec3<f32>(0.0,0.0,1.0)), hash(p+vec3<f32>(1.0,0.0,1.0)), f.x),
-                   mix(hash(p+vec3<f32>(0.0,1.0,1.0)), hash(p+vec3<f32>(1.0,1.0,1.0)), f.x), f.y), f.z);
-}
-
-fn fbm(p_in : vec3<f32>) -> f32 {
-    var p = p_in;
-    var v = 0.0;
-    var a = 0.5;
-    let shift = vec3<f32>(100.0);
-    for (var i = 0; i < 4; i++) {
-        v += a * noise(p);
-        p = p * 2.0 + shift;
-        a *= 0.5;
-    }
-    return v;
-}
-
-@fragment
-fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
-    let dir = normalize(in.vWorldDir);
-    let waterRadius = uniforms.timeParams.z;
-    if (waterRadius > 0.0) {
-        let b = dot(uniforms.cameraPos.xyz, dir);
-        let c = dot(uniforms.cameraPos.xyz, uniforms.cameraPos.xyz) - waterRadius * waterRadius;
-        let h = b * b - c;
-        if (h >= 0.0) {
-            let tNear = -b - sqrt(h);
-            if (c > 0.0) {
-                if (tNear > 0.0) {
-                    discard;
-                }
-            } else {
-                discard;
-            }
-        }
-    }
-    
-    let starPattern = hash(floor(dir * 160.0));
-    var stars = 0.0;
-    if (starPattern > 0.995) {
-        let intensity = sin(uniforms.timeParams.x * 1.8 + starPattern * 100.0) * 0.4 + 0.6;
-        stars = pow(fract(starPattern * 1234.56), 25.0) * intensity * 2.0;
-    }
-    
-    let gasCoords = dir * 2.8 + vec3<f32>(0.0, uniforms.timeParams.x * 0.003, uniforms.timeParams.x * 0.0015);
-    let n1 = fbm(gasCoords);
-    let n2 = fbm(gasCoords + vec3<f32>(3.2, 1.5, -2.1));
-    
-    let colorNebula1 = vec3<f32>(0.01, 0.005, 0.04);
-    let colorNebula2 = vec3<f32>(0.08, 0.03, 0.22);
-    let colorNebula3 = vec3<f32>(0.01, 0.12, 0.25);
-    
-    let blend1 = smoothstep(0.2, 0.7, n1);
-    let blend2 = smoothstep(0.4, 0.8, n2);
-    var gasColor = mix(colorNebula1, colorNebula2, blend1);
-    gasColor = mix(gasColor, colorNebula3, blend2);
-    
-    gasColor = gasColor * uniforms.timeParams.y;
-    
-    let finalColor = gasColor + vec3<f32>(stars, stars, stars);
-    return vec4<f32>(finalColor, 1.0);
-}
-`;
-            this.skyShaderModule = this.device.createShaderModule({ code: skyWGSL2 });
-            
-            this.skyBindGroupLayout = this.device.createBindGroupLayout({
-                entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }]
-            });
-
-            // --- Compile WebGPU Sky Pipeline ---
-            const skyWGSL = `
-struct SkyUniforms {
-    viewProjInverse : mat4x4<f32>,
-    cameraPos : vec4<f32>,
-    params : vec4<f32>, // x: time, y: gasIntensity, z: waterRadius, w: 0
-    sunDir : vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> uniforms : SkyUniforms;
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) worldDir : vec3<f32>,
-};
-
-@vertex
-fn vs_main(@builtin(vertex_index) vertexIndex : u32) -> VertexOutput {
-    var pos = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>( 3.0, -1.0),
-        vec2<f32>(-1.0,  3.0)
-    );
-    let xy = pos[vertexIndex];
-    var out : VertexOutput;
-    out.position = vec4<f32>(xy, 1.0, 1.0);
-    
-    let clipPos = vec4<f32>(xy, 1.0, 1.0);
-    var worldPos = uniforms.viewProjInverse * clipPos;
-    worldPos = worldPos / worldPos.w;
-    
-    out.worldDir = normalize(worldPos.xyz - uniforms.cameraPos.xyz);
-    return out;
-}
-
-fn hash(p_in: vec3<f32>) -> f32 {
-    var p = fract(p_in * vec3<f32>(443.897, 441.423, 437.195));
-    let d = dot(p, p.yzx + vec3<f32>(19.19, 19.19, 19.19));
-    p += vec3<f32>(d, d, d);
-    return fract((p.x + p.y) * p.z);
-}
-
-fn noise(x: vec3<f32>) -> f32 {
-    let p = floor(x);
-    var f = fract(x);
-    f = f * f * (vec3<f32>(3.0, 3.0, 3.0) - vec3<f32>(2.0, 2.0, 2.0) * f);
-    return mix(
-        mix(
-            mix(hash(p + vec3<f32>(0.0,0.0,0.0)), hash(p + vec3<f32>(1.0,0.0,0.0)), f.x),
-            mix(hash(p + vec3<f32>(0.0,1.0,0.0)), hash(p + vec3<f32>(1.0,1.0,0.0)), f.x),
-            f.y
-        ),
-        mix(
-            mix(hash(p + vec3<f32>(0.0,0.0,1.0)), hash(p + vec3<f32>(1.0,0.0,1.0)), f.x),
-            mix(hash(p + vec3<f32>(0.0,1.0,1.0)), hash(p + vec3<f32>(1.0,1.0,1.0)), f.x),
-            f.y
-        ),
-        f.z
-    );
-}
-
-fn fbm(p_in: vec3<f32>) -> f32 {
-    var v = 0.0;
-    var a = 0.5;
-    let shift = vec3<f32>(100.0, 100.0, 100.0);
-    var p = p_in;
-    for (var i = 0u; i < 4u; i++) {
-        v += a * noise(p);
-        p = p * 2.0 + shift;
-        a *= 0.5;
-    }
-    return v;
-}
-
-@fragment
-fn fs_main(@location(0) worldDir : vec3<f32>) -> @location(0) vec4<f32> {
-    let dir = normalize(worldDir);
-    let uWaterRadius = uniforms.params.z;
-    let uCameraPos = uniforms.cameraPos.xyz;
-    let uTime = uniforms.params.x;
-    let uGasIntensity = uniforms.params.y;
-    let uSunDir = normalize(uniforms.sunDir.xyz);
-
-    if (uWaterRadius > 0.0) {
-        let b = dot(uCameraPos, dir);
-        let c = dot(uCameraPos, uCameraPos) - uWaterRadius * uWaterRadius;
-        let h = b * b - c;
-        if (h >= 0.0) {
-            let tNear = -b - sqrt(h);
-            if (c > 0.0) {
-                if (tNear > 0.0) {
-                    discard;
-                }
-            } else {
-                discard;
-            }
-        }
-    }
-    
-    // Draw Sun
-    let sunDot = dot(dir, uSunDir);
-    var sunColor = vec3<f32>(0.0);
-    if (sunDot > 0.9998) {
-        sunColor = vec3<f32>(2.0, 1.9, 1.8); // Core bright white-yellow
-    } else if (sunDot > 0.998) {
-        let glow = (sunDot - 0.998) / (0.9998 - 0.998);
-        sunColor = vec3<f32>(1.0, 0.8, 0.5) * glow;
-    }
-    
-    let starPattern = hash(floor(dir * 160.0));
-    var stars = 0.0;
-    if (starPattern > 0.995) {
-        let intensity = sin(uTime * 1.8 + starPattern * 100.0) * 0.4 + 0.6;
-        stars = pow(fract(starPattern * 1234.56), 25.0) * intensity * 2.0;
-    }
-    
-    let gasCoords = dir * 2.8 + vec3<f32>(0.0, uTime * 0.003, uTime * 0.0015);
-    let n1 = fbm(gasCoords);
-    let n2 = fbm(gasCoords + vec3<f32>(3.2, 1.5, -2.1));
-    
-    let colorNebula1 = vec3<f32>(0.01, 0.005, 0.04);
-    let colorNebula2 = vec3<f32>(0.08, 0.03, 0.22);
-    let colorNebula3 = vec3<f32>(0.01, 0.12, 0.25);
-    let colorNebula4 = vec3<f32>(0.28, 0.04, 0.16);
-    
-    var skyColor = mix(colorNebula1, colorNebula2, n1);
-    skyColor = mix(skyColor, colorNebula3, n2 * 0.7);
-    skyColor += colorNebula4 * max(n1 * n2 - 0.08, 0.0) * 1.5;
-    
-    skyColor *= uGasIntensity;
-    let finalColor = skyColor + vec3<f32>(stars, stars, stars) + sunColor;
-    
-    return vec4<f32>(finalColor, 1.0);
-}
-            `;
-
-            const shaderModule = this.webgpu.device.createShaderModule({ code: skyWGSL });
-
-            this.webgpu.skyPipeline = this.webgpu.device.createRenderPipeline({
-              layout: 'auto',
-              vertex: {
-                module: shaderModule,
-                entryPoint: 'vs_main',
-              },
-              fragment: {
-                module: shaderModule,
-                entryPoint: 'fs_main',
-                targets: [{ format: this.webgpu.format }],
-              },
-              primitive: {
-                topology: 'triangle-list',
-              },
-              depthStencil: {
-                depthWriteEnabled: false,
-                depthCompare: 'always',
-                format: 'depth24plus',
-              },
-            });
-
-            
-            // --- Compile WebGPU Terrain Pipeline ---
-            const terrainWGSL = `
-struct TerrainUniforms {
-    viewProj : mat4x4<f32>,
-    lightSpaceMatrix : mat4x4<f32>,
-    cameraPos : vec4<f32>,
-    lightDir : vec4<f32>,
-    waterColor : vec4<f32>,
-    params : vec4<f32>, // x: waterRadius, y: renderDistEnabled, z: maxRenderDist, w: shadowsEnabled
-    shadowTexelSize : vec2<f32>,
-    tunnelCount : u32,
-    isTunnelMesh : f32,
-    tunnels : array<vec4<f32>, 64>,
-};
-
-@group(0) @binding(0) var<uniform> uniforms : TerrainUniforms;
-@group(0) @binding(1) var shadowMap : texture_depth_2d;
-@group(0) @binding(2) var shadowSampler : sampler_comparison;
-
-struct VertexInput {
-    @location(0) position : vec3<f32>,
-    @location(1) color : vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) color : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) worldPos : vec3<f32>,
-    @location(3) lightSpacePos : vec4<f32>,
-    @location(4) dist : f32,
-};
-
-@vertex
-fn vs_main(in : VertexInput) -> VertexOutput {
-    var out : VertexOutput;
-    if (length(in.position) < 0.01) {
-        out.position = vec4<f32>(9999.0, 9999.0, 9999.0, 1.0);
-        return out;
-    }
-    
-    out.worldPos = in.position;
-    out.normal = normalize(in.position);
-    out.color = in.color;
-    out.dist = length(in.position - uniforms.cameraPos.xyz);
-    
-    out.position = uniforms.viewProj * vec4<f32>(in.position, 1.0);
-    let shadowPos = in.position + normalize(in.position) * 0.002;
-    out.lightSpacePos = uniforms.lightSpaceMatrix * vec4<f32>(shadowPos, 1.0);
-    
-    return out;
-}
-
-${window.sharedShadowWGSL("uniforms.params.w")}
-
-@fragment
-fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
-    if (uniforms.isTunnelMesh > 0.5) {
-        let distToCenter = length(in.worldPos);
-    } else {
-        for (var i = 0u; i < 64u; i++) {
-            if (i < uniforms.tunnelCount) {
-                let t = uniforms.tunnels[i];
-                let diff = in.worldPos - t.xyz;
-                if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
-                    discard;
-                }
-            }
-        }
-    }
-    
-    if (uniforms.params.y > 0.5 && in.dist > uniforms.params.z) {
-        discard;
-    }
-    
-    var finalColor = in.color;
-    if (uniforms.lightDir.w > 0.5) {
-        let normal = normalize(in.normal);
-        let lightDir = normalize(uniforms.lightDir.xyz);
-        let diffuseVal = max(dot(normal, lightDir), 0.0);
-        
-        var shadow = 0.0;
-        if (diffuseVal > 0.001) {
-            shadow = calculateShadow(in.lightSpacePos, normal, lightDir);
-        }
-        let diffuse = 0.24 + diffuseVal * shadow * 0.76;
-        finalColor = in.color * diffuse;
-    }
-    
-    let dist = length(in.worldPos);
-    if (dist < uniforms.params.x) {
-        let depth = uniforms.params.x - dist;
-        var tintFactor = 1.0 - exp(-depth * 5.0);
-        tintFactor = clamp(tintFactor * uniforms.waterColor.w, 0.0, 0.85);
-        finalColor = mix(finalColor, uniforms.waterColor.xyz, tintFactor);
-    }
-    
-    return vec4<f32>(finalColor, 1.0);
-}
-`;
-            const terrainModule = this.webgpu.device.createShaderModule({ label: 'Terrain Shader', code: terrainWGSL });
-            
-            this.webgpu.terrainPipeline = this.webgpu.device.createRenderPipeline({
-                label: 'Terrain Pipeline',
-                layout: 'auto',
-                vertex: {
-                    module: terrainModule,
-                    entryPoint: 'vs_main',
-                    buffers: [
-                        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-                        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] }
-                    ]
-                },
-                fragment: {
-                    module: terrainModule,
-                    entryPoint: 'fs_main',
-                    targets: [{ format: this.webgpu.format }]
-                },
-                primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'cw' },
-                depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth24plus' }
-            });
-
-            const shadowSize = 1024;
-            this.webgpu.shadowDepthTexture = this.webgpu.device.createTexture({
-                size: [shadowSize, shadowSize, 1],
-                usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-                format: 'depth32float',
-            });
-            this.webgpu.shadowDepthTextureView = this.webgpu.shadowDepthTexture.createView();
-            
-            this.webgpu.shadowSampler = this.webgpu.device.createSampler({
-                compare: 'less',
-                magFilter: 'linear',
-                minFilter: 'linear',
-            });
-
-            this.webgpu.terrainShadowPipeline = this.webgpu.device.createRenderPipeline({
-                label: 'Terrain Shadow Pipeline',
-                layout: 'auto',
-                vertex: {
-                    module: terrainModule,
-                    entryPoint: 'vs_main',
-                    buffers: [
-                        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
-                        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] }
-                    ]
-                },
-                primitive: { topology: 'triangle-list', cullMode: 'none', frontFace: 'cw' },
-                depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth32float' }
-            });
-
-            this.webgpu.terrainUniformBuffer = this.webgpu.device.createBuffer({
-                size: 1232,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
-
-            this.webgpu.terrainBindGroup = this.webgpu.device.createBindGroup({
-                layout: this.webgpu.terrainPipeline.getBindGroupLayout(0),
-                entries: [
-                    { binding: 0, resource: { buffer: this.webgpu.terrainUniformBuffer } },
-                    { binding: 1, resource: this.webgpu.shadowDepthTextureView },
-                    { binding: 2, resource: this.webgpu.shadowSampler }
-                ]
-            });
-            
-            this.webgpu.terrainShadowBindGroup = this.webgpu.device.createBindGroup({
-                layout: this.webgpu.terrainShadowPipeline.getBindGroupLayout(0),
-                entries: [
-                    { binding: 0, resource: { buffer: this.webgpu.terrainUniformBuffer } },
-                    { binding: 1, resource: this.webgpu.shadowDepthTextureView },
-                    { binding: 2, resource: this.webgpu.shadowSampler }
-                ]
-            });
-
-            // Uniform buffer size: 
-            // viewProjInverse (mat4x4 = 64 bytes)
-            // cameraPos (vec4 = 16 bytes)
-            // params (vec4 = 16 bytes)
-            // sunDir (vec4 = 16 bytes)
-            // Total = 112 bytes
-            this.webgpu.skyUniformBuffer = this.webgpu.device.createBuffer({
-              size: 112,
-              usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
-
-            this.webgpu.skyBindGroup = this.webgpu.device.createBindGroup({
-              layout: this.webgpu.skyPipeline.getBindGroupLayout(0),
-              entries: [
-                {
-                  binding: 0,
-                  resource: {
-                    buffer: this.webgpu.skyUniformBuffer,
-                  },
-                },
-              ],
-            });
-
-    
-            // Water Uniform Buffer & Dummy Water Mask
-            this.webgpu.waterUniformBuffer = this.webgpu.device.createBuffer({
-                size: 2048,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
-
-            const dummyWaterTex = this.webgpu.device.createTexture({
-                size: [1, 1, 1],
-                format: 'r8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
-            });
-            this.webgpu.device.queue.writeTexture(
-                { texture: dummyWaterTex },
-                new Uint8Array([255]),
-                { bytesPerRow: 1 },
-                [1, 1, 1]
-            );
-            this.webgpu.dummyWaterMaskTextureView = dummyWaterTex.createView();
-            this.webgpu.dummyWaterMaskSampler = this.webgpu.device.createSampler({
-                magFilter: 'linear',
-                minFilter: 'linear'
-            });
-
-            this.webgpu.waterPipeline = this.webgpu.device.createRenderPipeline({
-                label: 'Native Water Pipeline',
-                layout: 'auto',
-                vertex: {
-                    module: this.waterShaderModule,
-                    entryPoint: 'vs_main',
-                    buffers: [
-                        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }
-                    ]
-                },
-                fragment: {
-                    module: this.waterShaderModule,
-                    entryPoint: 'fs_main',
-                    targets: [{
-                        format: this.format,
-                        blend: {
-                            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
-                        }
-                    }]
-                },
-                primitive: {
-                    topology: 'triangle-list',
-                    cullMode: 'none'
-                },
-                depthStencil: {
-                    depthWriteEnabled: false,
-                    depthCompare: 'less',
-                    format: 'depth24plus'
-                }
-            });
-
-        this.webgpu.dummyNormalBuffer = this.webgpu.device.createBuffer({
-            size: 12,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-        });
-        this.webgpu.device.queue.writeBuffer(this.webgpu.dummyNormalBuffer, 0, new Float32Array([0, 1, 0]));
-        this.webgpu.dummyColorBuffer = this.webgpu.device.createBuffer({
-            size: 12,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-        });
-        this.webgpu.device.queue.writeBuffer(this.webgpu.dummyColorBuffer, 0, new Float32Array([0, 0, 0]));
-        
-        if (typeof WebGPU3DUI !== "undefined") {
-            WebGPU3DUI.init(this.webgpu.device, this.webgpu.format);
-        }
-
-        this.webgpu.ready = true;
-            this.mode = 'webgl'; // Set primary high-performance WebGL mode
-            console.log("Graphics API: Operating in Native WebGL High-Performance Mode.");
-          }
-        }
-      } catch (e) {
-        console.warn("Graphics API: WebGPU initialization check complete, using WebGL.", e);
-      }
-    } else {
-      console.warn("Graphics API: Using WebGL Engine.");
-    }
-
+  async init() {
+    this.webgpu.ready = false;
     this.mode = 'webgl';
-    console.log("Graphics API: Operating in Native WebGL Engine Mode.");
+    console.log("Graphics API: Operating in Pure WebGL 2 Engine Mode (WebGPU Disabled).");
   },
 
-  renderWebGPU_MigratedParts(params) {
-    if (!this.webgpu.ready) return;
-    const { isUnderwater, invViewProj: viewProjInv, cameraPos, time, gasIntensity, waterRadius, finalLightDir, viewMatrix, projMatrix, lightSpaceMatrix, waterColor, waterOpacity, renderDistEnabled, maxRenderDist, shadowMapEnabled, shadowTexelSize } = params;
-    const commandEncoder = this.webgpu.currentCommandEncoder || this.webgpu.device.createCommandEncoder();
-    this.webgpu.currentCommandEncoder = commandEncoder;
-    
-    
-
-    // --- Main Color Pass ---
-    const textureView = this.webgpu.context.getCurrentTexture().createView();
-    const clearColor = isUnderwater 
-      ? { r: 0.01, g: 0.08, b: 0.16, a: 1.0 }
-      : { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
-
-    const renderPassDescriptor = {
-      colorAttachments: [{
-        view: textureView,
-        clearValue: clearColor,
-        loadOp: 'clear',
-        storeOp: 'store',
-      }],
-      depthStencilAttachment: {
-        view: this.webgpu.mainDepthTextureView,
-        depthClearValue: 1.0,
-        depthLoadOp: 'clear',
-        depthStoreOp: 'store',
-      }
-    };
-    
-    
-    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-    this.webgpu.currentPassEncoder = passEncoder;
-    this.webgpu.currentCommandEncoder = commandEncoder;
-
-
-    
-    // Render Sky natively if available
-    const isSkyOn = params.skyEnabled !== undefined ? params.skyEnabled : (typeof skyEnabled !== 'undefined' ? skyEnabled : true);
-    if (this.webgpu.skyPipeline && isSkyOn) {
-        passEncoder.setPipeline(this.webgpu.skyPipeline);
-        passEncoder.setBindGroup(0, this.webgpu.skyBindGroup);
-        
-        const skyUniforms = f32_webgpuSkyUniforms; // 16 (inv) + 4 (camPos) + 4 (params) + 4 (sunDir) = 28
-        if (viewProjInv) skyUniforms.set(viewProjInv, 0);
-        if (cameraPos) skyUniforms.set(cameraPos, 16);
-        skyUniforms[20] = (time || 0) * 0.05; // Time
-        skyUniforms[21] = gasIntensity !== undefined ? gasIntensity : (typeof skyGasIntensity !== 'undefined' ? skyGasIntensity : 1.0); // GasIntensity
-        skyUniforms[22] = (typeof window.isSpaceCameraMode !== 'undefined' && window.isSpaceCameraMode) ? 0.0 : (waterRadius || 0.0); // WaterRadius
-        skyUniforms[23] = 0.0;
-        if (finalLightDir) {
-            skyUniforms.set(finalLightDir, 24);
-        }
-        this.webgpu.device.queue.writeBuffer(this.webgpu.skyUniformBuffer, 0, skyUniforms);
-        
-        passEncoder.draw(3, 1, 0, 0);
-    }
-    
-    // Render Terrain
-    if (this.webgpu.terrainPipeline && this.webgpu.terrainVertexBuffer) {
-        passEncoder.setPipeline(this.webgpu.terrainPipeline);
-        passEncoder.setBindGroup(0, this.webgpu.terrainBindGroup);
-        passEncoder.setVertexBuffer(0, this.webgpu.terrainVertexBuffer);
-        passEncoder.setVertexBuffer(1, this.webgpu.terrainColorBuffer);
-        passEncoder.setIndexBuffer(this.webgpu.terrainIndexBuffer, this.webgpu.terrainUseUint32 ? 'uint32' : 'uint16');
-        passEncoder.drawIndexed(this.webgpu.terrainIndicesLength, 1, 0, 0, 0);
-    }
-
-    // --- Render Water (Native WebGPU) ---
-    if (this.webgpu.waterPipeline && this.webgpu.waterVertexBuffer && this.webgpu.waterIndicesLength > 0 && (typeof waterEnabled === 'undefined' || waterEnabled)) {
-        const timeVal = time || 0;
-        const wColor = waterColor || (typeof window.waterColor !== 'undefined' ? window.waterColor : [0.1, 0.4, 0.8]);
-        const wOpacity = waterOpacity !== undefined ? waterOpacity : (typeof window.waterOpacity !== 'undefined' ? window.waterOpacity : 0.8);
-        const wAnimTime = typeof window.waterAnimTime !== 'undefined' ? window.waterAnimTime : timeVal;
-        const wWaveStrength = typeof window.waveStrength !== 'undefined' ? window.waveStrength : 1.0;
-        const wLevel = typeof window.waterLevel !== 'undefined' ? window.waterLevel : 1.0;
-        const lightDir = finalLightDir || [0, 1, 0];
-        const camPos = cameraPos || [0, 0, 0];
-        const renderDistE = renderDistEnabled ? 1.0 : 0.0;
-        const renderDistVal = maxRenderDist !== undefined ? maxRenderDist : 100.0;
-        const colls = typeof collectibles !== 'undefined' ? collectibles : [];
-
-        // Collect top 4 boats for clipping
-        let boatCount = 0;
-        const topBoats = [null, null, null, null];
-        const topBoatsDistSq = [Infinity, Infinity, Infinity, Infinity];
-
-        const CLIPPING_MODELS = { "wood_boat": { size: [0.115, 0.055, 0.27], offset: [0.035, 1.0, 0.0] } };
-
-        for (let i = 0; i < colls.length; i++) {
-          const c = colls[i];
-          if (c && c.active && (c.type in CLIPPING_MODELS) && !c.isPreview) {
-            const dx = c.position[0] - camPos[0];
-            const dy = c.position[1] - camPos[1];
-            const dz = c.position[2] - camPos[2];
-            const distSq = dx*dx + dy*dy + dz*dz;
-            for (let j = 0; j < 4; j++) {
-              if (distSq < topBoatsDistSq[j]) {
-                for (let k = 3; k > j; k--) {
-                  topBoats[k] = topBoats[k - 1];
-                  topBoatsDistSq[k] = topBoatsDistSq[k - 1];
-                }
-                topBoats[j] = c;
-                topBoatsDistSq[j] = distSq;
-                break;
-              }
-            }
-          }
-        }
-        for (let j = 0; j < 4; j++) {
-          if (topBoats[j] !== null) boatCount++;
-        }
-
-        f32_webgpuWaterUData.fill(0);
-        const uData = f32_webgpuWaterUData; // 2048 bytes
-        if (viewMatrix) uData.set(viewMatrix, 0);
-        if (projMatrix) uData.set(projMatrix, 16);
-        uData[32] = wColor[0]; uData[33] = wColor[1]; uData[34] = wColor[2]; uData[35] = 1.0;
-        uData[36] = wOpacity; uData[37] = wAnimTime; uData[38] = wWaveStrength; uData[39] = wLevel;
-        uData[40] = lightDir[0]; uData[41] = lightDir[1]; uData[42] = lightDir[2]; uData[43] = 0.0;
-        uData[44] = camPos[0]; uData[45] = camPos[1]; uData[46] = camPos[2]; uData[47] = 0.0;
-        uData[48] = renderDistE; uData[49] = renderDistVal; uData[50] = 0.0; uData[51] = 0.0;
-        uData[52] = boatCount; uData[53] = 0.0; uData[54] = 0.0; uData[55] = 0.0;
-
-        for (let i = 0; i < boatCount; i++) {
-          const item = topBoats[i];
-          const pPos = item.position;
-          let n = item.normal || [0, 1, 0];
-          let r = item.R || [1, 0, 0];
-          let f = item.F || [0, 0, 1];
-          const lenR = Math.hypot(r[0], r[1], r[2]) || 1;
-          const lenN = Math.hypot(n[0], n[1], n[2]) || 1;
-          const lenF = Math.hypot(f[0], f[1], f[2]) || 1;
-          const cfg = CLIPPING_MODELS[item.type];
-
-          const offP = 56 + i * 4;
-          const offR = 72 + i * 4;
-          const offN = 88 + i * 4;
-          const offF = 104 + i * 4;
-          const offS = 120 + i * 4;
-          const offO = 136 + i * 4;
-
-          uData[offP] = pPos[0]; uData[offP+1] = pPos[1]; uData[offP+2] = pPos[2]; uData[offP+3] = 0;
-          uData[offR] = r[0]/lenR; uData[offR+1] = r[1]/lenR; uData[offR+2] = r[2]/lenR; uData[offR+3] = 0;
-          uData[offN] = n[0]/lenN; uData[offN+1] = n[1]/lenN; uData[offN+2] = n[2]/lenN; uData[offN+3] = 0;
-          uData[offF] = f[0]/lenF; uData[offF+1] = f[1]/lenF; uData[offF+2] = f[2]/lenF; uData[offF+3] = 0;
-          uData[offS] = cfg.size[0]; uData[offS+1] = cfg.size[1]; uData[offS+2] = cfg.size[2]; uData[offS+3] = 0;
-          uData[offO] = cfg.offset[0]; uData[offO+1] = cfg.offset[1]; uData[offO+2] = cfg.offset[2]; uData[offO+3] = 0;
-        }
-
-        this.webgpu.device.queue.writeBuffer(this.webgpu.waterUniformBuffer, 0, uData.buffer);
-
-        const maskTexView = this.webgpu.waterMaskTextureView || this.webgpu.dummyWaterMaskTextureView;
-        const maskSampler = this.webgpu.waterMaskSampler || this.webgpu.dummyWaterMaskSampler;
-
-        const waterBindGroup = this.webgpu.device.createBindGroup({
-            layout: this.webgpu.waterPipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.webgpu.waterUniformBuffer } },
-                { binding: 1, resource: maskTexView },
-                { binding: 2, resource: maskSampler }
-            ]
-        });
-
-        passEncoder.setPipeline(this.webgpu.waterPipeline);
-        passEncoder.setBindGroup(0, waterBindGroup);
-        passEncoder.setVertexBuffer(0, this.webgpu.waterVertexBuffer);
-        passEncoder.setIndexBuffer(this.webgpu.waterIndexBuffer, this.webgpu.waterUseUint32 ? 'uint32' : 'uint16');
-        passEncoder.drawIndexed(this.webgpu.waterIndicesLength, 1, 0, 0, 0);
-    }
-
+  renderWebGPU_MigratedParts() {
+    // WebGPU disabled
   },
 };
 
-// Expose legacy globals for the rest of the engine during migration
-let isWebGPUReady = false; 
+let isWebGPUReady = false;
 
 // Setup canvases
-if (!canvas) canvas = document.getElementById("mapCanvas"); // Primary Canvas (WebGPU)
-if (typeof glCanvas === "undefined" || !glCanvas) glCanvas = document.getElementById("glCanvas"); // Secondary Canvas (WebGL Overlay)
+if (!canvas) canvas = document.getElementById("mapCanvas");
+if (typeof glCanvas === "undefined" || !glCanvas) glCanvas = document.getElementById("glCanvas");
 
-// Initialize WebGPU asynchronously
-if (canvas && Graphics && Graphics.init) {
-  Graphics.init(canvas, glCanvas).then(() => {
-    isWebGPUReady = Graphics.webgpu ? Graphics.webgpu.ready : false;
-  });
-}
-
-// Initialize WebGL synchronously (Legacy requirement)
+// Initialize WebGL 2 synchronously (Pure WebGL 2 Mode)
 const initialAntialias = (typeof antialiasEnabled !== "undefined" && antialiasEnabled) || 
                          (typeof fxaaEnabled !== "undefined" && fxaaEnabled) || 
                          (typeof window.fxaaEnabled !== "undefined" && window.fxaaEnabled) || 
@@ -3290,12 +1221,10 @@ if (!glCanvas) glCanvas = document.getElementById("glCanvas");
 if (!canvas) canvas = document.getElementById("mapCanvas");
 
 if (glCanvas) {
-  gl = glCanvas.getContext("webgl2", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false }) ||
-       glCanvas.getContext("webgl", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false });
+  gl = glCanvas.getContext("webgl2", { antialias: initialAntialias, stencil: true, alpha: true, premultipliedAlpha: false });
 }
 if (!gl && canvas) {
-  gl = canvas.getContext("webgl2", { antialias: initialAntialias, stencil: true }) ||
-       canvas.getContext("webgl", { antialias: initialAntialias, stencil: true });
+  gl = canvas.getContext("webgl2", { antialias: initialAntialias, stencil: true });
 }
 
 if (gl) {
@@ -3306,83 +1235,10 @@ if (gl) {
   if (typeof Graphics !== "undefined") {
     Graphics.gl = gl;
   }
-  isWebGL2 = gl instanceof WebGL2RenderingContext;
-  Graphics.webgl.isWebGL2 = isWebGL2;
-  supportUint32 = isWebGL2 || gl.getExtension("OES_element_index_uint");
-  if (!isWebGL2 && typeof gl.getExtension === "function") {
-    gl.getExtension("OES_standard_derivatives");
-  }
-
-  Graphics.webgl.supportUint32 = supportUint32;
-
-  if (!gl._patchedForWebGPU) {
-      gl._patchedForWebGPU = true;
-      gl._activeAttributes = {};
-      gl._uniformValues = {};
-      gl._colorMask = [true, true, true, true];
-      gl._depthMask = true;
-      gl._cullFace = gl.BACK;
-      gl._frontFace = gl.CCW;
-      gl._cullEnabled = false;
-      gl._depthTest = false;
-      gl._stencilEnabled = false;
-
-      const origColorMask = gl.colorMask;
-      gl.colorMask = function(r, g, b, a) { origColorMask.apply(this, arguments); gl._colorMask = [r, g, b, a]; };
-      const origDepthMask = gl.depthMask;
-      gl.depthMask = function(flag) { origDepthMask.apply(this, arguments); gl._depthMask = flag; };
-      const origEnable = gl.enable;
-      gl.enable = function(cap) { origEnable.apply(this, arguments); if (cap === gl.CULL_FACE) gl._cullEnabled = true; if (cap === gl.DEPTH_TEST) gl._depthTest = true; if (cap === gl.STENCIL_TEST) gl._stencilEnabled = true; };
-      const origDisable = gl.disable;
-      gl.disable = function(cap) { origDisable.apply(this, arguments); if (cap === gl.CULL_FACE) gl._cullEnabled = false; if (cap === gl.DEPTH_TEST) gl._depthTest = false; if (cap === gl.STENCIL_TEST) gl._stencilEnabled = false; };
-      const origCullFace = gl.cullFace;
-      gl.cullFace = function(mode) { origCullFace.apply(this, arguments); gl._cullFace = mode; };
-      const origFrontFace = gl.frontFace;
-      gl.frontFace = function(mode) { origFrontFace.apply(this, arguments); gl._frontFace = mode; };
-
-      const origGetAttribLocation = gl.getAttribLocation;
-      gl.getAttribLocation = function(prog, name) {
-          if (!prog) return -1;
-          if (!prog._attribLocCache) prog._attribLocCache = {};
-          if (prog._attribLocCache[name] !== undefined) return prog._attribLocCache[name];
-          const loc = origGetAttribLocation.call(this, prog, name);
-          if (!prog._attribNamesInv) prog._attribNamesInv = {};
-          prog._attribNamesInv[name] = loc;
-          prog._attribLocCache[name] = loc;
-          return loc;
-      };
-
-      const origGetUniformLocation = gl.getUniformLocation;
-      gl.getUniformLocation = function(prog, name) {
-          if (!prog) return null;
-          if (!prog._uniformLocCache) prog._uniformLocCache = {};
-          if (prog._uniformLocCache[name] !== undefined) return prog._uniformLocCache[name];
-          const loc = origGetUniformLocation.call(this, prog, name);
-          if (loc) { loc._name = name; loc._prog = prog; }
-          prog._uniformLocCache[name] = loc;
-          return loc;
-      };
-
-      const origUseProgram = gl.useProgram;
-      gl.useProgram = function(prog) {
-          origUseProgram.apply(this, arguments);
-          gl._currentProgram = prog;
-          if (prog === window.modelProgram) prog._name = 'model';
-          if (prog === window.charProgram) prog._name = 'char';
-          if (!prog._uniformValues) prog._uniformValues = {};
-      };
-
-      function trackUniform(loc, value) {
-          if (loc && loc._name && loc._prog) loc._prog._uniformValues[loc._name] = value;
-      }
-
-      const origUniform1f = gl.uniform1f; gl.uniform1f = function(loc, v0) { origUniform1f.apply(this, arguments); trackUniform(loc, [v0]); };
-      const origUniform2f = gl.uniform2f; gl.uniform2f = function(loc, v0, v1) { origUniform2f.apply(this, arguments); trackUniform(loc, [v0, v1]); };
-      const origUniform3f = gl.uniform3f; gl.uniform3f = function(loc, v0, v1, v2) { origUniform3f.apply(this, arguments); trackUniform(loc, [v0, v1, v2]); };
-      const origUniform1i = gl.uniform1i; gl.uniform1i = function(loc, v0) { origUniform1i.apply(this, arguments); trackUniform(loc, [v0]); };
-      const origUniform3fv = gl.uniform3fv; gl.uniform3fv = function(loc, v) { origUniform3fv.apply(this, arguments); trackUniform(loc, v); };
-      const origUniformMatrix4fv = gl.uniformMatrix4fv; gl.uniformMatrix4fv = function(loc, trans, v) { origUniformMatrix4fv.apply(this, arguments); trackUniform(loc, v); };
-  }
+  isWebGL2 = true;
+  supportUint32 = true;
+  Graphics.webgl.isWebGL2 = true;
+  Graphics.webgl.supportUint32 = true;
 }
 
 
@@ -3395,16 +1251,6 @@ if (gl) {
         const h = Math.max(1, Math.round(window.innerHeight * scaleVal));
         canvas.width = w;
         canvas.height = h;
-        if (Graphics.webgpu && Graphics.webgpu.device && Graphics.webgpu.context) {
-          const device = Graphics.webgpu.device;
-          if (Graphics.webgpu.mainDepthTexture) Graphics.webgpu.mainDepthTexture.destroy();
-          Graphics.webgpu.mainDepthTexture = device.createTexture({
-            size: [w, h, 1],
-            format: 'depth24plus',
-            usage: GPUTextureUsage.RENDER_ATTACHMENT
-          });
-          Graphics.webgpu.mainDepthTextureView = Graphics.webgpu.mainDepthTexture.createView();
-        }
         if (glCanvas) {
           glCanvas.width = w;
           glCanvas.height = h;
@@ -3899,52 +1745,35 @@ window.cloud3DProgram = cloud3DProgram;
       let dummyColorTex = null;
       
       function computeShadowMapSize() {
-        if (typeof shadowMapQuality === "number" && shadowMapQuality > 0) {
-          if (shadowMapQuality === 1) return 1024; // Low: 1024x1024 (3x3 B-Spline)
-          return 1536; // Medium / High / Ultra: 1536x1536 with progressive Wide 5x5 Convolved B-Spline smoothing
-        }
-        return 1536;
+        const q = (typeof window !== "undefined" && typeof window.shadowMapQuality === "number")
+          ? window.shadowMapQuality
+          : (typeof shadowMapQuality === "number" ? shadowMapQuality : 2);
+        if (q <= 0) return 512;
+        if (q === 1) return 512;
+        if (q === 2) return 1024;
+        if (q === 3) return 1536;
+        if (q >= 4) return 2048;
+        return 1024;
       }
       let SHADOW_WIDTH = computeShadowMapSize();
       let SHADOW_HEIGHT = computeShadowMapSize();
 
       function initShadowMap() {
-        if (!isWebGL2) {
-          const ext = gl.getExtension("WEBGL_depth_texture");
-          if (!ext) {
-            console.error("WEBGL_depth_texture extension is not supported.");
-          }
-        }
-
         shadowFramebuffer = gl.createFramebuffer();
         shadowDepthTexture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture);
 
-        if (isWebGL2) {
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.DEPTH_COMPONENT24,
-            SHADOW_WIDTH,
-            SHADOW_HEIGHT,
-            0,
-            gl.DEPTH_COMPONENT,
-            gl.UNSIGNED_INT,
-            null,
-          );
-        } else {
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.DEPTH_COMPONENT,
-            SHADOW_WIDTH,
-            SHADOW_HEIGHT,
-            0,
-            gl.DEPTH_COMPONENT,
-            gl.UNSIGNED_INT,
-            null,
-          );
-        }
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.DEPTH_COMPONENT24,
+          SHADOW_WIDTH,
+          SHADOW_HEIGHT,
+          0,
+          gl.DEPTH_COMPONENT,
+          gl.UNSIGNED_INT,
+          null,
+        );
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -3960,33 +1789,27 @@ window.cloud3DProgram = cloud3DProgram;
           0,
         );
 
-        // Allocate 1x1 fallback color texture in WebGL2 (pure depth-only pass for maximum FPS)
-        dummyColorTex = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, dummyColorTex);
-        gl.texImage2D(
-          gl.TEXTURE_2D,
-          0,
-          gl.RGBA,
-          isWebGL2 ? 1 : SHADOW_WIDTH,
-          isWebGL2 ? 1 : SHADOW_HEIGHT,
-          0,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          null,
-        );
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        if (isWebGL2 && typeof gl.drawBuffers === "function") {
-          gl.drawBuffers([gl.NONE]);
-          gl.readBuffer(gl.NONE);
-        } else {
-          gl.framebufferTexture2D(
-            gl.FRAMEBUFFER,
-            gl.COLOR_ATTACHMENT0,
+        // WebGL 2 pure depth-only framebuffer (no color attachment required for depth passes)
+        gl.drawBuffers([gl.NONE]);
+        gl.readBuffer(gl.NONE);
+
+        // Allocate a 1x1 fallback texture for shader sampler bindings expecting an active texture
+        if (!dummyColorTex) {
+          dummyColorTex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, dummyColorTex);
+          gl.texImage2D(
             gl.TEXTURE_2D,
-            dummyColorTex,
             0,
+            gl.RGBA,
+            1,
+            1,
+            0,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            new Uint8Array([255, 255, 255, 255]),
           );
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         }
 
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
@@ -4004,45 +1827,17 @@ window.cloud3DProgram = cloud3DProgram;
         if (!shadowDepthTexture || !shadowFramebuffer) return;
 
         gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture);
-        if (isWebGL2) {
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.DEPTH_COMPONENT24,
-            SHADOW_WIDTH,
-            SHADOW_HEIGHT,
-            0,
-            gl.DEPTH_COMPONENT,
-            gl.UNSIGNED_INT,
-            null,
-          );
-        } else {
-          gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.DEPTH_COMPONENT,
-            SHADOW_WIDTH,
-            SHADOW_HEIGHT,
-            0,
-            gl.DEPTH_COMPONENT,
-            gl.UNSIGNED_INT,
-            null,
-          );
-          if (dummyColorTex) {
-            gl.bindTexture(gl.TEXTURE_2D, dummyColorTex);
-            gl.texImage2D(
-              gl.TEXTURE_2D,
-              0,
-              gl.RGBA,
-              SHADOW_WIDTH,
-              SHADOW_HEIGHT,
-              0,
-              gl.RGBA,
-              gl.UNSIGNED_BYTE,
-              null,
-            );
-          }
-        }
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.DEPTH_COMPONENT24,
+          SHADOW_WIDTH,
+          SHADOW_HEIGHT,
+          0,
+          gl.DEPTH_COMPONENT,
+          gl.UNSIGNED_INT,
+          null,
+        );
       };
 
 
@@ -4058,20 +1853,21 @@ window.cloud3DProgram = cloud3DProgram;
       let fxaaCopyWidth = 0;
       let fxaaCopyHeight = 0;
 
-      const fxaaVS = `
-        attribute vec2 aPosition;
-        varying vec2 vUv;
+      const fxaaVS = `#version 300 es
+        in vec2 aPosition;
+        out vec2 vUv;
         void main() {
           vUv = aPosition * 0.5 + 0.5;
           gl_Position = vec4(aPosition, 0.0, 1.0);
         }
       `;
 
-      const fxaaFS = `
+      const fxaaFS = `#version 300 es
         precision highp float;
-        varying vec2 vUv;
+        in vec2 vUv;
         uniform sampler2D uTexture;
         uniform vec2 uResolution;
+        out vec4 fragColor;
 
         #define FXAA_REDUCE_MIN   (1.0 / 128.0)
         #define FXAA_REDUCE_MUL   (1.0 / 8.0)
@@ -4079,11 +1875,11 @@ window.cloud3DProgram = cloud3DProgram;
 
         void main() {
           vec2 inverseVP = 1.0 / uResolution;
-          vec3 rgbNW = texture2D(uTexture, vUv + vec2(-1.0, -1.0) * inverseVP).rgb;
-          vec3 rgbNE = texture2D(uTexture, vUv + vec2( 1.0, -1.0) * inverseVP).rgb;
-          vec3 rgbSW = texture2D(uTexture, vUv + vec2(-1.0,  1.0) * inverseVP).rgb;
-          vec3 rgbSE = texture2D(uTexture, vUv + vec2( 1.0,  1.0) * inverseVP).rgb;
-          vec3 rgbM  = texture2D(uTexture, vUv).rgb;
+          vec3 rgbNW = texture(uTexture, vUv + vec2(-1.0, -1.0) * inverseVP).rgb;
+          vec3 rgbNE = texture(uTexture, vUv + vec2( 1.0, -1.0) * inverseVP).rgb;
+          vec3 rgbSW = texture(uTexture, vUv + vec2(-1.0,  1.0) * inverseVP).rgb;
+          vec3 rgbSE = texture(uTexture, vUv + vec2( 1.0,  1.0) * inverseVP).rgb;
+          vec3 rgbM  = texture(uTexture, vUv).rgb;
 
           vec3 luma = vec3(0.299, 0.587, 0.114);
           float lumaNW = dot(rgbNW, luma);
@@ -4104,19 +1900,19 @@ window.cloud3DProgram = cloud3DProgram;
           dir = min(vec2(FXAA_SPAN_MAX, FXAA_SPAN_MAX), max(vec2(-FXAA_SPAN_MAX, -FXAA_SPAN_MAX), dir * rcpDirMin)) * inverseVP;
 
           vec3 rgbA = 0.5 * (
-            texture2D(uTexture, vUv + dir * (1.0 / 3.0 - 0.5)).rgb +
-            texture2D(uTexture, vUv + dir * (2.0 / 3.0 - 0.5)).rgb
+            texture(uTexture, vUv + dir * (1.0 / 3.0 - 0.5)).rgb +
+            texture(uTexture, vUv + dir * (2.0 / 3.0 - 0.5)).rgb
           );
           vec3 rgbB = rgbA * 0.5 + 0.25 * (
-            texture2D(uTexture, vUv + dir * -0.5).rgb +
-            texture2D(uTexture, vUv + dir *  0.5).rgb
+            texture(uTexture, vUv + dir * -0.5).rgb +
+            texture(uTexture, vUv + dir *  0.5).rgb
           );
 
           float lumaB = dot(rgbB, luma);
           if ((lumaB < lumaMin) || (lumaB > lumaMax)) {
-            gl_FragColor = vec4(rgbA, 1.0);
+            fragColor = vec4(rgbA, 1.0);
           } else {
-            gl_FragColor = vec4(rgbB, 1.0);
+            fragColor = vec4(rgbB, 1.0);
           }
         }
       `;
@@ -4525,10 +2321,18 @@ window.cloud3DProgram = cloud3DProgram;
       let activeBoatNormalBuffer = null;
       let activeBoatIndexBuffer = null;
       let activeBoatIndicesLength = 0;
+      let activeBoatUpdatedFrame = -1;
+      let currentRenderFrameId = 0;
 
-      function drawDedicatedActiveBoat(gl, posLoc, colorLoc, normalLoc) {
+      function updateDedicatedActiveBoatBuffers(gl) {
+        if (activeBoatUpdatedFrame === currentRenderFrameId) return;
+        activeBoatUpdatedFrame = currentRenderFrameId;
+
         const boat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
-        if (!boat || !boat.position) return;
+        if (!boat || !boat.position) {
+          activeBoatIndicesLength = 0;
+          return;
+        }
 
         if (!activeBoatVBO) {
           activeBoatVBO = gl.createBuffer();
@@ -4562,36 +2366,58 @@ window.cloud3DProgram = cloud3DProgram;
 
         gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatVBO);
         gl.bufferData(gl.ARRAY_BUFFER, flat.vertices, gl.DYNAMIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, flat.colors, gl.DYNAMIC_DRAW);
+
+        if (activeBoatNormalBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatNormalBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, flat.normals, gl.DYNAMIC_DRAW);
+        }
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBoatIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, flat.indices, gl.DYNAMIC_DRAW);
+      }
+
+      function drawDedicatedActiveBoat(gl, posLoc, colorLoc, normalLoc) {
+        updateDedicatedActiveBoatBuffers(gl);
+        if (!activeBoatVBO || !activeBoatIndexBuffer || activeBoatIndicesLength <= 0) return;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatVBO);
         gl.enableVertexAttribArray(posLoc);
         gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatColorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, flat.colors, gl.DYNAMIC_DRAW);
         gl.enableVertexAttribArray(colorLoc);
         gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
 
         if (normalLoc !== -1 && activeBoatNormalBuffer) {
           gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatNormalBuffer);
-          gl.bufferData(gl.ARRAY_BUFFER, flat.normals, gl.DYNAMIC_DRAW);
           gl.enableVertexAttribArray(normalLoc);
           gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
         }
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBoatIndexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, flat.indices, gl.DYNAMIC_DRAW);
-
-        const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && activeBoatIndicesLength > 65535;
+        const isUint32 = activeBoatIndicesLength > 65535;
         gl.drawElements(gl.TRIANGLES, activeBoatIndicesLength, isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
       }
       window.drawDedicatedActiveBoat = drawDedicatedActiveBoat;
 
       function drawDedicatedActiveBoatShadow(gl, depthPosLoc) {
+        updateDedicatedActiveBoatBuffers(gl);
         if (!activeBoatVBO || !activeBoatIndexBuffer || activeBoatIndicesLength <= 0) return;
+        gl.uniform1f(depthSwayFactorLoc, 0.0);
+        gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
+        gl.uniformMatrix4fv(depthModelLoc, false, f32_identity);
+        if (typeof depthColorLoc !== "undefined" && depthColorLoc >= 0) {
+          gl.disableVertexAttribArray(depthColorLoc);
+          gl.vertexAttrib3f(depthColorLoc, 0.0, 0.0, 0.0);
+        }
         gl.bindBuffer(gl.ARRAY_BUFFER, activeBoatVBO);
         gl.enableVertexAttribArray(depthPosLoc);
         gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBoatIndexBuffer);
-        const isUint32 = (typeof supportUint32 !== 'undefined' && supportUint32) && activeBoatIndicesLength > 65535;
+        const isUint32 = activeBoatIndicesLength > 65535;
         gl.drawElements(gl.TRIANGLES, activeBoatIndicesLength, isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
       }
       window.drawDedicatedActiveBoatShadow = drawDedicatedActiveBoatShadow;
@@ -5422,7 +3248,7 @@ window.cloud3DProgram = cloud3DProgram;
               ux, uy, uz,
               RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE
             );
-            const waterRadius_sync = RADIUS + waterLevel * 0.15;
+            const waterRadius_sync = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
             if (waterEnabled && terrainRadius_sync < waterRadius_sync) {
               const targetSwimRadius_sync =
                 waterRadius_sync +
@@ -5450,14 +3276,16 @@ window.cloud3DProgram = cloud3DProgram;
         let nz = sinTheta * sinPhi;
         let localUp = [nx, ny, nz];
 
-        let charHeight = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+        let charHeight = (typeof getVisualHeightOnSphere === "function") 
+          ? getVisualHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0))
+          : getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
         const charScale = playerScale;
 
         const mechOffset = typeof window.mechSeatOffset !== "undefined" ? window.mechSeatOffset : 0.71;
         let feetRadiusBefore = (playerCenterRadius !== null) ? (playerCenterRadius - (activeRidingMech ? mechOffset : 0.46 * charScale)) : (RADIUS + charHeight * HEIGHT_SCALE);
         const caveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore) : { ground: RADIUS + charHeight * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
         let terrainRadius = caveData.ground;
-        const waterRadius = RADIUS + waterLevel * 0.15;
+        const waterRadius = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
         let wRadiusLocal = getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore);
         if (caveData.insideTunnel && wRadiusLocal === 0) {
             wRadiusLocal = waterRadius;
@@ -8273,7 +6101,7 @@ if (prompt._lastHTML !== _newHtml_6) {
                       activeRidingBoat.isDynamic = true;
                       pendingCollectibleRefresh = true;
                       if (typeof refreshCollectiblesVBO === "function") {
-                        refreshCollectiblesVBO('dynamic');
+                        refreshCollectiblesVBO('all');
                       }
                       // Teleport player to the boat's exact position on boarding so the boat doesn't jump
                       if (activeRidingBoat.position) {
@@ -9010,21 +6838,17 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         window.gpuViewProj = f32_gpuViewProj;
         window.invViewProj = f32_invViewProj;
         
+        currentRenderFrameId++;
         if (shadowMapEnabled) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
           gl.viewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-          if (isWebGL2) {
-            gl.clear(gl.DEPTH_BUFFER_BIT);
-          } else {
-            gl.clearColor(1.0, 1.0, 1.0, 1.0);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-          }
+          gl.clear(gl.DEPTH_BUFFER_BIT);
 
           gl.enable(gl.DEPTH_TEST);
           gl.disable(gl.BLEND);
           gl.disable(gl.CULL_FACE); // Draw both faces into shadow map to prevent missing shadows from wrong windings
           gl.enable(gl.POLYGON_OFFSET_FILL);
-          gl.polygonOffset(2.0, 4.0);
+          gl.polygonOffset(0.25, 0.6);
 
           gl.useProgram(depthProgram);
         gl.uniformMatrix4fv(
@@ -9050,7 +6874,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enableVertexAttribArray(depthPosLoc);
           gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
-          const isUint32 = supportUint32 && cubeIndicesLength > 65535;
+          const isUint32 = cubeIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
           const bytesPerIndex = isUint32 ? 4 : 2;
 
@@ -9121,6 +6945,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             eyePos,
             renderDistValue: curObjectDist
           });
+          if (depthColorLoc >= 0) {
+            gl.disableVertexAttribArray(depthColorLoc);
+            gl.vertexAttrib3f(depthColorLoc, 0.0, 0.0, 0.0);
+          }
         }
 
         // Collectibles to depth (Cull by object render distance)
@@ -9140,7 +6968,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enableVertexAttribArray(depthPosLoc);
           gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
-          const isUint32 = supportUint32 && collectibleIndicesLength > 65535;
+          const isUint32 = collectibleIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
           const bytesPerIndex = isUint32 ? 4 : 2;
 
@@ -9169,7 +6997,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enableVertexAttribArray(depthPosLoc);
           gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dynamicCollectibleIndexBuffer);
-          const isUint32 = supportUint32 && dynamicCollectibleIndicesLength > 65535;
+          const isUint32 = dynamicCollectibleIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
 
           gl.drawElements(
@@ -9214,7 +7042,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.enableVertexAttribArray(depthPosLoc);
             gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, amphibianIndexBuffer);
-            if (supportUint32 && amphibianIndicesLength > 65535) {
+            if (amphibianIndicesLength > 65535) {
                gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_INT, 0);
             } else {
                gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -9251,7 +7079,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.enableVertexAttribArray(depthPosLoc);
             gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, fireIndexBuffer);
-            if (supportUint32 && fireIndicesLength > 65535) {
+            if (fireIndicesLength > 65535) {
                gl.drawElements(gl.TRIANGLES, fireIndicesLength, gl.UNSIGNED_INT, 0);
             } else {
                gl.drawElements(gl.TRIANGLES, fireIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -9273,7 +7101,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enableVertexAttribArray(depthPosLoc);
           gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
-          if (supportUint32 && charIndicesLength > 65535) {
+          if (charIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               charIndicesLength,
@@ -9310,7 +7138,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enableVertexAttribArray(depthPosLoc);
           gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
-          if (supportUint32 && equipIndicesLength > 65535) {
+          if (equipIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               equipIndicesLength,
@@ -9392,7 +7220,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyIndexBuffer);
 
-            if (supportUint32 && skyIndicesLength > 65535) {
+            if (skyIndicesLength > 65535) {
               gl.drawElements(gl.TRIANGLES, skyIndicesLength, gl.UNSIGNED_INT, 0);
             } else {
               gl.drawElements(
@@ -9476,7 +7304,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.frontFace(gl.CW);
             gl.cullFace(gl.BACK);
 
-            if (supportUint32 && satLen > 65535) {
+            if (satLen > 65535) {
               gl.drawElements(gl.TRIANGLES, satLen, gl.UNSIGNED_INT, 0);
             } else {
               gl.drawElements(gl.TRIANGLES, satLen, gl.UNSIGNED_SHORT, 0);
@@ -9555,7 +7383,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 setF32(f32_modelViewMatrix, epMV);
                 gl.uniformMatrix4fv(mvLoc, false, f32_modelViewMatrix);
 
-                if (supportUint32 && epMesh.indicesLength > 65535) {
+                if (epMesh.indicesLength > 65535) {
                   gl.drawElements(gl.TRIANGLES, epMesh.indicesLength, gl.UNSIGNED_INT, 0);
                 } else {
                   gl.drawElements(gl.TRIANGLES, epMesh.indicesLength, gl.UNSIGNED_SHORT, 0);
@@ -10340,7 +8168,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               setF32(f32_charModelMatrix, charModelMatrix),
             );
 
-            if (supportUint32 && charIndicesLength > 65535) {
+            if (charIndicesLength > 65535) {
               gl.drawElements(
                 gl.TRIANGLES,
                 charIndicesLength,
@@ -10616,7 +8444,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 // Reflection inverts vertex winding order!
                 gl.frontFace(gl.CW);
 
-                if (supportUint32 && charIndicesLength > 65535) {
+                if (charIndicesLength > 65535) {
                   gl.drawElements(gl.TRIANGLES, charIndicesLength, gl.UNSIGNED_INT, 0);
                 } else {
                   gl.drawElements(gl.TRIANGLES, charIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -10661,7 +8489,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   
                   gl.disable(gl.CULL_FACE);
 
-                  if (supportUint32 && cubeIndicesLength > 65535) {
+                  if (cubeIndicesLength > 65535) {
                     gl.drawElements(gl.TRIANGLES, cubeIndicesLength, gl.UNSIGNED_INT, 0);
                   } else {
                     gl.drawElements(gl.TRIANGLES, cubeIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -10748,7 +8576,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   gl.frontFace(gl.CCW);
                   gl.cullFace(gl.BACK);
 
-                  if (supportUint32 && amphibianIndicesLength > 65535) {
+                  if (amphibianIndicesLength > 65535) {
                     gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_INT, 0);
                   } else {
                     gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -10789,7 +8617,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
                   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, fireIndexBuffer);
 
-                  if (supportUint32 && fireIndicesLength > 65535) {
+                  if (fireIndicesLength > 65535) {
                     gl.drawElements(gl.TRIANGLES, fireIndicesLength, gl.UNSIGNED_INT, 0);
                   } else {
                     gl.drawElements(gl.TRIANGLES, fireIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -10871,7 +8699,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
 
-          const isUint32 = supportUint32 && cubeIndicesLength > 65535;
+          const isUint32 = cubeIndicesLength > 65535;
           if (frustumCullingEnabled && frustumPlanes) {
             const ranges = getVisibleIndexRanges(cubeObstacles, frustumPlanes);
             const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
@@ -10979,7 +8807,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, hitboxIndexBuffer);
 
-          if (supportUint32 && hitboxIndicesLength > 65535) {
+          if (hitboxIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               hitboxIndicesLength,
@@ -11068,7 +8896,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
-            const isUint32 = supportUint32 && collectibleIndicesLength > 65535;
+            const isUint32 = collectibleIndicesLength > 65535;
             if (isUint32) {
               gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_INT, 0);
             } else {
@@ -11093,7 +8921,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dynamicCollectibleIndexBuffer);
-            const isUint32Dynamic = supportUint32 && dynamicCollectibleIndicesLength > 65535;
+            const isUint32Dynamic = dynamicCollectibleIndicesLength > 65535;
             if (frustumCullingEnabled && frustumPlanes && window.dynamicCollectiblesList && window.dynamicCollectiblesList.length > 0) {
               const ranges = getVisibleIndexRanges(window.dynamicCollectiblesList, frustumPlanes);
               const type = isUint32Dynamic ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
@@ -11167,7 +8995,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, previewIndexBuffer);
-          if (supportUint32 && previewIndicesLength > 65535) {
+          if (previewIndicesLength > 65535) {
             gl.drawElements(gl.TRIANGLES, previewIndicesLength, gl.UNSIGNED_INT, 0);
           } else {
             gl.drawElements(gl.TRIANGLES, previewIndicesLength, gl.UNSIGNED_SHORT, 0);
@@ -11246,7 +9074,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
 
-          if (supportUint32 && equipIndicesLength > 65535) {
+          if (equipIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               equipIndicesLength,
@@ -11329,7 +9157,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, amphibianIndexBuffer);
-          if (supportUint32 && amphibianIndicesLength > 65535) {
+          if (amphibianIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               amphibianIndicesLength,
@@ -11403,7 +9231,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, fireIndexBuffer);
-          if (supportUint32 && fireIndicesLength > 65535) {
+          if (fireIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               fireIndicesLength,
@@ -11848,7 +9676,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, atmosphereIndexBuffer);
 
-          if (supportUint32 && atmosphereIndicesLength > 65535) {
+          if (atmosphereIndicesLength > 65535) {
             gl.drawElements(
               gl.TRIANGLES,
               atmosphereIndicesLength,

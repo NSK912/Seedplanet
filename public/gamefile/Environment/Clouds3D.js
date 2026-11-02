@@ -113,11 +113,10 @@
         });
     }
     
-    const useUint32 = typeof supportUint32 !== 'undefined' ? supportUint32 : (typeof global.supportUint32 !== 'undefined' ? global.supportUint32 : false);
     return {
         vertices: new Float32Array(vertices),
         localPos: new Float32Array(localPositions),
-        indices: (useUint32 && indices.length > 65535) ? new Uint32Array(indices) : new Uint16Array(indices),
+        indices: (indices.length > 65535) ? new Uint32Array(indices) : new Uint16Array(indices),
         chunks: cloudChunks
     };
   }

@@ -117,7 +117,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- Version Info -->
           <div style="color: #64748b; font-size: 12px; font-weight: 500; font-family: 'Google Sans', sans-serif; margin-left: 8px;">
             <span style="font-weight: 700; margin-right: 4px;">NSK App</span>
-            ver 2.0.13
+            ver 2.0.14
           </div>
         </div>
       </div>
@@ -997,7 +997,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               type="range"
               id="shadowMapQualitySlider"
               style="width: 100%; cursor: pointer; accent-color: #dfb76c"
-              min="1"
+              min="0"
               max="4"
               value="2"
               step="1"
@@ -3558,7 +3558,9 @@ window.addEventListener("keyup", (e) => {
         document.getElementById("shadowMapQualitySlider")?.addEventListener("input", (e) => {
           const val = parseInt(e.target.value);
           shadowMapQuality = val;
-          shadowMapEnabled = true;
+          shadowMapEnabled = (val > 0);
+          window.shadowMapQuality = val;
+          window.shadowMapEnabled = shadowMapEnabled;
           updateShadowMapUI();
           if (typeof window.resizeShadowMap === 'function') window.resizeShadowMap();
           if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
