@@ -53,7 +53,6 @@
       if (batchStart !== -1 && batchCount > 0) {
         gl.drawElements(gl.TRIANGLES, batchCount, type, batchStart * bytesPerIndex);
       }
-      gl.enable(gl.CULL_FACE);
     }
   }
 

@@ -30,7 +30,7 @@ window.characterVertexShaderSource = `#version 300 es
                 vec4 worldPos = uModelMatrix * vec4(aPosition, 1.0);
                 vWorldNormal = normalize(mat3(uModelMatrix) * aNormal);
                 vWorldPos = worldPos.xyz;
-                vPositionLightSpace = uLightSpaceMatrix * vec4(worldPos.xyz + vWorldNormal * 0.002, 1.0);
+                vPositionLightSpace = uLightSpaceMatrix * vec4(worldPos.xyz, 1.0);
             }
         `;
 
@@ -46,7 +46,7 @@ window.characterVertexShaderSource = `#version 300 es
             in vec2 vTexCoord;
             uniform vec3 uLightDir;
             uniform vec3 uCameraPos;
-            uniform sampler2D uShadowMap;
+            uniform highp sampler2DShadow uShadowMap;
             
             uniform float uWaterRadius;
             uniform vec3 uWaterColor;
@@ -94,18 +94,7 @@ window.characterVertexShaderSource = `#version 300 es
                 vec3 viewDir = normalize(uCameraPos - vWorldPos);
                 vec3 lightDir = normalize(uLightDir);
                 
-                float diffuseVal = max(dot(normal, lightDir), 0.0);
-                
-                // Shadow
-                float planetHorizon = smoothstep(-0.08, 0.06, dot(normalize(vWorldPos), lightDir));
-                float shadow = 0.0;
-                if (diffuseVal > 0.001 && planetHorizon > 0.001) {
-                    shadow = calculateShadow(vPositionLightSpace, normal, lightDir) * planetHorizon;
-                }
-                float lit = mix(0.3, 1.0, shadow);
-                float diffuse = diffuseVal * lit * 0.75 + 0.25;
-                
-                // Character does not reflect light (matte surface, no specular or fresnel reflection)
+                // Character base color
                 vec3 baseColor = vColor;
                 if (uHasMainTex > 0.5) {
                     baseColor = texture(uMainTex, vTexCoord).rgb;
@@ -280,7 +269,7 @@ window.characterVertexShaderSource = `#version 300 es
                         }
                     }
                 }
-                vec3 baseLit = baseColor * diffuse;
+                vec3 baseLit = calculateUnifiedLighting(baseColor, normal, vWorldPos, lightDir, vPositionLightSpace, false);
                 vec3 addedCharLight = baseColor * pointLightAccum + pointTintAccum;
                 vec3 finalColor = clamp(baseLit + addedCharLight * (1.0 - baseLit * 0.55), 0.0, 1.0);
 

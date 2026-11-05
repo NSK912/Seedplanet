@@ -253,9 +253,9 @@ window.ItemRegistry["wood_roof"] = {
 
         const shadeNoise = pRand(seedVal + i * 19.3);
         const plankColor = [
-          rCol * (0.85 + shadeNoise * 0.28),
-          gCol * (0.85 + shadeNoise * 0.28),
-          bCol * (0.85 + shadeNoise * 0.28)
+          rCol * (0.94 + shadeNoise * 0.12),
+          gCol * (0.94 + shadeNoise * 0.12),
+          bCol * (0.94 + shadeNoise * 0.12)
         ];
 
         addBox(plankCenter, effW, plankThick, plankLen, plankColor, roofR, normSlope, dirSlope, vertices, colors, indices);

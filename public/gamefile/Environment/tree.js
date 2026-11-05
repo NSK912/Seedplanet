@@ -199,12 +199,14 @@
       if (locs.uShadowMapLoc) gl.uniform1i(locs.uShadowMapLoc, 1);
       if (locs.uWaterMaskLoc) gl.uniform1i(locs.uWaterMaskLoc, 2);
       if (locs.uShadowsEnabledLoc) {
-        gl.uniform1f(locs.uShadowsEnabledLoc, 0.0);
+        const sVal = (opts.shadowMapEnabled !== false) ? 2.0 : 0.0;
+        gl.uniform1f(locs.uShadowsEnabledLoc, sVal);
       }
       if (locs.uShadowTexelSizeLoc) {
         const sw = opts.shadowWidth || global.SHADOW_WIDTH || 1024;
         const sh = opts.shadowHeight || global.SHADOW_HEIGHT || 1024;
-        gl.uniform2f(locs.uShadowTexelSizeLoc, 1.0 / sw, 1.0 / sh);
+        const tBias = opts.shadowTexelDepthBias || global.shadowTexelDepthBias || (typeof window !== "undefined" && window.shadowTexelDepthBias) || (1.0 / sh);
+        gl.uniform2f(locs.uShadowTexelSizeLoc, 1.0 / sw, tBias);
       }
     }
 

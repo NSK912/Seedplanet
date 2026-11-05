@@ -146,16 +146,7 @@
                 vViewPos = mvPosition.xyz;
                 vWorldPos = pos;
                 vec3 nWorld = normalize(vWorldNormal);
-                vec3 radialUp = length(pos) > 0.001 ? normalize(pos) : vec3(0.0, 1.0, 0.0);
-                vec3 lDir = length(uLightDir) > 0.001 ? normalize(uLightDir) : radialUp;
-                float cosTheta = clamp(dot(nWorld, lDir), 0.0, 1.0);
-                float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-                // Pure normal offset (5.5mm - 12.0mm) along surface normal:
-                // Shifts receiver outward along N to eliminate self-shadow acne on all tilted/sloped surfaces
-                // without pushing depth along the light ray into interior ceilings or rafters.
-                float normalOffset = isGrass ? 0.0 : (0.0055 + 0.0065 * sinTheta);
-                vec3 shadowPos = pos + nWorld * normalOffset;
-                vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
+                vPositionLightSpace = uLightSpaceMatrix * vec4(pos, 1.0);
                 vDist = length(mvPosition.xyz);
             }
         `;
@@ -172,7 +163,7 @@
             in float vDist;
             in float vIsGrass;
             uniform vec3 uLightDir;
-            uniform sampler2D uShadowMap;
+            uniform highp sampler2DShadow uShadowMap;
             
             uniform float uRenderDistEnabled;
             uniform float uMaxRenderDist;
@@ -196,97 +187,26 @@
             out vec4 fragColor;
 
             ${window.SHARED_SHADOW_GLSL = `
+            uniform mat4 uLightSpaceMatrix;
             float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
                 if (uShadowsEnabled < 0.5) return 1.0;
-                vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-                projCoords = projCoords * 0.5 + 0.5;
-                
-                if (projCoords.z > 1.0 || projCoords.z < 0.0) return 1.0;
-                if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
+                vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
+                if (projCoords.z > 1.0 || projCoords.z < 0.0 ||
+                    projCoords.x < 0.0 || projCoords.x > 1.0 ||
+                    projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
 
-                float borderDist = max(abs(projCoords.x - 0.5), abs(projCoords.y - 0.5));
-                float edgeFade = 1.0 - smoothstep(0.45, 0.495, borderDist);
-                if (edgeFade <= 0.001) return 1.0;
-
-                vec2 texelSize = (uShadowTexelSize.x > 0.0) ? uShadowTexelSize : vec2(1.0 / 1536.0);
-                float currentDepth = projCoords.z;
-
-                vec3 lDir = length(lightDir) > 0.001 ? normalize(lightDir) : vec3(0.0, 1.0, 0.0);
-                float cosTheta = clamp(dot(normal, lDir), 0.0, 1.0);
+                vec3 L = normalize(lightDir);
+                float cosTheta = max(dot(normal, L), 0.0);
+                if (cosTheta <= 0.0) return 0.0;
                 float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
 
-                // Calibrated Micro-Depth Bias:
-                // Because Normal Offset in the vertex shader eliminates self-shadow acne on the surface,
-                // the scalar depth bias here only needs to cover ~6mm, ensuring zero Peter Panning / zero light leaks
-                // even on thin 18mm boards, ceilings, and plank seams.
-                float tanTheta = min(sinTheta / max(cosTheta, 0.12), 3.5);
-                float slopeBias = min(tanTheta * texelSize.x * 0.45, 0.00022);
-                float bias = 0.00006 + 0.00003 * sinTheta + slopeBias;
+                vec2 lightNormalXY = (uLightSpaceMatrix * vec4(normal, 0.0)).xy;
+                vec2 nDirXY = length(lightNormalXY) > 0.0 ? normalize(lightNormalXY) : vec2(0.0);
 
-                vec2 res = 1.0 / texelSize;
-                vec2 st = projCoords.xy * res;
-                vec2 baseIdx = floor(st);
-                vec2 f = fract(st);
-                vec2 centerUv = (baseIdx + 0.5) * texelSize;
-
-                float depthCenter = texture(uShadowMap, centerUv).r;
-                float c00 = step(currentDepth - bias, depthCenter);
-
-                float d_m1m1 = texture(uShadowMap, centerUv + vec2(-texelSize.x, -texelSize.y)).r;
-                float d_p1m1 = texture(uShadowMap, centerUv + vec2( texelSize.x, -texelSize.y)).r;
-                float d_m1p1 = texture(uShadowMap, centerUv + vec2(-texelSize.x,  texelSize.y)).r;
-                float d_p1p1 = texture(uShadowMap, centerUv + vec2( texelSize.x,  texelSize.y)).r;
-
-                if (c00 < 0.5) {
-                    float maxOccludedDepth = depthCenter + 0.0010;
-                    d_m1m1 = min(d_m1m1, maxOccludedDepth);
-                    d_p1m1 = min(d_p1m1, maxOccludedDepth);
-                    d_m1p1 = min(d_m1p1, maxOccludedDepth);
-                    d_p1p1 = min(d_p1p1, maxOccludedDepth);
-                }
-
-                float cm1m1 = step(currentDepth - bias, d_m1m1);
-                float cp1m1 = step(currentDepth - bias, d_p1m1);
-                float cm1p1 = step(currentDepth - bias, d_m1p1);
-                float cp1p1 = step(currentDepth - bias, d_p1p1);
-
-                float earlySum5 = c00 + cm1m1 + cp1m1 + cm1p1 + cp1p1;
-                if (earlySum5 > 4.99) return 1.0;
-                if (earlySum5 < 0.01) return 1.0 - edgeFade;
-
-                float d_0m1 = texture(uShadowMap, centerUv + vec2( 0.0,         -texelSize.y)).r;
-                float d_m10 = texture(uShadowMap, centerUv + vec2(-texelSize.x,  0.0        )).r;
-                float d_p10 = texture(uShadowMap, centerUv + vec2( texelSize.x,  0.0        )).r;
-                float d_0p1 = texture(uShadowMap, centerUv + vec2( 0.0,          texelSize.y)).r;
-
-                if (c00 < 0.5) {
-                    float maxOccludedDepth = depthCenter + 0.0022;
-                    d_0m1 = min(d_0m1, maxOccludedDepth);
-                    d_m10 = min(d_m10, maxOccludedDepth);
-                    d_p10 = min(d_p10, maxOccludedDepth);
-                    d_0p1 = min(d_0p1, maxOccludedDepth);
-                }
-
-                float c0m1 = step(currentDepth - bias, d_0m1);
-                float cm10 = step(currentDepth - bias, d_m10);
-                float cp10 = step(currentDepth - bias, d_p10);
-                float c0p1 = step(currentDepth - bias, d_0p1);
-
-                vec3 wx = vec3(
-                    0.5 * (1.0 - f.x) * (1.0 - f.x),
-                    0.75 - (f.x - 0.5) * (f.x - 0.5),
-                    0.5 * f.x * f.x
-                );
-                vec3 wy = vec3(
-                    0.5 * (1.0 - f.y) * (1.0 - f.y),
-                    0.75 - (f.y - 0.5) * (f.y - 0.5),
-                    0.5 * f.y * f.y
-                );
-                float row0 = wx.x * cm1m1 + wx.y * c0m1 + wx.z * cp1m1;
-                float row1 = wx.x * cm10  + wx.y * c00  + wx.z * cp10;
-                float row2 = wx.x * cm1p1 + wx.y * c0p1 + wx.z * cp1p1;
-                float shadow = wy.x * row0 + wy.y * row1 + wy.z * row2;
-                return mix(1.0, shadow, edgeFade);
+                float kernelRadius = length(vec2(1.0, 1.0));
+                vec2 uvOffset = nDirXY * (sinTheta * kernelRadius * uShadowTexelSize.x);
+                float depthBias = uShadowTexelSize.y * (1.0 + cosTheta * kernelRadius);
+                return texture(uShadowMap, vec3(projCoords.xy + uvOffset, projCoords.z - depthBias));
             }
 
             uniform vec4 uPointLightOccluders[72];
@@ -337,6 +257,29 @@
                 }
                 return vis;
             }
+
+            // --- Unified Single Lighting Function for All Shaders ---
+            vec3 calculateUnifiedLighting(
+                vec3 baseColor,
+                vec3 worldNormal,
+                vec3 worldPos,
+                vec3 lightDir,
+                vec4 lightSpacePos,
+                bool isGrass
+            ) {
+                if (uShadowsEnabled < 0.5) {
+                    return baseColor;
+                }
+                vec3 N = normalize(worldNormal);
+                vec3 L = length(lightDir) > 0.001 ? normalize(lightDir) : vec3(0.0, 1.0, 0.0);
+                float nDotL = max(dot(N, L), 0.0);
+                float shadow = (nDotL > 0.0) ? calculateShadow(lightSpacePos, N, L) : 0.0;
+                float diffuse = 0.40 + nDotL * shadow * 0.60;
+                if (isGrass) {
+                    diffuse = max(diffuse, mix(0.40, 0.65, shadow));
+                }
+                return baseColor * diffuse;
+            }
             `}
 
             void main() {
@@ -344,37 +287,14 @@
                     discard;
                 }
                 vec3 normal = normalize(vWorldNormal);
-                vec3 lightDir = normalize(uLightDir);
-                vec3 radialUp = normalize(vWorldPos);
-                
-                // Diffuse with smooth grazing-angle terminator to prevent oblique shadow artifacts
-                float rawDiffuse = max(dot(normal, lightDir), 0.0);
-                float grazingTerminator = smoothstep(0.01, 0.12, rawDiffuse);
-                float planetHorizon = smoothstep(-0.08, 0.06, dot(radialUp, lightDir));
-                float diffuseVal = rawDiffuse * grazingTerminator;
-                
-                // Shadow (skip texture lookups for grass and unlit back-faces)
-                float shadow = 0.0;
-                if (vIsGrass < 0.5 && diffuseVal > 0.001 && planetHorizon > 0.001) {
-                    shadow = calculateShadow(vPositionLightSpace, normal, lightDir) * planetHorizon;
-                }
-                float hemi = clamp(dot(normal, radialUp) * 0.5 + 0.5, 0.0, 1.0);
-                float ambient = 0.22 + 0.06 * hemi;
-                float diffuse = ambient + diffuseVal * shadow * 0.72;
-                
-                // Specular
+                vec3 lightDir = length(uLightDir) > 0.001 ? normalize(uLightDir) : vec3(0.0, 1.0, 0.0);
                 vec3 viewDir = normalize(uCameraPos - vWorldPos);
                 vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(dot(normal, halfDir), 0.0), 16.0) * 0.25 * shadow;
+                float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+                float spec = pow(max(dot(normal, halfDir), 0.0), 16.0);
+                float diffuseVal = max(dot(normal, lightDir), 0.0);
                 
-                // Fresnel
-                float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.15 * (0.15 + 0.85 * shadow);
-                
-                vec3 finalColor = vColor * diffuse + vec3(1.0) * spec + vec3(0.95, 0.97, 1.0) * fresnel;
-                 if (vIsGrass > 0.5) {
-                     // Grass is slightly brighter and doesn't get fully shadowed to stand out
-                     finalColor = vColor * diffuseVal * 1.2 + vec3(0.1, 0.2, 0.05);
-                 }
+                vec3 finalColor = calculateUnifiedLighting(vColor, normal, vWorldPos, lightDir, vPositionLightSpace, vIsGrass > 0.5);
 
                  // Point Lights from Lanterns (ตะเกียงหินเรืองแสง), Glowing Stones (หินเรืองแสง), and Campfires
                  if (uPointLightCount > 0) {
@@ -546,6 +466,8 @@
       const depthVertexShaderSource = `#version 300 es
             in vec3 aPosition;
             in vec3 aColor;
+            in float aTerrainRadius;
+            in vec3 aTunnelCenter;
             uniform mat4 uModelMatrix;
             uniform mat4 uLightSpaceMatrix;
             uniform float uTime;
@@ -553,6 +475,9 @@
             uniform float uWaterSwayFactor;
             uniform float uPlanetRadius;
             uniform float uWaterRadius;
+            out vec3 vWorldPos;
+            out float vTerrainRadius;
+            out vec3 vTunnelCenter;
             void main() {
                 vec3 pos = aPosition;
                 
@@ -648,14 +573,71 @@
                     pos.x += (waterSwayX * 0.14 + currentX * 0.15) * swayAmount;
                     pos.z += (waterSwayZ * 0.14 + currentZ * 0.15) * swayAmount;
                 }
-                gl_Position = uLightSpaceMatrix * uModelMatrix * vec4(pos, 1.0);
+                vec4 worldPos4 = uModelMatrix * vec4(pos, 1.0);
+                vWorldPos = worldPos4.xyz;
+                vTerrainRadius = aTerrainRadius;
+                vTunnelCenter = aTunnelCenter;
+                gl_Position = uLightSpaceMatrix * worldPos4;
             }
         `;
 
       const depthFragmentShaderSource = `#version 300 es
             precision highp float;
+            precision highp int;
+            in vec3 vWorldPos;
+            in float vTerrainRadius;
+            in vec3 vTunnelCenter;
+            uniform vec4 uTunnels[64];
+            uniform int uTunnelCount;
+            uniform float uIsTunnelMesh;
             out vec4 fragColor;
             void main() {
+                if (uIsTunnelMesh > 5.0) {
+                    // Planet Surface in Depth Pass: cut open cave mouths
+                    for (int i = 0; i < 64; i++) {
+                        if (i < uTunnelCount) {
+                            vec4 t = uTunnels[i];
+                            vec3 diff = vWorldPos - t.xyz;
+                            if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
+                                discard;
+                            }
+                        }
+                    }
+                } else if (uIsTunnelMesh > 1.5) {
+                    // Cave Outer Shell in Depth Pass
+                    float distToCenter = length(vWorldPos);
+                    float actualTerrainRadius = abs(vTerrainRadius);
+                    if (distToCenter > actualTerrainRadius - 0.05) {
+                        discard;
+                    }
+                    for (int i = 0; i < 64; i++) {
+                        if (i < uTunnelCount) {
+                            vec4 t = uTunnels[i];
+                            vec3 diff = vWorldPos - t.xyz;
+                            if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
+                                discard;
+                            }
+                        }
+                    }
+                } else if (uIsTunnelMesh > 0.5) {
+                    // Cave Interior & Collar in Depth Pass
+                    float distToCenter = length(vWorldPos);
+                    float actualTerrainRadius = abs(vTerrainRadius);
+                    bool isCollar = vTerrainRadius < 0.0;
+                    if (!isCollar && distToCenter > actualTerrainRadius - 0.025) {
+                        discard;
+                    }
+                    for (int i = 0; i < 64; i++) {
+                        if (i < uTunnelCount) {
+                            vec4 t = uTunnels[i];
+                            if (length(t.xyz - vTunnelCenter) < 0.05) continue;
+                            vec3 diff = vWorldPos - t.xyz;
+                            if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
+                                discard;
+                            }
+                        }
+                    }
+                }
                 fragColor = vec4(gl_FragCoord.z, gl_FragCoord.z, gl_FragCoord.z, 1.0);
             }
         `;
@@ -686,8 +668,7 @@
                 vColor = aColor;
                 vNormal = normalize(aPosition);
                 vWorldPos = aPosition;
-                vec3 shadowPos = aPosition + normalize(aPosition) * 0.002;
-                vPositionLightSpace = uLightSpaceMatrix * vec4(shadowPos, 1.0);
+                vPositionLightSpace = uLightSpaceMatrix * vec4(aPosition, 1.0);
                 vDist = length(mvPosition.xyz);
                 vTerrainRadius = aTerrainRadius;
                 vTunnelCenter = aTunnelCenter;
@@ -706,7 +687,7 @@
             in vec3 vTunnelCenter;
             uniform vec3 uLightDir;
             uniform float uUseLighting;
-            uniform sampler2D uShadowMap;
+            uniform highp sampler2DShadow uShadowMap;
             out vec4 fragColor;
             
             uniform float uRenderDistEnabled;
@@ -792,15 +773,7 @@
                 if (uUseLighting > 0.5) {
                     vec3 normal = normalize(vNormal);
                     vec3 lightDir = normalize(uLightDir);
-                    float diffuseVal = max(dot(normal, lightDir), 0.0);
-                    
-                    // Shadow (skip texture lookups for unlit back-faces)
-                    float shadow = 0.0;
-                    if (diffuseVal > 0.001) {
-                        shadow = calculateShadow(vPositionLightSpace, normal, lightDir);
-                    }
-                    float diffuse = 0.24 + diffuseVal * shadow * 0.76;
-                    finalColor = vColor * diffuse;
+                    finalColor = calculateUnifiedLighting(vColor, normal, vWorldPos, lightDir, vPositionLightSpace, false);
                     if (uPointLightCount > 0) {
                         vec3 pointLightAccum = vec3(0.0);
                         vec3 pointTintAccum = vec3(0.0);
@@ -1738,6 +1711,11 @@ window.cloud3DProgram = cloud3DProgram;
         depthProgram,
         "uWaterRadius",
       );
+      const depthTerrainRadiusAttrLoc = gl.getAttribLocation(depthProgram, "aTerrainRadius");
+      const depthTunnelCenterAttrLoc = gl.getAttribLocation(depthProgram, "aTunnelCenter");
+      const depthTunnelsLoc = gl.getUniformLocation(depthProgram, "uTunnels");
+      const depthTunnelCountLoc = gl.getUniformLocation(depthProgram, "uTunnelCount");
+      const depthIsTunnelMeshLoc = gl.getUniformLocation(depthProgram, "uIsTunnelMesh");
 
       // Shadow Map Framebuffer initialization
       let shadowFramebuffer;
@@ -1748,12 +1726,12 @@ window.cloud3DProgram = cloud3DProgram;
         const q = (typeof window !== "undefined" && typeof window.shadowMapQuality === "number")
           ? window.shadowMapQuality
           : (typeof shadowMapQuality === "number" ? shadowMapQuality : 2);
-        if (q <= 0) return 512;
-        if (q === 1) return 512;
-        if (q === 2) return 1024;
-        if (q === 3) return 1536;
-        if (q >= 4) return 2048;
-        return 1024;
+        if (q <= 0) return 1024;
+        if (q === 1) return 1536;
+        if (q === 2) return 2048;
+        if (q === 3) return 3072;
+        if (q >= 4) return 4096;
+        return 2048;
       }
       let SHADOW_WIDTH = computeShadowMapSize();
       let SHADOW_HEIGHT = computeShadowMapSize();
@@ -1775,10 +1753,12 @@ window.cloud3DProgram = cloud3DProgram;
           null,
         );
 
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
         gl.framebufferTexture2D(
@@ -1838,6 +1818,12 @@ window.cloud3DProgram = cloud3DProgram;
           gl.UNSIGNED_INT,
           null,
         );
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
       };
 
 
@@ -4878,16 +4864,18 @@ window.cloud3DProgram = cloud3DProgram;
           actualSunPos = window.getSunWorldPosition();
         }
 
+        const sunVecX = actualSunPos[0] - activePlanetCore[0];
+        const sunVecY = actualSunPos[1] - activePlanetCore[1];
+        const sunVecZ = actualSunPos[2] - activePlanetCore[2];
         const sunLen = Math.sqrt(
-          actualSunPos[0] * actualSunPos[0] +
-            actualSunPos[1] * actualSunPos[1] +
-            actualSunPos[2] * actualSunPos[2],
+          sunVecX * sunVecX +
+            sunVecY * sunVecY +
+            sunVecZ * sunVecZ,
         ) || 1.0;
-
         const finalLightDir = [
-          actualSunPos[0] / sunLen,
-          actualSunPos[1] / sunLen,
-          actualSunPos[2] / sunLen,
+          sunVecX / sunLen,
+          sunVecY / sunLen,
+          sunVecZ / sunLen,
         ];
         window.finalLightDir = finalLightDir;
         window.sunDistance = sunLen;
@@ -6770,23 +6758,52 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             : renderDistValue);
 
         let shadowTargetX = px, shadowTargetY = py, shadowTargetZ = pz;
-        let camPlayerDist = 10.0;
+        // Universal Standard Cascaded Shadow Volume:
+        // Coverage sized to cover the entire structure and surrounding terrain smoothly (32m across)
+        // --- Fully Automatic Shadow Camera & Resolution System ---
+        const curPlayerScale = (typeof playerScale === "number" && playerScale > 0.01) ? playerScale : 0.22;
+        let shadowCamDist = 3.0;
         if (typeof eyePos !== "undefined" && eyePos) {
-          const dx = eyePos[0] - px;
-          const dy = eyePos[1] - py;
-          const dz = eyePos[2] - pz;
-          camPlayerDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          shadowCamDist = Math.hypot(eyePos[0] - px, eyePos[1] - py, eyePos[2] - pz);
         }
-        const snappedCamDist = Math.round(camPlayerDist * 0.5) * 2.0;
-        let orthoSize = Math.min(24.0, Math.max(16.0, Math.min(curObjectDist, snappedCamDist + 8.0)));
+        const stepSpan = curPlayerScale * 16.0;
+        const minSpan = curPlayerScale * 32.0;
+        let orthoSize = Math.ceil(Math.max(shadowCamDist * 2.0, minSpan) / stepSpan) * stepSpan;
 
-        let lightDistance = Math.max(RADIUS + 8.0, 20.0);
-        let lightFarPlane = Math.max(RADIUS * 2.5 + 8.0, 48.0);
-        if (cameraMode !== "planet" && cameraMode !== "sun") {
-            orthoSize = Math.min(10.5, Math.max(5.8, Math.min(curObjectDist, snappedCamDist + 2.5)));
-            lightDistance = 10.0;
-            lightFarPlane = 20.0;
+        // Automatically compute shadow map resolution needed so 1 texel is always smaller than character limbs
+        const maxAllowedTexelSize = Math.max(0.008, curPlayerScale * 0.075);
+        const minAutoRes = (orthoSize * 2.0) / maxAllowedTexelSize;
+        const maxGpuSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+        const baseQualityRes = computeShadowMapSize();
+        const targetAutoRes = Math.min(maxGpuSize, Math.max(baseQualityRes, minAutoRes <= 2048 ? 2048 : 4096));
+        if (SHADOW_WIDTH !== targetAutoRes && shadowDepthTexture) {
+          SHADOW_WIDTH = targetAutoRes;
+          SHADOW_HEIGHT = targetAutoRes;
+          gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture);
+          gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.DEPTH_COMPONENT24,
+            SHADOW_WIDTH,
+            SHADOW_HEIGHT,
+            0,
+            gl.DEPTH_COMPONENT,
+            gl.UNSIGNED_INT,
+            null
+          );
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
         }
+
+        const curPlanetRad = (typeof RADIUS === "number" && RADIUS > 1.0) ? RADIUS : 32.0;
+        const lightNearPlane = 0.1;
+        let lightDistance = Math.max(orthoSize * 2.0, curPlanetRad + orthoSize);
+        let lightFarPlane = lightDistance * 2.0;
+        const shadowTexelDepthBias = (orthoSize * 2.0) / (SHADOW_WIDTH * (lightFarPlane - lightNearPlane));
         const lightUp =
           Math.abs(finalLightDir[1]) > 0.99 ? [0.0, 0.0, 1.0] : [0.0, 1.0, 0.0];
 
@@ -6802,7 +6819,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const uyy = fzz * rxx - fzx * rxz;
           const uyz = fzx * rxy - fzy * rxx;
 
-          const texelWorldSize = (orthoSize * 2.0) / Math.max(1024, SHADOW_WIDTH);
+          const texelWorldSize = (orthoSize * 2.0) / SHADOW_WIDTH;
           let lx = shadowTargetX * rxx + shadowTargetY * rxy + shadowTargetZ * rxz;
           let ly = shadowTargetX * uyx + shadowTargetY * uyy + shadowTargetZ * uyz;
           const lz = shadowTargetX * fzx + shadowTargetY * fzy + shadowTargetZ * fzz;
@@ -6847,8 +6864,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.enable(gl.DEPTH_TEST);
           gl.disable(gl.BLEND);
           gl.disable(gl.CULL_FACE); // Draw both faces into shadow map to prevent missing shadows from wrong windings
-          gl.enable(gl.POLYGON_OFFSET_FILL);
-          gl.polygonOffset(0.25, 0.6);
+          gl.disable(gl.POLYGON_OFFSET_FILL); // Pass 1 records exact 3D geometry depth; Pass 2 compares exact 3D depth with texelDepthBias for 100% mathematical match
 
           gl.useProgram(depthProgram);
         gl.uniformMatrix4fv(
@@ -6860,6 +6876,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         gl.uniform1f(depthPlanetRadiusLoc, RADIUS);
         const activeWaterSurfaceRadius = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
         gl.uniform1f(depthWaterRadiusLoc, activeWaterSurfaceRadius);
+        if (depthIsTunnelMeshLoc) gl.uniform1f(depthIsTunnelMeshLoc, 0.0);
+
+
 
         // Cubes to depth (Cull by object render distance)
         if (cubeVertexBuffer && cubeIndexBuffer && cubeIndicesLength > 0) {
@@ -6950,6 +6969,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.vertexAttrib3f(depthColorLoc, 0.0, 0.0, 0.0);
           }
         }
+
+        // Ensure CULL_FACE stays disabled for all subsequent depth pass draws (Collectibles, Houses, Character, Equipment)
+        gl.disable(gl.CULL_FACE);
 
         // Collectibles to depth (Cull by object render distance)
         if (
@@ -8005,7 +8027,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(terrainShadowMapLoc, 1);
-          gl.uniform2f(terrainShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform2f(terrainShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
           gl.uniform1i(terrainWaterMaskLoc, 2);
 
           if (Graphics.mode === 'hybrid') { gl.colorMask(false, false, false, false); }
@@ -8095,7 +8117,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(charShadowMapLoc, 1);
-          gl.uniform2f(charShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform2f(charShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
           gl.uniform1i(charWaterMaskLoc, 2);
 
           gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
@@ -8456,7 +8478,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 if (cubeVertexBuffer && cubeIndicesLength > 0) {
                   gl.useProgram(modelProgram);
                   gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
-                  gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+                  gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
                   gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
@@ -8660,7 +8682,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
           gl.uniform1i(modelShadowMapLoc, 1);
-          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
           gl.uniform1i(modelWaterMaskLoc, 2);
           gl.activeTexture(gl.TEXTURE3);
           gl.bindTexture(gl.TEXTURE_2D, window._SSRSceneTexture || getDummySSRTexture());
@@ -8840,7 +8862,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           gl.useProgram(modelProgram);
           gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
-          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,
@@ -8877,7 +8899,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.uniform1f(modelTimeLoc, leafAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
           gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
-          gl.uniform1f(modelSwayFactorLoc, natureSway ? 1.0 : 0.0);
+          gl.uniform1f(modelSwayFactorLoc, 0.0);
           gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
 
           if (hasStaticCollectibles) {
@@ -8961,7 +8983,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.cullFace(gl.BACK);
           gl.useProgram(modelProgram);
           gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
-          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
 
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, modelViewMatrix));
@@ -9108,7 +9130,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           gl.useProgram(modelProgram);
           gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
-          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, 1.0 / SHADOW_HEIGHT);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
           gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
             modelMVLoc,

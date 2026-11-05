@@ -122,9 +122,9 @@ window.ItemRegistry["wood_floor"] = {
                 
         const shadeNoise = pRand(seedVal + i * 17.3);
         // Vary base wooden color slightly to give authentic plank variation
-        const rCol = baseColor[0] * (0.85 + shadeNoise * 0.3);
-        const gCol = baseColor[1] * (0.85 + shadeNoise * 0.3);
-        const bCol = baseColor[2] * (0.85 + shadeNoise * 0.3);
+        const rCol = baseColor[0] * (0.94 + shadeNoise * 0.12);
+        const gCol = baseColor[1] * (0.94 + shadeNoise * 0.12);
+        const bCol = baseColor[2] * (0.94 + shadeNoise * 0.12);
         const plankColor = [rCol, gCol, bCol];
                 
         // Draw individual plank board (exact non-overlapping width & depth prevents Z-fighting shimmer)

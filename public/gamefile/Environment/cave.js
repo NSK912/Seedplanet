@@ -1108,6 +1108,59 @@
       return { tunnelsData: f32_tunnelsData, count: count };
     },
 
+    drawCaveDepth: function(gl, locations) {
+      if (!tunnelIndicesCount || !tunnelVertexBuffer || !tunnelIndexBuffer) {
+        return;
+      }
+      const positionLoc = locations.positionLoc;
+      const isTunnelMeshLoc = locations.isTunnelMeshLoc;
+      const terrainRadiusAttrLoc = locations.terrainRadiusAttrLoc;
+      const tunnelCenterAttrLoc = locations.tunnelCenterAttrLoc;
+      const useUint32 = tunnelIndicesCount > 65535;
+      gl.disable(gl.CULL_FACE);
+      if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 1.0);
+      if (terrainRadiusAttrLoc !== undefined && terrainRadiusAttrLoc !== -1 && tunnelTerrainRadiusBuffer) {
+        gl.enableVertexAttribArray(terrainRadiusAttrLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelTerrainRadiusBuffer);
+        gl.vertexAttribPointer(terrainRadiusAttrLoc, 1, gl.FLOAT, false, 0, 0);
+      }
+      if (tunnelCenterAttrLoc !== undefined && tunnelCenterAttrLoc !== -1 && tunnelCenterBuffer) {
+        gl.enableVertexAttribArray(tunnelCenterAttrLoc);
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelCenterBuffer);
+        gl.vertexAttribPointer(tunnelCenterAttrLoc, 3, gl.FLOAT, false, 0, 0);
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, tunnelVertexBuffer);
+      gl.enableVertexAttribArray(positionLoc);
+      gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tunnelIndexBuffer);
+      gl.drawElements(gl.TRIANGLES, tunnelIndicesCount, useUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+
+      if (tunnelShellIndicesCount > 0 && tunnelShellVertexBuffer && tunnelShellIndexBuffer) {
+        const useUint32Shell = tunnelShellIndicesCount > 65535;
+        if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 2.0);
+        if (terrainRadiusAttrLoc !== undefined && terrainRadiusAttrLoc !== -1 && tunnelShellTerrainRadiusBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellTerrainRadiusBuffer);
+          gl.vertexAttribPointer(terrainRadiusAttrLoc, 1, gl.FLOAT, false, 0, 0);
+        }
+        if (tunnelCenterAttrLoc !== undefined && tunnelCenterAttrLoc !== -1 && tunnelShellCenterBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellCenterBuffer);
+          gl.vertexAttribPointer(tunnelCenterAttrLoc, 3, gl.FLOAT, false, 0, 0);
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, tunnelShellVertexBuffer);
+        gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tunnelShellIndexBuffer);
+        gl.drawElements(gl.TRIANGLES, tunnelShellIndicesCount, useUint32Shell ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+      }
+      if (isTunnelMeshLoc) gl.uniform1f(isTunnelMeshLoc, 0.0);
+      if (terrainRadiusAttrLoc !== undefined && terrainRadiusAttrLoc !== -1) {
+        gl.disableVertexAttribArray(terrainRadiusAttrLoc);
+        gl.vertexAttrib1f(terrainRadiusAttrLoc, 99999.0);
+      }
+      if (tunnelCenterAttrLoc !== undefined && tunnelCenterAttrLoc !== -1) {
+        gl.disableVertexAttribArray(tunnelCenterAttrLoc);
+        gl.vertexAttrib3f(tunnelCenterAttrLoc, 0.0, 0.0, 0.0);
+      }
+    },
     drawCave: function(gl, locations) {
       if (!tunnelIndicesCount || !tunnelVertexBuffer || !tunnelColorBuffer || !tunnelIndexBuffer) {
         return;

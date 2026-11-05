@@ -423,9 +423,9 @@ window.ItemRegistry["wood_wall"] = {
         const t = -0.15 + 0.03 + i * 0.06; // horizontal offset along wallR
         const shadeNoise = pRand(seedVal + i * 17.3);
         const plankColor = item.isPreview ? previewColor : [
-          rCol * (0.85 + shadeNoise * 0.3),
-          gCol * (0.85 + shadeNoise * 0.3),
-          bCol * (0.85 + shadeNoise * 0.3)
+          rCol * (0.94 + shadeNoise * 0.12),
+          gCol * (0.94 + shadeNoise * 0.12),
+          bCol * (0.94 + shadeNoise * 0.12)
         ];
 
         const hLeft = Math.max(0, getTrimHeight(t - 0.03, 0.25));

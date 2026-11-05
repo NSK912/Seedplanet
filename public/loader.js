@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789150100000';
+  const version = '1789500000000';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {

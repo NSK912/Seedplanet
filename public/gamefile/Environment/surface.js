@@ -406,7 +406,6 @@
     const vBuf = opts.vertexBuffer !== undefined ? opts.vertexBuffer : global.vertexBuffer;
     const iBuf = opts.indexBuffer !== undefined ? opts.indexBuffer : global.indexBuffer;
     const idxLen = opts.indicesLength !== undefined ? opts.indicesLength : global.indicesLength;
-    const useUint32 = opts.supportUint32 !== undefined ? opts.supportUint32 : global.supportUint32;
 
     if (!vBuf || !iBuf || !idxLen || idxLen <= 0) return;
 
@@ -419,6 +418,20 @@
         f32_identity,
       );
     }
+    if (typeof global.CaveSystem !== "undefined" && global.CaveSystem.getTunnelUniformsData && opts.eyePos) {
+      const { tunnelsData, count } = global.CaveSystem.getTunnelUniformsData(opts.eyePos);
+      if (opts.tunnelsLoc) gl.uniform4fv(opts.tunnelsLoc, tunnelsData);
+      if (opts.tunnelCountLoc) gl.uniform1i(opts.tunnelCountLoc, count);
+    }
+    if (opts.isTunnelMeshLoc) gl.uniform1f(opts.isTunnelMeshLoc, 10.0); // 10.0 = Planet Surface in depth shader
+    if (opts.terrainRadiusAttrLoc !== undefined && opts.terrainRadiusAttrLoc !== -1) {
+      gl.disableVertexAttribArray(opts.terrainRadiusAttrLoc);
+      gl.vertexAttrib1f(opts.terrainRadiusAttrLoc, 99999.0);
+    }
+    if (opts.tunnelCenterAttrLoc !== undefined && opts.tunnelCenterAttrLoc !== -1) {
+      gl.disableVertexAttribArray(opts.tunnelCenterAttrLoc);
+      gl.vertexAttrib3f(opts.tunnelCenterAttrLoc, 0.0, 0.0, 0.0);
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
     gl.enableVertexAttribArray(opts.depthPosLoc);
     gl.vertexAttribPointer(opts.depthPosLoc, 3, gl.FLOAT, false, 0, 0);
@@ -428,6 +441,7 @@
     } else {
       gl.drawElements(gl.TRIANGLES, idxLen, gl.UNSIGNED_SHORT, 0);
     }
+    if (opts.isTunnelMeshLoc) gl.uniform1f(opts.isTunnelMeshLoc, 0.0);
   }
 
   function drawSurface(gl, opts = {}) {
