@@ -895,6 +895,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==================== BOUNDING RADIUS ====================
   function getBoundingRadius(obs) {
     if (!obs) return CFG.defaultRadius;
+    if (typeof obs._cachedRadius === 'number' && obs._cachedRadius > 0) {
+      return obs._cachedRadius;
+    }
     
     let r = 0;
     if (typeof obs.boundingRadius === 'number' && obs.boundingRadius > 0) {
@@ -906,7 +909,10 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (typeof obs.scale === 'number' && obs.scale > 0) {
       r = obs.scale * 2.0;
     } else if (Array.isArray(obs.extents) && obs.extents.length > 0) {
-      r = Math.max(...obs.extents.map(Math.abs));
+      for (let i = 0; i < obs.extents.length; i++) {
+        const a = Math.abs(obs.extents[i]);
+        if (a > r) r = a;
+      }
     }
     
     if (r <= 0) {
@@ -916,7 +922,9 @@ document.addEventListener("DOMContentLoaded", () => {
       else r = CFG.defaultRadius;
     }
     
-    return Math.max(r, 1.0);
+    const finalR = Math.max(r, 1.0);
+    obs._cachedRadius = finalR;
+    return finalR;
   }
 
   // ==================== SPHERE IN FRUSTUM CHECK ====================
@@ -942,12 +950,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ==================== VISIBLE INDEX RANGES ====================
+  let _visStarts = new Int32Array(2048);
+  let _visEnds = new Int32Array(2048);
+  let _visOrder = new Int32Array(2048);
+
   function getVisibleIndexRanges(obstacles, planes, maxDistance, eyePos) {
     if (!obstacles || !obstacles.length) return [];
+    const obsLen = obstacles.length;
     
     if (!planes && (!maxDistance || !eyePos || eyePos.length < 3)) {
       let minStart = Infinity, maxEnd = -Infinity;
-      for (let i = 0; i < obstacles.length; i++) {
+      for (let i = 0; i < obsLen; i++) {
         const obs = obstacles[i];
         if (!obs) continue;
         const start = obs.meshStart ?? obs.start ?? obs.offset;
@@ -960,11 +973,24 @@ document.addEventListener("DOMContentLoaded", () => {
       if (minStart < maxEnd) return [{ start: minStart, end: maxEnd }];
       return [];
     }
+
+    if (obsLen > _visStarts.length) {
+      const newCap = Math.max(obsLen, _visStarts.length * 2);
+      _visStarts = new Int32Array(newCap);
+      _visEnds = new Int32Array(newCap);
+      _visOrder = new Int32Array(newCap);
+    }
     
-    const ranges = [];
-    const maxDistSq = (typeof maxDistance === "number" && maxDistance > 0) ? (maxDistance * maxDistance) : 0;
+    let rangeCount = 0;
+    let isMonotonic = true;
+    let prevStart = -1;
+    const hasDist = (typeof maxDistance === "number" && maxDistance > 0 && eyePos && eyePos.length >= 3);
+    const ex = hasDist ? eyePos[0] : 0;
+    const ey = hasDist ? eyePos[1] : 0;
+    const ez = hasDist ? eyePos[2] : 0;
+    const activeBoat = typeof global.activeRidingBoat !== "undefined" ? global.activeRidingBoat : null;
     
-    for (let i = 0; i < obstacles.length; i++) {
+    for (let i = 0; i < obsLen; i++) {
       const obs = obstacles[i];
       if (!obs) continue;
       
@@ -973,87 +999,128 @@ document.addEventListener("DOMContentLoaded", () => {
       if (start === undefined || end === undefined || end <= start) continue;
       
       const pos = obs.position || obs.pos;
-      if (!pos || pos.length < 3) {
-        ranges.push({ start, end });
-        continue;
-      }
-      
-      if (obs.isRiding || obs.activeRiding || (typeof global.activeRidingBoat !== "undefined" && global.activeRidingBoat === obs)) {
-        ranges.push({ start, end });
-        continue;
-      }
-      
-      const radius = getBoundingRadius(obs);
-      
-      if (maxDistSq > 0 && eyePos && eyePos.length >= 3) {
-        const dx = pos[0] - eyePos[0];
-        const dy = pos[1] - eyePos[1];
-        const dz = pos[2] - eyePos[2];
-        const distSq = dx * dx + dy * dy + dz * dz;
-        const maxThreshold = maxDistance + radius;
-        if (distSq > maxThreshold * maxThreshold) {
+      if (pos && pos.length >= 3 && !obs.isRiding && !obs.activeRiding && activeBoat !== obs) {
+        const radius = getBoundingRadius(obs);
+        
+        if (hasDist) {
+          const dx = pos[0] - ex;
+          const dy = pos[1] - ey;
+          const dz = pos[2] - ez;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          const maxThreshold = maxDistance + radius;
+          if (distSq > maxThreshold * maxThreshold) {
+            continue;
+          }
+        }
+        
+        if (planes && !isSphereInFrustum(planes, pos, radius)) {
           continue;
         }
       }
-      
-      if (!planes || isSphereInFrustum(planes, pos, radius)) {
-        ranges.push({ start, end });
+
+      if (start < prevStart) {
+        isMonotonic = false;
       }
+      prevStart = start;
+      _visStarts[rangeCount] = start;
+      _visEnds[rangeCount] = end;
+      rangeCount++;
     }
     
-    if (!ranges.length) return [];
+    if (rangeCount === 0) return [];
     
-    ranges.sort((a, b) => a.start - b.start);
-    
+    const GAP = 4500;
     const merged = [];
-    let cur = { start: ranges[0].start, end: ranges[0].end };
-    const GAP = 72;
-    
-    for (let i = 1; i < ranges.length; i++) {
-      const next = ranges[i];
-      if (next.start <= cur.end + GAP) {
-        cur.end = Math.max(cur.end, next.end);
+
+    if (isMonotonic) {
+      let curStart = _visStarts[0];
+      let curEnd = _visEnds[0];
+      for (let i = 1; i < rangeCount; i++) {
+        const nextStart = _visStarts[i];
+        const nextEnd = _visEnds[i];
+        if (nextStart <= curEnd + GAP) {
+          if (nextEnd > curEnd) curEnd = nextEnd;
+        } else {
+          merged.push({ start: curStart, end: curEnd });
+          curStart = nextStart;
+          curEnd = nextEnd;
+        }
+      }
+      merged.push({ start: curStart, end: curEnd });
+      return merged;
+    }
+
+    for (let i = 0; i < rangeCount; i++) _visOrder[i] = i;
+    const subOrder = _visOrder.subarray(0, rangeCount);
+    subOrder.sort((a, b) => _visStarts[a] - _visStarts[b]);
+
+    let curStart = _visStarts[subOrder[0]];
+    let curEnd = _visEnds[subOrder[0]];
+    for (let i = 1; i < rangeCount; i++) {
+      const idx = subOrder[i];
+      const nextStart = _visStarts[idx];
+      const nextEnd = _visEnds[idx];
+      if (nextStart <= curEnd + GAP) {
+        if (nextEnd > curEnd) curEnd = nextEnd;
       } else {
-        merged.push(cur);
-        cur = { start: next.start, end: next.end };
+        merged.push({ start: curStart, end: curEnd });
+        curStart = nextStart;
+        curEnd = nextEnd;
       }
     }
-    merged.push(cur);
+    merged.push({ start: curStart, end: curEnd });
     
     return merged;
   }
 
   // ==================== CLOUD CHUNKS CULLING ====================
+  const _rotatedCloudPool = [];
   function getVisibleCloudRanges(chunks, orbitMatrix, planes) {
     if (!chunks || !chunks.length) return [];
     if (!planes) {
       return [{ start: 0, end: chunks[chunks.length - 1]?.meshEnd || 0 }];
     }
 
-    const rotatedChunks = [];
-    for (let i = 0; i < chunks.length; i++) {
+    const len = chunks.length;
+    while (_rotatedCloudPool.length < len) {
+      _rotatedCloudPool.push({
+        position: [0, 0, 0],
+        radius: 15.0,
+        _cachedRadius: 15.0,
+        meshStart: 0,
+        meshEnd: 0,
+        active: true,
+        layer: 0
+      });
+    }
+    _rotatedCloudPool.length = len;
+
+    const hasOrbit = orbitMatrix && orbitMatrix.length >= 16;
+    for (let i = 0; i < len; i++) {
       const chunk = chunks[i];
+      const slot = _rotatedCloudPool[i];
       const cx = chunk.position[0];
       const cy = chunk.position[1];
       const cz = chunk.position[2];
       
-      if (orbitMatrix && orbitMatrix.length >= 16) {
-        const rx = cx * orbitMatrix[0] + cy * orbitMatrix[4] + cz * orbitMatrix[8];
-        const ry = cx * orbitMatrix[1] + cy * orbitMatrix[5] + cz * orbitMatrix[9];
-        const rz = cx * orbitMatrix[2] + cy * orbitMatrix[6] + cz * orbitMatrix[10];
-        rotatedChunks.push({
-          position: [rx, ry, rz],
-          radius: chunk.radius || 15.0,
-          meshStart: chunk.meshStart,
-          meshEnd: chunk.meshEnd,
-          active: chunk.active,
-          layer: chunk.layer
-        });
+      if (hasOrbit) {
+        slot.position[0] = cx * orbitMatrix[0] + cy * orbitMatrix[4] + cz * orbitMatrix[8];
+        slot.position[1] = cx * orbitMatrix[1] + cy * orbitMatrix[5] + cz * orbitMatrix[9];
+        slot.position[2] = cx * orbitMatrix[2] + cy * orbitMatrix[6] + cz * orbitMatrix[10];
       } else {
-        rotatedChunks.push(chunk);
+        slot.position[0] = cx;
+        slot.position[1] = cy;
+        slot.position[2] = cz;
       }
+      const r = chunk.radius || 15.0;
+      slot.radius = r;
+      slot._cachedRadius = Math.max(r, 1.0);
+      slot.meshStart = chunk.meshStart;
+      slot.meshEnd = chunk.meshEnd;
+      slot.active = chunk.active;
+      slot.layer = chunk.layer;
     }
-    return getVisibleIndexRanges(rotatedChunks, planes);
+    return getVisibleIndexRanges(_rotatedCloudPool, planes);
   }
 
   // ==================== SINGLE OBJECT VISIBILITY ====================

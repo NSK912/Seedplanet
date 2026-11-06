@@ -6,6 +6,7 @@ window.ItemRegistry["rock"] = {
     if (item.type === "iron_ore") color = [0.45, 0.22, 0.18];
     else if (item.type === "gold_ore") color = [0.85, 0.68, 0.12];
     else if (item.type === "glow_ore") color = [0.22, 0.95, 0.88];
+    else if (item.type === "dirt" || item.type === "DIRT") color = [0.46, 0.30, 0.16];
     const rockPos = [
       item.position[0] - item.normal[0] * (item.size * 0.2),
       item.position[1] - item.normal[1] * (item.size * 0.2),
@@ -27,3 +28,5 @@ window.ItemRegistry["big_rock"] = window.ItemRegistry["rock"];
 window.ItemRegistry["iron_ore"] = window.ItemRegistry["rock"];
 window.ItemRegistry["gold_ore"] = window.ItemRegistry["rock"];
 window.ItemRegistry["glow_ore"] = window.ItemRegistry["rock"];
+window.ItemRegistry["dirt"] = window.ItemRegistry["rock"];
+window.ItemRegistry["DIRT"] = window.ItemRegistry["rock"];

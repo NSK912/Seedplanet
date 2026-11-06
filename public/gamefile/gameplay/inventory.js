@@ -244,6 +244,7 @@
       const ALL_ITEMS = [
         { name: "ROCK", icon: "🪨" },
         { name: "BIG_ROCK", icon: "🪨" },
+        { name: "DIRT", icon: "🟫" },
         { name: "IRON_ORE", icon: "🟥" },
         { name: "GOLD_ORE", icon: "🪙" },
         { name: "GLOW_ORE", icon: "✨" },
@@ -454,6 +455,11 @@
             mockItem.size = 0.4;
             mockItem.color = [0.5, 0.5, 0.5];
             mockItem.seed = 678.9;
+          } else if (name === "DIRT") {
+            scaleFactor = 1.35;
+            mockItem.size = 0.33;
+            mockItem.color = [0.46, 0.30, 0.16];
+            mockItem.seed = 444.44;
           } else if (name === "BRANCH") {
             scaleFactor = 1.4;
             mockItem.size = 0.45;
@@ -547,6 +553,9 @@
           } else if (name === "BIG_ROCK") {
             scaleFactor = 1.0;
             buildRockFormation(p, 0.8, [0.5, 0.5, 0.5], 678.9, rawVertices, rawColors, rawIndices);
+          } else if (name === "DIRT") {
+            scaleFactor = 1.35;
+            buildRockFormation(p, 0.5, [0.46, 0.30, 0.16], 444.44, rawVertices, rawColors, rawIndices);
           } else if (name === "IRON_ORE") {
             scaleFactor = 1.35;
             buildRockFormation(p, 0.55, [0.45, 0.22, 0.18], 111.11, rawVertices, rawColors, rawIndices);
@@ -3470,15 +3479,19 @@ function cancelFloorPlacement() {
           isUsingItem = true;
           checkMeleeHit("SHOVEL");
           
+          let dugSuccess = false;
           if (isAltAction) {
               const forwardPoint = calculateForwardTarget();
               // Use a reasonable radius (0.05 rad = 40cm) to cleanly expand and connect with the existing hole (0.08 rad = 64cm)
               if (forwardPoint) {
-                  modTerrainAtPlayer(-0.35, true, forwardPoint, 0.05, "trench");
+                  dugSuccess = Boolean(modTerrainAtPlayer(-0.35, true, forwardPoint, 0.05, "trench"));
               }
           } else {
               // Trigger the digging terrain modifications (dig down)!
-              modTerrainAtPlayer(-0.35, true);
+              dugSuccess = Boolean(modTerrainAtPlayer(-0.35, true));
+          }
+          if (dugSuccess) {
+              addItemToInventory({ name: "DIRT", icon: "🟫", count: 1, label: "DIRT" }, false, true);
           }
         } else if (itemName === "BOW") {
           showNotice("🚫 คันธนูถูกปิดใช้งาน กรุณาใช้ปืนไม้ติดแขน (ARM CANNON) แทน!");

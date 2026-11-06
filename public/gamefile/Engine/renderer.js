@@ -29,6 +29,13 @@
             
             void main() {
                 vec3 pos = aPosition;
+                vec4 baseMvPos = uModelViewMatrix * vec4(pos, 1.0);
+                float vertexCamDist = length(baseMvPos.xyz);
+                if (uRenderDistEnabled > 0.5 && vertexCamDist > uMaxRenderDist + 2.5) {
+                    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                    return;
+                }
+                bool outsideRenderRange = (uRenderDistEnabled > 0.5 && vertexCamDist > uMaxRenderDist);
                 
                 vec3 actualColor = aColor * (length(uTint) > 0.001 ? uTint : vec3(1.0));
                 bool isGrass = false;
@@ -60,10 +67,6 @@
                 bool isLeaf = isGrass || isTreeLeaf;
                 float distToCenter = length(pos);
                 bool isSeaweed = !isTree && !isGrass && (distToCenter < uWaterRadius) && (actualColor.g > 0.38 && actualColor.g > actualColor.r * 1.35 && actualColor.g > actualColor.b * 1.15);
-                
-                vec4 baseMvPos = uModelViewMatrix * vec4(pos, 1.0);
-                float vertexCamDist = length(baseMvPos.xyz);
-                bool outsideRenderRange = (uRenderDistEnabled > 0.5 && vertexCamDist > uMaxRenderDist);
 
                 if ((isLeaf || isTree) && uSwayFactor > 0.0 && !outsideRenderRange) {
                     float h = distToCenter - uPlanetRadius;
@@ -224,43 +227,42 @@
                 if (uPointLightOccluderCount <= 0) return 1.0;
                 float vis = 1.0;
                 for (int j = 0; j < 24; j++) {
-                    if (j < uPointLightOccluderCount) {
-                        vec4 r0 = uPointLightOccluders[j * 3];
-                        vec4 r1 = uPointLightOccluders[j * 3 + 1];
-                        vec4 r2 = uPointLightOccluders[j * 3 + 2];
+                    if (j >= uPointLightOccluderCount) break;
+                    vec4 r0 = uPointLightOccluders[j * 3];
+                    vec4 r1 = uPointLightOccluders[j * 3 + 1];
+                    vec4 r2 = uPointLightOccluders[j * 3 + 2];
 
-                        vec3 la = vec3(
-                            dot(r0.xyz, fragPos) + r0.w,
-                            dot(r1.xyz, fragPos) + r1.w,
-                            dot(r2.xyz, fragPos) + r2.w
-                        );
-                        vec3 lb = vec3(
-                            dot(r0.xyz, lightPos) + r0.w,
-                            dot(r1.xyz, lightPos) + r1.w,
-                            dot(r2.xyz, lightPos) + r2.w
-                        );
+                    vec3 la = vec3(
+                        dot(r0.xyz, fragPos) + r0.w,
+                        dot(r1.xyz, fragPos) + r1.w,
+                        dot(r2.xyz, fragPos) + r2.w
+                    );
+                    vec3 lb = vec3(
+                        dot(r0.xyz, lightPos) + r0.w,
+                        dot(r1.xyz, lightPos) + r1.w,
+                        dot(r2.xyz, lightPos) + r2.w
+                    );
 
-                        if ((la.x > 1.0 && lb.x > 1.0) || (la.x < -1.0 && lb.x < -1.0) ||
-                            (la.y > 1.0 && lb.y > 1.0) || (la.y < -1.0 && lb.y < -1.0) ||
-                            (la.z > 1.0 && lb.z > 1.0) || (la.z < -1.0 && lb.z < -1.0)) {
-                            continue;
-                        }
+                    if ((la.x > 1.0 && lb.x > 1.0) || (la.x < -1.0 && lb.x < -1.0) ||
+                        (la.y > 1.0 && lb.y > 1.0) || (la.y < -1.0 && lb.y < -1.0) ||
+                        (la.z > 1.0 && lb.z > 1.0) || (la.z < -1.0 && lb.z < -1.0)) {
+                        continue;
+                    }
 
-                        vec3 ld = lb - la;
-                        vec3 invD = vec3(
-                            abs(ld.x) > 1e-5 ? (1.0 / ld.x) : 1e5,
-                            abs(ld.y) > 1e-5 ? (1.0 / ld.y) : 1e5,
-                            abs(ld.z) > 1e-5 ? (1.0 / ld.z) : 1e5
-                        );
-                        vec3 t0 = (-1.0 - la) * invD;
-                        vec3 t1 = ( 1.0 - la) * invD;
-                        vec3 tmin3 = min(t0, t1);
-                        vec3 tmax3 = max(t0, t1);
-                        float tEnter = max(max(tmin3.x, tmin3.y), max(tmin3.z, 0.005));
-                        float tExit  = min(min(tmax3.x, tmax3.y), min(tmax3.z, 0.995));
-                        if (tEnter < tExit) {
-                            return 0.0;
-                        }
+                    vec3 ld = lb - la;
+                    vec3 invD = vec3(
+                        abs(ld.x) > 1e-5 ? (1.0 / ld.x) : 1e5,
+                        abs(ld.y) > 1e-5 ? (1.0 / ld.y) : 1e5,
+                        abs(ld.z) > 1e-5 ? (1.0 / ld.z) : 1e5
+                    );
+                    vec3 t0 = (-1.0 - la) * invD;
+                    vec3 t1 = ( 1.0 - la) * invD;
+                    vec3 tmin3 = min(t0, t1);
+                    vec3 tmax3 = max(t0, t1);
+                    float tEnter = max(max(tmin3.x, tmin3.y), max(tmin3.z, 0.005));
+                    float tExit  = min(min(tmax3.x, tmax3.y), min(tmax3.z, 0.995));
+                    if (tEnter < tExit) {
+                        return 0.0;
                     }
                 }
                 return vis;
@@ -435,11 +437,23 @@
             uniform float uWaterSwayFactor;
             uniform float uPlanetRadius;
             uniform float uWaterRadius;
+            uniform vec3 uCameraPos;
+            uniform float uRenderDistEnabled;
+            uniform float uMaxShadowDist;
             out vec3 vWorldPos;
             out float vTerrainRadius;
             out vec3 vTunnelCenter;
             void main() {
                 vec3 pos = aPosition;
+                vec4 baseWorldPos4 = uModelMatrix * vec4(pos, 1.0);
+                if (uRenderDistEnabled > 0.5 && uMaxShadowDist > 0.0) {
+                    vec3 camDiff = baseWorldPos4.xyz - uCameraPos;
+                    float maxD = uMaxShadowDist + 3.0;
+                    if (dot(camDiff, camDiff) > maxD * maxD) {
+                        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                        return;
+                    }
+                }
                 
                 vec3 actualColor = aColor;
                 bool isGrass = false;
@@ -485,32 +499,21 @@
                         tangent = cross(bitangent, up);
 
                         if (isTree) {
-                            // Very gentle branch/trunk sway. Note that treeSwayWeight is 0.0 for trunks (meaning no sway!)
                             float swayAmount = treeSwayWeight * 0.03 * uSwayFactor;
-                            
-                            // Slower time scaling for calm, organic motion
                             float windPhase = uTime * 0.45 + (pos.x + pos.y + pos.z) * 0.05;
                             float branchWind = sin(windPhase);
-
-                            // We want a pure linear displacement along a fixed wind direction vector in the tangent plane.
-                            // This completely eliminates any circular orbital rotation/spinning around the trunk.
                             vec3 windDir = normalize(tangent * 1.0 + bitangent * 0.3);
                             pos += windDir * branchWind * swayAmount;
 
                             if (isTreeLeaf) {
-                                // Leaf flutter (gentle fluttering, base of leaf is anchored)
                                 float leafPhase = uTime * 1.4 + (pos.x + pos.y + pos.z) * 0.1;
                                 float leafWind = sin(leafPhase);
-                                float lSway = 0.0025 * treeSwayWeight * uSwayFactor; // Very subtle fluttering
-
-                                // Pure linear flutter direction in the tangent plane to prevent spinning
+                                float lSway = 0.0025 * treeSwayWeight * uSwayFactor;
                                 vec3 flutterDir = normalize(tangent * -0.3 + bitangent * 1.0);
                                 pos += flutterDir * leafWind * lSway;
                             }
                         } else {
-                            // Grass sway
                             float swayAmount = isGrass ? (vertexType * 0.15 * uSwayFactor) : 0.0;
-
                             float windX = sin(uTime * 1.5 + pos.y * 5.0 + pos.x * 2.0);
                             float windZ = cos(uTime * 1.5 + pos.y * 5.0 + pos.z * 2.0);
                             float macroWindX = sin(uTime * 0.15) * 0.5 - 1.5;
@@ -520,16 +523,12 @@
                         }
                     }
                 } else if (isSeaweed && uWaterSwayFactor > 0.0) {
-                    // Seaweed/Kelp: Sway with fluid water viscosity
                     float h = max(0.0, distToCenter - uPlanetRadius);
                     float swayAmount = max(0.0, h - 0.015) * 0.9 * uWaterSwayFactor;
-                    
                     float waterSwayX = sin(uTime * 0.7 + pos.y * 14.0 + pos.x * 5.0);
                     float waterSwayZ = cos(uTime * 0.7 + pos.y * 14.0 + pos.z * 5.0);
-                    
                     float currentX = sin(uTime * 0.15) * 0.5;
                     float currentZ = cos(uTime * 0.15) * 0.5;
-                    
                     pos.x += (waterSwayX * 0.14 + currentX * 0.15) * swayAmount;
                     pos.z += (waterSwayZ * 0.14 + currentZ * 0.15) * swayAmount;
                 }
@@ -555,12 +554,11 @@
                 if (uIsTunnelMesh > 5.0) {
                     // Planet Surface in Depth Pass: cut open cave mouths
                     for (int i = 0; i < 64; i++) {
-                        if (i < uTunnelCount) {
-                            vec4 t = uTunnels[i];
-                            vec3 diff = vWorldPos - t.xyz;
-                            if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
-                                discard;
-                            }
+                        if (i >= uTunnelCount) break;
+                        vec4 t = uTunnels[i];
+                        vec3 diff = vWorldPos - t.xyz;
+                        if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
+                            discard;
                         }
                     }
                 } else if (uIsTunnelMesh > 1.5) {
@@ -571,12 +569,11 @@
                         discard;
                     }
                     for (int i = 0; i < 64; i++) {
-                        if (i < uTunnelCount) {
-                            vec4 t = uTunnels[i];
-                            vec3 diff = vWorldPos - t.xyz;
-                            if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
-                                discard;
-                            }
+                        if (i >= uTunnelCount) break;
+                        vec4 t = uTunnels[i];
+                        vec3 diff = vWorldPos - t.xyz;
+                        if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
+                            discard;
                         }
                     }
                 } else if (uIsTunnelMesh > 0.5) {
@@ -588,13 +585,12 @@
                         discard;
                     }
                     for (int i = 0; i < 64; i++) {
-                        if (i < uTunnelCount) {
-                            vec4 t = uTunnels[i];
-                            if (length(t.xyz - vTunnelCenter) < 0.05) continue;
-                            vec3 diff = vWorldPos - t.xyz;
-                            if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
-                                discard;
-                            }
+                        if (i >= uTunnelCount) break;
+                        vec4 t = uTunnels[i];
+                        if (length(t.xyz - vTunnelCenter) < 0.05) continue;
+                        vec3 diff = vWorldPos - t.xyz;
+                        if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
+                            discard;
                         }
                     }
                 }
@@ -610,6 +606,8 @@
             uniform mat4 uModelViewMatrix;
             uniform mat4 uProjectionMatrix;
             uniform mat4 uLightSpaceMatrix;
+            uniform float uRenderDistEnabled;
+            uniform float uMaxRenderDist;
             out vec3 vColor;
             out vec3 vNormal;
             out vec3 vWorldPos;
@@ -624,12 +622,17 @@
                     return;
                 }
                 vec4 mvPosition = uModelViewMatrix * vec4(aPosition, 1.0);
+                float dist = length(mvPosition.xyz);
+                if (uRenderDistEnabled > 0.5 && dist > uMaxRenderDist + 3.5) {
+                    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                    return;
+                }
                 gl_Position = uProjectionMatrix * mvPosition;
                 vColor = aColor;
                 vNormal = normalize(aPosition);
                 vWorldPos = aPosition;
                 vPositionLightSpace = uLightSpaceMatrix * vec4(aPosition, 1.0);
-                vDist = length(mvPosition.xyz);
+                vDist = dist;
                 vTerrainRadius = aTerrainRadius;
                 vTunnelCenter = aTunnelCenter;
             }
@@ -672,23 +675,24 @@
             ${window.SHARED_SHADOW_GLSL}
 
             void main() {
+                if (uRenderDistEnabled > 0.5 && vDist > uMaxRenderDist) {
+                    discard;
+                }
+
                 // Hole cutting or cave clipping
                 if (uIsTunnelMesh > 1.5) {
                     // Cave Outer Shell (เปลือกถ้ำด้านนอก)
                     float distToCenter = length(vWorldPos);
                     float actualTerrainRadius = abs(vTerrainRadius);
-                    // Discard any outer shell fragment near or above the planet surface so it never covers the hole mouth or pokes through the ground
                     if (distToCenter > actualTerrainRadius - 0.05) {
                         discard;
                     }
-                    // Discard outer shell fragments that fall inside ANY tunnel cavity (including its own)
                     for (int i = 0; i < 64; i++) {
-                        if (i < uTunnelCount) {
-                            vec4 t = uTunnels[i];
-                            vec3 diff = vWorldPos - t.xyz;
-                            if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
-                                discard;
-                            }
+                        if (i >= uTunnelCount) break;
+                        vec4 t = uTunnels[i];
+                        vec3 diff = vWorldPos - t.xyz;
+                        if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
+                            discard;
                         }
                     }
                 } else if (uIsTunnelMesh > 0.5) {
@@ -697,38 +701,30 @@
                     float actualTerrainRadius = abs(vTerrainRadius);
                     bool isCollar = vTerrainRadius < 0.0;
                     
-                    // Discard the clamped flat roof of the cave sphere (which is at actualTerrainRadius)
                     if (!isCollar && distToCenter > actualTerrainRadius - 0.025) {
                         discard;
                     }
-                    // If overlapping with another tunnel, discard the inner wall so tunnels connect smoothly
                     for (int i = 0; i < 64; i++) {
-                        if (i < uTunnelCount) {
-                            vec4 t = uTunnels[i];
-                            // Skip the owner tunnel sphere of this vertex
-                            if (length(t.xyz - vTunnelCenter) < 0.05) continue;
-                            vec3 diff = vWorldPos - t.xyz;
-                            if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
-                                discard;
-                            }
+                        if (i >= uTunnelCount) break;
+                        vec4 t = uTunnels[i];
+                        if (length(t.xyz - vTunnelCenter) < 0.05) continue;
+                        vec3 diff = vWorldPos - t.xyz;
+                        if (dot(diff, diff) < (t.w * 0.94) * (t.w * 0.94)) {
+                            discard;
                         }
                     }
-                } else {
+                } else if (uTunnelCount > 0) {
                     // Planet Surface Mesh: cut open the mouth of every cave / player-dug hole
                     for (int i = 0; i < 64; i++) {
-                        if (i < uTunnelCount) {
-                            vec4 t = uTunnels[i];
-                            vec3 diff = vWorldPos - t.xyz;
-                            if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
-                                discard;
-                            }
+                        if (i >= uTunnelCount) break;
+                        vec4 t = uTunnels[i];
+                        vec3 diff = vWorldPos - t.xyz;
+                        if (dot(diff, diff) < (t.w * 1.02) * (t.w * 1.02)) {
+                            discard;
                         }
                     }
                 }
 
-                if (uRenderDistEnabled > 0.5 && vDist > uMaxRenderDist) {
-                    discard;
-                }
                 vec3 finalColor;
                 if (uUseLighting > 0.5) {
                     vec3 normal = normalize(vNormal);
@@ -865,6 +861,11 @@ const skyVertexShaderSource = `#version 300 es
             }
 
             void main() {
+                if (uWaterRadius > 0.0) {
+                    if (length(uCameraPos) < uWaterRadius) {
+                        discard;
+                    }
+                }
                 vec3 dir = normalize(vWorldDir);
                 
                 // ดาวระยิบระยับ
@@ -1641,11 +1642,15 @@ window.cloud3DProgram = cloud3DProgram;
       const depthTunnelsLoc = gl.getUniformLocation(depthProgram, "uTunnels");
       const depthTunnelCountLoc = gl.getUniformLocation(depthProgram, "uTunnelCount");
       const depthIsTunnelMeshLoc = gl.getUniformLocation(depthProgram, "uIsTunnelMesh");
+      const depthCameraPosLoc = gl.getUniformLocation(depthProgram, "uCameraPos");
+      const depthRenderDistEnabledLoc = gl.getUniformLocation(depthProgram, "uRenderDistEnabled");
+      const depthMaxShadowDistLoc = gl.getUniformLocation(depthProgram, "uMaxShadowDist");
 
       // Shadow Map Framebuffer initialization
       let shadowFramebuffer;
       let shadowDepthTexture;
       let dummyColorTex = null;
+      const maxGpuTextureSize = (gl && gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 4096;
       
       function computeShadowMapSize() {
         const q = (typeof window !== "undefined" && typeof window.shadowMapQuality === "number")
@@ -6674,13 +6679,34 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           ? terrainRenderDistValue
           : (typeof window !== "undefined" && typeof window.terrainRenderDistValue !== "undefined"
             ? window.terrainRenderDistValue
-            : renderDistValue);
+            : 32.0);
+
+        const curLandmarkDist = typeof landmarkRenderDistValue !== "undefined"
+          ? landmarkRenderDistValue
+          : (typeof window !== "undefined" && typeof window.landmarkRenderDistValue !== "undefined"
+            ? window.landmarkRenderDistValue
+            : 20.0);
+
+        const curShadowDist = typeof shadowRenderDistValue !== "undefined"
+          ? shadowRenderDistValue
+          : (typeof window !== "undefined" && typeof window.shadowRenderDistValue !== "undefined"
+            ? window.shadowRenderDistValue
+            : 14.0);
 
         const curObjectDist = typeof objectRenderDistValue !== "undefined"
           ? objectRenderDistValue
           : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
             ? window.objectRenderDistValue
-            : renderDistValue);
+            : 6.0);
+
+        const curGrassDist = typeof grassRenderDistValue !== "undefined"
+          ? grassRenderDistValue
+          : (typeof window !== "undefined" && typeof window.grassRenderDistValue !== "undefined"
+            ? window.grassRenderDistValue
+            : 4.5);
+
+        // Distance culling for shadows (LOD optimization: shadows are cast within shadowRenderDistValue)
+        const curShadowLandmarkDist = Math.min(curLandmarkDist, curShadowDist);
 
         let shadowTargetX = px, shadowTargetY = py, shadowTargetZ = pz;
         // Universal Standard Cascaded Shadow Volume:
@@ -6694,13 +6720,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         const stepSpan = curPlayerScale * 16.0;
         const minSpan = curPlayerScale * 32.0;
         let orthoSize = Math.ceil(Math.max(shadowCamDist * 2.0, minSpan) / stepSpan) * stepSpan;
+        if (renderDistEnabled && curShadowDist > 0) {
+          orthoSize = Math.min(orthoSize, Math.max(minSpan * 0.75, curShadowDist + 2.0));
+        }
 
-        // Automatically compute shadow map resolution needed so 1 texel is always smaller than character limbs
-        const maxAllowedTexelSize = Math.max(0.008, curPlayerScale * 0.075);
-        const minAutoRes = (orthoSize * 2.0) / maxAllowedTexelSize;
-        const maxGpuSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+        // Respect user's Shadow Map Quality setting without querying gl.getParameter every frame
         const baseQualityRes = computeShadowMapSize();
-        const targetAutoRes = Math.min(maxGpuSize, Math.max(baseQualityRes, minAutoRes <= 2048 ? 2048 : 4096));
+        const targetAutoRes = Math.min(maxGpuTextureSize, baseQualityRes);
         if (SHADOW_WIDTH !== targetAutoRes && shadowDepthTexture) {
           SHADOW_WIDTH = targetAutoRes;
           SHADOW_HEIGHT = targetAutoRes;
@@ -6802,8 +6828,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         const activeWaterSurfaceRadius = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
         gl.uniform1f(depthWaterRadiusLoc, activeWaterSurfaceRadius);
         if (depthIsTunnelMeshLoc) gl.uniform1f(depthIsTunnelMeshLoc, 0.0);
+        if (depthCameraPosLoc && eyePos) gl.uniform3fv(depthCameraPosLoc, setF32(f32_eyePos, eyePos));
+        if (depthRenderDistEnabledLoc) gl.uniform1f(depthRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
 
-        // Planet terrain surface & cave shells to depth (prevents sunlight from shining through the planet from underneath!)
+        // Planet terrain surface & cave shells to depth (cull beyond shadow ortho range)
+        if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, Math.max(curShadowDist + 6.0, orthoSize + 4.0));
         if (vertexBuffer && indexBuffer && indicesLength > 0 && typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawSurfaceDepth) {
           SurfaceSystem.drawSurfaceDepth(gl, {
             vertexBuffer,
@@ -6829,7 +6858,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             });
           }
         }
-        // Cubes to depth (Cull by object render distance)
+        // Cubes to depth (Cull by shadow landmark render distance)
+        if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, curShadowLandmarkDist);
         if (cubeVertexBuffer && cubeIndexBuffer && cubeIndicesLength > 0) {
           gl.uniform1f(depthSwayFactorLoc, 0.0);
           gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
@@ -6847,7 +6877,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const bytesPerIndex = isUint32 ? 4 : 2;
 
           if (cubeObstacles && cubeObstacles.length > 0 && typeof getVisibleIndexRanges === "function" && eyePos) {
-            const shadowRanges = getVisibleIndexRanges(cubeObstacles, null, curObjectDist, eyePos);
+            const shadowRanges = getVisibleIndexRanges(cubeObstacles, null, curShadowLandmarkDist, eyePos);
             for (let i = 0; i < shadowRanges.length; i++) {
               const range = shadowRanges[i];
               const count = range.end - range.start;
@@ -6874,7 +6904,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
         }
 
-        // Nature / tree objects to depth (Cull by object render distance)
+        // Nature / tree objects to depth (Cull by shadow landmark render distance)
         if (typeof TreeSystem !== "undefined" && TreeSystem.drawTreeDepth) {
           TreeSystem.drawTreeDepth(gl, {
             natureVertexBuffer,
@@ -6894,7 +6924,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             natureObstacles,
             grassChunks,
             eyePos,
-            renderDistValue: curObjectDist
+            renderDistValue: curShadowLandmarkDist
           });
           if (depthColorLoc >= 0) {
             gl.disableVertexAttribArray(depthColorLoc);
@@ -6902,6 +6932,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         }
         
         if (typeof GrassSystem !== "undefined" && GrassSystem.drawGrassDepth) {
+          const grassShadowDist = Math.min(curGrassDist, curShadowDist);
+          if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, grassShadowDist);
           GrassSystem.drawGrassDepth(gl, {
             natureVertexBuffer,
             natureIndexBuffer,
@@ -6911,7 +6943,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             supportUint32,
             grassChunks,
             eyePos,
-            renderDistValue: curObjectDist
+            renderDistValue: grassShadowDist
           });
           if (depthColorLoc >= 0) {
             gl.disableVertexAttribArray(depthColorLoc);
@@ -6921,8 +6953,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
         // Ensure CULL_FACE stays disabled for all subsequent depth pass draws (Collectibles, Houses, Character, Equipment)
         gl.disable(gl.CULL_FACE);
+        const objShadowDist = Math.min(curObjectDist, curShadowDist);
+        if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, objShadowDist);
 
-        // Collectibles to depth (Cull by object render distance)
+        // Collectibles to depth (Cull by object/shadow render distance)
         if (
           collectibleVertexBuffer &&
           collectibleIndexBuffer &&
@@ -6941,7 +6975,6 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
           const isUint32 = collectibleIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
-          const bytesPerIndex = isUint32 ? 4 : 2;
 
           gl.drawElements(
             gl.TRIANGLES,
@@ -6951,7 +6984,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           );
         }
 
-        // Dynamic Collectibles to depth (Cull by object render distance)
+        // Dynamic Collectibles to depth (Cull by object/shadow render distance)
         if (
           dynamicCollectibleVertexBuffer &&
           dynamicCollectibleIndexBuffer &&
@@ -6980,7 +7013,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         }
 
         if (activeRidingBoat && typeof drawDedicatedActiveBoatShadow === "function") {
+          if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, 0.0);
           drawDedicatedActiveBoatShadow(gl, depthPosLoc);
+          if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, objShadowDist);
         }
 
         // Amphibians to depth (Cull creatures if outside object render distance)
@@ -6991,7 +7026,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         ) {
           let hasNearbyAmphibians = true;
           if (typeof amphibians !== "undefined" && amphibians && amphibians.length > 0 && eyePos) {
-            const maxSq = (curObjectDist + 1.0) * (curObjectDist + 1.0);
+            const maxSq = (objShadowDist + 1.0) * (objShadowDist + 1.0);
             hasNearbyAmphibians = amphibians.some(npc => {
               if (npc.hp !== undefined && npc.hp <= 0) return false;
               const pos = npc.position || npc.pos;
@@ -7029,7 +7064,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         ) {
           let hasNearbyFire = true;
           if (typeof fireObstacles !== "undefined" && fireObstacles && fireObstacles.length > 0 && eyePos) {
-            const maxSq = (curObjectDist + 1.0) * (curObjectDist + 1.0);
+            const maxSq = (objShadowDist + 1.0) * (objShadowDist + 1.0);
             hasNearbyFire = fireObstacles.some(f => {
               const pos = f.position || f.pos;
               if (!pos) return true;
@@ -7058,7 +7093,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
         }
 
-        // Character to depth
+        // Character & Equip to depth (always cast shadow near player)
+        if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, 0.0);
         if (charVertexBuffer && charIndexBuffer && charIndicesLength > 0) {
           gl.uniform1f(depthSwayFactorLoc, 0.0);
           gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
@@ -7162,6 +7198,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         // วาดท้องฟ้าอวกาศเนบิวลากลุ่มก๊าซ (Cosmic Deep Space Skybox)
         if (
           skyEnabled &&
+          !isCameraUnderwater &&
           skyVertexBuffer &&
           skyIndexBuffer &&
           skyIndicesLength > 0
@@ -7177,13 +7214,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             gl.uniform1f(skyTimeLoc, cloudAnimTime * 0.05);
             gl.uniform1f(skyGasIntensityLoc, skyGasIntensity);
             if (skyCameraPosLoc) gl.uniform3fv(skyCameraPosLoc, setF32(f32_eyePos, eyePos));
-            if (skyWaterRadiusLoc) gl.uniform1f(skyWaterRadiusLoc, isSpaceCameraMode ? 0.0 : waterRadius);
+            const isSpaceCam = (typeof cameraMode !== "undefined" && (cameraMode === "sun" || cameraMode === "overview" || cameraMode === "solarsystem" || cameraMode === "spacesmap_overview"));
+            if (skyWaterRadiusLoc) gl.uniform1f(skyWaterRadiusLoc, isSpaceCam ? 0.0 : waterRadius);
 
             gl.depthMask(false);
-            const prevDepthFunc = gl.getParameter(gl.DEPTH_FUNC);
             gl.depthFunc(gl.LEQUAL);
-            const prevCull = gl.isEnabled(gl.CULL_FACE);
-            if (prevCull) gl.disable(gl.CULL_FACE);
+            gl.disable(gl.CULL_FACE);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, skyVertexBuffer);
             gl.enableVertexAttribArray(skyPosLoc);
@@ -7202,8 +7238,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               );
             }
 
-            if (prevCull) gl.enable(gl.CULL_FACE);
-            gl.depthFunc(prevDepthFunc || gl.LESS);
+            gl.depthFunc(gl.LESS);
             gl.depthMask(true);
         }
 
@@ -7215,7 +7250,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         const satIBO = window.satelliteIndexBuffer;
         const satLen = window.satelliteIndicesLength || 0;
 
-        if (satVBO && satCBO && satIBO && satLen > 0) {
+        if (satVBO && satCBO && satIBO && satLen > 0 && !isCameraUnderwater) {
           const satProg = sunProgram || modelProgram;
           if (satProg) {
             gl.useProgram(satProg);
@@ -7286,7 +7321,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         // ============================================
         // วาดดาวบริวารดวงอื่นๆ ในระบบสุริยะ SpacesMap ( Celestial Neighbor Planets - ไม่ล็อคตามกล้อง )
         // ============================================
-        if (window.EXTRA_PLANETS && Array.isArray(window.EXTRA_PLANETS) && window.EXTRA_PLANETS.length > 0) {
+        if (window.EXTRA_PLANETS && Array.isArray(window.EXTRA_PLANETS) && window.EXTRA_PLANETS.length > 0 && !isCameraUnderwater) {
           const extraProg = modelProgram || sunProgram;
           if (extraProg) {
             gl.useProgram(extraProg);
@@ -8349,19 +8384,19 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   setF32(f32_reflectedModelViewMatrix, reflectedModelViewMatrix),
                 );
                 gl.uniformMatrix4fv(
-                  gl.getUniformLocation(charProgram, "uModelMatrix"),
+                  charModelMatrixLoc,
                   false,
                   setF32(f32_reflectedModelMatrix, reflectedModelMatrix),
                 );
                 gl.uniformMatrix4fv(charProjLoc, false, setF32(f32_projMatrix, projMatrix));
                 gl.uniform3fv(charLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                 gl.uniformMatrix4fv(
-                  gl.getUniformLocation(charProgram, "uLightSpaceMatrix"),
+                  charLightSpaceLoc,
                   false,
                   setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
                 );
-                gl.uniform1i(gl.getUniformLocation(charProgram, "uShadowMap"), 1);
-          gl.uniform1i(gl.getUniformLocation(charProgram, "uWaterMaskTex"), 2);
+                gl.uniform1i(charShadowMapLoc, 1);
+                gl.uniform1i(charWaterMaskLoc, 2);
                 gl.uniform1f(charWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
                 gl.uniform3fv(charWaterColorLoc, setF32(f32_waterColor, waterColor));
                 gl.uniform1f(charWaterOpacityLoc, waterOpacity);
@@ -8642,7 +8677,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             modelRenderDistEnabledLoc,
             renderDistEnabled ? 1.0 : 0.0,
           );
-          gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
+          gl.uniform1f(modelMaxRenderDistLoc, curLandmarkDist);
           gl.uniform1f(modelTimeLoc, leafAnimTime);
           gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
           gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
@@ -8666,8 +8701,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
 
           const isUint32 = cubeIndicesLength > 65535;
+          const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
+            ? renderDistEnabled
+            : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
           if (frustumCullingEnabled && frustumPlanes) {
-            const ranges = getVisibleIndexRanges(cubeObstacles, frustumPlanes);
+            const ranges = getVisibleIndexRanges(cubeObstacles, frustumPlanes, isRenderDistOn ? curLandmarkDist : null, eyePos);
             const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
             const bytesPerIndex = isUint32 ? 4 : 2;
             for (let i = 0; i < ranges.length; i++) {
@@ -8721,7 +8759,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             waterColor,
             waterOpacity,
             renderDistEnabled,
-            renderDistValue: curObjectDist,
+            renderDistValue: curLandmarkDist,
             leafAnimTime,
             eyePos,
             natureSway,
@@ -8745,8 +8783,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             natureIndicesLength,
             natureGrassStartIndex,
             supportUint32,
+            modelMaxRenderDistLoc,
             renderDistEnabled,
-            renderDistValue: curObjectDist,
+            renderDistValue: curGrassDist,
             frustumCullingEnabled,
             frustumPlanes,
             grassChunks,
@@ -9082,12 +9121,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
+            modelLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform1i(modelWaterMaskLoc, 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
@@ -9156,12 +9195,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             setF32(f32_projMatrix, projMatrix),
           );
           gl.uniformMatrix4fv(
-            gl.getUniformLocation(modelProgram, "uLightSpaceMatrix"),
+            modelLightSpaceLoc,
             false,
             setF32(f32_lightSpaceMatrix, lightSpaceMatrix),
           );
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uShadowMap"), 1);
-          gl.uniform1i(gl.getUniformLocation(modelProgram, "uWaterMaskTex"), 2);
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform1i(modelWaterMaskLoc, 2);
 
           gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
@@ -9611,6 +9650,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         // วาดชั้นบรรยากาศ (Atmosphere) - เรืองแสงฟิสิกส์ Fresnel สวยงามรอบดวงดาว
         if (
           atmosphereEnabled &&
+          !isCameraUnderwater &&
           atmosphereVertexBuffer &&
           atmosphereIndexBuffer &&
           atmosphereIndicesLength > 0
@@ -9661,7 +9701,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
         
         // วาดเมฆแก๊สลอยตัว (Gaseous Clouds)
-        if (cloudsEnabled) {
+        if (cloudsEnabled && !isCameraUnderwater) {
           if (typeof window.cloud3DData === "undefined" && typeof window.generateClouds3D === "function") {
               const currentSeed = typeof seedVal !== "undefined" ? seedVal : (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 12345);
               const currentRadius = typeof RADIUS !== "undefined" ? RADIUS : 8.0;

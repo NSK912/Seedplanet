@@ -1081,22 +1081,76 @@
       rebuildTunnelBuffers(gl || _gl, supportUint32 || _supportUint32);
     },
 
-    getTunnelUniformsData: function(eyePos) {
-      f32_tunnelsData.fill(0);
-      let count = 0;
-      const tunnels = global.tunnels3D || [];
-      if (tunnels && tunnels.length > 0) {
-        tunnelsWithDistPool.length = 0;
-        for (let i = 0; i < tunnels.length; i++) {
-          const t = tunnels[i];
-          const dx = t.x - eyePos[0];
-          const dy = t.y - eyePos[1];
-          const dz = t.z - eyePos[2];
-          const distSq = dx*dx + dy*dy + dz*dz;
-          tunnelsWithDistPool.push({ t: t, distSq: distSq });
+    getTunnelUniformsData: (function() {
+      let _lastEx = NaN, _lastEy = NaN, _lastEz = NaN;
+      let _lastLen = -1;
+      let _lastMaxDist = -1;
+      let _cachedCount = 0;
+      const _cachedResult = { tunnelsData: f32_tunnelsData, count: 0 };
+
+      return function(eyePos) {
+        const tunnels = global.tunnels3D || [];
+        const tLen = tunnels ? tunnels.length : 0;
+        if (tLen === 0 || !eyePos || eyePos.length < 3) {
+          _cachedResult.count = 0;
+          return _cachedResult;
         }
-        tunnelsWithDistPool.sort((a, b) => a.distSq - b.distSq);
-        count = Math.min(64, tunnelsWithDistPool.length);
+
+        const isLodOn = (typeof global.renderDistLimitEnabled !== "undefined") ? !!global.renderDistLimitEnabled : true;
+        const terrainDist = (typeof global.terrainRenderDistValue === "number" && global.terrainRenderDistValue > 0)
+          ? global.terrainRenderDistValue
+          : 32.0;
+        const maxDist = isLodOn ? (terrainDist + 4.0) : 99999.0;
+
+        const ex = eyePos[0], ey = eyePos[1], ez = eyePos[2];
+        const moveSq = (ex - _lastEx) * (ex - _lastEx) + (ey - _lastEy) * (ey - _lastEy) + (ez - _lastEz) * (ez - _lastEz);
+        if (tLen === _lastLen && Math.abs(maxDist - _lastMaxDist) < 0.05 && moveSq < 0.0025) {
+          _cachedResult.count = _cachedCount;
+          return _cachedResult;
+        }
+
+        _lastEx = ex; _lastEy = ey; _lastEz = ez;
+        _lastLen = tLen;
+        _lastMaxDist = maxDist;
+
+        let activePoolCount = 0;
+        for (let i = 0; i < tLen; i++) {
+          const t = tunnels[i];
+          if (!t) continue;
+          const dx = t.x - ex;
+          const dy = t.y - ey;
+          const dz = t.z - ez;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          const limit = maxDist + (t.r || 1.0);
+          if (distSq > limit * limit) continue;
+
+          if (activePoolCount >= tunnelsWithDistPool.length) {
+            tunnelsWithDistPool.push({ t: t, distSq: distSq });
+          } else {
+            const slot = tunnelsWithDistPool[activePoolCount];
+            slot.t = t;
+            slot.distSq = distSq;
+          }
+          activePoolCount++;
+        }
+
+        // Sort only the active subset [0 .. activePoolCount - 1]
+        if (activePoolCount > 1) {
+          // Simple insertion/selection or subarray sort for small activePoolCount
+          for (let i = 1; i < activePoolCount; i++) {
+            const cur = tunnelsWithDistPool[i];
+            const curDist = cur.distSq;
+            let j = i - 1;
+            while (j >= 0 && tunnelsWithDistPool[j].distSq > curDist) {
+              tunnelsWithDistPool[j + 1] = tunnelsWithDistPool[j];
+              j--;
+            }
+            tunnelsWithDistPool[j + 1] = cur;
+          }
+        }
+
+        const count = Math.min(64, activePoolCount);
+        f32_tunnelsData.fill(0);
         for (let i = 0; i < count; i++) {
           const t = tunnelsWithDistPool[i].t;
           f32_tunnelsData[i * 4 + 0] = t.x;
@@ -1104,9 +1158,11 @@
           f32_tunnelsData[i * 4 + 2] = t.z;
           f32_tunnelsData[i * 4 + 3] = t.r;
         }
-      }
-      return { tunnelsData: f32_tunnelsData, count: count };
-    },
+        _cachedCount = count;
+        _cachedResult.count = count;
+        return _cachedResult;
+      };
+    })(),
 
     drawCaveDepth: function(gl, locations) {
       if (!tunnelIndicesCount || !tunnelVertexBuffer || !tunnelIndexBuffer) {

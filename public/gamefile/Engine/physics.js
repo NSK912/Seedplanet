@@ -595,7 +595,28 @@ const CollisionCore = {
 
     if (isColliding) return true;
 
-    // 2. Water surface collision (Removed by request)
+    // 2. Water surface collision (Toggleable via UI Dev Game)
+    const isWaterCollisionOn = typeof window.cameraWaterCollisionEnabled === "boolean" 
+      ? window.cameraWaterCollisionEnabled 
+      : (typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : true);
+
+    if (isWaterCollisionOn && typeof waterRadius === "number" && waterRadius > 0.0) {
+      const isWaterOn = (typeof waterEnabled === "undefined" || waterEnabled);
+      if (isWaterOn) {
+        let pHead = playerHeadPos || (typeof window !== "undefined" && window.player3DPos ? window.player3DPos : null);
+        let pHeadDist = pHead ? Math.sqrt(pHead[0] * pHead[0] + pHead[1] * pHead[1] + pHead[2] * pHead[2]) : (waterRadius + 1.0);
+        
+        if (pHeadDist >= waterRadius - 0.02) {
+          if (distToCenter < waterRadius + actualCamCushion) {
+            return true;
+          }
+        } else {
+          if (distToCenter > waterRadius - actualCamCushion) {
+            return true;
+          }
+        }
+      }
+    }
 
     // 3. Obstacle & Objects collision
     const checkObstacleCollisions = (obstacles, extraCushion, mask) => {
@@ -997,6 +1018,37 @@ const CollisionCore = {
           currentP[1] += uy * (penetration + 0.015);
           currentP[2] += uz * (penetration + 0.015);
           moved = true;
+        }
+      }
+
+      // 3. Water surface collision resolution (Toggleable via UI Dev Game)
+      const isWaterCollisionOn = typeof window.cameraWaterCollisionEnabled === "boolean" 
+        ? window.cameraWaterCollisionEnabled 
+        : (typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : true);
+
+      if (isWaterCollisionOn && typeof waterRadius === "number" && waterRadius > 0.0) {
+        const isWaterOn = (typeof waterEnabled === "undefined" || waterEnabled);
+        if (isWaterOn) {
+          let pHead = playerHeadPos || (typeof window !== "undefined" && window.player3DPos ? window.player3DPos : null);
+          let pHeadDist = pHead ? Math.sqrt(pHead[0] * pHead[0] + pHead[1] * pHead[1] + pHead[2] * pHead[2]) : (waterRadius + 1.0);
+          
+          if (pHeadDist >= waterRadius - 0.02) {
+            if (distToCenter < waterRadius + actualCamCushion) {
+              const penetration = (waterRadius + actualCamCushion) - distToCenter;
+              currentP[0] += ux * (penetration + 0.015);
+              currentP[1] += uy * (penetration + 0.015);
+              currentP[2] += uz * (penetration + 0.015);
+              moved = true;
+            }
+          } else {
+            if (distToCenter > waterRadius - actualCamCushion) {
+              const penetration = distToCenter - (waterRadius - actualCamCushion);
+              currentP[0] -= ux * (penetration + 0.015);
+              currentP[1] -= uy * (penetration + 0.015);
+              currentP[2] -= uz * (penetration + 0.015);
+              moved = true;
+            }
+          }
         }
       }
 

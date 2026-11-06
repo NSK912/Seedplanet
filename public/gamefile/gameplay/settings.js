@@ -92,6 +92,48 @@ window.antialiasEnabled = antialiasEnabled;
 let cameraMode = "tps";
 var zoomLimitEnabled = true;
 let cameraCollisionEnabled = true;
+let cameraWaterCollisionEnabled = true;
+if (typeof window !== "undefined") {
+  window.cameraWaterCollisionEnabled = cameraWaterCollisionEnabled;
+}
+let masterLodScale = 100;
+if (typeof window !== "undefined") {
+  window.masterLodScale = masterLodScale;
+}
+
+function applyMasterLodScale(scalePercent) {
+  const pct = Math.max(25, Math.min(200, parseInt(scalePercent) || 100));
+  masterLodScale = pct;
+  if (typeof window !== "undefined") {
+    window.masterLodScale = pct;
+  }
+  const factor = pct / 100.0;
+
+  // Base values (ค่าเริ่มต้น):
+  // 1. Terrain: 32.0
+  // 2. Landmarks: 20.0
+  // 3. Shadow: 14.0
+  // 4. Objects: 6.0
+  // 5. Grass: 4.5
+  const tDist = Math.round(32.0 * factor * 10) / 10;
+  const lDist = Math.round(20.0 * factor * 10) / 10;
+  const sDist = Math.round(14.0 * factor * 10) / 10;
+  const oDist = Math.round(6.0 * factor * 10) / 10;
+  const gDist = Math.round(4.5 * factor * 10) / 10;
+
+  if (typeof window.setTerrainRenderDist === "function") window.setTerrainRenderDist(tDist);
+  if (typeof window.setLandmarkRenderDist === "function") window.setLandmarkRenderDist(lDist);
+  if (typeof window.setShadowRenderDist === "function") window.setShadowRenderDist(sDist);
+  if (typeof window.setObjectRenderDist === "function") window.setObjectRenderDist(oDist);
+  if (typeof window.setGrassRenderDist === "function") window.setGrassRenderDist(gDist);
+
+  const slider = document.getElementById("masterLodScaleSlider");
+  if (slider && parseInt(slider.value) !== pct) slider.value = pct;
+
+  const label = document.getElementById("masterLodScaleVal");
+  if (label) label.textContent = `${pct}%`;
+}
+window.applyMasterLodScale = applyMasterLodScale;
 let ragdollEnabled = false;
 
 let currentKeyBindings = {
@@ -563,6 +605,16 @@ function syncInventorySettingsUI() {
     sensVal.textContent = mouseSensitivity.toFixed(2) + "x";
   }
 
+  const lodSlider = document.getElementById("masterLodScaleSlider");
+  const lodVal = document.getElementById("masterLodScaleVal");
+  const curLodScale = typeof masterLodScale === "number" ? masterLodScale : (typeof window !== "undefined" && typeof window.masterLodScale === "number" ? window.masterLodScale : 100);
+  if (lodSlider && parseInt(lodSlider.value) !== curLodScale) {
+    lodSlider.value = curLodScale;
+  }
+  if (lodVal) {
+    lodVal.textContent = `${curLodScale}%`;
+  }
+
   function updateFxaaUI() {
     const btnOn = document.getElementById("fxaaToggleOn") || document.getElementById("taauToggleOn");
     const btnOff = document.getElementById("fxaaToggleOff") || document.getElementById("taauToggleOff");
@@ -683,6 +735,16 @@ function initSettingsEventListeners() {
       const val = parseInt(e.target.value);
       mouseSensitivity = val / 100;
       document.getElementById("mouseSensitivityVal").textContent = mouseSensitivity.toFixed(2) + "x";
+    });
+  }
+
+  const lodSlider = document.getElementById("masterLodScaleSlider");
+  if (lodSlider) {
+    lodSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value);
+      applyMasterLodScale(val);
+      if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
+      else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
     });
   }
 

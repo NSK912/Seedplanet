@@ -9,6 +9,8 @@
         uniform float uTime;
         uniform float uWaveStrength;
         uniform float uWaterLevel;
+        uniform float uRenderDistEnabled;
+        uniform float uMaxRenderDist;
         
         out vec3 vPosition;
         out vec3 vNormal;
@@ -17,6 +19,12 @@
         out vec4 vNormClipPos;
         
         void main() {
+            vec4 baseMvPos = uModelViewMatrix * vec4(aPosition, 1.0);
+            float baseDist = length(baseMvPos.xyz);
+            if (uRenderDistEnabled > 0.5 && baseDist > uMaxRenderDist + 3.0) {
+                gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                return;
+            }
             float wave1 = sin(aPosition.x * 6.0 + uTime * 2.3) * 0.04;
             float wave2 = cos(aPosition.z * 5.0 + uTime * 1.8) * 0.035;
             float wave3 = sin(aPosition.y * 4.0 + uTime * 2.7) * 0.025;
@@ -270,6 +278,7 @@
   let waterLevelLoc = null;
   let waterLightDirLoc = null;
   let waterCameraPosLoc = null;
+  let waterMaskTexLoc = null;
   let waterRenderDistEnabledLoc = null;
   let waterMaxRenderDistLoc = null;
 
@@ -360,6 +369,7 @@
     waterLevelLoc = gl.getUniformLocation(waterProgram, "uWaterLevel");
     waterLightDirLoc = gl.getUniformLocation(waterProgram, "uLightDir");
     waterCameraPosLoc = gl.getUniformLocation(waterProgram, "uCameraPos");
+    waterMaskTexLoc = gl.getUniformLocation(waterProgram, "uWaterMaskTex");
     waterRenderDistEnabledLoc = gl.getUniformLocation(waterProgram, "uRenderDistEnabled");
     waterMaxRenderDistLoc = gl.getUniformLocation(waterProgram, "uMaxRenderDist");
 
@@ -740,7 +750,7 @@
     gl.uniform1f(waterLevelLoc, wLevel);
     gl.uniform3fv(waterLightDirLoc, setF32(f32_light, lightDir));
     gl.uniform3fv(waterCameraPosLoc, setF32(f32_cam, cameraPos));
-    gl.uniform1i(gl.getUniformLocation(waterProgram, "uWaterMaskTex"), 2);
+    if (waterMaskTexLoc) gl.uniform1i(waterMaskTexLoc, 2);
     gl.uniform1f(waterRenderDistEnabledLoc, renderDistE);
     gl.uniform1f(waterMaxRenderDistLoc, renderDistVal);
 
@@ -871,41 +881,16 @@
     gl.uniform3fv(waterBoatOffsetLoc, f32_boatOffsets);
     gl.uniform1f(waterBoatCountLoc, boatCount);
 
-    // Tunnel clipping parameters
-    let waterTunnelCount = 0;
-    if (t3D) {
-      const count = t3D.length;
-      while (tunnelsWithDistPool.length < count) {
-        tunnelsWithDistPool.push({ t: null, distSq: 0 });
-      }
-      for (let i = 0; i < tunnelsWithDistPool.length; i++) {
-        if (i < count) {
-          const t = t3D[i];
-          const dx = t.x - cameraPos[0];
-          const dy = t.y - cameraPos[1];
-          const dz = t.z - cameraPos[2];
-          tunnelsWithDistPool[i].t = t;
-          tunnelsWithDistPool[i].distSq = dx*dx + dy*dy + dz*dz;
-        } else {
-          tunnelsWithDistPool[i].t = null;
-          tunnelsWithDistPool[i].distSq = Infinity;
-        }
-      }
-      tunnelsWithDistPool.sort((a, b) => a.distSq - b.distSq);
-      waterTunnelCount = Math.min(64, count);
-      f32_waterTunnelsData.fill(0);
-      for (let i = 0; i < waterTunnelCount; i++) {
-        const t = tunnelsWithDistPool[i].t;
-        if (t) {
-          f32_waterTunnelsData[i * 4 + 0] = t.x;
-          f32_waterTunnelsData[i * 4 + 1] = t.y;
-          f32_waterTunnelsData[i * 4 + 2] = t.z;
-          f32_waterTunnelsData[i * 4 + 3] = t.r;
-        }
+    // Tunnel clipping parameters (reuse CaveSystem per-frame cache if needed)
+    if (waterTunnelsLoc || waterTunnelCountLoc) {
+      if (typeof global.CaveSystem !== "undefined" && global.CaveSystem.getTunnelUniformsData) {
+        const { tunnelsData, count } = global.CaveSystem.getTunnelUniformsData(cameraPos);
+        if (waterTunnelsLoc) gl.uniform4fv(waterTunnelsLoc, tunnelsData);
+        if (waterTunnelCountLoc) gl.uniform1i(waterTunnelCountLoc, count);
+      } else {
+        if (waterTunnelCountLoc) gl.uniform1i(waterTunnelCountLoc, 0);
       }
     }
-    if (waterTunnelsLoc) gl.uniform4fv(waterTunnelsLoc, f32_waterTunnelsData);
-    if (waterTunnelCountLoc) gl.uniform1i(waterTunnelCountLoc, waterTunnelCount);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, waterVertexBuffer);
     gl.enableVertexAttribArray(waterPosLoc);
@@ -915,8 +900,7 @@
 
     // Transparent water pass should not write to depth buffer so 3D UI and other transparent passes are not clipped
     gl.depthMask(false);
-    const prevCull = gl.isEnabled(gl.CULL_FACE);
-    if (prevCull) gl.disable(gl.CULL_FACE);
+    gl.disable(gl.CULL_FACE);
 
     if (waterIndicesLength > 65535) {
       gl.drawElements(gl.TRIANGLES, waterIndicesLength, gl.UNSIGNED_INT, 0);
@@ -925,7 +909,6 @@
     }
 
     gl.depthMask(true);
-    if (prevCull) gl.enable(gl.CULL_FACE);
   }
 
   function getMaskTexture() {

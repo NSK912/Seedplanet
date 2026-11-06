@@ -48,6 +48,7 @@
             taauEnabled: currentFxaa,
             cameraMode,
             cameraCollisionEnabled,
+            cameraWaterCollisionEnabled: typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : (typeof window !== "undefined" && typeof window.cameraWaterCollisionEnabled === "boolean" ? window.cameraWaterCollisionEnabled : true),
             zoomLimitEnabled,
             ragdollEnabled,
             fullscreen: isCurrentFullscreen
@@ -92,6 +93,7 @@
             taauEnabled: currentFxaa,
             cameraMode,
             cameraCollisionEnabled,
+            cameraWaterCollisionEnabled: typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : (typeof window !== "undefined" && typeof window.cameraWaterCollisionEnabled === "boolean" ? window.cameraWaterCollisionEnabled : true),
             zoomLimitEnabled,
             ragdollEnabled,
             fullscreen: isCurrentFullscreen,
@@ -136,8 +138,12 @@
             waterPlantSway,
             renderDistEnabled,
             renderDistValue,
-            terrainRenderDistValue: typeof terrainRenderDistValue !== "undefined" ? terrainRenderDistValue : renderDistValue,
-            objectRenderDistValue: typeof objectRenderDistValue !== "undefined" ? objectRenderDistValue : renderDistValue,
+            terrainRenderDistValue: typeof terrainRenderDistValue !== "undefined" ? terrainRenderDistValue : 32.0,
+            landmarkRenderDistValue: typeof landmarkRenderDistValue !== "undefined" ? landmarkRenderDistValue : 20.0,
+            shadowRenderDistValue: typeof shadowRenderDistValue !== "undefined" ? shadowRenderDistValue : 14.0,
+            objectRenderDistValue: typeof objectRenderDistValue !== "undefined" ? objectRenderDistValue : 6.0,
+            grassRenderDistValue: typeof grassRenderDistValue !== "undefined" ? grassRenderDistValue : 4.5,
+            masterLodScale: typeof masterLodScale === "number" ? masterLodScale : (typeof window !== "undefined" && typeof window.masterLodScale === "number" ? window.masterLodScale : 100),
 
             charAnimFps,
             waterAnimFps,
@@ -346,6 +352,24 @@
               ? "🛡️ ระบบกันกล้องชนวัตถุ: เปิด"
               : "🛡️ ระบบกันกล้องชนวัตถุ: ปิด";
             toggleBtn.classList.toggle("active", cameraCollisionEnabled);
+          }
+        }
+        if (typeof settings.cameraWaterCollisionEnabled === "boolean") {
+          cameraWaterCollisionEnabled = settings.cameraWaterCollisionEnabled;
+          if (typeof window !== "undefined") {
+            window.cameraWaterCollisionEnabled = cameraWaterCollisionEnabled;
+          }
+          const waterBtn = document.getElementById("cameraWaterCollisionToggle");
+          if (waterBtn) {
+            waterBtn.textContent = cameraWaterCollisionEnabled
+              ? "🌊 ระบบกันกล้องชนผิวน้ำ: เปิด"
+              : "🌊 ระบบกันกล้องชนผิวน้ำ: ปิด";
+            waterBtn.classList.toggle("active", cameraWaterCollisionEnabled);
+          }
+          const devWaterBtn = document.getElementById("devCameraWaterCollisionBtn");
+          if (devWaterBtn) {
+            devWaterBtn.textContent = cameraWaterCollisionEnabled ? "🌊 กันกล้องชนผิวน้ำ: เปิด" : "🌊 กันกล้องชนผิวน้ำ: ปิด";
+            devWaterBtn.style.backgroundImage = cameraWaterCollisionEnabled ? "linear-gradient(135deg, #0288d1, #00acc1)" : "linear-gradient(135deg, #37474f, #455a64)";
           }
         }
         if (typeof settings.zoomLimitEnabled === "boolean") {
@@ -687,6 +711,30 @@
           if (label) label.textContent = renderDistValue.toFixed(2);
         }
 
+        if (typeof settings.landmarkRenderDistValue === "number") {
+          landmarkRenderDistValue = settings.landmarkRenderDistValue;
+          if (typeof window !== "undefined" && typeof window.setLandmarkRenderDist === "function") {
+            window.setLandmarkRenderDist(landmarkRenderDistValue);
+          } else {
+            const input = document.getElementById("landmarkRenderDist");
+            const label = document.getElementById("landmarkRenderDistLabel");
+            if (input) input.value = Math.round(landmarkRenderDistValue * 10);
+            if (label) label.textContent = landmarkRenderDistValue.toFixed(2);
+          }
+        }
+
+        if (typeof settings.shadowRenderDistValue === "number") {
+          shadowRenderDistValue = settings.shadowRenderDistValue;
+          if (typeof window !== "undefined" && typeof window.setShadowRenderDist === "function") {
+            window.setShadowRenderDist(shadowRenderDistValue);
+          } else {
+            const input = document.getElementById("shadowRenderDist");
+            const label = document.getElementById("shadowRenderDistLabel");
+            if (input) input.value = Math.round(shadowRenderDistValue * 10);
+            if (label) label.textContent = shadowRenderDistValue.toFixed(2);
+          }
+        }
+
         if (typeof settings.objectRenderDistValue === "number") {
           objectRenderDistValue = settings.objectRenderDistValue;
           if (typeof window !== "undefined" && typeof window.setObjectRenderDist === "function") {
@@ -703,6 +751,28 @@
           const label = document.getElementById("objectRenderDistLabel");
           if (input) input.value = Math.round(objectRenderDistValue * 10);
           if (label) label.textContent = objectRenderDistValue.toFixed(2);
+        }
+
+        if (typeof settings.grassRenderDistValue === "number") {
+          grassRenderDistValue = settings.grassRenderDistValue;
+          if (typeof window !== "undefined" && typeof window.setGrassRenderDist === "function") {
+            window.setGrassRenderDist(grassRenderDistValue);
+          } else {
+            const input = document.getElementById("grassRenderDist");
+            const label = document.getElementById("grassRenderDistLabel");
+            if (input) input.value = Math.round(grassRenderDistValue * 10);
+            if (label) label.textContent = grassRenderDistValue.toFixed(2);
+          }
+        }
+
+        if (typeof settings.masterLodScale === "number") {
+          masterLodScale = settings.masterLodScale;
+          if (typeof window !== "undefined") window.masterLodScale = masterLodScale;
+          if (typeof applyMasterLodScale === "function") {
+            applyMasterLodScale(masterLodScale);
+          } else if (typeof window.applyMasterLodScale === "function") {
+            window.applyMasterLodScale(masterLodScale);
+          }
         }
 
         if (typeof settings.voxelHoleRadiusMultiplier === "number") {
@@ -972,6 +1042,7 @@
         taauEnabled: true,
         cameraMode: "tps",
         cameraCollisionEnabled: true,
+        cameraWaterCollisionEnabled: true,
         zoomLimitEnabled: true,
         ragdollEnabled: false,
         currentGridSize: 400,
@@ -1005,9 +1076,13 @@
         natureSway: 1,
         waterPlantSway: 1,
         renderDistEnabled: true,
-        renderDistValue: 15.0,
-        terrainRenderDistValue: 15.0,
-        objectRenderDistValue: 5.0,
+        renderDistValue: 32.0,
+        terrainRenderDistValue: 32.0,
+        landmarkRenderDistValue: 20.0,
+        shadowRenderDistValue: 14.0,
+        objectRenderDistValue: 6.0,
+        grassRenderDistValue: 4.5,
+        masterLodScale: 100,
         charAnimFps: 30,
         waterAnimFps: 30,
         leafAnimFps: 30,
@@ -1098,9 +1173,16 @@
           "waterSway",
           "renderDist",
           "terrainRenderDist",
+          "landmarkRenderDist",
+          "shadowRenderDist",
           "objectRenderDist",
+          "grassRenderDist",
+          "masterLodScaleSlider",
           "devTerrainRenderDistSlider",
+          "devLandmarkRenderDistSlider",
+          "devShadowRenderDistSlider",
           "devObjectRenderDistSlider",
+          "devGrassRenderDistSlider",
           "charFps",
           "waterFps",
           "leafFps",
@@ -1161,6 +1243,7 @@
             targetFps,
             cameraMode,
             cameraCollisionEnabled,
+            cameraWaterCollisionEnabled: typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : (typeof window !== "undefined" && typeof window.cameraWaterCollisionEnabled === "boolean" ? window.cameraWaterCollisionEnabled : true),
             zoomLimitEnabled,
             ragdollEnabled,
             currentGridSize,
@@ -1194,8 +1277,12 @@
             waterPlantSway,
             renderDistEnabled,
             renderDistValue,
-            terrainRenderDistValue: typeof terrainRenderDistValue !== "undefined" ? terrainRenderDistValue : renderDistValue,
-            objectRenderDistValue: typeof objectRenderDistValue !== "undefined" ? objectRenderDistValue : renderDistValue,
+            terrainRenderDistValue: typeof terrainRenderDistValue !== "undefined" ? terrainRenderDistValue : 32.0,
+            landmarkRenderDistValue: typeof landmarkRenderDistValue !== "undefined" ? landmarkRenderDistValue : 20.0,
+            shadowRenderDistValue: typeof shadowRenderDistValue !== "undefined" ? shadowRenderDistValue : 14.0,
+            objectRenderDistValue: typeof objectRenderDistValue !== "undefined" ? objectRenderDistValue : 6.0,
+            grassRenderDistValue: typeof grassRenderDistValue !== "undefined" ? grassRenderDistValue : 4.5,
+            masterLodScale: typeof masterLodScale === "number" ? masterLodScale : 100,
             charAnimFps,
             waterAnimFps,
             leafAnimFps,
@@ -1476,7 +1563,22 @@
                 : "🛡️ ระบบกันกล้องชนวัตถุ: ปิด";
               colBtn.classList.toggle("active", cameraCollisionEnabled);
             }
-
+            cameraWaterCollisionEnabled = DEFAULT_SETTINGS.cameraWaterCollisionEnabled;
+            if (typeof window !== "undefined") {
+              window.cameraWaterCollisionEnabled = cameraWaterCollisionEnabled;
+            }
+            const waterColBtn = document.getElementById("cameraWaterCollisionToggle");
+            if (waterColBtn) {
+              waterColBtn.textContent = cameraWaterCollisionEnabled
+                ? "🌊 ระบบกันกล้องชนผิวน้ำ: เปิด"
+                : "🌊 ระบบกันกล้องชนผิวน้ำ: ปิด";
+              waterColBtn.classList.toggle("active", cameraWaterCollisionEnabled);
+            }
+            const devWaterColBtn = document.getElementById("devCameraWaterCollisionBtn");
+            if (devWaterColBtn) {
+              devWaterColBtn.textContent = cameraWaterCollisionEnabled ? "🌊 กันกล้องชนผิวน้ำ: เปิด" : "🌊 กันกล้องชนผิวน้ำ: ปิด";
+              devWaterColBtn.style.backgroundImage = cameraWaterCollisionEnabled ? "linear-gradient(135deg, #0288d1, #00acc1)" : "linear-gradient(135deg, #37474f, #455a64)";
+            }
             zoomLimitEnabled = DEFAULT_SETTINGS.zoomLimitEnabled;
             const zoomBtn = document.getElementById("zoomLimitToggle");
             if (zoomBtn) {
@@ -1527,6 +1629,15 @@
             if (trInput) trInput.value = Math.round(terrainRenderDistValue * 10);
             if (trLabel) trLabel.textContent = terrainRenderDistValue.toFixed(2);
 
+            landmarkRenderDistValue = DEFAULT_SETTINGS.landmarkRenderDistValue;
+            if (typeof window !== "undefined" && typeof window.setLandmarkRenderDist === "function") {
+              window.setLandmarkRenderDist(landmarkRenderDistValue);
+            }
+            const lmInput = document.getElementById("landmarkRenderDist");
+            const lmLabel = document.getElementById("landmarkRenderDistLabel");
+            if (lmInput) lmInput.value = Math.round(landmarkRenderDistValue * 10);
+            if (lmLabel) lmLabel.textContent = landmarkRenderDistValue.toFixed(2);
+
             objectRenderDistValue = DEFAULT_SETTINGS.objectRenderDistValue;
             if (typeof window !== "undefined" && typeof window.setObjectRenderDist === "function") {
               window.setObjectRenderDist(objectRenderDistValue);
@@ -1535,6 +1646,32 @@
             const objLabel = document.getElementById("objectRenderDistLabel");
             if (objInput) objInput.value = Math.round(objectRenderDistValue * 10);
             if (objLabel) objLabel.textContent = objectRenderDistValue.toFixed(2);
+
+            shadowRenderDistValue = DEFAULT_SETTINGS.shadowRenderDistValue;
+            if (typeof window !== "undefined" && typeof window.setShadowRenderDist === "function") {
+              window.setShadowRenderDist(shadowRenderDistValue);
+            }
+            const shInput = document.getElementById("shadowRenderDist");
+            const shLabel = document.getElementById("shadowRenderDistLabel");
+            if (shInput) shInput.value = Math.round(shadowRenderDistValue * 10);
+            if (shLabel) shLabel.textContent = shadowRenderDistValue.toFixed(2);
+
+            grassRenderDistValue = DEFAULT_SETTINGS.grassRenderDistValue;
+            if (typeof window !== "undefined" && typeof window.setGrassRenderDist === "function") {
+              window.setGrassRenderDist(grassRenderDistValue);
+            }
+            const grInput = document.getElementById("grassRenderDist");
+            const grLabel = document.getElementById("grassRenderDistLabel");
+            if (grInput) grInput.value = Math.round(grassRenderDistValue * 10);
+            if (grLabel) grLabel.textContent = grassRenderDistValue.toFixed(2);
+
+            masterLodScale = DEFAULT_SETTINGS.masterLodScale || 100;
+            if (typeof window !== "undefined") window.masterLodScale = masterLodScale;
+            if (typeof applyMasterLodScale === "function") {
+              applyMasterLodScale(masterLodScale);
+            } else if (typeof window.applyMasterLodScale === "function") {
+              window.applyMasterLodScale(masterLodScale);
+            }
 
             charAnimFps = DEFAULT_SETTINGS.charAnimFps;
             waterAnimFps = DEFAULT_SETTINGS.waterAnimFps;

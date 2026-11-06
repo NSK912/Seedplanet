@@ -68,7 +68,8 @@
 })();
 
 function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = null, customR = null, mode = "normal") {
-  if (!isDevMode && !bypassDevCheck) return;
+  if (!isDevMode && !bypassDevCheck) return false;
+  let dugNewHole = false;
   
   let x, y, z;
   if (customTargetPoint) {
@@ -399,6 +400,7 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
           } else if (typeof window !== "undefined" && typeof window.playDigSound === "function") {
               window.playDigSound([tx, ty, tz]);
           }
+          dugNewHole = true;
       }
   }
 
@@ -477,6 +479,8 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
   if (typeof playSplashSound === 'function') {
      playSplashSound(0.5); // use splash as temp SFX
   }
+
+  return dugNewHole;
 }
 
 const digBtn = document.getElementById("devDigTerrainBtn");
@@ -1496,11 +1500,14 @@ const _devCharUIInitTimer = setInterval(() => {
   }
 })();
 
-// --- ระบบควบคุมระยะเรนเดอร์แยก 2 ระยะ: 1. พื้น (Terrain: 15.0) 2. วัตถุทุกชนิด (Objects: 5.0) ---
+// --- ระบบควบคุมระยะเรนเดอร์แยก 3 ระดับ: 1. พื้น (Terrain: 15.0) 2. ต้นไม้/สิ่งก่อสร้าง (Landmarks: 25.0) 3. วัตถุชิ้นเล็ก (Objects: 5.0) ---
 (function initDevSplitRenderDistance() {
-  if (typeof window.terrainRenderDistValue !== "number") window.terrainRenderDistValue = 15.0;
-  if (typeof window.objectRenderDistValue !== "number") window.objectRenderDistValue = 5.0;
-  if (typeof window.renderDistValue !== "number") window.renderDistValue = 15.0;
+  if (typeof window.terrainRenderDistValue !== "number") window.terrainRenderDistValue = 32.0;
+  if (typeof window.landmarkRenderDistValue !== "number") window.landmarkRenderDistValue = 20.0;
+  if (typeof window.shadowRenderDistValue !== "number") window.shadowRenderDistValue = 14.0;
+  if (typeof window.objectRenderDistValue !== "number") window.objectRenderDistValue = 6.0;
+  if (typeof window.grassRenderDistValue !== "number") window.grassRenderDistValue = 4.5;
+  if (typeof window.renderDistValue !== "number") window.renderDistValue = 32.0;
   if (typeof window.renderDistEnabled !== "boolean") window.renderDistEnabled = true;
 
   window.setTerrainRenderDist = function(val) {
@@ -1522,6 +1529,56 @@ const _devCharUIInitTimer = setInterval(() => {
     // Sync dev input & label
     const devInput = document.getElementById("devTerrainRenderDistSlider");
     const devLabel = document.getElementById("devTerrainRenderDistLabel");
+    if (devInput && Math.round(parseFloat(devInput.value)) !== Math.round(num * 10)) {
+      devInput.value = Math.round(num * 10);
+    }
+    if (devLabel) devLabel.textContent = num.toFixed(2);
+  };
+
+  window.setLandmarkRenderDist = function(val) {
+    const num = typeof val === "number" ? val : parseFloat(val);
+    if (isNaN(num)) return;
+    window.landmarkRenderDistValue = num;
+    if (typeof landmarkRenderDistValue !== "undefined") {
+      landmarkRenderDistValue = num;
+    }
+    
+    // Sync main input & label
+    const mainInput = document.getElementById("landmarkRenderDist");
+    const mainLabel = document.getElementById("landmarkRenderDistLabel");
+    if (mainInput && Math.round(parseFloat(mainInput.value)) !== Math.round(num * 10)) {
+      mainInput.value = Math.round(num * 10);
+    }
+    if (mainLabel) mainLabel.textContent = num.toFixed(2);
+
+    // Sync dev input & label
+    const devInput = document.getElementById("devLandmarkRenderDistSlider");
+    const devLabel = document.getElementById("devLandmarkRenderDistLabel");
+    if (devInput && Math.round(parseFloat(devInput.value)) !== Math.round(num * 10)) {
+      devInput.value = Math.round(num * 10);
+    }
+    if (devLabel) devLabel.textContent = num.toFixed(2);
+  };
+
+  window.setShadowRenderDist = function(val) {
+    const num = typeof val === "number" ? val : parseFloat(val);
+    if (isNaN(num)) return;
+    window.shadowRenderDistValue = num;
+    if (typeof shadowRenderDistValue !== "undefined") {
+      shadowRenderDistValue = num;
+    }
+    
+    // Sync main input & label
+    const mainInput = document.getElementById("shadowRenderDist");
+    const mainLabel = document.getElementById("shadowRenderDistLabel");
+    if (mainInput && Math.round(parseFloat(mainInput.value)) !== Math.round(num * 10)) {
+      mainInput.value = Math.round(num * 10);
+    }
+    if (mainLabel) mainLabel.textContent = num.toFixed(2);
+
+    // Sync dev input & label
+    const devInput = document.getElementById("devShadowRenderDistSlider");
+    const devLabel = document.getElementById("devShadowRenderDistLabel");
     if (devInput && Math.round(parseFloat(devInput.value)) !== Math.round(num * 10)) {
       devInput.value = Math.round(num * 10);
     }
@@ -1553,8 +1610,36 @@ const _devCharUIInitTimer = setInterval(() => {
     if (devLabel) devLabel.textContent = num.toFixed(2);
   };
 
+  window.setGrassRenderDist = function(val) {
+    const num = typeof val === "number" ? val : parseFloat(val);
+    if (isNaN(num)) return;
+    window.grassRenderDistValue = num;
+    if (typeof grassRenderDistValue !== "undefined") {
+      grassRenderDistValue = num;
+    }
+    
+    // Sync main input & label
+    const mainInput = document.getElementById("grassRenderDist");
+    const mainLabel = document.getElementById("grassRenderDistLabel");
+    if (mainInput && Math.round(parseFloat(mainInput.value)) !== Math.round(num * 10)) {
+      mainInput.value = Math.round(num * 10);
+    }
+    if (mainLabel) mainLabel.textContent = num.toFixed(2);
+
+    // Sync dev input & label
+    const devInput = document.getElementById("devGrassRenderDistSlider");
+    const devLabel = document.getElementById("devGrassRenderDistLabel");
+    if (devInput && Math.round(parseFloat(devInput.value)) !== Math.round(num * 10)) {
+      devInput.value = Math.round(num * 10);
+    }
+    if (devLabel) devLabel.textContent = num.toFixed(2);
+  };
+
   const devTerrainSlider = document.getElementById("devTerrainRenderDistSlider");
+  const devLandmarkSlider = document.getElementById("devLandmarkRenderDistSlider");
+  const devShadowSlider = document.getElementById("devShadowRenderDistSlider");
   const devObjectSlider = document.getElementById("devObjectRenderDistSlider");
+  const devGrassSlider = document.getElementById("devGrassRenderDistSlider");
 
   if (devTerrainSlider) {
     devTerrainSlider.value = Math.round(window.terrainRenderDistValue * 10);
@@ -1564,11 +1649,35 @@ const _devCharUIInitTimer = setInterval(() => {
     });
   }
 
+  if (devLandmarkSlider) {
+    devLandmarkSlider.value = Math.round(window.landmarkRenderDistValue * 10);
+    devLandmarkSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10) / 10;
+      window.setLandmarkRenderDist(val);
+    });
+  }
+
+  if (devShadowSlider) {
+    devShadowSlider.value = Math.round(window.shadowRenderDistValue * 10);
+    devShadowSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10) / 10;
+      window.setShadowRenderDist(val);
+    });
+  }
+
   if (devObjectSlider) {
     devObjectSlider.value = Math.round(window.objectRenderDistValue * 10);
     devObjectSlider.addEventListener("input", (e) => {
       const val = parseInt(e.target.value, 10) / 10;
       window.setObjectRenderDist(val);
+    });
+  }
+
+  if (devGrassSlider) {
+    devGrassSlider.value = Math.round(window.grassRenderDistValue * 10);
+    devGrassSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10) / 10;
+      window.setGrassRenderDist(val);
     });
   }
 })();
@@ -1617,6 +1726,11 @@ const _devCharUIInitTimer = setInterval(() => {
         ☀️ สลับกล้องไปหา Satellite Sun
       </button>
 
+      <!-- ปุ่มเปิด/ปิด การชนกล้องของผิวน้ำ (Camera Water Collision) -->
+      <button id="devCameraWaterCollisionBtn" class="btn-random" style="background-image: linear-gradient(135deg, #0288d1, #00acc1); margin: 0; padding: 8px 4px; font-size: 11px; text-align: center; font-weight: bold; color: #fff; cursor: pointer; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);">
+        🌊 กันกล้องชนผิวน้ำ: เปิด
+      </button>
+
       <!-- สไลเดอร์ปรับความเร็วการบินของกล้องฟรี -->
       <div style="display: flex; flex-direction: column; gap: 2px;">
         <div style="display: flex; justify-content: space-between; font-size: 10px; color: #bbb;">
@@ -1654,6 +1768,7 @@ const _devCharUIInitTimer = setInterval(() => {
   const speedSlider = group.querySelector("#devFreeCamSpeedSlider");
   const speedLabel = group.querySelector("#devFreeCamSpeedLabel");
   const posText = group.querySelector("#devFreeCamPosText");
+  const waterColBtn = group.querySelector("#devCameraWaterCollisionBtn");
 
   function updateCamUI() {
     const mode = window.cameraMode || (typeof cameraMode !== "undefined" ? cameraMode : "thirdperson");
@@ -1687,6 +1802,33 @@ const _devCharUIInitTimer = setInterval(() => {
         posText.style.color = mode === "sun" ? "#ffd54f" : "#90caf9";
       }
     }
+    if (waterColBtn) {
+      const isWaterColOn = (typeof window.cameraWaterCollisionEnabled === "boolean") ? window.cameraWaterCollisionEnabled : true;
+      waterColBtn.textContent = isWaterColOn ? "🌊 กันกล้องชนผิวน้ำ: เปิด" : "🌊 กันกล้องชนผิวน้ำ: ปิด";
+      waterColBtn.style.backgroundImage = isWaterColOn ? "linear-gradient(135deg, #0288d1, #00acc1)" : "linear-gradient(135deg, #37474f, #455a64)";
+    }
+  }
+
+  if (waterColBtn) {
+    waterColBtn.addEventListener("click", () => {
+      window.cameraWaterCollisionEnabled = !window.cameraWaterCollisionEnabled;
+      if (typeof cameraWaterCollisionEnabled !== "undefined") {
+        cameraWaterCollisionEnabled = window.cameraWaterCollisionEnabled;
+      }
+      const isWaterColOn = window.cameraWaterCollisionEnabled;
+      updateCamUI();
+
+      // Sync with main UI toggle if exists
+      const mainWaterColBtn = document.getElementById("cameraWaterCollisionToggle");
+      if (mainWaterColBtn) {
+        mainWaterColBtn.textContent = isWaterColOn ? "🌊 ระบบกันกล้องชนผิวน้ำ: เปิด" : "🌊 ระบบกันกล้องชนผิวน้ำ: ปิด";
+        mainWaterColBtn.classList.toggle("active", isWaterColOn);
+      }
+
+      if (typeof showNotice === "function") {
+        showNotice(isWaterColOn ? "🌊 เปิดระบบกันกล้องชนผิวน้ำ" : "🌊 ปิดระบบกันกล้องชนผิวน้ำ");
+      }
+    });
   }
 
   // Event Listeners

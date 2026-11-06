@@ -17,41 +17,46 @@
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
     const maxDist = opts.renderDistValue !== undefined 
       ? opts.renderDistValue 
-      : (typeof global.objectRenderDistValue === "number" ? global.objectRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.objectRenderDistValue === "number" ? global.window.objectRenderDistValue : 5.0));
+      : (typeof global.grassRenderDistValue === "number" ? global.grassRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.grassRenderDistValue === "number" ? global.window.grassRenderDistValue : 4.5));
     const maxDistSq = maxDist * maxDist;
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
     
     if (chunks && chunks.length > 0 && eye) {
+      if (maxDist <= 0.01) return;
       gl.disable(gl.CULL_FACE); // Grass is two-sided
       let batchStart = -1;
-      let batchCount = 0;
+      let batchEnd = -1;
+      const GAP = 4500;
+      const ex = eye[0], ey = eye[1], ez = eye[2];
       
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        const dx = chunk.pos[0] - eye[0];
-        const dy = chunk.pos[1] - eye[1];
-        const dz = chunk.pos[2] - eye[2];
+        const dx = chunk.pos[0] - ex;
+        const dy = chunk.pos[1] - ey;
+        const dz = chunk.pos[2] - ez;
         const distSq = dx * dx + dy * dy + dz * dz;
 
-        // Shadow distance limit for grass based on object render distance
+        // Shadow distance limit for grass based on shadow/grass render distance
         const r = chunk.radius || 0;
         const maxThreshold = maxDist + r;
         if (distSq <= maxThreshold * maxThreshold) {
+          const cStart = chunk.start;
+          const cEnd = cStart + chunk.count;
           if (batchStart === -1) {
-            batchStart = chunk.start;
-            batchCount = chunk.count;
-          } else if (chunk.start === batchStart + batchCount) {
-            batchCount += chunk.count;
+            batchStart = cStart;
+            batchEnd = cEnd;
+          } else if (cStart <= batchEnd + GAP) {
+            if (cEnd > batchEnd) batchEnd = cEnd;
           } else {
-            gl.drawElements(gl.TRIANGLES, batchCount, type, batchStart * bytesPerIndex);
-            batchStart = chunk.start;
-            batchCount = chunk.count;
+            gl.drawElements(gl.TRIANGLES, batchEnd - batchStart, type, batchStart * bytesPerIndex);
+            batchStart = cStart;
+            batchEnd = cEnd;
           }
         }
       }
-      if (batchStart !== -1 && batchCount > 0) {
-        gl.drawElements(gl.TRIANGLES, batchCount, type, batchStart * bytesPerIndex);
+      if (batchStart !== -1 && batchEnd > batchStart) {
+        gl.drawElements(gl.TRIANGLES, batchEnd - batchStart, type, batchStart * bytesPerIndex);
       }
     }
   }
@@ -67,6 +72,10 @@
     
     if (!vBuf || !cBuf || !iBuf || !idxLen || idxLen <= 0 || grassStartIdx === undefined || grassStartIdx >= idxLen) return;
 
+    if (opts.modelMaxRenderDistLoc && opts.renderDistValue !== undefined) {
+      gl.uniform1f(opts.modelMaxRenderDistLoc, opts.renderDistValue);
+    }
+
     const isUint32 = idxLen > 65535;
     const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     const bytesPerIndex = isUint32 ? 4 : 2;
@@ -79,17 +88,21 @@
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
     
     if (chunks && chunks.length > 0 && eye) {
+      if (opts.renderDistEnabled && opts.renderDistValue <= 0.01) return;
       gl.disable(gl.CULL_FACE);
       let batchStart = -1;
-      let batchCount = 0;
+      let batchEnd = -1;
+      const GAP = 4500;
+      const ex = eye[0], ey = eye[1], ez = eye[2];
+      const checkFrustum = !!(fcEnabled && fPlanes && typeof global.isSphereInFrustum === "function");
       
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         let visible = true;
 
-        const dx = chunk.pos[0] - eye[0];
-        const dy = chunk.pos[1] - eye[1];
-        const dz = chunk.pos[2] - eye[2];
+        const dx = chunk.pos[0] - ex;
+        const dy = chunk.pos[1] - ey;
+        const dz = chunk.pos[2] - ez;
         const distSq = dx * dx + dy * dy + dz * dz;
 
         if (opts.renderDistEnabled) {
@@ -99,27 +112,29 @@
           }
         }
 
-        if (visible && fcEnabled && fPlanes && typeof global.isSphereInFrustum === "function") {
+        if (visible && checkFrustum) {
           if (!global.isSphereInFrustum(fPlanes, chunk.pos, chunk.radius)) {
             visible = false;
           }
         }
 
         if (visible) {
+          const cStart = chunk.start;
+          const cEnd = cStart + chunk.count;
           if (batchStart === -1) {
-            batchStart = chunk.start;
-            batchCount = chunk.count;
-          } else if (chunk.start === batchStart + batchCount) {
-            batchCount += chunk.count;
+            batchStart = cStart;
+            batchEnd = cEnd;
+          } else if (cStart <= batchEnd + GAP) {
+            if (cEnd > batchEnd) batchEnd = cEnd;
           } else {
-            gl.drawElements(gl.TRIANGLES, batchCount, type, batchStart * bytesPerIndex);
-            batchStart = chunk.start;
-            batchCount = chunk.count;
+            gl.drawElements(gl.TRIANGLES, batchEnd - batchStart, type, batchStart * bytesPerIndex);
+            batchStart = cStart;
+            batchEnd = cEnd;
           }
         }
       }
-      if (batchStart !== -1 && batchCount > 0) {
-        gl.drawElements(gl.TRIANGLES, batchCount, type, batchStart * bytesPerIndex);
+      if (batchStart !== -1 && batchEnd > batchStart) {
+        gl.drawElements(gl.TRIANGLES, batchEnd - batchStart, type, batchStart * bytesPerIndex);
       }
       gl.enable(gl.CULL_FACE);
     } else {

@@ -59,7 +59,7 @@
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
     const maxDist = opts.renderDistValue !== undefined 
       ? opts.renderDistValue 
-      : (typeof global.objectRenderDistValue === "number" ? global.objectRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.objectRenderDistValue === "number" ? global.window.objectRenderDistValue : 5.0));
+      : (typeof global.landmarkRenderDistValue === "number" ? global.landmarkRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.landmarkRenderDistValue === "number" ? global.window.landmarkRenderDistValue : 25.0));
 
     if (obstacles && obstacles.length > 0 && typeof global.getVisibleIndexRanges === "function" && eye) {
       const ranges = global.getVisibleIndexRanges(obstacles, null, maxDist, eye);
@@ -137,7 +137,7 @@
     const obstacles = opts.natureObstacles !== undefined ? opts.natureObstacles : global.natureObstacles;
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
     const maxDist = (opts.renderDistEnabled !== false)
-      ? (opts.renderDistValue !== undefined ? opts.renderDistValue : (typeof global.objectRenderDistValue === "number" ? global.objectRenderDistValue : 5.0))
+      ? (opts.renderDistValue !== undefined ? opts.renderDistValue : (typeof global.landmarkRenderDistValue === "number" ? global.landmarkRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.landmarkRenderDistValue === "number" ? global.window.landmarkRenderDistValue : 25.0)))
       : null;
 
     // Trees & rocks use CW winding order normally, so mirrored is CCW
@@ -251,7 +251,7 @@
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
     const grassStartIdx = opts.natureGrassStartIndex !== undefined ? opts.natureGrassStartIndex : global.natureGrassStartIndex;
     const maxDist = (opts.renderDistEnabled !== false)
-      ? (opts.renderDistValue !== undefined ? opts.renderDistValue : (typeof global.objectRenderDistValue === "number" ? global.objectRenderDistValue : 5.0))
+      ? (opts.renderDistValue !== undefined ? opts.renderDistValue : (typeof global.landmarkRenderDistValue === "number" ? global.landmarkRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.landmarkRenderDistValue === "number" ? global.window.landmarkRenderDistValue : 25.0)))
       : null;
 
     if (obstacles && obstacles.length > 0 && typeof global.getVisibleIndexRanges === "function" && eye) {

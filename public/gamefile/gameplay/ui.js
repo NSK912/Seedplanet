@@ -848,6 +848,34 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             />
           </div>
 
+          <!-- ระยะเรนเดอร์ LOD (LOD Distance) -->
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                font-family: 'Google Sans', sans-serif;
+              "
+            >
+              <span data-i18n="lod_distance_scale">ระยะการมองเห็น (LOD)</span>
+              <span
+                id="masterLodScaleVal"
+                style="color: #dfb76c; font-weight: bold"
+                >100%</span
+              >
+            </div>
+            <input
+              type="range"
+              id="masterLodScaleSlider"
+              min="25"
+              max="200"
+              step="5"
+              value="100"
+              style="width: 100%; cursor: pointer; accent-color: #dfb76c"
+            />
+          </div>
+
           <!-- FPS Limit -->
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div
@@ -1588,6 +1616,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </button>
         <button
           class="btn-toggle active"
+          id="cameraWaterCollisionToggle"
+          style="margin-bottom: 8px"
+        >
+          🌊 ระบบกันกล้องชนผิวน้ำ: เปิด
+        </button>
+        <button
+          class="btn-toggle active"
           id="zoomLimitToggle"
           style="margin-bottom: 8px"
         >
@@ -1644,7 +1679,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       </div>
 
       <div class="control-group">
-        <label>👁️ ระยะการมองเห็น (Render Distance)</label>
+        <label>👁️ ระยะการมองเห็น (Render Distance & LOD)</label>
         <button
           class="btn-toggle active"
           id="renderDistToggle"
@@ -1652,11 +1687,20 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         >
           🛡️ จำกัดระยะเรนเดอร์: เปิด
         </button>
-        <label>🌍 1. ระยะเรนเดอร์พื้น (Terrain Distance) <span id="terrainRenderDistLabel">15.00</span></label>
-        <input type="range" id="terrainRenderDist" min="5" max="300" value="150" />
+        <label>🌍 1. ระยะเรนเดอร์พื้น (Terrain Distance) <span id="terrainRenderDistLabel">32.00</span></label>
+        <input type="range" id="terrainRenderDist" min="5" max="600" value="320" />
 
-        <label style="margin-top: 8px; display: block;">🌲 2. ระยะเรนเดอร์วัตถุทุกชนิด (Objects Distance - ต้นไม้, หญ้า, หิน, NPC ฯลฯ) <span id="objectRenderDistLabel">5.00</span></label>
-        <input type="range" id="objectRenderDist" min="5" max="200" value="50" />
+        <label style="margin-top: 8px; display: block;">🌲 2. ระยะเรนเดอร์ต้นไม้และสิ่งก่อสร้าง (Landmarks/Trees/Houses) <span id="landmarkRenderDistLabel">20.00</span></label>
+        <input type="range" id="landmarkRenderDist" min="10" max="600" value="200" />
+
+        <label style="margin-top: 8px; display: block;">🌑 3. ระยะเรนเดอร์เงา (Shadow Distance LOD) <span id="shadowRenderDistLabel">14.00</span></label>
+        <input type="range" id="shadowRenderDist" min="2" max="500" value="140" />
+
+        <label style="margin-top: 8px; display: block;">📦 4. ระยะเรนเดอร์วัตถุชิ้นเล็ก (Small Objects & Dynamic Items) <span id="objectRenderDistLabel">6.00</span></label>
+        <input type="range" id="objectRenderDist" min="5" max="300" value="60" />
+
+        <label style="margin-top: 8px; display: block;">🌾 5. ระยะเรนเดอร์หญ้า (Grass Detail Distance LOD) <span id="grassRenderDistLabel">4.50</span></label>
+        <input type="range" id="grassRenderDist" min="5" max="200" value="45" />
       </div>
 
       <div class="control-group">
@@ -1841,12 +1885,21 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       </div>
       
       <div class="control-group" id="devRenderDistContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
-        <label>👁️ ปรับระยะเรนเดอร์ 2 ระยะ (Render Distance)</label>
-        <label style="margin-top: 4px; display: block;">🌍 1. ระยะเรนเดอร์พื้น <span id="devTerrainRenderDistLabel">15.00</span></label>
-        <input type="range" id="devTerrainRenderDistSlider" min="5" max="300" value="150" style="width: 100%; margin-top: 2px;" />
+        <label>👁️ ปรับระยะเรนเดอร์ 5 ระดับ (Render Distance & LOD)</label>
+        <label style="margin-top: 4px; display: block;">🌍 1. ระยะเรนเดอร์พื้น <span id="devTerrainRenderDistLabel">32.00</span></label>
+        <input type="range" id="devTerrainRenderDistSlider" min="5" max="600" value="320" style="width: 100%; margin-top: 2px;" />
 
-        <label style="margin-top: 6px; display: block;">🌲 2. ระยะเรนเดอร์วัตถุทุกชนิด <span id="devObjectRenderDistLabel">5.00</span></label>
-        <input type="range" id="devObjectRenderDistSlider" min="5" max="200" value="50" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 6px; display: block;">🌲 2. ระยะเรนเดอร์ต้นไม้และสิ่งก่อสร้าง <span id="devLandmarkRenderDistLabel">20.00</span></label>
+        <input type="range" id="devLandmarkRenderDistSlider" min="10" max="600" value="200" style="width: 100%; margin-top: 2px;" />
+
+        <label style="margin-top: 6px; display: block;">🌑 3. ระยะเรนเดอร์เงา <span id="devShadowRenderDistLabel">14.00</span></label>
+        <input type="range" id="devShadowRenderDistSlider" min="2" max="500" value="140" style="width: 100%; margin-top: 2px;" />
+
+        <label style="margin-top: 6px; display: block;">📦 4. ระยะเรนเดอร์วัตถุชิ้นเล็ก <span id="devObjectRenderDistLabel">6.00</span></label>
+        <input type="range" id="devObjectRenderDistSlider" min="5" max="300" value="60" style="width: 100%; margin-top: 2px;" />
+
+        <label style="margin-top: 6px; display: block;">🌾 5. ระยะเรนเดอร์หญ้า <span id="devGrassRenderDistLabel">4.50</span></label>
+        <input type="range" id="devGrassRenderDistSlider" min="5" max="200" value="45" style="width: 100%; margin-top: 2px;" />
       </div>
 
             <div class="control-group" id="devCharModelContainer" style="margin-top: 8px;">
@@ -4455,8 +4508,14 @@ window.addEventListener("keyup", (e) => {
       const renderDistToggle = document.getElementById("renderDistToggle");
       const terrainRenderDistSlider = document.getElementById("terrainRenderDist") || document.getElementById("renderDist");
       const terrainRenderDistLabel = document.getElementById("terrainRenderDistLabel") || document.getElementById("renderDistLabel");
+      const landmarkRenderDistSlider = document.getElementById("landmarkRenderDist");
+      const landmarkRenderDistLabel = document.getElementById("landmarkRenderDistLabel");
       const objectRenderDistSlider = document.getElementById("objectRenderDist");
       const objectRenderDistLabel = document.getElementById("objectRenderDistLabel");
+      const shadowRenderDistSlider = document.getElementById("shadowRenderDist");
+      const shadowRenderDistLabel = document.getElementById("shadowRenderDistLabel");
+      const grassRenderDistSlider = document.getElementById("grassRenderDist");
+      const grassRenderDistLabel = document.getElementById("grassRenderDistLabel");
 
       const charFpsSlider = document.getElementById("charFps");
       const charFpsLabel = document.getElementById("charFpsLabel");
@@ -5343,6 +5402,18 @@ window.addEventListener("keyup", (e) => {
         if (terrainRenderDistLabel) terrainRenderDistLabel.textContent = val.toFixed(2);
       });
 
+      landmarkRenderDistSlider?.addEventListener("input", () => {
+        const val = parseInt(landmarkRenderDistSlider.value) / 10;
+        landmarkRenderDistValue = val;
+        if (typeof window !== "undefined") {
+          window.landmarkRenderDistValue = val;
+          if (typeof window.setLandmarkRenderDist === "function") {
+            window.setLandmarkRenderDist(val);
+          }
+        }
+        if (landmarkRenderDistLabel) landmarkRenderDistLabel.textContent = val.toFixed(2);
+      });
+
       objectRenderDistSlider?.addEventListener("input", () => {
         const val = parseInt(objectRenderDistSlider.value) / 10;
         objectRenderDistValue = val;
@@ -5353,6 +5424,30 @@ window.addEventListener("keyup", (e) => {
           }
         }
         if (objectRenderDistLabel) objectRenderDistLabel.textContent = val.toFixed(2);
+      });
+
+      shadowRenderDistSlider?.addEventListener("input", () => {
+        const val = parseInt(shadowRenderDistSlider.value) / 10;
+        shadowRenderDistValue = val;
+        if (typeof window !== "undefined") {
+          window.shadowRenderDistValue = val;
+          if (typeof window.setShadowRenderDist === "function") {
+            window.setShadowRenderDist(val);
+          }
+        }
+        if (shadowRenderDistLabel) shadowRenderDistLabel.textContent = val.toFixed(2);
+      });
+
+      grassRenderDistSlider?.addEventListener("input", () => {
+        const val = parseInt(grassRenderDistSlider.value) / 10;
+        grassRenderDistValue = val;
+        if (typeof window !== "undefined") {
+          window.grassRenderDistValue = val;
+          if (typeof window.setGrassRenderDist === "function") {
+            window.setGrassRenderDist(val);
+          }
+        }
+        if (grassRenderDistLabel) grassRenderDistLabel.textContent = val.toFixed(2);
       });
 
       charFpsSlider?.addEventListener("input", () => {

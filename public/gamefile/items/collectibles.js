@@ -2691,142 +2691,13 @@ function buildCollectibles(count, seed) {
                             floorPreviewCollectible.stairTop = bestP_top;
               floorPreviewCollectible.stairBottom = bestP_bottom;
             } else {
-              let snappedToCave = false;
+              if (floorPreviewCollectible) {
+                floorPreviewCollectible.wasSnappedToCave = false;
+              }
+              // Not snapped to floor edge: place stairs in front of player on the ground, going UP and AWAY (cave snapping disabled for wood_stairs).
               let cx = playerPt[0];
               let cy = playerPt[1];
               let cz = playerPt[2];
-              let bestTunnelRadius = 0.4;
-              
-              // Apply hysteresis based on previous frame's snapped-to-cave state to prevent rapid snapping/unsnapping flicker
-              let wasSnapped = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible && floorPreviewCollectible.wasSnappedToCave);
-              
-              if (typeof tunnels3D !== 'undefined' && tunnels3D) {
-                  let minDist = Infinity;
-                  let closestTunnel = null;
-                  
-                  for (let t of tunnels3D) {
-                      let dx = t.x - targetPos[0];
-                      let dy = t.y - targetPos[1];
-                      let dz = t.z - targetPos[2];
-                      let distSq = dx*dx + dy*dy + dz*dz;
-                      
-                      let t_len = Math.sqrt(t.x*t.x + t.y*t.y + t.z*t.z) || 1;
-                      const theta_t = Math.acos(Math.max(-1.0, Math.min(1.0, t.y/t_len)));
-                      const phi_t = Math.atan2(t.z, t.x);
-                      const height_t = typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_t, phi_t, typeof globalSeed !== 'undefined' ? globalSeed : 0) : 0;
-                      let maxTerrainRadius = RADIUS + height_t * HEIGHT_SCALE;
-                      
-                      let isMouth = (t_len + t.r * 1.25 >= maxTerrainRadius);
-                      let limitRadius = t.r * (wasSnapped ? 3.0 : 2.0);
-                      if (isMouth && distSq < limitRadius * limitRadius && distSq < minDist) {
-                          minDist = distSq;
-                          closestTunnel = t;
-                      }
-                  }
-                  
-                  if (closestTunnel) {
-                      snappedToCave = true;
-                      if (floorPreviewCollectible) {
-                          floorPreviewCollectible.wasSnappedToCave = true;
-                      }
-                      
-                      // Snap directly to the closest tunnel mouth's static position to avoid any cursor-based center jitter
-                      cx = closestTunnel.x;
-                      cy = closestTunnel.y;
-                      cz = closestTunnel.z;
-                      bestTunnelRadius = closestTunnel.r;
-                      
-                      let t_len = Math.sqrt(cx*cx + cy*cy + cz*cz) || 1;
-                      let n_t = [cx/t_len, cy/t_len, cz/t_len];
-                      
-                      // Calculate the surface height of the cave mouth center
-                      const theta_t = Math.acos(Math.max(-1.0, Math.min(1.0, n_t[1])));
-                      const phi_t = Math.atan2(n_t[2], n_t[0]);
-                      const height_t = typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_t, phi_t, typeof globalSeed !== 'undefined' ? globalSeed : 0) : 0;
-                      let maxTerrainRadius = RADIUS + height_t * HEIGHT_SCALE;
-                      
-                      const P_surf_center = [n_t[0] * maxTerrainRadius, n_t[1] * maxTerrainRadius, n_t[2] * maxTerrainRadius];
-                      
-                      // Project player forward direction onto cave tangent plane to determine stair climb direction.
-                      // This avoids any spinning singularities at the center of the mouth and makes the stair follow the player's look direction.
-                      const dot_F_t = pF[0]*n_t[0] + pF[1]*n_t[1] + pF[2]*n_t[2];
-                      let forwardDir_t = [pF[0] - n_t[0]*dot_F_t, pF[1] - n_t[1]*dot_F_t, pF[2] - n_t[2]*dot_F_t];
-                      let forwardLen_t = Math.sqrt(forwardDir_t[0]*forwardDir_t[0] + forwardDir_t[1]*forwardDir_t[1] + forwardDir_t[2]*forwardDir_t[2]) || 1;
-                      const slope_dir = [forwardDir_t[0]/forwardLen_t, forwardDir_t[1]/forwardLen_t, forwardDir_t[2]/forwardLen_t];
-                      
-                      // Position top of stair exactly on the cave mouth rim / lip in the direction closest to the player
-                      // (opposite of the inward slope direction)
-                      const P_lip = [
-                          P_surf_center[0] - slope_dir[0] * (bestTunnelRadius * 1.02),
-                          P_surf_center[1] - slope_dir[1] * (bestTunnelRadius * 1.02),
-                          P_surf_center[2] - slope_dir[2] * (bestTunnelRadius * 1.02)
-                      ];
-                      
-                      const len_lip = Math.sqrt(P_lip[0]*P_lip[0] + P_lip[1]*P_lip[1] + P_lip[2]*P_lip[2]) || 1;
-                      const n_lip = [P_lip[0]/len_lip, P_lip[1]/len_lip, P_lip[2]/len_lip];
-                      const theta_lip = Math.acos(Math.max(-1.0, Math.min(1.0, n_lip[1])));
-                      const phi_lip = Math.atan2(n_lip[2], n_lip[0]);
-                      const height_lip = typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_lip, phi_lip, typeof globalSeed !== 'undefined' ? globalSeed : 0) : 0;
-                      let r_lip = RADIUS + height_lip * HEIGHT_SCALE;
-                      const P_top = [n_lip[0]*r_lip, n_lip[1]*r_lip, n_lip[2]*r_lip];
-                      
-                      // Project bottom position on the cave floor inside the cave mouth
-                      const L_horizontal = 0.35;
-                      const P_inward = [
-                          P_top[0] + slope_dir[0] * L_horizontal,
-                          P_top[1] + slope_dir[1] * L_horizontal,
-                          P_top[2] + slope_dir[2] * L_horizontal
-                      ];
-                      const len_inward = Math.sqrt(P_inward[0]*P_inward[0] + P_inward[1]*P_inward[1] + P_inward[2]*P_inward[2]) || 1;
-                      const n_inward = [P_inward[0]/len_inward, P_inward[1]/len_inward, P_inward[2]/len_inward];
-                      
-                      // Query height at a query radius inside the tunnel (r_lip - 0.5) to guarantee we are physically inside the 3D tunnel segment
-                      let r_floor = r_lip - 1.2;
-                      if (typeof getTerrainSurfaceAndCeiling === "function") {
-                          const caveInfoTemp = getTerrainSurfaceAndCeiling(n_inward[0], n_inward[1], n_inward[2], r_lip - 0.5);
-                          if (caveInfoTemp) {
-                              r_floor = caveInfoTemp.ground;
-                          }
-                      }
-                      
-                      // Crucial: Enforce a minimum slope/vertical drop to guarantee the stairs are never horizontal/flat.
-                      const minDrop = Math.max(0.6, bestTunnelRadius * 1.5);
-                      if (r_floor > r_lip - minDrop) {
-                          r_floor = r_lip - minDrop;
-                      }
-                      
-                      const P_bottom = [n_inward[0] * r_floor, n_inward[1] * r_floor, n_inward[2] * r_floor];
-                      
-                      // Lateral orthogonal vector for stair rungs
-                      let W_dir = [
-                          n_t[1]*slope_dir[2] - n_t[2]*slope_dir[1],
-                          n_t[2]*slope_dir[0] - n_t[0]*slope_dir[2],
-                          n_t[0]*slope_dir[1] - n_t[1]*slope_dir[0]
-                      ];
-                      const lenW = Math.sqrt(W_dir[0]*W_dir[0] + W_dir[1]*W_dir[1] + W_dir[2]*W_dir[2]) || 1;
-                      W_dir = [W_dir[0]/lenW, W_dir[1]/lenW, W_dir[2]/lenW];
-                      
-                      // Apply snapped position and axes
-                      targetPos = [
-                          (P_top[0] + P_bottom[0]) / 2,
-                          (P_top[1] + P_bottom[1]) / 2,
-                          (P_top[2] + P_bottom[2]) / 2
-                      ];
-                      pN = [n_t[0], n_t[1], n_t[2]];
-                      pR = [W_dir[0], W_dir[1], W_dir[2]];
-                      pF = [slope_dir[0], slope_dir[1], slope_dir[2]];
-                      
-                      floorPreviewCollectible.stairTop = P_top;
-                      floorPreviewCollectible.stairBottom = P_bottom;
-                      floorPreviewCollectible.isValidPlacement = true;
-                  }
-              }
-
-              if (!snappedToCave) {
-                  if (floorPreviewCollectible) {
-                      floorPreviewCollectible.wasSnappedToCave = false;
-                  }
-              // Not snapped: place stairs in front of player on the ground, going UP and AWAY.
               const L_horizontal = 0.3;
               
               const dx = targetPos[0] - cx;
@@ -2839,10 +2710,8 @@ function buildCollectibles(count, seed) {
               let gridX = Math.round(localX / 0.3);
               let gridZ = Math.round(localZ / 0.3);
               
-              if (!snappedToCave) {
-                  gridX = Math.max(-1, Math.min(1, gridX));
-                  gridZ = Math.max(1, Math.min(2, gridZ)); // Force it to be in front
-              }
+              gridX = Math.max(-1, Math.min(1, gridX));
+              gridZ = Math.max(1, Math.min(2, gridZ)); // Force it to be in front
               
               const P_bottom_start = [
                 cx + pR[0] * (gridX * 0.3) + pF[0] * (gridZ * 0.3),
@@ -2851,7 +2720,6 @@ function buildCollectibles(count, seed) {
               ];
 
               const slope_dir = [pF[0], pF[1], pF[2]];
-              const W_dir = [pR[0], pR[1], pR[2]];
 
               // Calculate true ground height for P_bottom
               const len_b = Math.sqrt(P_bottom_start[0]*P_bottom_start[0] + P_bottom_start[1]*P_bottom_start[1] + P_bottom_start[2]*P_bottom_start[2]) || 1;
@@ -2904,94 +2772,6 @@ function buildCollectibles(count, seed) {
                  H_vertical = -0.25;
               }
 
-              // Check terrain at P_temp to see if we're bridging a cave drop-off
-              const P_temp = [
-                P_bottom[0] + slope_dir[0] * L_horizontal,
-                P_bottom[1] + slope_dir[1] * L_horizontal,
-                P_bottom[2] + slope_dir[2] * L_horizontal
-              ];
-              const len_temp = Math.sqrt(P_temp[0]*P_temp[0] + P_temp[1]*P_temp[1] + P_temp[2]*P_temp[2]) || 1;
-              const n_temp = [P_temp[0] / len_temp, P_temp[1] / len_temp, P_temp[2] / len_temp];
-              
-              let r_temp = 0;
-              let r_surface = 0;
-              let caveInfoTemp = null;
-              
-              // Raycast slightly forward to find the true crater rim, as the slope might be wide.
-              let max_r_surface = -Infinity;
-              let foundCaveBoundary = false;
-              let boundary_r_temp = 0;
-              let boundary_caveInfo = null;
-              
-              for (let step = 1; step <= 5; step++) {
-                  let test_L = L_horizontal * step;
-                  const P_test = [
-                    P_bottom[0] + slope_dir[0] * test_L,
-                    P_bottom[1] + slope_dir[1] * test_L,
-                    P_bottom[2] + slope_dir[2] * test_L
-                  ];
-                  const len_test = Math.sqrt(P_test[0]*P_test[0] + P_test[1]*P_test[1] + P_test[2]*P_test[2]) || 1;
-                  const n_test = [P_test[0] / len_test, P_test[1] / len_test, P_test[2] / len_test];
-                  
-                  const theta_test = Math.acos(Math.max(-1.0, Math.min(1.0, n_test[1])));
-                  const phi_test = Math.atan2(n_test[2], n_test[0]);
-                  let height_test = 0;
-                  if (typeof getHeightOnSphere === "function") height_test = getHeightOnSphere(theta_test, phi_test, typeof globalSeed !== "undefined" ? globalSeed : 0);
-                  let test_r_temp = RADIUS + height_test * HEIGHT_SCALE;
-                  let test_r_surface = test_r_temp;
-                  
-                  let testCaveInfo = null;
-                  if (typeof getTerrainSurfaceAndCeiling === "function") {
-                      testCaveInfo = getTerrainSurfaceAndCeiling(n_test[0], n_test[1], n_test[2], RADIUS - 0.5);
-                      if (testCaveInfo) {
-                          test_r_surface = testCaveInfo.surfaceRadius;
-                          if (testCaveInfo.ground < test_r_temp - 0.5) {
-                              test_r_temp = testCaveInfo.ground;
-                          }
-                      }
-                  }
-                  
-                  if (test_r_surface > max_r_surface) {
-                      max_r_surface = test_r_surface;
-                  }
-                  
-                  if (step === 1) {
-                      r_temp = test_r_temp;
-                      r_surface = test_r_surface;
-                      caveInfoTemp = testCaveInfo;
-                  }
-                  
-                  // Check if we found a boundary at this step or previous
-                  if (Math.abs(r_b - test_r_temp) > 0.5 || (testCaveInfo && testCaveInfo.isEntrance)) {
-                      foundCaveBoundary = true;
-                  }
-              }
-              
-              // If there's a huge drop-off between P_bottom and P_temp (like a cave entrance boundary), bridge it!
-              if (foundCaveBoundary || snappedToCave) {
-                  let targetSurface = Math.max(max_r_surface, RADIUS - 0.2);
-                  let min_ground = Math.min(r_temp, r_b);
-                  
-                  if (lookDownAngle < -0.2 || snappedToCave) {
-                      // Aiming down into the cave. P_bottom should be lifted to the surface lip.
-                      let adjust_H = targetSurface - r_b + 0.15;
-                      if (adjust_H > 0) {
-                          P_bottom[0] += n_b[0] * adjust_H;
-                          P_bottom[1] += n_b[1] * adjust_H;
-                          P_bottom[2] += n_b[2] * adjust_H;
-                      }
-                      
-                      H_vertical = min_ground - targetSurface - 0.15;
-                      L_actual = Math.max(L_horizontal, Math.abs(H_vertical) * 0.6);
-                  } else {
-                      // Aiming up out of the cave. P_top should reach the surface lip.
-                      if (targetSurface - r_b > 0.5) {
-                          H_vertical = targetSurface - r_b + 0.15;
-                          L_actual = Math.max(L_horizontal, H_vertical * 0.6);
-                      }
-                  }
-              }
-
               // Crucial: Enforce a minimum absolute height difference to guarantee the stairs are never horizontal/flat.
               if (Math.abs(H_vertical) < 0.22) {
                   H_vertical = (H_vertical >= 0) ? 0.22 : -0.22;
@@ -3003,9 +2783,6 @@ function buildCollectibles(count, seed) {
                 P_bottom[1] + slope_dir[1] * L_actual + n_b[1] * H_vertical,
                 P_bottom[2] + slope_dir[2] * L_actual + n_b[2] * H_vertical
               ];
-              
-              // Ensure P_top is always treated as the far point regardless of height.
-              // The rendering code now safely handles negative slopes.
 
               targetPos = [
                 (P_top[0] + P_bottom[0]) / 2,
@@ -3013,10 +2790,9 @@ function buildCollectibles(count, seed) {
                 (P_top[2] + P_bottom[2]) / 2
               ];
 
-                            floorPreviewCollectible.stairTop = P_top;
+              floorPreviewCollectible.stairTop = P_top;
               floorPreviewCollectible.stairBottom = P_bottom;
-              floorPreviewCollectible.isValidPlacement = isInCave;
-              }
+              floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < maxSlope);
             }
           } else if (typeToPlace === "folding_ladder") {
             // DEATH STRANDING EXTENDABLE FOLDING LADDER PLACEMENT
@@ -3152,7 +2928,130 @@ function buildCollectibles(count, seed) {
               return sR;
             }
 
-            // 3. Probing for Anchor 2 (Landing end) with Fast Directional Raymarching & Transform Caching
+            // 3. Check Cave Mouth Snapping FIRST for folding_ladder (บันไดพับ snap ปากถ้ำ)
+            let snappedToCave = false;
+            let P_cave_top = null;
+            let P_cave_bottom = null;
+            let wasSnapped = Boolean(typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible && floorPreviewCollectible.wasSnappedToCave);
+
+            if (!isPlayerInWater && typeof tunnels3D !== 'undefined' && tunnels3D && tunnels3D.length > 0) {
+              let minDist = Infinity;
+              let closestTunnel = null;
+
+              for (let t of tunnels3D) {
+                const dx1 = t.x - targetPos[0];
+                const dy1 = t.y - targetPos[1];
+                const dz1 = t.z - targetPos[2];
+                const distSqTarget = dx1*dx1 + dy1*dy1 + dz1*dz1;
+
+                const dx2 = t.x - playerFeetPos[0];
+                const dy2 = t.y - playerFeetPos[1];
+                const dz2 = t.z - playerFeetPos[2];
+                const distSqFeet = dx2*dx2 + dy2*dy2 + dz2*dz2;
+
+                const distSq = Math.min(distSqTarget, distSqFeet);
+
+                const t_len = Math.sqrt(t.x*t.x + t.y*t.y + t.z*t.z) || 1;
+                const theta_t = Math.acos(Math.max(-1.0, Math.min(1.0, t.y / t_len)));
+                const phi_t = Math.atan2(t.z, t.x);
+                const height_t = typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_t, phi_t, seedVal) : 0;
+                const maxTerrainRadius = RADIUS + height_t * HEIGHT_SCALE;
+
+                const isMouth = (t_len + t.r * 1.25 >= maxTerrainRadius);
+                const limitRadius = t.r * (wasSnapped ? 3.2 : 2.2);
+                if (isMouth && distSq < limitRadius * limitRadius && distSq < minDist) {
+                  minDist = distSq;
+                  closestTunnel = t;
+                }
+              }
+
+              if (closestTunnel) {
+                snappedToCave = true;
+                if (floorPreviewCollectible) {
+                  floorPreviewCollectible.wasSnappedToCave = true;
+                }
+
+                const cx = closestTunnel.x;
+                const cy = closestTunnel.y;
+                const cz = closestTunnel.z;
+                const bestTunnelRadius = closestTunnel.r;
+
+                const t_len = Math.sqrt(cx*cx + cy*cy + cz*cz) || 1;
+                const n_t = [cx / t_len, cy / t_len, cz / t_len];
+
+                const theta_t = Math.acos(Math.max(-1.0, Math.min(1.0, n_t[1])));
+                const phi_t = Math.atan2(n_t[2], n_t[0]);
+                const height_t = typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_t, phi_t, seedVal) : 0;
+                const maxTerrainRadius = RADIUS + height_t * HEIGHT_SCALE;
+
+                const P_surf_center = [n_t[0] * maxTerrainRadius, n_t[1] * maxTerrainRadius, n_t[2] * maxTerrainRadius];
+
+                // Project ladderF onto cave tangent plane so ladder follows player look + Q rotation
+                const dot_F_t = ladderF[0]*n_t[0] + ladderF[1]*n_t[1] + ladderF[2]*n_t[2];
+                const forwardDir_t = [ladderF[0] - n_t[0]*dot_F_t, ladderF[1] - n_t[1]*dot_F_t, ladderF[2] - n_t[2]*dot_F_t];
+                const forwardLen_t = Math.sqrt(forwardDir_t[0]*forwardDir_t[0] + forwardDir_t[1]*forwardDir_t[1] + forwardDir_t[2]*forwardDir_t[2]) || 1;
+                const slope_dir = [forwardDir_t[0]/forwardLen_t, forwardDir_t[1]/forwardLen_t, forwardDir_t[2]/forwardLen_t];
+
+                // Position top of ladder on the cave mouth rim/lip closest to the player
+                const P_lip = [
+                  P_surf_center[0] - slope_dir[0] * (bestTunnelRadius * 1.02),
+                  P_surf_center[1] - slope_dir[1] * (bestTunnelRadius * 1.02),
+                  P_surf_center[2] - slope_dir[2] * (bestTunnelRadius * 1.02)
+                ];
+
+                const len_lip = Math.sqrt(P_lip[0]*P_lip[0] + P_lip[1]*P_lip[1] + P_lip[2]*P_lip[2]) || 1;
+                const n_lip = [P_lip[0]/len_lip, P_lip[1]/len_lip, P_lip[2]/len_lip];
+                const theta_lip = Math.acos(Math.max(-1.0, Math.min(1.0, n_lip[1])));
+                const phi_lip = Math.atan2(n_lip[2], n_lip[0]);
+                const height_lip = typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta_lip, phi_lip, seedVal) : 0;
+                let r_lip = RADIUS + height_lip * HEIGHT_SCALE;
+                if (typeof getFloorTopRadiusAt === "function") {
+                  const fRadLip = getFloorTopRadiusAt(n_lip[0], n_lip[1], n_lip[2], r_lip);
+                  if (fRadLip > r_lip && fRadLip - r_lip < 0.6) {
+                    r_lip = fRadLip;
+                  }
+                }
+                P_cave_top = [n_lip[0]*r_lip, n_lip[1]*r_lip, n_lip[2]*r_lip];
+
+                // Project bottom position onto the cave floor inside the cave mouth
+                const L_horizontal = 0.35;
+                const P_inward = [
+                  P_cave_top[0] + slope_dir[0] * L_horizontal,
+                  P_cave_top[1] + slope_dir[1] * L_horizontal,
+                  P_cave_top[2] + slope_dir[2] * L_horizontal
+                ];
+                const len_inward = Math.sqrt(P_inward[0]*P_inward[0] + P_inward[1]*P_inward[1] + P_inward[2]*P_inward[2]) || 1;
+                const n_inward = [P_inward[0]/len_inward, P_inward[1]/len_inward, P_inward[2]/len_inward];
+
+                let r_floor = r_lip - 1.2;
+                if (typeof getTerrainSurfaceAndCeiling === "function") {
+                  const caveInfoTemp = getTerrainSurfaceAndCeiling(n_inward[0], n_inward[1], n_inward[2], r_lip - 0.5);
+                  if (caveInfoTemp) {
+                    r_floor = caveInfoTemp.ground;
+                  }
+                }
+                const solidFloorR = getSolidRadAt(n_inward, r_lip - 0.5);
+                if (solidFloorR < r_lip - 0.25 && solidFloorR < r_floor) {
+                  r_floor = solidFloorR;
+                }
+
+                const minDrop = Math.max(0.6, bestTunnelRadius * 1.5);
+                if (r_floor > r_lip - minDrop) {
+                  r_floor = r_lip - minDrop;
+                }
+                if (r_floor < r_lip - 3.3) {
+                  r_floor = r_lip - 3.3;
+                }
+
+                P_cave_bottom = [n_inward[0] * r_floor, n_inward[1] * r_floor, n_inward[2] * r_floor];
+              }
+            }
+
+            if (!snappedToCave && floorPreviewCollectible) {
+              floorPreviewCollectible.wasSnappedToCave = false;
+            }
+
+            // 4. Probing for Anchor 2 (Landing end) with Fast Directional Raymarching & Transform Caching (when not snapped to cave mouth)
             const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
             const cache = floorPreviewCollectible._ladderCache;
             const timeDiff = cache ? (nowTime - (cache.time || 0)) : 999;
@@ -3162,7 +3061,10 @@ function buildCollectibles(count, seed) {
             let P_anchor2 = null;
             let isValid = false;
 
-            if (cache && ((timeDiff < 60 && movedDist < 0.12 && rotDiff < 0.12) || (movedDist < 0.04 && rotDiff < 0.04))) {
+            if (snappedToCave && P_cave_top && P_cave_bottom) {
+              P_anchor2 = P_cave_bottom;
+              isValid = true;
+            } else if (cache && !cache.wasCaveSnap && ((timeDiff < 60 && movedDist < 0.12 && rotDiff < 0.12) || (movedDist < 0.04 && rotDiff < 0.04))) {
               P_anchor2 = cache.P_anchor2;
               isValid = cache.isValid;
             } else {
@@ -3405,21 +3307,27 @@ function buildCollectibles(count, seed) {
                 pitch: camPitch,
                 rotA: rotA,
                 P_anchor2: P_anchor2,
-                isValid: isValid
+                isValid: isValid,
+                wasCaveSnap: false
               };
             }
 
-            // Assign P_top and P_bottom by elevation
-            const r1 = Math.hypot(P_anchor1[0], P_anchor1[1], P_anchor1[2]);
-            const r2 = Math.hypot(P_anchor2[0], P_anchor2[1], P_anchor2[2]);
-
+            // Assign P_top and P_bottom by elevation (or use cave-snapped endpoints directly)
             let P_top, P_bottom;
-            if (r1 >= r2) {
-              P_top = P_anchor1;
-              P_bottom = P_anchor2;
+            if (snappedToCave && P_cave_top && P_cave_bottom) {
+              P_top = P_cave_top;
+              P_bottom = P_cave_bottom;
             } else {
-              P_top = P_anchor2;
-              P_bottom = P_anchor1;
+              const r1 = Math.hypot(P_anchor1[0], P_anchor1[1], P_anchor1[2]);
+              const r2 = Math.hypot(P_anchor2[0], P_anchor2[1], P_anchor2[2]);
+
+              if (r1 >= r2) {
+                P_top = P_anchor1;
+                P_bottom = P_anchor2;
+              } else {
+                P_top = P_anchor2;
+                P_bottom = P_anchor1;
+              }
             }
 
             targetPos = [
@@ -6147,7 +6055,7 @@ function buildCollectibles(count, seed) {
               }
           }
           
-          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore" || c.type === "dragon_fruit" || c.type === "cotton_plant");
+          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "dirt" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore" || c.type === "dragon_fruit" || c.type === "cotton_plant");
           let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           if (c.type === "wood_boat" && !isInWater) {
              const cPos = c.position;
@@ -6897,6 +6805,17 @@ function buildCollectibles(count, seed) {
           actionType: "RAW_MATERIAL",
           usage_th: "วัตถุดิบก้อนหิน ได้จากการขุดหิน ใช้สำหรับคราฟต์พลั่ว ลูกธนู และพื้นหิน",
           usage_en: "Large rock mined from stone nodes. Used to craft Shovel, Arrows, and Stone Floor.",
+          maxStack: 99
+        },
+        "DIRT": {
+          id: "DIRT",
+          category: ITEM_CATEGORIES.NONE,
+          name_th: "ดิน",
+          name_en: "Dirt",
+          icon: "🟫",
+          actionType: "RAW_MATERIAL",
+          usage_th: "ดินที่ได้จากการขุดหลุมด้วยพลั่ว",
+          usage_en: "Soil obtained from digging holes with a shovel.",
           maxStack: 99
         },
         "LOG": {

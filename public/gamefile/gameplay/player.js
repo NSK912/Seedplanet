@@ -1532,17 +1532,23 @@ window.characterVertexShaderSource = `#version 300 es
       let campfireSize = 0.25;
       let voxelHoleRadiusMultiplier = 2.0;
 
-      // --- Render Distance State (Split: 1. Terrain: 15.0, 2. Objects: 5.0) ---
+      // --- Render Distance State (Hierarchy: 1. Terrain: 32.0, 2. Landmarks: 20.0, 3. Shadows: 14.0, 4. Objects: 6.0, 5. Grass: 4.5) ---
       let renderDistEnabled = true;
-      let terrainRenderDistValue = 15.0;
-      let objectRenderDistValue = 5.0;
-      let renderDistValue = 15.0; // for backwards compatibility
+      let terrainRenderDistValue = 32.0;
+      let landmarkRenderDistValue = 20.0;
+      let shadowRenderDistValue = 14.0;
+      let objectRenderDistValue = 6.0;
+      let grassRenderDistValue = 4.5;
+      let renderDistValue = 32.0; // for backwards compatibility
 
       // Expose to window for global access and devgame.js integration
       if (typeof window !== "undefined") {
         window.renderDistEnabled = renderDistEnabled;
         window.terrainRenderDistValue = terrainRenderDistValue;
+        window.landmarkRenderDistValue = landmarkRenderDistValue;
+        window.shadowRenderDistValue = shadowRenderDistValue;
         window.objectRenderDistValue = objectRenderDistValue;
+        window.grassRenderDistValue = grassRenderDistValue;
         window.renderDistValue = renderDistValue;
       }
 
@@ -7324,6 +7330,7 @@ window.characterVertexShaderSource = `#version 300 es
               let label = "BRANCH";
               if (item.type === "rock") { icon = "🪨"; label = "ROCK"; }
               else if (item.type === "big_rock") { icon = "🪨"; label = "BIG_ROCK"; }
+              else if (item.type === "dirt" || item.type === "DIRT") { icon = "🟫"; label = "DIRT"; }
               else if (item.type === "iron_ore") { icon = "🟥"; label = "IRON_ORE"; }
               else if (item.type === "gold_ore") { icon = "🪙"; label = "GOLD_ORE"; }
               else if (item.type === "glow_ore") { icon = "✨"; label = "GLOW_ORE"; }
@@ -7403,6 +7410,34 @@ window.characterVertexShaderSource = `#version 300 es
           } else {
             cameraCollisionToggle.textContent = "🛡️ ระบบกันกล้องชนวัตถุ: ปิด";
             cameraCollisionToggle.classList.remove("active");
+          }
+        });
+      }
+
+      const cameraWaterCollisionToggle = document.getElementById(
+        "cameraWaterCollisionToggle",
+      );
+      if (cameraWaterCollisionToggle) {
+        cameraWaterCollisionToggle.addEventListener("click", () => {
+          window.cameraWaterCollisionEnabled = !window.cameraWaterCollisionEnabled;
+          if (typeof cameraWaterCollisionEnabled !== "undefined") {
+            cameraWaterCollisionEnabled = window.cameraWaterCollisionEnabled;
+          }
+          const isWaterColOn = window.cameraWaterCollisionEnabled;
+          cameraWaterCollisionToggle.textContent = isWaterColOn
+            ? "🌊 ระบบกันกล้องชนผิวน้ำ: เปิด"
+            : "🌊 ระบบกันกล้องชนผิวน้ำ: ปิด";
+          cameraWaterCollisionToggle.classList.toggle("active", isWaterColOn);
+
+          const devBtn = document.getElementById("devCameraWaterCollisionBtn");
+          if (devBtn) {
+            devBtn.textContent = isWaterColOn ? "🌊 กันกล้องชนผิวน้ำ: เปิด" : "🌊 กันกล้องชนผิวน้ำ: ปิด";
+            devBtn.style.backgroundImage = isWaterColOn
+              ? "linear-gradient(135deg, #0288d1, #00acc1)"
+              : "linear-gradient(135deg, #37474f, #455a64)";
+          }
+          if (typeof showNotice === "function") {
+            showNotice(isWaterColOn ? "🌊 เปิดระบบกันกล้องชนผิวน้ำ" : "🌊 ปิดระบบกันกล้องชนผิวน้ำ");
           }
         });
       }
