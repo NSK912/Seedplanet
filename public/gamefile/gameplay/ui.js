@@ -20,6 +20,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
     <!-- Floating NPC HP Overlay -->
     <div id="npcHpOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10005;"></div>
+    <!-- Floating Planter Box 5-Slot Growth Overlay -->
+    <div id="planterGrowthOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10004;"></div>
 
     <!-- หน้าเข้าเกม (Title Screen) -->
     <div class="game-start-overlay" id="gameStartOverlay">
@@ -1815,6 +1817,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </button>
         <button class="btn-toggle" id="hitboxToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #d32f2f, #f44336);">
           🟥 แสดงโครงสร้างการชน (Show Hitboxes) ปิด
+        </button>
+        <button class="btn-toggle" id="planetWireframeToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #00695c, #26a69a);">
+          🌐 แสดงเส้นโครงสร้างดาว (Planet Wireframe) ปิด
         </button>
         <button class="btn-toggle active" id="frustumCullingToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #2e7d32, #4caf50);">
           👁️ Frustum Culling (คัดออกวัตถุนอกจอ) เปิด
@@ -3918,9 +3923,12 @@ window.addEventListener("keyup", (e) => {
       }
 
       canvas?.addEventListener("mousedown", (e) => {
+        if (window._devBucketGizmoDragging || window._devBucketGizmoHoveredAxis) {
+          return;
+        }
         initAudio();
         const isPointerLocked = (document.pointerLockElement === canvas || window.simulatedPointerLock);
-        if (!isPointerLocked && gameStarted && e.button === 0) {
+        if (!isPointerLocked && gameStarted && e.button === 0 && !window.devBucketGizmoEnabled) {
           requestPointerLockSafe();
         }
         if ((e.button === 0 || e.button === 2) && isPointerLocked) {
@@ -3954,6 +3962,10 @@ window.addEventListener("keyup", (e) => {
             }
           } else if (isPlacingFloor) {
             if (!isAltAction) placeFloor();
+          } else if (window.PlanterSystem && window.activePlantingTargetPlanter && window.activePlantingSeedItem) {
+            if (!isAltAction) {
+              window.PlanterSystem.handleLeftClick();
+            }
           } else if (!isUsingItem || (activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON") && arrowShotInCurrentAnim && useAnimTimer <= (bowHoldArmTimer - bowSpamClickDelay))) {
              if (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex]) {
                const item = actionSlotsItems[selectedActionSlotIndex];
@@ -4425,6 +4437,7 @@ window.addEventListener("keyup", (e) => {
       const randomNatureBtn = document.getElementById("randomNatureBtn");
       const devInputModeToggle = document.getElementById("devInputModeToggle");
       const hitboxToggle = document.getElementById("hitboxToggle");
+      const planetWireframeToggle = document.getElementById("planetWireframeToggle");
       const frustumCullingToggle = document.getElementById("frustumCullingToggle");
       const caveWaterToggle = document.getElementById("caveWaterToggle");
       const colliderDistSlider = document.getElementById("colliderDist");
@@ -4829,6 +4842,7 @@ window.addEventListener("keyup", (e) => {
         const devInputModeToggle = document.getElementById("devInputModeToggle");
         const screenModeVisibilityToggle = document.getElementById("screenModeVisibilityToggle");
         const hitboxToggle = document.getElementById("hitboxToggle");
+        const planetWireframeToggle = document.getElementById("planetWireframeToggle");
         const frustumCullingToggle = document.getElementById("frustumCullingToggle");
         const caveWaterToggle = document.getElementById("caveWaterToggle");
         const actionReachToggle = document.getElementById("actionReachToggle");
@@ -4857,6 +4871,13 @@ window.addEventListener("keyup", (e) => {
         if (hitboxToggle) {
           const hbText = typeof t === "function" ? t("toggle_hitboxes") : "แสดงโครงสร้างการชน (Show Hitboxes)";
           hitboxToggle.textContent = `🟥 ${hbText} ${showHitboxes ? onText : offText}`;
+        }
+
+        if (planetWireframeToggle) {
+          const pwText = typeof t === "function" ? t("toggle_planet_wireframe") : "แสดงเส้นโครงสร้างดาว (Planet Wireframe)";
+          const isPwOn = typeof showPlanetWireframe !== "undefined" ? showPlanetWireframe : !!(typeof window !== "undefined" && window.showPlanetWireframe);
+          planetWireframeToggle.textContent = `🌐 ${pwText} ${isPwOn ? onText : offText}`;
+          planetWireframeToggle.classList.toggle("active", isPwOn);
         }
 
         if (frustumCullingToggle) {
@@ -4957,6 +4978,15 @@ window.addEventListener("keyup", (e) => {
         if (typeof buildHitboxes === "function") {
            buildHitboxes();
         }
+      });
+
+      planetWireframeToggle?.addEventListener("click", () => {
+        showPlanetWireframe = !showPlanetWireframe;
+        if (typeof window !== "undefined") {
+          window.showPlanetWireframe = showPlanetWireframe;
+        }
+        planetWireframeToggle.classList.toggle("active", showPlanetWireframe);
+        updateSettingsTogglesUI();
       });
 
       frustumCullingToggle?.addEventListener("click", () => {

@@ -2140,3 +2140,86 @@
       .mech-slot-status.empty {
         color: rgba(255, 255, 255, 0.3);
       }
+
+      /* Floating Planter Box 5-Slot HP-Style Growth UI */
+      .planter-growth-overlay {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        transform: translate(-50%, -100%);
+        pointer-events: none;
+        z-index: 10004;
+        transition: opacity 0.15s ease;
+      }
+      .planter-growth-card {
+        background: rgba(10, 14, 22, 0.90);
+        border: 1px solid rgba(223, 183, 108, 0.45);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 8px rgba(46, 204, 113, 0.2);
+        padding: 5px 8px;
+        backdrop-filter: blur(8px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+      }
+      .planter-growth-card.mature {
+        border-color: rgba(241, 196, 15, 0.7);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7), 0 0 12px rgba(241, 196, 15, 0.45);
+        animation: planterMaturePulse 2s infinite ease-in-out;
+      }
+      @keyframes planterMaturePulse {
+        0%, 100% { border-color: rgba(241, 196, 15, 0.7); box-shadow: 0 0 10px rgba(241, 196, 15, 0.35); }
+        50% { border-color: rgba(243, 156, 18, 1.0); box-shadow: 0 0 16px rgba(241, 196, 15, 0.7); }
+      }
+      .planter-title-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Google Sans', monospace, sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        color: #f1f2f6;
+      }
+      .planter-icon {
+        font-size: 13px;
+      }
+      .planter-timer {
+        font-size: 10px;
+        color: #dfb76c;
+        margin-left: 2px;
+      }
+      .planter-slots-row {
+        display: flex;
+        gap: 3px;
+        margin-top: 1px;
+      }
+      .planter-hp-slot {
+        width: 14px;
+        height: 6px;
+        background: rgba(46, 204, 113, 0.15);
+        border: 1px solid rgba(46, 204, 113, 0.4);
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+      }
+      .planter-hp-slot.filled {
+        background: #2ecc71;
+        border-color: #58d68d;
+        box-shadow: 0 0 4px rgba(46, 204, 113, 0.85);
+      }
+      .planter-growth-card.mature .planter-hp-slot.filled {
+        background: #f1c40f;
+        border-color: #f39c12;
+        box-shadow: 0 0 5px rgba(241, 196, 15, 0.9);
+      }
+      .planter-status-text {
+        font-size: 9px;
+        color: #ced6e0;
+        font-family: monospace;
+        text-align: center;
+      }
+      .planter-growth-card.mature .planter-status-text {
+        color: #f1c40f;
+        font-weight: 700;
+      }

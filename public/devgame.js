@@ -2743,6 +2743,9 @@ if (typeof window !== "undefined") {
    * Called inside renderer.js inside the unlit lines/debug pipeline
    */
   window.renderDevSkeletonAndParts = function(gl, params) {
+    if (typeof window.renderDevBucketGizmo === "function") {
+      try { window.renderDevBucketGizmo(gl, params); } catch (e) {}
+    }
     if (!gl || window.characterModel !== "chibi" || !window.chibiGlbModel) {
       const overlay = document.getElementById("devBoneLabelsOverlay");
       if (overlay && overlay.style.display !== "none") overlay.style.display = "none";
@@ -3800,3 +3803,994 @@ if (typeof window !== "undefined") {
     setTimeout(mountGroup, 1500);
   }
 })();
+
+/* ==========================================================================
+   3D Transform & Rotation Gizmo for Held Bucket (ระบบปรับตำแหน่งและแกนหมุนโมเดล 3D ของถังน้ำ)
+   ========================================================================== */
+(function initDevBucketGizmoSystem() {
+  if (!window.devBucketOffset) {
+    window.devBucketOffset = { x: 0.016, y: -0.031, z: -0.007, scale: 1.0, rotX: 0.0, rotY: -90.0, rotZ: 0.0 };
+  }
+  if (typeof window.devBucketGizmoEnabled !== "boolean") {
+    window.devBucketGizmoEnabled = false;
+  }
+  if (!window.devBucketGizmoMode) {
+    window.devBucketGizmoMode = "translate"; // "translate" | "rotate"
+  }
+
+  let gizmoPosBuf = null;
+  let gizmoColBuf = null;
+  let hoveredAxis = null; // 'x' | 'y' | 'z' | 'center' | 'rot_x' | 'rot_y' | 'rot_z' | null
+  let draggingAxis = null;
+  let dragStartMouse = [0, 0];
+  let dragStartOffset = { x: 0.03, y: 0.00, z: 0.04, rotX: 0.0, rotY: 0.0, rotZ: 0.0 };
+
+  function transformPt(m, x, y, z) {
+    return [
+      m[0] * x + m[4] * y + m[8] * z + m[12],
+      m[1] * x + m[5] * y + m[9] * z + m[13],
+      m[2] * x + m[6] * y + m[10] * z + m[14]
+    ];
+  }
+
+  function multMat4Vec4(m, v) {
+    return [
+      m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12] * v[3],
+      m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13] * v[3],
+      m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14] * v[3],
+      m[3] * v[0] + m[7] * v[1] + m[11] * v[2] + m[15] * v[3]
+    ];
+  }
+
+  function projectWorldToScreen(worldPos, viewM, projM, w, h) {
+    const vView = multMat4Vec4(viewM, [worldPos[0], worldPos[1], worldPos[2], 1.0]);
+    const vClip = multMat4Vec4(projM, vView);
+    if (vClip[3] <= 0.01) return null;
+    const ndcX = vClip[0] / vClip[3];
+    const ndcY = vClip[1] / vClip[3];
+    return [
+      (ndcX * 0.5 + 0.5) * w,
+      (-ndcY * 0.5 + 0.5) * h,
+      vClip[3]
+    ];
+  }
+
+  function distToSegment2D(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-4) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  function ensureGizmoOverlay() {
+    let el = document.getElementById("devBucketGizmoOverlay");
+    if (!el && document.body) {
+      el = document.createElement("div");
+      el.id = "devBucketGizmoOverlay";
+      el.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:18;display:none;";
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function refreshEquipMeshNow() {
+    if (typeof window.updateChibiEquipMesh === "function") {
+      try { window.updateChibiEquipMesh(); } catch (e) {}
+    }
+    if (typeof window.updateCharacterMesh === "function") {
+      try { window.updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0); } catch (e) {}
+    }
+  }
+
+  function syncSlidersFromOffset() {
+    const off = window.devBucketOffset || { x: 0.03, y: 0.00, z: 0.04, scale: 1.0, rotX: 0.0, rotY: 0.0, rotZ: 0.0 };
+    const sx = document.getElementById("devBucketPosXSlider");
+    const sy = document.getElementById("devBucketPosYSlider");
+    const sz = document.getElementById("devBucketPosZSlider");
+    const ss = document.getElementById("devBucketScaleSlider");
+    const rx = document.getElementById("devBucketRotXSlider");
+    const ry = document.getElementById("devBucketRotYSlider");
+    const rz = document.getElementById("devBucketRotZSlider");
+
+    const lx = document.getElementById("devBucketPosXLabel");
+    const ly = document.getElementById("devBucketPosYLabel");
+    const lz = document.getElementById("devBucketPosZLabel");
+    const ls = document.getElementById("devBucketScaleLabel");
+    const lrx = document.getElementById("devBucketRotXLabel");
+    const lry = document.getElementById("devBucketRotYLabel");
+    const lrz = document.getElementById("devBucketRotZLabel");
+
+    if (sx) sx.value = Math.round(off.x * 1000);
+    if (sy) sy.value = Math.round(off.y * 1000);
+    if (sz) sz.value = Math.round(off.z * 1000);
+    if (ss) ss.value = Math.round((off.scale || 1.0) * 100);
+    if (rx) rx.value = Math.round(off.rotX || 0);
+    if (ry) ry.value = Math.round(off.rotY || 0);
+    if (rz) rz.value = Math.round(off.rotZ || 0);
+
+    if (lx) lx.textContent = off.x.toFixed(3);
+    if (ly) ly.textContent = off.y.toFixed(3);
+    if (lz) lz.textContent = off.z.toFixed(3);
+    if (ls) ls.textContent = (off.scale || 1.0).toFixed(2) + "x";
+    if (lrx) lrx.textContent = Math.round(off.rotX || 0) + "°";
+    if (lry) lry.textContent = Math.round(off.rotY || 0) + "°";
+    if (lrz) lrz.textContent = Math.round(off.rotZ || 0) + "°";
+  }
+
+  window.renderDevBucketGizmo = function(gl, params) {
+    const overlay = ensureGizmoOverlay();
+    if (!window.devBucketGizmoEnabled || !gl || !params) {
+      if (overlay && overlay.style.display !== "none") {
+        overlay.style.display = "none";
+        overlay.innerHTML = "";
+      }
+      window._devBucketGizmoScreenData = null;
+      return;
+    }
+
+    if (typeof window.updateChibiEquipMesh === "function") {
+      try { window.updateChibiEquipMesh(); } catch (e) {}
+    }
+
+    const charModelMatrix = params.charModelMatrix || (typeof window.getCharacterMatrix === "function" ? window.getCharacterMatrix() : null);
+    if (!charModelMatrix) return;
+
+    const localOrigin = window._lastBucketCenterLocalPos || window._lastBucketGripLocalPos || [0.18, -0.55, 0.06];
+    const itemScale = window._lastBucketItemScale || ((typeof playerScale === "number" ? playerScale : 0.1) / 0.1);
+
+    const wOrigin = transformPt(charModelMatrix, localOrigin[0], localOrigin[1], localOrigin[2]);
+
+    const localStep = 0.26 * itemScale;
+    const ringRadius = 0.20 * itemScale;
+    const wTipX = transformPt(charModelMatrix, localOrigin[0] + localStep, localOrigin[1], localOrigin[2]);
+    const wTipY = transformPt(charModelMatrix, localOrigin[0], localOrigin[1] + localStep, localOrigin[2]);
+    const wTipZ = transformPt(charModelMatrix, localOrigin[0], localOrigin[1], localOrigin[2] + localStep);
+
+    const verts = [];
+    const cols = [];
+
+    const addLine = (p1, p2, c) => {
+      verts.push(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+      cols.push(c[0], c[1], c[2], c[0], c[1], c[2]);
+    };
+
+    const isRotMode = window.devBucketGizmoMode === "rotate";
+    const activeAxis = draggingAxis || hoveredAxis;
+
+    const colX = (activeAxis === "x" || activeAxis === "rot_x") ? [1.0, 1.0, 0.2] : [1.0, 0.22, 0.22];
+    const colY = (activeAxis === "y" || activeAxis === "rot_y") ? [1.0, 1.0, 0.2] : [0.2, 0.95, 0.35];
+    const colZ = (activeAxis === "z" || activeAxis === "rot_z") ? [1.0, 1.0, 0.2] : [0.22, 0.62, 1.0];
+    const colC = (activeAxis === "center") ? [1.0, 1.0, 1.0] : [1.0, 0.85, 0.25];
+
+    // Helper to draw a circle ring around an axis in local space
+    const addLocalCircleRing = (plane, col) => {
+      const segs = 36;
+      let prevPt = null;
+      const pts = [];
+      for (let i = 0; i <= segs; i++) {
+        const a = (i / segs) * Math.PI * 2;
+        const c = Math.cos(a) * ringRadius;
+        const s = Math.sin(a) * ringRadius;
+        let lx = 0, ly = 0, lz = 0;
+        if (plane === "yz") { // around X axis (Pitch)
+          ly = c; lz = s;
+        } else if (plane === "xz") { // around Y axis (Yaw)
+          lx = c; lz = s;
+        } else if (plane === "xy") { // around Z axis (Roll)
+          lx = c; ly = s;
+        }
+        const wPt = transformPt(charModelMatrix, localOrigin[0] + lx, localOrigin[1] + ly, localOrigin[2] + lz);
+        pts.push(wPt);
+        if (prevPt) {
+          addLine(prevPt, wPt, col);
+        }
+        prevPt = wPt;
+      }
+      return pts;
+    };
+
+    let ringPtsX = [], ringPtsY = [], ringPtsZ = [];
+
+    if (!isRotMode) {
+      // 1. Translation Arrows (Engine Standard)
+      const addArrowAxis = (origin, tip, upHint1, upHint2, col) => {
+        const d1 = [(upHint1[0] - origin[0]) * 0.015, (upHint1[1] - origin[1]) * 0.015, (upHint1[2] - origin[2]) * 0.015];
+        const d2 = [(upHint2[0] - origin[0]) * 0.015, (upHint2[1] - origin[1]) * 0.015, (upHint2[2] - origin[2]) * 0.015];
+        addLine(origin, tip, col);
+        addLine([origin[0] + d1[0], origin[1] + d1[1], origin[2] + d1[2]], [tip[0] + d1[0], tip[1] + d1[1], tip[2] + d1[2]], col);
+        addLine([origin[0] - d1[0], origin[1] - d1[1], origin[2] - d1[2]], [tip[0] - d1[0], tip[1] - d1[1], tip[2] - d1[2]], col);
+        addLine([origin[0] + d2[0], origin[1] + d2[1], origin[2] + d2[2]], [tip[0] + d2[0], tip[1] + d2[1], tip[2] + d2[2]], col);
+
+        const baseCenter = [
+          origin[0] + (tip[0] - origin[0]) * 0.78,
+          origin[1] + (tip[1] - origin[1]) * 0.78,
+          origin[2] + (tip[2] - origin[2]) * 0.78
+        ];
+        const r1 = [(upHint1[0] - origin[0]) * 0.085, (upHint1[1] - origin[1]) * 0.085, (upHint1[2] - origin[2]) * 0.085];
+        const r2 = [(upHint2[0] - origin[0]) * 0.085, (upHint2[1] - origin[1]) * 0.085, (upHint2[2] - origin[2]) * 0.085];
+
+        const c1 = [baseCenter[0] + r1[0], baseCenter[1] + r1[1], baseCenter[2] + r1[2]];
+        const c2 = [baseCenter[0] + r2[0], baseCenter[1] + r2[1], baseCenter[2] + r2[2]];
+        const c3 = [baseCenter[0] - r1[0], baseCenter[1] - r1[1], baseCenter[2] - r1[2]];
+        const c4 = [baseCenter[0] - r2[0], baseCenter[1] - r2[1], baseCenter[2] - r2[2]];
+
+        addLine(tip, c1, col); addLine(tip, c2, col); addLine(tip, c3, col); addLine(tip, c4, col);
+        addLine(c1, c2, col); addLine(c2, c3, col); addLine(c3, c4, col); addLine(c4, c1, col);
+      };
+
+      addArrowAxis(wOrigin, wTipX, wTipY, wTipZ, colX);
+      addArrowAxis(wOrigin, wTipY, wTipX, wTipZ, colY);
+      addArrowAxis(wOrigin, wTipZ, wTipX, wTipY, colZ);
+
+      // Center handle box
+      const boxR = 0.09 * Math.hypot(wTipX[0] - wOrigin[0], wTipX[1] - wOrigin[1], wTipX[2] - wOrigin[2]);
+      const pTop = [wOrigin[0], wOrigin[1] + boxR, wOrigin[2]];
+      const pBtm = [wOrigin[0], wOrigin[1] - boxR, wOrigin[2]];
+      const pL = [wOrigin[0] - boxR, wOrigin[1], wOrigin[2]];
+      const pR = [wOrigin[0] + boxR, wOrigin[1], wOrigin[2]];
+      const pF = [wOrigin[0], wOrigin[1], wOrigin[2] + boxR];
+      const pB = [wOrigin[0], wOrigin[1], wOrigin[2] - boxR];
+      addLine(pTop, pL, colC); addLine(pTop, pR, colC); addLine(pTop, pF, colC); addLine(pTop, pB, colC);
+      addLine(pBtm, pL, colC); addLine(pBtm, pR, colC); addLine(pBtm, pF, colC); addLine(pBtm, pB, colC);
+      addLine(pL, pF, colC); addLine(pF, pR, colC); addLine(pR, pB, colC); addLine(pB, pL, colC);
+    } else {
+      // 2. Rotation Gizmo (3D Torus / Rotation Rings Standard Engine)
+      ringPtsX = addLocalCircleRing("yz", colX); // Pitch (Red ring around X)
+      ringPtsY = addLocalCircleRing("xz", colY); // Yaw (Green ring around Y)
+      ringPtsZ = addLocalCircleRing("xy", colZ); // Roll (Blue ring around Z)
+
+      // Small central indicator axes
+      const smStep = localStep * 0.35;
+      const smX = transformPt(charModelMatrix, localOrigin[0] + smStep, localOrigin[1], localOrigin[2]);
+      const smY = transformPt(charModelMatrix, localOrigin[0], localOrigin[1] + smStep, localOrigin[2]);
+      const smZ = transformPt(charModelMatrix, localOrigin[0], localOrigin[1], localOrigin[2] + smStep);
+      addLine(wOrigin, smX, colX);
+      addLine(wOrigin, smY, colY);
+      addLine(wOrigin, smZ, colZ);
+    }
+
+    if (!gizmoPosBuf) gizmoPosBuf = gl.createBuffer();
+    if (!gizmoColBuf) gizmoColBuf = gl.createBuffer();
+
+    gl.disable(gl.DEPTH_TEST);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gizmoPosBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(params.positionLoc);
+    gl.vertexAttribPointer(params.positionLoc, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gizmoColBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cols), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(params.colorLoc);
+    gl.vertexAttribPointer(params.colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.LINES, 0, verts.length / 3);
+
+    gl.enable(gl.DEPTH_TEST);
+
+    // Project 3D axis points / rings to 2D screen space for interactive mouse dragging & axis labels
+    const viewM = params.viewMatrix;
+    const projM = params.projMatrix;
+    if (viewM && projM) {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const sO = projectWorldToScreen(wOrigin, viewM, projM, w, h);
+      const sX = projectWorldToScreen(wTipX, viewM, projM, w, h);
+      const sY = projectWorldToScreen(wTipY, viewM, projM, w, h);
+      const sZ = projectWorldToScreen(wTipZ, viewM, projM, w, h);
+
+      const projectRing = (pts) => pts.map(p => projectWorldToScreen(p, viewM, projM, w, h)).filter(Boolean);
+      const sRingX = isRotMode ? projectRing(ringPtsX) : [];
+      const sRingY = isRotMode ? projectRing(ringPtsY) : [];
+      const sRingZ = isRotMode ? projectRing(ringPtsZ) : [];
+
+      if (sO) {
+        window._devBucketGizmoScreenData = {
+          origin: sO,
+          tipX: sX,
+          tipY: sY,
+          tipZ: sZ,
+          ringX: sRingX,
+          ringY: sRingY,
+          ringZ: sRingZ,
+          localStep: localStep,
+          isRotMode: isRotMode
+        };
+
+        if (overlay) {
+          overlay.style.display = "block";
+          const makeBadge = (pt, label, bg, isHot) => {
+            if (!pt) return "";
+            const scaleCss = isHot ? "transform:translate(-50%,-50%) scale(1.25);box-shadow:0 0 10px #fff;" : "transform:translate(-50%,-50%);";
+            return `<div style="position:absolute;left:${pt[0].toFixed(1)}px;top:${pt[1].toFixed(1)}px;background:${bg};color:#fff;font-weight:bold;font-size:10px;padding:1px 5px;border-radius:4px;border:1px solid rgba(255,255,255,0.85);font-family:'Google Sans',sans-serif;user-select:none;${scaleCss}">${label}</div>`;
+          };
+
+          if (!isRotMode) {
+            overlay.innerHTML =
+              makeBadge(sX, "X", activeAxis === "x" ? "#f59e0b" : "#ef4444", activeAxis === "x") +
+              makeBadge(sY, "Y", activeAxis === "y" ? "#f59e0b" : "#22c55e", activeAxis === "y") +
+              makeBadge(sZ, "Z", activeAxis === "z" ? "#f59e0b" : "#3b82f6", activeAxis === "z");
+          } else {
+            // Find representative point on each ring for label badge
+            const ptRx = sRingX[0] || sX;
+            const ptRy = sRingY[0] || sY;
+            const ptRz = sRingZ[0] || sZ;
+            overlay.innerHTML =
+              makeBadge(ptRx, "Rot X", activeAxis === "rot_x" ? "#f59e0b" : "#ef4444", activeAxis === "rot_x") +
+              makeBadge(ptRy, "Rot Y", activeAxis === "rot_y" ? "#f59e0b" : "#22c55e", activeAxis === "rot_y") +
+              makeBadge(ptRz, "Rot Z", activeAxis === "rot_z" ? "#f59e0b" : "#3b82f6", activeAxis === "rot_z");
+          }
+        }
+      } else if (overlay) {
+        overlay.style.display = "none";
+      }
+    }
+  };
+
+  function distToPolyline2D(px, py, pts) {
+    if (!pts || pts.length < 2) return 9999;
+    let minD = 9999;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const d = distToSegment2D(px, py, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]);
+      if (d < minD) minD = d;
+    }
+    return minD;
+  }
+
+  function pickGizmoAxis(mx, my) {
+    const data = window._devBucketGizmoScreenData;
+    if (!data || !window.devBucketGizmoEnabled) return null;
+
+    const o = data.origin;
+    if (!data.isRotMode) {
+      if (Math.hypot(mx - o[0], my - o[1]) <= 16) {
+        return "center";
+      }
+
+      const dX = data.tipX ? distToSegment2D(mx, my, o[0], o[1], data.tipX[0], data.tipX[1]) : 999;
+      const dY = data.tipY ? distToSegment2D(mx, my, o[0], o[1], data.tipY[0], data.tipY[1]) : 999;
+      const dZ = data.tipZ ? distToSegment2D(mx, my, o[0], o[1], data.tipZ[0], data.tipZ[1]) : 999;
+
+      const threshold = 18;
+      let best = null;
+      let minD = threshold;
+      if (dX < minD) { minD = dX; best = "x"; }
+      if (dY < minD) { minD = dY; best = "y"; }
+      if (dZ < minD) { minD = dZ; best = "z"; }
+      return best;
+    } else {
+      // Rotation Rings picking
+      const dRx = distToPolyline2D(mx, my, data.ringX);
+      const dRy = distToPolyline2D(mx, my, data.ringY);
+      const dRz = distToPolyline2D(mx, my, data.ringZ);
+
+      const threshold = 20;
+      let best = null;
+      let minD = threshold;
+      if (dRx < minD) { minD = dRx; best = "rot_x"; }
+      if (dRy < minD) { minD = dRy; best = "rot_y"; }
+      if (dRz < minD) { minD = dRz; best = "rot_z"; }
+      return best;
+    }
+  }
+
+  window.addEventListener("pointerdown", (e) => {
+    if (!window.devBucketGizmoEnabled || e.button !== 0) return;
+    const t = e.target;
+    if (t && t.closest && t.closest("#mainControls, .controls, #inventoryOverlay, .game-ui")) return;
+
+    const hit = pickGizmoAxis(e.clientX, e.clientY);
+    if (hit) {
+      draggingAxis = hit;
+      hoveredAxis = hit;
+      window._devBucketGizmoDragging = true;
+      window._devBucketGizmoHoveredAxis = hit;
+      dragStartMouse = [e.clientX, e.clientY];
+      dragStartOffset = {
+        x: window.devBucketOffset.x,
+        y: window.devBucketOffset.y,
+        z: window.devBucketOffset.z,
+        rotX: window.devBucketOffset.rotX || 0,
+        rotY: window.devBucketOffset.rotY || 0,
+        rotZ: window.devBucketOffset.rotZ || 0
+      };
+      if (document.body) document.body.style.cursor = "grabbing";
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+    }
+  }, true);
+
+  window.addEventListener("pointermove", (e) => {
+    if (!window.devBucketGizmoEnabled) return;
+
+    if (draggingAxis && window._devBucketGizmoScreenData) {
+      const data = window._devBucketGizmoScreenData;
+      const o = data.origin;
+      const dxScreen = e.clientX - dragStartMouse[0];
+      const dyScreen = e.clientY - dragStartMouse[1];
+
+      if (!data.isRotMode) {
+        // Translation Drag
+        const stepLocal = data.localStep || 0.26;
+        const applyAxisDelta = (axisKey, tip) => {
+          if (!tip) return 0;
+          const vx = tip[0] - o[0];
+          const vy = tip[1] - o[1];
+          const pixLen = Math.hypot(vx, vy);
+          if (pixLen < 2) return 0;
+          const projPix = (dxScreen * vx + dyScreen * vy) / pixLen;
+          return (projPix / pixLen) * stepLocal;
+        };
+
+        if (draggingAxis === "x") {
+          window.devBucketOffset.x = Math.max(-1.0, Math.min(1.0, dragStartOffset.x + applyAxisDelta("x", data.tipX)));
+        } else if (draggingAxis === "y") {
+          window.devBucketOffset.y = Math.max(-1.0, Math.min(1.0, dragStartOffset.y + applyAxisDelta("y", data.tipY)));
+        } else if (draggingAxis === "z") {
+          window.devBucketOffset.z = Math.max(-1.0, Math.min(1.0, dragStartOffset.z + applyAxisDelta("z", data.tipZ)));
+        } else if (draggingAxis === "center") {
+          window.devBucketOffset.x = Math.max(-1.0, Math.min(1.0, dragStartOffset.x + applyAxisDelta("x", data.tipX)));
+          window.devBucketOffset.y = Math.max(-1.0, Math.min(1.0, dragStartOffset.y + applyAxisDelta("y", data.tipY)));
+        }
+      } else {
+        // Rotation Drag with Tangent Projection on 2D Screen Space
+        const distCenter = Math.hypot(e.clientX - o[0], e.clientY - o[1]);
+        let dAngleDeg = 0;
+
+        if (distCenter > 20) {
+          // Circular angular delta around gizmo origin
+          const vStart = [dragStartMouse[0] - o[0], dragStartMouse[1] - o[1]];
+          const vCurrent = [e.clientX - o[0], e.clientY - o[1]];
+          const angStart = Math.atan2(vStart[1], vStart[0]);
+          const angCurrent = Math.atan2(vCurrent[1], vCurrent[0]);
+          dAngleDeg = ((angCurrent - angStart) * 180.0) / Math.PI;
+          while (dAngleDeg > 180) dAngleDeg -= 360;
+          while (dAngleDeg < -180) dAngleDeg += 360;
+        } else {
+          // Linear fallback if close to origin
+          dAngleDeg = (dxScreen - dyScreen) * 0.75;
+        }
+
+        const normalizeDeg = (deg) => {
+          let a = deg % 360;
+          if (a > 180) a -= 360;
+          if (a < -180) a += 360;
+          return Math.round(a);
+        };
+
+        if (draggingAxis === "rot_x") {
+          window.devBucketOffset.rotX = normalizeDeg(dragStartOffset.rotX + dAngleDeg);
+        } else if (draggingAxis === "rot_y") {
+          window.devBucketOffset.rotY = normalizeDeg(dragStartOffset.rotY + dAngleDeg);
+        } else if (draggingAxis === "rot_z") {
+          window.devBucketOffset.rotZ = normalizeDeg(dragStartOffset.rotZ + dAngleDeg);
+        }
+      }
+
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    const t = e.target;
+    if (t && t.closest && t.closest("#mainControls, .controls, #inventoryOverlay, .game-ui")) {
+      hoveredAxis = null;
+      window._devBucketGizmoHoveredAxis = null;
+      return;
+    }
+
+    const hit = pickGizmoAxis(e.clientX, e.clientY);
+    if (hit !== hoveredAxis) {
+      hoveredAxis = hit;
+      window._devBucketGizmoHoveredAxis = hit;
+      if (document.body) {
+        document.body.style.cursor = hit ? "grab" : "";
+      }
+    }
+  }, true);
+
+  window.addEventListener("pointerup", () => {
+    if (draggingAxis) {
+      draggingAxis = null;
+      window._devBucketGizmoDragging = false;
+      if (document.body) {
+        document.body.style.cursor = hoveredAxis ? "grab" : "";
+      }
+    }
+  }, true);
+
+  window.toggleDevBucketGizmo = function(forceVal) {
+    window.devBucketGizmoEnabled = (typeof forceVal === "boolean") ? forceVal : !window.devBucketGizmoEnabled;
+    if (window.devBucketGizmoEnabled) {
+      if (document.exitPointerLock) {
+        try { document.exitPointerLock(); } catch (e) {}
+      }
+      window.simulatedPointerLock = false;
+    } else {
+      hoveredAxis = null;
+      draggingAxis = null;
+      window._devBucketGizmoDragging = false;
+      window._devBucketGizmoHoveredAxis = null;
+      if (document.body) document.body.style.cursor = "";
+    }
+    updateDevBucketGizmoUI();
+    refreshEquipMeshNow();
+    if (typeof showNotice === "function") {
+      showNotice(window.devBucketGizmoEnabled
+        ? "🪣 เปิดโหมดลากปรับตำแหน่งและแกนหมุน 3D ของถังน้ำแล้ว"
+        : "ปิดโหมดปรับ 3D ของถังน้ำแล้ว");
+    }
+    return window.devBucketGizmoEnabled;
+  };
+
+  window.setDevBucketGizmoMode = function(mode) {
+    window.devBucketGizmoMode = mode;
+    hoveredAxis = null;
+    draggingAxis = null;
+    window._devBucketGizmoDragging = false;
+    window._devBucketGizmoHoveredAxis = null;
+    updateDevBucketGizmoUI();
+    refreshEquipMeshNow();
+  };
+
+  function updateDevBucketGizmoUI() {
+    const toggleBtn = document.getElementById("devToggleBucketGizmoBtn");
+    const statusBadge = document.getElementById("devBucketGizmoStatusBadge");
+    const detailsPanel = document.getElementById("devBucketGizmoDetailsPanel");
+    const modeTranslateBtn = document.getElementById("devBucketModeTranslateBtn");
+    const modeRotateBtn = document.getElementById("devBucketModeRotateBtn");
+
+    if (toggleBtn) {
+      if (window.devBucketGizmoEnabled) {
+        toggleBtn.innerHTML = "🟢 ปรับตำแหน่ง 3D ถังน้ำ (Gizmo): เปิด (ON)";
+        toggleBtn.style.background = "linear-gradient(135deg, #0284c7, #38bdf8)";
+        toggleBtn.style.borderColor = "#7dd3fc";
+      } else {
+        toggleBtn.innerHTML = "🪣 ปรับตำแหน่ง 3D ถังน้ำ (Gizmo): ปิด (OFF)";
+        toggleBtn.style.background = "rgba(255, 255, 255, 0.08)";
+        toggleBtn.style.borderColor = "rgba(255, 255, 255, 0.25)";
+      }
+    }
+    if (statusBadge) {
+      statusBadge.textContent = window.devBucketGizmoEnabled ? "ON" : "OFF";
+      statusBadge.style.background = window.devBucketGizmoEnabled ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.1)";
+      statusBadge.style.color = window.devBucketGizmoEnabled ? "#38bdf8" : "#aaa";
+    }
+    if (detailsPanel) {
+      detailsPanel.style.display = window.devBucketGizmoEnabled ? "block" : "none";
+    }
+    if (modeTranslateBtn && modeRotateBtn) {
+      const isRot = window.devBucketGizmoMode === "rotate";
+      modeTranslateBtn.style.background = !isRot ? "linear-gradient(135deg, #0284c7, #38bdf8)" : "rgba(255,255,255,0.08)";
+      modeTranslateBtn.style.borderColor = !isRot ? "#7dd3fc" : "rgba(255,255,255,0.25)";
+      modeRotateBtn.style.background = isRot ? "linear-gradient(135deg, #9333ea, #c084fc)" : "rgba(255,255,255,0.08)";
+      modeRotateBtn.style.borderColor = isRot ? "#e9d5ff" : "rgba(255,255,255,0.25)";
+    }
+    syncSlidersFromOffset();
+  }
+
+  function mountBucketGizmoControlGroup() {
+    const mainControls = document.getElementById("mainControls");
+    if (!mainControls) return false;
+    if (document.getElementById("devBucketGizmoControlGroup")) return true;
+
+    const off = window.devBucketOffset;
+    const group = document.createElement("div");
+    group.className = "control-group";
+    group.id = "devBucketGizmoControlGroup";
+    group.style.border = "1.5px solid #38bdf8";
+    group.style.borderRadius = "8px";
+    group.style.background = "rgba(12, 20, 32, 0.95)";
+    group.style.boxShadow = "0 4px 12px rgba(0,0,0,0.5)";
+    group.style.padding = "10px";
+
+    group.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:bold;color:#38bdf8;font-size:13px;">🪣 ปรับตำแหน่งโมเดล 3D ถังน้ำ (3D Gizmo)</span>
+        <span id="devBucketGizmoStatusBadge" style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.1);color:#aaa;">OFF</span>
+      </div>
+
+      <button id="devToggleBucketGizmoBtn" style="width:100%;padding:8px 10px;font-size:12px;font-weight:bold;color:#fff;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.25);border-radius:6px;cursor:pointer;transition:all 0.2s;">
+        🪣 ปรับตำแหน่ง 3D ถังน้ำ (Gizmo): ปิด (OFF)
+      </button>
+
+      <div id="devBucketGizmoDetailsPanel" style="display:none;margin-top:10px;padding-top:8px;border-top:1px solid rgba(56,189,248,0.25);">
+        <!-- Mode Switcher: เลื่อนตำแหน่ง vs หมุนแกน 3D -->
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <button id="devBucketModeTranslateBtn" style="flex:1;padding:6px;font-size:11px;font-weight:bold;color:#fff;background:linear-gradient(135deg, #0284c7, #38bdf8);border:1px solid #7dd3fc;border-radius:4px;cursor:pointer;">
+            ✥ เลื่อนตำแหน่ง (Move)
+          </button>
+          <button id="devBucketModeRotateBtn" style="flex:1;padding:6px;font-size:11px;font-weight:bold;color:#fff;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.25);border-radius:4px;cursor:pointer;">
+            🔄 แกนหมุน 3D (Rotate)
+          </button>
+        </div>
+
+        <div style="font-size:11px;color:#bae6fd;margin-bottom:8px;line-height:1.4;background:rgba(56,189,248,0.1);padding:6px 8px;border-radius:4px;">
+          💡 คลิกลากแกน <b style="color:#ef4444;">X (แดง)</b>, <b style="color:#22c55e;">Y (เขียว)</b>, <b style="color:#3b82f6;">Z (น้ำเงิน)</b> บนถังน้ำในฉาก 3D ได้โดยตรง หรือปรับละเอียดด้านล่าง:
+        </div>
+
+        <!-- Position Sliders -->
+        <div style="margin-top:4px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;">
+            <span style="color:#f87171;font-weight:bold;">↔ แกน X (ซ้าย/ขวา):</span>
+            <span id="devBucketPosXLabel" style="color:#fff;font-family:monospace;">${off.x.toFixed(3)}</span>
+          </div>
+          <input type="range" id="devBucketPosXSlider" min="-400" max="400" value="${Math.round(off.x * 1000)}" style="width:100%;accent-color:#ef4444;">
+        </div>
+
+        <div style="margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;">
+            <span style="color:#4ade80;font-weight:bold;">↕ แกน Y (ขึ้น/ลง):</span>
+            <span id="devBucketPosYLabel" style="color:#fff;font-family:monospace;">${off.y.toFixed(3)}</span>
+          </div>
+          <input type="range" id="devBucketPosYSlider" min="-400" max="400" value="${Math.round(off.y * 1000)}" style="width:100%;accent-color:#22c55e;">
+        </div>
+
+        <div style="margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;">
+            <span style="color:#60a5fa;font-weight:bold;">↹ แกน Z (หน้า/หลัง):</span>
+            <span id="devBucketPosZLabel" style="color:#fff;font-family:monospace;">${off.z.toFixed(3)}</span>
+          </div>
+          <input type="range" id="devBucketPosZSlider" min="-400" max="400" value="${Math.round(off.z * 1000)}" style="width:100%;accent-color:#3b82f6;">
+        </div>
+
+        <div style="margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;">
+            <span style="color:#dfb76c;">📐 ขนาดถังน้ำ (Scale):</span>
+            <span id="devBucketScaleLabel" style="color:#dfb76c;font-family:monospace;">${(off.scale || 1.0).toFixed(2)}x</span>
+          </div>
+          <input type="range" id="devBucketScaleSlider" min="30" max="250" value="${Math.round((off.scale || 1.0) * 100)}" style="width:100%;accent-color:#dfb76c;">
+        </div>
+
+        <!-- Rotation Sliders (3D Angles) -->
+        <div style="margin-top:8px;padding-top:6px;border-top:1px dashed rgba(255,255,255,0.15);">
+          <div style="font-size:11px;font-weight:bold;color:#c084fc;margin-bottom:4px;">🔄 ปรับองศาการหมุน (Rotation Angles):</div>
+          
+          <div style="margin-top:4px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;">
+              <span style="color:#f87171;">🔄 ก้ม/เงย (Pitch - แกน X):</span>
+              <span id="devBucketRotXLabel" style="color:#f87171;font-family:monospace;">${Math.round(off.rotX || 0)}°</span>
+            </div>
+            <input type="range" id="devBucketRotXSlider" min="-180" max="180" value="${Math.round(off.rotX || 0)}" style="width:100%;accent-color:#ef4444;">
+          </div>
+
+          <div style="margin-top:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;">
+              <span style="color:#4ade80;">🔄 หมุนหัน (Yaw - แกน Y):</span>
+              <span id="devBucketRotYLabel" style="color:#4ade80;font-family:monospace;">${Math.round(off.rotY || 0)}°</span>
+            </div>
+            <input type="range" id="devBucketRotYSlider" min="-180" max="180" value="${Math.round(off.rotY || 0)}" style="width:100%;accent-color:#22c55e;">
+          </div>
+
+          <div style="margin-top:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;">
+              <span style="color:#60a5fa;">🔄 เอียง (Roll - แกน Z):</span>
+              <span id="devBucketRotZLabel" style="color:#60a5fa;font-family:monospace;">${Math.round(off.rotZ || 0)}°</span>
+            </div>
+            <input type="range" id="devBucketRotZSlider" min="-180" max="180" value="${Math.round(off.rotZ || 0)}" style="width:100%;accent-color:#3b82f6;">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button id="devBucketCopyBtn" style="flex:1;padding:6px;font-size:11px;background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid #38bdf8;border-radius:4px;cursor:pointer;">
+            📋 คัดลอกค่า (Copy)
+          </button>
+          <button id="devBucketResetBtn" style="padding:6px 10px;font-size:11px;background:transparent;color:#f87171;border:1px solid #f87171;border-radius:4px;cursor:pointer;">
+            ↺ รีเซ็ต
+          </button>
+        </div>
+      </div>
+    `;
+
+    if (mainControls.firstChild) {
+      mainControls.insertBefore(group, mainControls.firstChild);
+    } else {
+      mainControls.appendChild(group);
+    }
+
+    document.getElementById("devToggleBucketGizmoBtn")?.addEventListener("click", () => {
+      window.toggleDevBucketGizmo();
+    });
+
+    document.getElementById("devBucketModeTranslateBtn")?.addEventListener("click", () => {
+      window.setDevBucketGizmoMode("translate");
+    });
+    document.getElementById("devBucketModeRotateBtn")?.addEventListener("click", () => {
+      window.setDevBucketGizmoMode("rotate");
+    });
+
+    document.getElementById("devBucketPosXSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.x = parseInt(e.target.value, 10) / 1000;
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+    document.getElementById("devBucketPosYSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.y = parseInt(e.target.value, 10) / 1000;
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+    document.getElementById("devBucketPosZSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.z = parseInt(e.target.value, 10) / 1000;
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+    document.getElementById("devBucketScaleSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.scale = parseInt(e.target.value, 10) / 100;
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+    document.getElementById("devBucketRotXSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.rotX = parseInt(e.target.value, 10);
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+    document.getElementById("devBucketRotYSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.rotY = parseInt(e.target.value, 10);
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+    document.getElementById("devBucketRotZSlider")?.addEventListener("input", (e) => {
+      window.devBucketOffset.rotZ = parseInt(e.target.value, 10);
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+    });
+
+    document.getElementById("devBucketCopyBtn")?.addEventListener("click", () => {
+      const o = window.devBucketOffset;
+      const txt = `{ x: ${o.x.toFixed(3)}, y: ${o.y.toFixed(3)}, z: ${o.z.toFixed(3)}, scale: ${(o.scale || 1.0).toFixed(2)}, rotX: ${Math.round(o.rotX || 0)}, rotY: ${Math.round(o.rotY || 0)}, rotZ: ${Math.round(o.rotZ || 0)} }`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).catch(() => {});
+      }
+      if (typeof showNotice === "function") {
+        showNotice("คัดลอกค่าตำแหน่งและมุมหมุนถังน้ำแล้ว: " + txt);
+      }
+    });
+
+    document.getElementById("devBucketResetBtn")?.addEventListener("click", () => {
+      window.devBucketOffset = { x: 0.016, y: -0.031, z: -0.007, scale: 1.0, rotX: 0.0, rotY: -90.0, rotZ: 0.0 };
+      syncSlidersFromOffset();
+      refreshEquipMeshNow();
+      if (typeof showNotice === "function") {
+        showNotice("รีเซ็ตตำแหน่งและแกนหมุนโมเดล 3D ถังน้ำเป็นค่าเริ่มต้นแล้ว");
+      }
+    });
+
+    updateDevBucketGizmoUI();
+    return true;
+  }
+
+  if (!mountBucketGizmoControlGroup()) {
+    window.addEventListener("DOMContentLoaded", mountBucketGizmoControlGroup);
+    setTimeout(mountBucketGizmoControlGroup, 500);
+    setTimeout(mountBucketGizmoControlGroup, 1500);
+  }
+})();
+
+// --- ระบบปรับตำแหน่งและสเกล 3D UI กล่องดิน (Planter Box 3D UI Settings) ---
+(function initDevPlanterUiSettings() {
+  window.devgame = window.devgame || {};
+
+  if (typeof window.devgame.planterUiScale !== "number") window.devgame.planterUiScale = 0.25;
+  if (typeof window.devgame.planterUiUpOffset !== "number") window.devgame.planterUiUpOffset = 0.03;
+  if (typeof window.devgame.planterUiForwardOffset !== "number") window.devgame.planterUiForwardOffset = 0.05;
+  if (typeof window.devgame.planterUiRightOffset !== "number") window.devgame.planterUiRightOffset = 0.00;
+  if (typeof window.devgame.planterUiYawOffset !== "number") window.devgame.planterUiYawOffset = 180;
+  if (typeof window.devgame.planterUiPitchOffset !== "number") window.devgame.planterUiPitchOffset = 0;
+  if (typeof window.devgame.planterUiPreviewAlways !== "boolean") window.devgame.planterUiPreviewAlways = true;
+
+  function syncPlanterUiControls() {
+    const d = window.devgame;
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = String(val); };
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+
+    setVal("devPlanterUiScaleSlider", Math.round(d.planterUiScale * 100));
+    setTxt("devPlanterUiScaleLabel", Math.round(d.planterUiScale * 100) + "%");
+
+    setVal("devPlanterUiUpSlider", Math.round(d.planterUiUpOffset * 100));
+    setTxt("devPlanterUiUpLabel", d.planterUiUpOffset.toFixed(2));
+
+    setVal("devPlanterUiForwardSlider", Math.round(d.planterUiForwardOffset * 100));
+    setTxt("devPlanterUiForwardLabel", d.planterUiForwardOffset.toFixed(2));
+
+    setVal("devPlanterUiRightSlider", Math.round(d.planterUiRightOffset * 100));
+    setTxt("devPlanterUiRightLabel", d.planterUiRightOffset.toFixed(2));
+
+    setVal("devPlanterUiYawSlider", Math.round(d.planterUiYawOffset));
+    setTxt("devPlanterUiYawLabel", Math.round(d.planterUiYawOffset) + "°");
+
+    setVal("devPlanterUiPitchSlider", Math.round(d.planterUiPitchOffset));
+    setTxt("devPlanterUiPitchLabel", Math.round(d.planterUiPitchOffset) + "°");
+
+    const previewBtn = document.getElementById("devPlanterUiPreviewToggleBtn");
+    if (previewBtn) {
+      if (d.planterUiPreviewAlways) {
+        previewBtn.innerHTML = "🟢 แสดง 3D UI กล่องดินตลอดเวลา: เปิด (ON)";
+        previewBtn.style.background = "linear-gradient(135deg, #059669, #10b981)";
+        previewBtn.style.borderColor = "#6ee7b7";
+      } else {
+        previewBtn.innerHTML = "👁️ แสดง 3D UI กล่องดินตลอดเวลา: ปิด (OFF)";
+        previewBtn.style.background = "rgba(255, 255, 255, 0.08)";
+        previewBtn.style.borderColor = "rgba(255, 255, 255, 0.25)";
+      }
+    }
+  }
+
+  function refreshPlanter3DUINow() {
+    if (window.PlanterSystem && typeof window.PlanterSystem.renderFloatingGrowthUI === "function") {
+      window.PlanterSystem.renderFloatingGrowthUI();
+    }
+  }
+
+  function mountPlanterUiControlGroup() {
+    const mainControls = document.getElementById("mainControls");
+    if (!mainControls) return false;
+    if (document.getElementById("devPlanter3DUiGroup")) return true;
+
+    const d = window.devgame;
+    const group = document.createElement("div");
+    group.className = "control-group";
+    group.id = "devPlanter3DUiGroup";
+    group.style.border = "1.5px solid #10b981";
+    group.style.borderRadius = "8px";
+    group.style.background = "rgba(12, 24, 18, 0.95)";
+    group.style.boxShadow = "0 4px 12px rgba(0,0,0,0.5)";
+    group.style.padding = "10px";
+
+    group.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:bold;color:#34d399;font-size:13px;">🪴 ปรับตำแหน่ง 3D UI กล่องดิน (Planter 3D UI)</span>
+      </div>
+
+      <button id="devPlanterUiPreviewToggleBtn" style="width:100%;padding:7px 10px;font-size:11px;font-weight:bold;color:#fff;background:linear-gradient(135deg, #059669, #10b981);border:1px solid #6ee7b7;border-radius:6px;cursor:pointer;margin-bottom:8px;">
+        🟢 แสดง 3D UI กล่องดินตลอดเวลา: เปิด (ON)
+      </button>
+
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:11px;color:#dfb76c;">📐 ย่อ/ขยายสเกล UI (Scale):</label>
+          <span id="devPlanterUiScaleLabel" style="font-size:11px;font-weight:bold;color:#dfb76c;font-family:monospace;">${Math.round(d.planterUiScale * 100)}%</span>
+        </div>
+        <input type="range" id="devPlanterUiScaleSlider" min="10" max="250" value="${Math.round(d.planterUiScale * 100)}" style="width:100%;accent-color:#dfb76c;">
+      </div>
+
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:11px;color:#4ade80;">↕ เลื่อนขึ้น/ลง (Up):</label>
+          <span id="devPlanterUiUpLabel" style="font-size:11px;font-weight:bold;color:#4ade80;font-family:monospace;">${d.planterUiUpOffset.toFixed(2)}</span>
+        </div>
+        <input type="range" id="devPlanterUiUpSlider" min="-50" max="150" value="${Math.round(d.planterUiUpOffset * 100)}" style="width:100%;accent-color:#22c55e;">
+      </div>
+
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:11px;color:#60a5fa;">↹ เลื่อนหน้า/หลัง (Forward):</label>
+          <span id="devPlanterUiForwardLabel" style="font-size:11px;font-weight:bold;color:#60a5fa;font-family:monospace;">${d.planterUiForwardOffset.toFixed(2)}</span>
+        </div>
+        <input type="range" id="devPlanterUiForwardSlider" min="-100" max="100" value="${Math.round(d.planterUiForwardOffset * 100)}" style="width:100%;accent-color:#3b82f6;">
+      </div>
+
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:11px;color:#f87171;">↔ เลื่อนซ้าย/ขวา (Right):</label>
+          <span id="devPlanterUiRightLabel" style="font-size:11px;font-weight:bold;color:#f87171;font-family:monospace;">${d.planterUiRightOffset.toFixed(2)}</span>
+        </div>
+        <input type="range" id="devPlanterUiRightSlider" min="-100" max="100" value="${Math.round(d.planterUiRightOffset * 100)}" style="width:100%;accent-color:#ef4444;">
+      </div>
+
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:11px;color:#c084fc;">🔄 หมุนซ้าย/ขวา (Yaw):</label>
+          <span id="devPlanterUiYawLabel" style="font-size:11px;font-weight:bold;color:#c084fc;font-family:monospace;">${Math.round(d.planterUiYawOffset)}°</span>
+        </div>
+        <input type="range" id="devPlanterUiYawSlider" min="-180" max="180" value="${Math.round(d.planterUiYawOffset)}" style="width:100%;accent-color:#a855f7;">
+      </div>
+
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:11px;color:#38bdf8;">🔄 หมุนก้ม/เงย (Pitch):</label>
+          <span id="devPlanterUiPitchLabel" style="font-size:11px;font-weight:bold;color:#38bdf8;font-family:monospace;">${Math.round(d.planterUiPitchOffset)}°</span>
+        </div>
+        <input type="range" id="devPlanterUiPitchSlider" min="-180" max="180" value="${Math.round(d.planterUiPitchOffset)}" style="width:100%;accent-color:#0ea5e9;">
+      </div>
+
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button id="devPlanterUiCopyBtn" style="flex:1;padding:6px;font-size:11px;background:rgba(16,185,129,0.2);color:#34d399;border:1px solid #10b981;border-radius:4px;cursor:pointer;">
+          📋 คัดลอกค่า (Copy)
+        </button>
+        <button id="devPlanterUiResetBtn" style="padding:6px 10px;font-size:11px;background:transparent;color:#f87171;border:1px solid #f87171;border-radius:4px;cursor:pointer;">
+          ↺ รีเซ็ต
+        </button>
+      </div>
+    `;
+
+    if (mainControls.firstChild) {
+      mainControls.insertBefore(group, mainControls.firstChild);
+    } else {
+      mainControls.appendChild(group);
+    }
+
+    document.getElementById("devPlanterUiPreviewToggleBtn")?.addEventListener("click", () => {
+      window.devgame.planterUiPreviewAlways = !window.devgame.planterUiPreviewAlways;
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiScaleSlider")?.addEventListener("input", (e) => {
+      window.devgame.planterUiScale = parseInt(e.target.value, 10) / 100;
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiUpSlider")?.addEventListener("input", (e) => {
+      window.devgame.planterUiUpOffset = parseInt(e.target.value, 10) / 100;
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiForwardSlider")?.addEventListener("input", (e) => {
+      window.devgame.planterUiForwardOffset = parseInt(e.target.value, 10) / 100;
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiRightSlider")?.addEventListener("input", (e) => {
+      window.devgame.planterUiRightOffset = parseInt(e.target.value, 10) / 100;
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiYawSlider")?.addEventListener("input", (e) => {
+      window.devgame.planterUiYawOffset = parseInt(e.target.value, 10);
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiPitchSlider")?.addEventListener("input", (e) => {
+      window.devgame.planterUiPitchOffset = parseInt(e.target.value, 10);
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+    });
+
+    document.getElementById("devPlanterUiCopyBtn")?.addEventListener("click", () => {
+      const d = window.devgame;
+      const txt = `{ scale: ${d.planterUiScale.toFixed(2)}, up: ${d.planterUiUpOffset.toFixed(2)}, forward: ${d.planterUiForwardOffset.toFixed(2)}, right: ${d.planterUiRightOffset.toFixed(2)}, yaw: ${Math.round(d.planterUiYawOffset)}, pitch: ${Math.round(d.planterUiPitchOffset)} }`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).catch(() => {});
+      }
+      if (typeof showNotice === "function") {
+        showNotice("คัดลอกค่า 3D UI กล่องดินแล้ว: " + txt);
+      }
+    });
+
+    document.getElementById("devPlanterUiResetBtn")?.addEventListener("click", () => {
+      window.devgame.planterUiScale = 0.25;
+      window.devgame.planterUiUpOffset = 0.03;
+      window.devgame.planterUiForwardOffset = 0.05;
+      window.devgame.planterUiRightOffset = 0.00;
+      window.devgame.planterUiYawOffset = 180;
+      window.devgame.planterUiPitchOffset = 0;
+      syncPlanterUiControls();
+      refreshPlanter3DUINow();
+      if (typeof showNotice === "function") {
+        showNotice("รีเซ็ตตำแหน่ง 3D UI กล่องดินเป็นค่าเริ่มต้นแล้ว");
+      }
+    });
+
+    syncPlanterUiControls();
+    return true;
+  }
+
+  if (!mountPlanterUiControlGroup()) {
+    window.addEventListener("DOMContentLoaded", mountPlanterUiControlGroup);
+    setTimeout(mountPlanterUiControlGroup, 500);
+    setTimeout(mountPlanterUiControlGroup, 1500);
+  }
+})();
+
+

@@ -1842,56 +1842,57 @@ function buildCollectibles(count, seed) {
         let itemsToProcess = [];
         if (targetBuffer === 'main') {
           for (let item of collectibles) {
-            if (!item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window") {
+            if (!item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window" && item.type !== "wood_planter_box") {
               delete item.meshStart;
               delete item.meshEnd;
             }
           }
           const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
-          itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window" && c !== currentActiveBoat);
+          itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window" && c.type !== "wood_planter_box" && c !== currentActiveBoat);
         } else if (targetBuffer === 'dynamic') {
           for (let item of collectibles) {
-            if (item.isDynamic || item.type === "wood_door" || item.type === "wood_window") {
+            if (item.isDynamic || item.type === "wood_door" || item.type === "wood_window" || item.type === "wood_planter_box") {
               delete item.meshStart;
               delete item.meshEnd;
             }
           }
           const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
-          itemsToProcess = collectibles.filter(c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c !== currentActiveBoat);
+          itemsToProcess = collectibles.filter(c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window" || c.type === "wood_planter_box") && c !== currentActiveBoat);
         } else {
           itemsToProcess = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible ? [floorPreviewCollectible] : []);
         }
 
-        // Build spatial acceleration grids for doors, windows, and roofs
-        // Eliminates O(N^2) cross-item calculations in wood_wall and wood_roof!
-        const spatialDoors = new Map();
-        const spatialWindows = new Map();
-        const spatialRoofs = new Map();
+        // Build spatial acceleration grids for doors, windows, and roofs only when rebuilding 'main'
+        if (targetBuffer === 'main' || !window._spatialDoors) {
+          const spatialDoors = new Map();
+          const spatialWindows = new Map();
+          const spatialRoofs = new Map();
 
-        for (let i = 0; i < collectibles.length; i++) {
-          const c = collectibles[i];
-          if (!c.active || !c.position) continue;
-          const px = c.position[0], py = c.position[1], pz = c.position[2];
-          if (c.type === "wood_door") {
-            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
-            let arr = spatialDoors.get(key);
-            if (!arr) { arr = []; spatialDoors.set(key, arr); }
-            arr.push(c);
-          } else if (c.type === "wood_window") {
-            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
-            let arr = spatialWindows.get(key);
-            if (!arr) { arr = []; spatialWindows.set(key, arr); }
-            arr.push(c);
-          } else if (c.type === "wood_roof") {
-            const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
-            let arr = spatialRoofs.get(key);
-            if (!arr) { arr = []; spatialRoofs.set(key, arr); }
-            arr.push(c);
+          for (let i = 0; i < collectibles.length; i++) {
+            const c = collectibles[i];
+            if (!c.active || !c.position) continue;
+            const px = c.position[0], py = c.position[1], pz = c.position[2];
+            if (c.type === "wood_door") {
+              const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+              let arr = spatialDoors.get(key);
+              if (!arr) { arr = []; spatialDoors.set(key, arr); }
+              arr.push(c);
+            } else if (c.type === "wood_window") {
+              const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+              let arr = spatialWindows.get(key);
+              if (!arr) { arr = []; spatialWindows.set(key, arr); }
+              arr.push(c);
+            } else if (c.type === "wood_roof") {
+              const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
+              let arr = spatialRoofs.get(key);
+              if (!arr) { arr = []; spatialRoofs.set(key, arr); }
+              arr.push(c);
+            }
           }
+          window._spatialDoors = spatialDoors;
+          window._spatialWindows = spatialWindows;
+          window._spatialRoofs = spatialRoofs;
         }
-        window._spatialDoors = spatialDoors;
-        window._spatialWindows = spatialWindows;
-        window._spatialRoofs = spatialRoofs;
 
         const activeProcessedItems = [];
         for (let item of itemsToProcess) {
@@ -2283,6 +2284,7 @@ function buildCollectibles(count, seed) {
             : placingItemName === "WOOD_CHEST" ? "wood_chest"
             : placingItemName === "WOOD_BED" ? "wood_bed"
             : placingItemName === "WOOD_TABLE" ? "wood_table"
+            : placingItemName === "WOOD_PLANTER_BOX" ? "wood_planter_box"
             : placingItemName === "WOOD_CHAIR" ? "wood_chair"
             : placingItemName === "LANTERN" ? "lantern"
             : placingItemName === "MEGANEURA" ? "meganeura_item"
@@ -2314,7 +2316,7 @@ function buildCollectibles(count, seed) {
             collectibles.push(floorPreviewCollectible);
             floorPreviewCollectible = collectibles[collectibles.length - 1];
             window.floorPreviewCollectible = floorPreviewCollectible;
-            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof" || typeToPlace === "folding_ladder") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -2333,7 +2335,8 @@ function buildCollectibles(count, seed) {
           const ny = cosTheta;
           const nz = sinTheta * sinPhi;
           
-          let height = getHeightOnSphere(charTheta, charPhi, globalSeed);
+          const sampleTerrainH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+          let height = sampleTerrainH(charTheta, charPhi, globalSeed);
           let terrainRadius = RADIUS + height * HEIGHT_SCALE;
           let groundRadius = terrainRadius;
           
@@ -2383,7 +2386,7 @@ function buildCollectibles(count, seed) {
           const baseOffset = typeToPlace === "campfire" ? 0.20 : (typeToPlace === "lantern" ? 0.22 : 0.35);
           const forwardOffset = typeToPlace === "lantern"
             ? ((typeof actionReachDistance === "number" && actionReachDistance > 0.05) ? actionReachDistance : 0.25)
-            : ((typeToPlace === "campfire" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace.startsWith("robot_")) 
+            : ((typeToPlace === "campfire" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace.startsWith("robot_")) 
               ? Math.max(baseOffset, actionReachDistance) 
               : baseOffset); 
           const activePreviewF = (typeToPlace === "lantern") ? aimF : F;
@@ -2403,7 +2406,7 @@ function buildCollectibles(count, seed) {
           let previewTheta = Math.acos(Math.max(-1.0, Math.min(1.0, pny)));
           let previewPhi = Math.atan2(pnz, pnx);
 
-          let previewHeight = getHeightOnSphere(previewTheta, previewPhi, globalSeed);
+          let previewHeight = sampleTerrainH(previewTheta, previewPhi, globalSeed);
           let previewTerrainRadius = RADIUS + previewHeight * HEIGHT_SCALE;
           
           let isInCave = isPlayerInCave;
@@ -2424,8 +2427,8 @@ function buildCollectibles(count, seed) {
           
           // Calculate slope to prevent placing on too steep ground
           const eps = 0.01;
-          const h1 = getHeightOnSphere(previewTheta + eps, previewPhi, globalSeed);
-          const h2 = getHeightOnSphere(previewTheta, previewPhi + eps, globalSeed);
+          const h1 = sampleTerrainH(previewTheta + eps, previewPhi, globalSeed);
+          const h2 = sampleTerrainH(previewTheta, previewPhi + eps, globalSeed);
           const dhScale = HEIGHT_SCALE / (eps * Math.max(1, previewTerrainRadius));
           const slopeTheta = Math.abs(h1 - previewHeight) * dhScale;
           const slopePhi = Math.abs(h2 - previewHeight) * dhScale;
@@ -2471,8 +2474,8 @@ function buildCollectibles(count, seed) {
           let pN = [pnx, pny, pnz];
 
           // "ลอยสูงจากพื้นเสมอ" -> float slightly above the ground at the preview location
-          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12)));
-          let bob = typeToPlace === "campfire" ? 0.005 : (Math.sin(Date.now() * 0.003) * 0.01 + bobAmt); 
+          const bobAmt = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_planter_box" ? 0.0 : (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" ? 0.015 : ((typeToPlace === "stone_floor") ? 0.03 : ((typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") ? 0.05 : 0.12))));
+          let bob = typeToPlace === "campfire" ? 0.005 : (typeToPlace === "wood_planter_box" ? 0.0 : (Math.sin(Date.now() * 0.003) * 0.01 + bobAmt)); 
           if (typeToPlace === "robot_cockpit") bob = 0.14;
           else if (typeToPlace === "robot_left_leg" || typeToPlace === "robot_right_leg") bob = 0.14;
           else if (typeToPlace === "robot_stand") bob = 0.0;
@@ -4356,7 +4359,7 @@ function buildCollectibles(count, seed) {
                 }
               }
             }
-          } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
+          } else if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item") {
             // Direct wall snap for wood_window and wood_door
             if (typeToPlace === "wood_window" || typeToPlace === "wood_door") {
               let nearestWall = null;
@@ -4712,7 +4715,7 @@ function buildCollectibles(count, seed) {
                     let gridZ = Math.round(localZ / 0.15);
 
                     // Prevent center and corner placement for walls to avoid overlapping side-by-side, unless placing on thin_wood_floor which allows center placement, or if placing thin_wood_floor itself.
-                    if (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
+                    if (typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_")) {
                         const isWoodFloor = (nearestFloor.type === "wood_floor" || nearestFloor.type === "thin_wood_floor");
                         let validPlace = (typeToPlace === "wood_bed" || typeToPlace === "lantern") ? isWoodFloor : true;
                         floorPreviewCollectible.size = 0.25;
@@ -4741,7 +4744,7 @@ function buildCollectibles(count, seed) {
                         } else if (typeToPlace === "wood_chest") {
                             halfW = 0.058; // 0.25 * 0.45 / 2
                             halfD = 0.048; // 0.21 * 0.45 / 2
-                        } else if (typeToPlace === "wood_table") {
+                        } else if (typeToPlace === "wood_table" || typeToPlace === "wood_planter_box") {
                             halfW = 0.060; // 0.26 * 0.46 / 2
                             halfD = 0.046; // 0.20 * 0.46 / 2
                         } else if (typeToPlace === "wood_chair") {
@@ -4810,13 +4813,13 @@ function buildCollectibles(count, seed) {
 
                             // Check other placed furniture on this floor to prevent overlapping objects
                             const isFloorLevelLantern = (other.type === "lantern" && Math.abs(olN - (floorHH / 2)) < 0.035);
-                            if ((other.type === "wood_bed" || other.type === "wood_chest" || other.type === "wood_table" || other.type === "wood_chair" || isFloorLevelLantern || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") && Math.abs(olN - (floorHH / 2)) < 0.12) {
+                            if ((other.type === "wood_bed" || other.type === "wood_chest" || other.type === "wood_table" || other.type === "wood_planter_box" || other.type === "wood_chair" || isFloorLevelLantern || other.type === "obsidian_pad_warp_item" || other.type === "obsidian_compass_pad_item") && Math.abs(olN - (floorHH / 2)) < 0.12) {
                                 const oR = other.R || sR;
                                 const oF = other.F || sF;
                                 let oHalfW = 0.06, oHalfD = 0.06;
                                 if (other.type === "wood_bed") { oHalfW = 0.075; oHalfD = 0.121; }
                                 else if (other.type === "wood_chest") { oHalfW = 0.058; oHalfD = 0.048; }
-                                else if (other.type === "wood_table") { oHalfW = 0.060; oHalfD = 0.046; }
+                                else if (other.type === "wood_table" || other.type === "wood_planter_box") { oHalfW = 0.060; oHalfD = 0.046; }
                                 else if (other.type === "wood_chair") { oHalfW = 0.032; oHalfD = 0.032; }
                                 else if (other.type === "lantern") { oHalfW = 0.018; oHalfD = 0.018; }
                                 else { oHalfW = 0.085; oHalfD = 0.085; }
@@ -5240,7 +5243,7 @@ function buildCollectibles(count, seed) {
                     }
             }
           } else {
-                    if (!isSnapped && (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_"))) {
+                    if (!isSnapped && (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_"))) {
                         floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
                         floorPreviewCollectible.size = 0.25;
                         const rotAngleG = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
@@ -5262,7 +5265,7 @@ function buildCollectibles(count, seed) {
             }
           } else {
                 // No wood floor found nearby or too far
-                if (!isSnapped && (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_"))) {
+                if (!isSnapped && (typeToPlace === "wood_chest" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace.startsWith("robot_"))) {
                     floorPreviewCollectible.isValidPlacement = !isUnderWater && (slopeVal < 0.6);
                     floorPreviewCollectible.size = 0.25;
                     const rotAngleG = (typeof placementRotationAngle !== "undefined") ? placementRotationAngle : 0.0;
@@ -5284,8 +5287,9 @@ function buildCollectibles(count, seed) {
             }
           }
 
-          // Smooth interpolation (instant if snapped or placing ladder to prevent lag/misalignment)
-          const interpSpeed = (isSnapped || typeToPlace === "folding_ladder") ? 1.0 : 0.3;
+          floorPreviewCollectible.isFloorSnapped = isSnapped;
+          // Smooth interpolation (instant if snapped or placing ladder/planter box to prevent lag/misalignment)
+          const interpSpeed = (isSnapped || typeToPlace === "folding_ladder" || typeToPlace === "wood_planter_box") ? 1.0 : 0.3;
           floorPreviewCollectible.position[0] = floorPreviewCollectible.position[0] * (1 - interpSpeed) + targetPos[0] * interpSpeed;
           floorPreviewCollectible.position[1] = floorPreviewCollectible.position[1] * (1 - interpSpeed) + targetPos[1] * interpSpeed;
           floorPreviewCollectible.position[2] = floorPreviewCollectible.position[2] * (1 - interpSpeed) + targetPos[2] * interpSpeed;
@@ -6461,6 +6465,19 @@ function buildCollectibles(count, seed) {
           usage_en: "Pre-place as a low-poly wooden table for furnishing your home or camp. Crafted from 1 Wood Log.",
           maxStack: 99
         },
+        "WOOD_PLANTER_BOX": {
+          id: "WOOD_PLANTER_BOX",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "กล่องไม้ใส่ดิน",
+          name_en: "Wooden Planter Box",
+          name_ja: "木製プランター（土入り）",
+          icon: "🪴",
+          actionType: "PLACE_FURNITURE",
+          placeType: "wood_planter_box",
+          usage_th: "พรี-วางเป็นกระบะกล่องไม้ใส่ดินโลโพลีสำหรับปลูกพืชและตกแต่ง คราฟต์จากท่อนไม้ 1 อัน และดิน 1 อัน",
+          usage_en: "Pre-place as a low-poly wooden planter box filled with soil. Crafted from 1 Wood Log and 1 Dirt.",
+          maxStack: 99
+        },
         "WOOD_CHAIR": {
           id: "WOOD_CHAIR",
           category: ITEM_CATEGORIES.PRE_PLACE,
@@ -6700,6 +6717,30 @@ function buildCollectibles(count, seed) {
           usage_en: "Hold in hand. Left-click to dig/terraform terrain and attack for 1 DMG.",
           maxStack: 1
         },
+        "IRON_BUCKET": {
+          id: "IRON_BUCKET",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "ถังเหล็ก",
+          name_en: "Iron Bucket",
+          name_ja: "鉄のバケツ",
+          icon: "🪣",
+          actionType: "TOOL_BUCKET",
+          usage_th: "ถังน้ำเหล็กหล่อโลโพลี ใช้ตักน้ำและถือใช้งาน คราฟต์จากแร่เหล็ก 1 อัน",
+          usage_en: "Low-poly forged iron water bucket. Crafted from 1 Iron Ore.",
+          maxStack: 99
+        },
+        "WATER_BUCKET": {
+          id: "WATER_BUCKET",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "ถังใส่น้ำ",
+          name_en: "Water Bucket",
+          name_ja: "水入りバケツ",
+          icon: "🪣💧",
+          actionType: "TOOL_WATER_BUCKET",
+          usage_th: "ถังเหล็กที่มีน้ำบรรจุเต็มถัง ได้จากการใช้ถังเหล็กตักน้ำ",
+          usage_en: "Iron bucket filled with water. Obtained by scooping water with an Iron Bucket.",
+          maxStack: 99
+        },
         "BOW": {
           id: "BOW",
           category: ITEM_CATEGORIES.HOLDABLE,
@@ -6768,19 +6809,19 @@ function buildCollectibles(count, seed) {
           icon: "🐉",
           actionType: "CONSUMABLE_FOOD",
           healHP: 4,
-          usage_th: "ถือในมือ/คลิกใช้ รับประทานเพื่อฟื้นฟูพลังชีวิตผู้เล่น HP +4 จุด (เก็บได้จากต้นไม้ใบไม้ขาว-แดง)",
-          usage_en: "Hold or use to eat and restore 4 Player HP points (harvested from white-and-red leaved trees).",
+          usage_th: "รับประทานฟื้นฟู HP +4 หรือถือในมือเพื่อนำไปปลูกในกล่องไม้ใส่ดิน (WOOD PLANTER BOX) ได้ต้นไม้ใบขาวแดง/ขาวทอง",
+          usage_en: "Eat to restore 4 HP or hold to plant inside a Wooden Planter Box to grow a white-and-red leaved tree.",
           maxStack: 99
         },
         "COTTON_PLANT": {
           id: "COTTON_PLANT",
-          category: ITEM_CATEGORIES.NONE,
-          name_th: "ต้นฝ้าย",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "ต้นฝ้าย (นุ่น)",
           name_en: "Cotton Plant",
           icon: "☁️",
           actionType: "RAW_MATERIAL",
-          usage_th: "พืชธรรมชาติ เก็บได้ทันทีจากกลุ่มต้นฝ้าย ใช้เป็นวัตถุดิบเส้นใยและสิ่งทอ",
-          usage_en: "Natural fiber plant harvested directly from cotton plant clusters.",
+          usage_th: "พืชธรรมชาติ ถือในมือเพื่อนำไปปลูกในกล่องไม้ใส่ดิน (WOOD PLANTER BOX) หรือใช้เป็นวัตถุดิบเส้นใยและสิ่งทอ",
+          usage_en: "Natural fiber plant. Hold to plant inside a Wooden Planter Box or use for textile crafting.",
           maxStack: 99
         },
 
@@ -6987,6 +7028,351 @@ function buildCollectibles(count, seed) {
         }
       };
       window.ItemRegistry["IRON_BULLET"] = window.ItemRegistry["iron_bullet"];
+
+      window.buildIronBucketModel = function(scale, centerPos, rVec, nVec, fVec, vertices, colors, indices, hasWater = false) {
+        const s = scale || 0.35;
+        const p = centerPos || [0, 0, 0];
+        const r = rVec || [1, 0, 0];
+        const n = nVec || [0, 1, 0];
+        const f = fVec || [0, 0, 1];
+
+        const pt = (rx, ny, fz) => [
+          p[0] + (r[0] * rx + n[0] * ny + f[0] * fz) * s,
+          p[1] + (r[1] * rx + n[1] * ny + f[1] * fz) * s,
+          p[2] + (r[2] * rx + n[2] * ny + f[2] * fz) * s
+        ];
+
+        const ironBodyDark = [0.58, 0.62, 0.68];
+        const ironBodyLight = [0.66, 0.70, 0.76];
+        const ironBand = [0.38, 0.41, 0.46];
+        const ironLug = [0.32, 0.35, 0.40];
+        const ironHandle = [0.50, 0.54, 0.60];
+        const waterColor = [0.18, 0.62, 0.95];
+        const waterHighlight = [0.42, 0.82, 1.0];
+        const innerCavityDark = [0.20, 0.22, 0.26];
+        const innerCavityWall = [0.26, 0.29, 0.34];
+        const gripColor = [0.42, 0.28, 0.16];
+
+        // 1. Bottom base plate & iron foot hoop
+        buildTaperedSegment(pt(0, -0.36, 0), pt(0, -0.30, 0), 0.245 * s, 0.255 * s, 8, ironBand, vertices, colors, indices, true);
+
+        // 2. Lower bucket wall (8-sided flared low-poly)
+        buildTaperedSegment(pt(0, -0.30, 0), pt(0, -0.04, 0), 0.24 * s, 0.295 * s, 8, ironBodyDark, vertices, colors, indices, false);
+
+        // 3. Middle reinforcing iron hoop
+        buildTaperedSegment(pt(0, -0.06, 0), pt(0, 0.01, 0), 0.305 * s, 0.312 * s, 8, ironBand, vertices, colors, indices, false);
+
+        // 4. Upper bucket wall (8-sided flared low-poly)
+        buildTaperedSegment(pt(0, 0.01, 0), pt(0, 0.24, 0), 0.295 * s, 0.35 * s, 8, ironBodyLight, vertices, colors, indices, false);
+
+        // 5. Top thick iron rim / lip (Open ring: addCaps = false so no dark cap covers the opening)
+        buildTaperedSegment(pt(0, 0.22, 0), pt(0, 0.28, 0), 0.355 * s, 0.365 * s, 8, ironBand, vertices, colors, indices, false);
+
+        // 6. Bucket Interior / Water Volume
+        // Always build interior metal lining first for realistic bucket depth
+        buildTaperedSegment(pt(0, -0.30, 0), pt(0, -0.27, 0), 0.235 * s, 0.240 * s, 8, innerCavityDark, vertices, colors, indices, true);
+        buildTaperedSegment(pt(0, -0.27, 0), pt(0, 0.23, 0), 0.240 * s, 0.340 * s, 8, innerCavityWall, vertices, colors, indices, false);
+
+        if (hasWater) {
+          // Water pool surface rests strictly inside upper bucket cavity (never penetrates bucket walls or bottom)
+          buildTaperedSegment(pt(0, 0.13, 0), pt(0, 0.185, 0), 0.262 * s, 0.290 * s, 8, waterColor, vertices, colors, indices, true);
+          // Crisp water surface highlight
+          buildTaperedSegment(pt(0, 0.187, 0), pt(0, 0.191, 0), 0.18 * s, 0.13 * s, 8, waterHighlight, vertices, colors, indices, true);
+        }
+
+        // 7. Side mounting lugs (ears)
+        buildTaperedSegment(pt(-0.365, 0.21, 0), pt(-0.365, 0.32, 0), 0.042 * s, 0.036 * s, 5, ironLug, vertices, colors, indices, true);
+        buildTaperedSegment(pt(0.365, 0.21, 0), pt(0.365, 0.32, 0), 0.042 * s, 0.036 * s, 5, ironLug, vertices, colors, indices, true);
+
+        // 8. Low-poly arched bail handle
+        const h0 = pt(-0.365, 0.30, 0);
+        const h1 = pt(-0.31, 0.47, 0);
+        const h2 = pt(-0.14, 0.58, 0);
+        const h3 = pt(0.14, 0.58, 0);
+        const h4 = pt(0.31, 0.47, 0);
+        const h5 = pt(0.365, 0.30, 0);
+        const hRad = 0.022 * s;
+        buildTaperedSegment(h0, h1, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
+        buildTaperedSegment(h1, h2, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
+        buildTaperedSegment(h2, h3, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
+        buildTaperedSegment(h3, h4, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
+        buildTaperedSegment(h4, h5, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
+
+        // 9. Center wooden/forged grip sleeve at top of handle
+        buildTaperedSegment(pt(-0.10, 0.58, 0), pt(0.10, 0.58, 0), 0.036 * s, 0.036 * s, 6, gripColor, vertices, colors, indices, true);
+      };
+
+      window.ItemRegistry["iron_bucket"] = {
+        render: function(item, vertices, colors, indices, targetBuffer) {
+          const s = (item && item.size) ? item.size * 2.2 : 0.55;
+          const p = (item && item.position) ? item.position : [0, 0, 0];
+          const r = (item && item.R) ? item.R : [1, 0, 0];
+          const n = (item && item.normal) ? item.normal : [0, 1, 0];
+          const f = (item && item.F) ? item.F : [0, 0, 1];
+          const hasWater = !!(item && item.hasWater);
+          window.buildIronBucketModel(s, p, r, n, f, vertices, colors, indices, hasWater);
+        }
+      };
+      window.ItemRegistry["IRON_BUCKET"] = window.ItemRegistry["iron_bucket"];
+
+      window.ItemRegistry["water_bucket"] = {
+        render: function(item, vertices, colors, indices, targetBuffer) {
+          const s = (item && item.size) ? item.size * 2.2 : 0.55;
+          const p = (item && item.position) ? item.position : [0, 0, 0];
+          const r = (item && item.R) ? item.R : [1, 0, 0];
+          const n = (item && item.normal) ? item.normal : [0, 1, 0];
+          const f = (item && item.F) ? item.F : [0, 0, 1];
+          window.buildIronBucketModel(s, p, r, n, f, vertices, colors, indices, true);
+        }
+      };
+      window.ItemRegistry["WATER_BUCKET"] = window.ItemRegistry["water_bucket"];
+
+      window.buildWoodPlanterBoxModel = function(item, vertices, colors, indices) {
+        const p = (item && item.position) ? item.position : [0, 0, 0];
+        const r = (item && item.R) ? item.R : [1, 0, 0];
+        const f = (item && item.F) ? item.F : [0, 0, 1];
+        const n = (item && item.normal) ? item.normal : [0, 1, 0];
+        const isPreview = !!(item && item.isPreview);
+        const isValid = !(item && item.isValidPlacement === false);
+        const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+
+        const s = (item && item.customScale) ? item.customScale : 0.46;
+
+        const woodPostColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
+        const woodPlankDark = isPreview ? previewColor : [0.52, 0.35, 0.19];
+        const woodPlankLight = isPreview ? previewColor : [0.60, 0.41, 0.23];
+        const woodRimColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
+        const dirtBaseColor = isPreview ? previewColor : [0.33, 0.20, 0.10];
+        const dirtMoundColor = isPreview ? previewColor : [0.39, 0.24, 0.13];
+        const dirtClodColor = isPreview ? previewColor : [0.28, 0.17, 0.08];
+
+        const pt = (rx, ny, fz) => [
+          p[0] + (r[0] * rx + n[0] * ny + f[0] * fz) * s,
+          p[1] + (r[1] * rx + n[1] * ny + f[1] * fz) * s,
+          p[2] + (r[2] * rx + n[2] * ny + f[2] * fz) * s
+        ];
+
+        // 1) Bottom wooden floor plate
+        addBox(pt(0, 0.014, 0), 0.236 * s, 0.016 * s, 0.176 * s, woodPostColor, r, n, f, vertices, colors, indices);
+
+        // 2) 4 Corner Wooden Posts
+        const postX = 0.112;
+        const postZ = 0.082;
+        const postCoords = [
+          [-postX, 0.056, -postZ],
+          [ postX, 0.056, -postZ],
+          [-postX, 0.056,  postZ],
+          [ postX, 0.056,  postZ]
+        ];
+        for (let i = 0; i < 4; i++) {
+          const c = postCoords[i];
+          addBox(pt(c[0], c[1], c[2]), 0.028 * s, 0.112 * s, 0.028 * s, woodPostColor, r, n, f, vertices, colors, indices);
+        }
+
+        // 3) Front & Back Low-Poly Wooden Plank Walls (2 horizontal planks each)
+        addBox(pt(0, 0.032, -postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankDark, r, n, f, vertices, colors, indices);
+        addBox(pt(0, 0.072, -postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankLight, r, n, f, vertices, colors, indices);
+        addBox(pt(0, 0.032,  postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankDark, r, n, f, vertices, colors, indices);
+        addBox(pt(0, 0.072,  postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankLight, r, n, f, vertices, colors, indices);
+
+        // 4) Left & Right Low-Poly Wooden Plank Walls (2 horizontal planks each)
+        addBox(pt(-postX, 0.032, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankLight, r, n, f, vertices, colors, indices);
+        addBox(pt(-postX, 0.072, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankDark, r, n, f, vertices, colors, indices);
+        addBox(pt( postX, 0.032, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankLight, r, n, f, vertices, colors, indices);
+        addBox(pt( postX, 0.072, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankDark, r, n, f, vertices, colors, indices);
+
+        // 5) Top Wooden Rim Trim around all 4 edges
+        addBox(pt(0, 0.100, -postZ), 0.252 * s, 0.016 * s, 0.030 * s, woodRimColor, r, n, f, vertices, colors, indices);
+        addBox(pt(0, 0.100,  postZ), 0.252 * s, 0.016 * s, 0.030 * s, woodRimColor, r, n, f, vertices, colors, indices);
+        addBox(pt(-postX, 0.100, 0), 0.030 * s, 0.016 * s, 0.152 * s, woodRimColor, r, n, f, vertices, colors, indices);
+        addBox(pt( postX, 0.100, 0), 0.030 * s, 0.016 * s, 0.152 * s, woodRimColor, r, n, f, vertices, colors, indices);
+
+        // 6) Planetary Terrain Surface Mound inside the planter box (adapted from terrain.js buildPlanetAsync)
+        let det = (r[1] * n[2] - r[2] * n[1]) * f[0] +
+                  (r[2] * n[0] - r[0] * n[2]) * f[1] +
+                  (r[0] * n[1] - r[1] * n[0]) * f[2];
+        const isFlipped = det < 0;
+
+        const latSeg = 10;
+        const longSeg = 12;
+        const gridBaseIdx = vertices.length / 3;
+        const planetSeed = (typeof window !== "undefined" && typeof window.globalSeed === "number") ? window.globalSeed : 12345;
+        const itemSeed = (item && typeof item.seed === "number") ? item.seed : 123.45;
+        const fbm = (typeof window !== "undefined" && typeof window.fbmNoise === "function")
+          ? window.fbmNoise
+          : ((typeof fbmNoise === "function") ? fbmNoise : null);
+
+        // สีดินสีเดียวล้วน (เข้มชุ่มน้ำเมื่อรดน้ำแล้ว)
+        const isDirtMoist = !!(item && item.plantData && item.plantData.watered);
+        const singleDirtColor = isPreview ? previewColor : (isDirtMoist ? [0.28, 0.18, 0.09] : [0.46, 0.30, 0.16]);
+
+        let moundHeights = (item && item._cachedMoundHeights && item._cachedMoundSeed === itemSeed)
+          ? item._cachedMoundHeights
+          : null;
+        if (!moundHeights) {
+          moundHeights = new Float32Array((latSeg + 1) * (longSeg + 1));
+          let mIdx = 0;
+          for (let lat = 0; lat <= latSeg; lat++) {
+            const v = (lat / latSeg) * 2.0 - 1.0;
+            for (let long = 0; long <= longSeg; long++) {
+              const u = (long / longSeg) * 2.0 - 1.0;
+              const edgeFalloff = Math.max(0.0, (1.0 - u * u * 0.88) * (1.0 - v * v * 0.88));
+              const localNoise = fbm
+                ? fbm(u * 2.4 + itemSeed, v * 2.4 + itemSeed, 0.5, planetSeed + 300, 3)
+                : (Math.sin(u * 4.0 + itemSeed) * Math.cos(v * 4.0) * 0.35);
+              moundHeights[mIdx++] = 0.082 + edgeFalloff * (0.022 + localNoise * 0.010);
+            }
+          }
+          if (item && typeof item === "object") {
+            item._cachedMoundHeights = moundHeights;
+            item._cachedMoundSeed = itemSeed;
+          }
+        }
+
+        let mhIdx = 0;
+        for (let lat = 0; lat <= latSeg; lat++) {
+          const v = (lat / latSeg) * 2.0 - 1.0; // -1 to +1
+          const fz = v * 0.073;
+
+          for (let long = 0; long <= longSeg; long++) {
+            const u = (long / longSeg) * 2.0 - 1.0; // -1 to +1
+            const rx = u * 0.103;
+            const moundHeight = moundHeights[mhIdx++];
+            const vPos = pt(rx, moundHeight, fz);
+
+            vertices.push(vPos[0], vPos[1], vPos[2]);
+            colors.push(singleDirtColor[0], singleDirtColor[1], singleDirtColor[2]);
+          }
+        }
+
+        for (let lat = 0; lat < latSeg; lat++) {
+          for (let long = 0; long < longSeg; long++) {
+            const a = gridBaseIdx + lat * (longSeg + 1) + long;
+            const b = a + longSeg + 1;
+            const c = a + 1;
+            const d = b + 1;
+            if (isFlipped) {
+              indices.push(a, d, c);
+              indices.push(a, b, d);
+            } else {
+              indices.push(a, c, d);
+              indices.push(a, d, b);
+            }
+          }
+        }
+
+        // 7) Plant Growing inside the Planter Box or Snap Placement Preview
+        if (item && (item.plantData || item.isPreviewPlant)) {
+          const isPreviewSnap = !item.plantData && item.isPreviewPlant;
+          const plant = item.plantData || {
+            seedType: item.previewSeedType || "DRAGON_FRUIT",
+            plantTime: 0,
+            watered: false,
+            growthDuration: 300,
+            seed: 1234
+          };
+
+          const isWatered = !isPreviewSnap && (plant.watered === true) && (plant.plantTime > 0);
+          const elapsedSec = isWatered ? Math.max(0, (Date.now() - plant.plantTime) / 1000) : 0;
+          const totalDur = plant.growthDuration || 300;
+          const progress = isWatered ? Math.min(1.0, elapsedSec / totalDur) : 0.0;
+          const curStage = isWatered ? Math.min(5, Math.floor(elapsedSec / 60)) : 0;
+          const isMature = isWatered && (progress >= 1.0);
+          if (!isPreviewSnap) {
+            plant.progress = progress;
+            plant.mature = isMature;
+            plant.stage = curStage;
+          }
+
+          const soilCenter = pt(0, 0.095, 0);
+          const plantSeed = (plant.seed || 1234) + 42;
+          const seedType = (plant.seedType || "DRAGON_FRUIT").toUpperCase();
+
+          // REQUIREMENT: Preview before placing and Stage 0 (first minute) use the EXACT SAME Sprout (ต้นอ่อน) model!
+          if (isPreviewSnap || curStage === 0) {
+            if (typeof window.buildPlantSprout === "function") {
+              const sproutScale = 0.024 * (s / 0.35);
+              window.buildPlantSprout(
+                soilCenter,
+                n,
+                r,
+                f,
+                sproutScale,
+                seedType,
+                vertices,
+                colors,
+                indices,
+                isPreviewSnap,
+                { isValid: (item.previewIsValid !== undefined ? item.previewIsValid : true) }
+              );
+            }
+          } else {
+            // Stage 1 to 5: Plant grows gradually towards full maturity (5 minutes)
+            const growthFactor = 0.28 + 0.72 * progress;
+            const plantTreeScale = 0.042 * (s / 0.35) * growthFactor;
+
+            if (seedType.includes("DRAGON")) {
+              const leafColor = [0.94, 0.12, 0.15];
+              leafColor.isWhiteRedAlternating = true;
+              if (plant.useGold) leafColor.useGoldForWhite = true;
+              if (typeof window.buildSingleTree === "function") {
+                window.buildSingleTree(
+                  soilCenter,
+                  n,
+                  r,
+                  f,
+                  plantTreeScale,
+                  leafColor,
+                  plantSeed,
+                  vertices,
+                  colors,
+                  indices,
+                  { hasFruits: isMature }
+                );
+              }
+            } else if (seedType.includes("BRANCH")) {
+              const leafColor = [0.18, 0.52, 0.20];
+              if (typeof window.buildSingleTree === "function") {
+                window.buildSingleTree(
+                  soilCenter,
+                  n,
+                  r,
+                  f,
+                  plantTreeScale,
+                  leafColor,
+                  plantSeed,
+                  vertices,
+                  colors,
+                  indices,
+                  { hasFruits: false }
+                );
+              }
+            } else if (seedType.includes("COTTON")) {
+              if (typeof window.buildCottonPlant === "function") {
+                window.buildCottonPlant(
+                  soilCenter[0], soilCenter[1], soilCenter[2],
+                  n[0], n[1], n[2],
+                  r, f, n,
+                  plantSeed,
+                  vertices,
+                  colors,
+                  indices,
+                  false,
+                  0.38 + 0.62 * progress,
+                  { hasBolls: isMature }
+                );
+              }
+            }
+          }
+        }
+      };
+
+      window.ItemRegistry["wood_planter_box"] = {
+        render: function(item, vertices, colors, indices, targetBuffer) {
+          window.buildWoodPlanterBoxModel(item, vertices, colors, indices);
+        }
+      };
+      window.ItemRegistry["WOOD_PLANTER_BOX"] = window.ItemRegistry["wood_planter_box"];
 
       // Helper functions for Backend Item System
       function getItemDefinition(itemOrName) {

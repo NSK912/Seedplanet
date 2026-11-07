@@ -2468,7 +2468,7 @@ window.cloud3DProgram = cloud3DProgram;
         
         let isPlacementItem = selectedItem && (
           (typeof isPlaceableItem === "function" ? isPlaceableItem(selectedItem.name) : (window.isPlaceableItem ? window.isPlaceableItem(selectedItem.name) : false)) ||
-          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "FOLDING_LADDER" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "WOOD_BED" || selectedItem.name === "WOOD_TABLE" || selectedItem.name === "WOOD_CHAIR" || selectedItem.name.startsWith("ROBOT_")
+          selectedItem.name === "STONE_FLOOR" || selectedItem.name === "WOOD_FLOOR" || selectedItem.name === "THIN_WOOD_FLOOR" || selectedItem.name === "WOOD_ROOF" || selectedItem.name === "WOOD_STAIRS" || selectedItem.name === "FOLDING_LADDER" || selectedItem.name === "CAMPFIRE" || selectedItem.name === "WOOD_BOAT" || selectedItem.name === "WOOD_WHEEL" || selectedItem.name === "ELECTRIC_ENGINE" || selectedItem.name === "BOAT_WING" || selectedItem.name === "WOOD_WALL" || selectedItem.name === "WOOD_WINDOW" || selectedItem.name === "WOOD_DOOR" || selectedItem.name === "WOOD_CHEST" || selectedItem.name === "WOOD_BED" || selectedItem.name === "WOOD_TABLE" || selectedItem.name === "WOOD_PLANTER_BOX" || selectedItem.name === "WOOD_CHAIR" || selectedItem.name.startsWith("ROBOT_")
         );
         
         // บังคับไม่ให้เข้าโหมดวางไอเทม ถ้านั่งอยู่บนเรือหรือหุ่นยนต์ หรือกำลังว่ายน้ำในกรณีบันไดพับ
@@ -2545,11 +2545,25 @@ window.cloud3DProgram = cloud3DProgram;
                 if (isActionDown && (document.pointerLockElement === canvas || window.simulatedPointerLock)) {
                     if (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex]) {
                         const slotItem = actionSlotsItems[selectedActionSlotIndex];
-                        if (slotItem && slotItem.name !== "BOW" && slotItem.name !== "WOODEN_ARM_CANNON" && slotItem.name !== "ARM_CANNON") {
+                        if (slotItem && slotItem.name !== "BOW" && slotItem.name !== "WOODEN_ARM_CANNON" && slotItem.name !== "ARM_CANNON" && slotItem.name !== "IRON_BUCKET" && slotItem.name !== "WATER_BUCKET") {
                             useItem(slotItem, selectedActionSlotIndex, "action");
                         }
                     }
                 }
+            }
+        }
+
+        if (typeof window.bucketScoopTimer === "number" && window.bucketScoopTimer > 0) {
+            window.bucketScoopTimer -= (delta / 1000) / 0.65;
+            if (window.bucketScoopTimer <= 0) {
+                window.bucketScoopTimer = 0;
+            }
+        }
+        if (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0) {
+            window.bucketWaterTimer -= (delta / 1000) / 0.85;
+            if (window.bucketWaterTimer <= 0) {
+                window.bucketWaterTimer = 0;
+                window.activeWateringAnimPlanter = null;
             }
         }
 
@@ -2885,12 +2899,12 @@ window.cloud3DProgram = cloud3DProgram;
             }
             if (!hasNearDynamicItem) {
               if (typeof SpatialGrid !== "undefined") {
-                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window"));
+                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window" || c.type === "wood_planter_box"));
                 hasNearDynamicItem = nearDyn.length > 0;
               } else if (typeof collectibles !== "undefined" && collectibles) {
                 for (let i = 0; i < collectibles.length; i++) {
                   const c = collectibles[i];
-                  if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window") && c.position) {
+                  if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window" || c.type === "wood_planter_box") && c.position) {
                     const dx = c.position[0] - pX;
                     const dy = c.position[1] - pY;
                     const dz = c.position[2] - pZ;
@@ -3181,6 +3195,9 @@ window.cloud3DProgram = cloud3DProgram;
         }
         
         updateCollectibles(dt);
+        if (window.PlanterSystem && typeof window.PlanterSystem.update === "function") {
+          window.PlanterSystem.update(dt);
+        }
 
         let sinTheta = Math.sin(charTheta);
         let cosTheta = Math.cos(charTheta);
@@ -4680,7 +4697,9 @@ window.cloud3DProgram = cloud3DProgram;
         }
 
         const charInterval = 1000 / charAnimFps;
-        const needsEveryFrame = ragdollEnabled;
+        const needsEveryFrame = ragdollEnabled ||
+          (typeof window.bucketScoopTimer === "number" && window.bucketScoopTimer > 0) ||
+          (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0);
         
         if (!isPlayerGrounded && !ragdollEnabled && !activeRidingBoat && !activeRidingMech && currentSwimFactor === 0.0) {
             jumpBlend = Math.min(1.0, jumpBlend + 10.0 * dt);
@@ -4871,7 +4890,7 @@ window.cloud3DProgram = cloud3DProgram;
             const demolishableTypes = [
               "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
               "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
-              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table", "wood_chair", "lantern",
+              "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table", "wood_planter_box", "wood_chair", "lantern",
               "meganeura_item", "isopod_item", "obsidian_pad_warp_item", "obsidian_compass_pad_item",
               "robot_stand", "robot_cockpit",
               "robot_left_arm", "robot_right_arm", "robot_left_leg", "robot_right_leg"
@@ -4930,7 +4949,7 @@ window.cloud3DProgram = cloud3DProgram;
                   item.position[1] + n[1] * 0.055,
                   item.position[2] + n[2] * 0.055
                 ];
-              } else if (item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair") {
+              } else if (item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair") {
                 // Elevate visual center to center of furniture mass
                 itemCenter = [
                   item.position[0] + n[0] * 0.05,
@@ -4982,7 +5001,7 @@ window.cloud3DProgram = cloud3DProgram;
                 meshRadius = 0.26;
               } else if (item.type.includes("floor") || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type.includes("roof") || item.type.includes("stairs") || item.type.includes("ladder")) {
                 meshRadius = 0.26;
-              } else if (item.type === "wood_chest" || item.type === "wood_table" || item.type === "wood_chair") {
+              } else if (item.type === "wood_chest" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair") {
                 meshRadius = 0.18;
               } else if (item.type === "lantern") {
                 meshRadius = 0.10;
@@ -5654,7 +5673,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -7585,7 +7604,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               const f = c.F || [0, 0, 1];
               const n = c.normal || [0, 1, 0];
 
-              if (t === "wood_table") {
+              if (t === "wood_table" || t === "wood_planter_box") {
                 const s = 0.46;
                 // Tabletop + apron occluder strictly below the top plank surface (0.145 * s = 0.0667)
                 const cyOff = 0.118 * s;
@@ -9255,7 +9274,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         // วาดเส้นกริดภูมิประเทศ (Wireframe) - ไม่รับแสงเงา (Unlit)
         gl.useProgram(program);
         gl.uniform1f(useLightingLoc, 0.0); // ปิดแสงเงาบนเส้น wireframe
-        if (typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawWireframe) {
+        const isPlanetWireframeVisible = (typeof showPlanetWireframe !== "undefined" && showPlanetWireframe) || (typeof window !== "undefined" && !!window.showPlanetWireframe);
+        if (isPlanetWireframeVisible && typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawWireframe) {
           SurfaceSystem.drawWireframe(gl, {
             wireframeBuffer,
             wireColorBuffer,
@@ -9276,8 +9296,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             supportUint32
           });
         }
-        
-        if (showActionReach && isDevMode) {
+        const isPlantingModeActive = (typeof window !== "undefined") && (
+          !!window.isHoldingPlantableSeed || !!window.activePlantingTargetPlanter
+        );
+        if ((showActionReach && isDevMode) || (typeof isPlacingFloor !== "undefined" && isPlacingFloor) || isPlantingModeActive) {
             const numSegments = 32;
             const arVerts = [];
             const arCols = [];

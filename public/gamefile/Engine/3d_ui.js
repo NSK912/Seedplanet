@@ -419,6 +419,7 @@ const World3DUI = {
         this.updateAll();
         const gl = this.gl;
         gl.useProgram(this.program);
+        gl.disable(gl.CULL_FACE);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -1250,6 +1251,398 @@ const World3DUI = {
   hideMechStandUI() {
     if (this.hasSign("mech_stand_world_sign")) {
       this.removeSign("mech_stand_world_sign");
+    }
+  },
+
+  _drawSeedianOrText(ctx, text, x, y, fontSize, align, color, isSeedian) {
+    const str = String(text || "");
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    if (!isSeedian) {
+      ctx.font = `bold ${Math.round(fontSize)}px "Google Sans", sans-serif`;
+      ctx.textAlign = align || "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(str, x, y);
+      return;
+    }
+
+    // Seedian geometric rune vector paths for 2D Canvas rendering
+    const RUNE_PATHS = {
+      A: "M16 2.5 L28 29.5 H4 Z M2 17.5 H30",
+      B: "M8 2.5 V29.5 M8 6.5 L24 16 L8 25.5",
+      C: "M26 2.5 L6 16 L26 29.5 M6 16 H28",
+      D: "M4 2.5 H28 L16 29.5 Z M16 2.5 V29.5",
+      E: "M6 2.5 V29.5 H26 V2.5 M16 12 V29.5",
+      F: "M10 2.5 V29.5 M10 8.5 L24 16 M10 18.5 L24 25.5",
+      G: "M16 2.5 L28 16 L16 29.5 L4 16 Z M16 16 H30",
+      H: "M6 2.5 H26 M6 29.5 H26 M6 4.5 L26 27.5 M26 4.5 L6 27.5",
+      I: "M16 2.5 V29.5 M16 10 L28 2.5",
+      J: "M6 2.5 H22 V23.5 L14 29.5",
+      K: "M4 16 L16 2.5 L28 16 M16 2.5 V29.5",
+      L: "M8 2.5 V29.5 H28 M2 29.5 L14 18",
+      M: "M6 2.5 V29.5 L16 16 L26 29.5 V2.5",
+      N: "M8 2.5 V29.5 M8 16 L24 6.5 M8 16 L24 25.5",
+      O: "M16 2.5 L27 8.5 L27 23.5 L16 29.5 L5 23.5 L5 8.5 Z",
+      P: "M22 2.5 V29.5 M22 4.5 L6 14.5 H22",
+      Q: "M16 2.5 L26 14 L16 23.5 L6 14 Z M16 23.5 V29.5",
+      R: "M8 2.5 V29.5 M8 4.5 L24 14 L8 23.5 M2 14 H28",
+      S: "M26 2.5 L8 11.5 L24 20.5 L6 29.5",
+      T: "M4 2.5 H28 M10 2.5 V29.5 M22 2.5 V29.5",
+      U: "M6 2.5 H26 M6 2.5 V21.5 L16 29.5 L26 21.5 V2.5",
+      V: "M2 2.5 H30 M6 2.5 L16 29.5 L26 2.5",
+      W: "M4 12 H28 L16 29.5 Z M16 2.5 V12",
+      X: "M16 2.5 V29.5 M2 16 H30 M10 10 H22 V22 H10 Z",
+      Y: "M16 15.5 V29.5 M16 2.5 L26 9.5 L16 16.5 L6 9.5 Z",
+      Z: "M4 2.5 H28 V29.5 H4 Z M4 29.5 L28 2.5"
+    };
+
+    const glyphSize = fontSize * 0.86;
+    const glyphAdv = glyphSize * 0.92;
+    const chars = Array.from(str.toUpperCase());
+    let totalW = 0;
+    ctx.font = `bold ${Math.round(fontSize * 0.85)}px "Google Sans", sans-serif`;
+    for (const ch of chars) {
+      if (RUNE_PATHS[ch]) totalW += glyphAdv;
+      else if (ch === " ") totalW += glyphSize * 0.42;
+      else totalW += ctx.measureText(ch).width + 2;
+    }
+
+    let curX = x;
+    if (align === "center") curX = x - totalW * 0.5;
+    else if (align === "right") curX = x - totalW;
+
+    for (const ch of chars) {
+      if (RUNE_PATHS[ch] && typeof Path2D !== "undefined") {
+        ctx.save();
+        ctx.translate(curX, y - glyphSize * 0.5);
+        const s = glyphSize / 32;
+        ctx.scale(s, s);
+        ctx.lineWidth = 3.2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke(new Path2D(RUNE_PATHS[ch]));
+        ctx.restore();
+        curX += glyphAdv;
+      } else if (ch === " ") {
+        curX += glyphSize * 0.42;
+      } else {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(ch, curX, y);
+        curX += ctx.measureText(ch).width + 2;
+      }
+    }
+  },
+
+  updatePlanterBoxUI(options) {
+    if (!this.backend) return;
+    const {
+      planter,
+      signId = "planter_box_world_sign",
+      seedType = "DRAGON_FRUIT",
+      seedIcon = "🌱",
+      plantName = "แก้วมังกร",
+      timerText = "5:00",
+      statusText = "กำลังเติบโต (0/5)",
+      filledSlots = 0,
+      isWatered = false,
+      isMature = false,
+      isEmpty = false,
+      lang = "th"
+    } = options || {};
+
+    if (!planter || !planter.position) {
+      this.hidePlanterBoxUI(signId);
+      return;
+    }
+
+    let sn = planter.normal ? [...planter.normal] : [0, 1, 0];
+    let sf = planter.F ? [...planter.F] : [0, 0, 1];
+    let sr = planter.R ? [...planter.R] : [1, 0, 0];
+
+    // Flip between the 2 LONG sides (+F and -F) so the 3D UI always faces the player,
+    // and never mounts on the short sides (+R / -R).
+    let activePlayerPos = (options && options.playerPos) ? options.playerPos : null;
+    if (!activePlayerPos && typeof charTheta !== "undefined" && typeof charPhi !== "undefined" && typeof RADIUS !== "undefined") {
+      const r = (typeof playerCenterRadius === "number" && playerCenterRadius > 0) ? playerCenterRadius : RADIUS;
+      activePlayerPos = [
+        r * Math.sin(charTheta) * Math.cos(charPhi),
+        r * Math.cos(charTheta),
+        r * Math.sin(charTheta) * Math.sin(charPhi)
+      ];
+    }
+    if (activePlayerPos) {
+      const dx = activePlayerPos[0] - planter.position[0];
+      const dy = activePlayerPos[1] - planter.position[1];
+      const dz = activePlayerPos[2] - planter.position[2];
+      const dotF = dx * sf[0] + dy * sf[1] + dz * sf[2];
+      if (dotF < 0) {
+        sf = [-sf[0], -sf[1], -sf[2]];
+        sr = [-sr[0], -sr[1], -sr[2]];
+      }
+    }
+
+    const dev = window.devgame || {};
+    const upOffset = (typeof dev.planterUiUpOffset === "number")
+      ? dev.planterUiUpOffset
+      : (typeof window.planterUiUpOffset === "number" ? window.planterUiUpOffset : 0.03);
+    const rightOffset = (typeof dev.planterUiRightOffset === "number")
+      ? dev.planterUiRightOffset
+      : (typeof window.planterUiRightOffset === "number" ? window.planterUiRightOffset : 0.00);
+    const forwardOffset = (typeof dev.planterUiForwardOffset === "number")
+      ? dev.planterUiForwardOffset
+      : (typeof window.planterUiForwardOffset === "number" ? window.planterUiForwardOffset : 0.05);
+    const yawOffsetDeg = (typeof dev.planterUiYawOffset === "number")
+      ? dev.planterUiYawOffset
+      : (typeof window.planterUiYawOffset === "number" ? window.planterUiYawOffset : 180.0);
+    const pitchOffsetDeg = (typeof dev.planterUiPitchOffset === "number")
+      ? dev.planterUiPitchOffset
+      : (typeof window.planterUiPitchOffset === "number" ? window.planterUiPitchOffset : 0.0);
+    const scaleVal = (typeof dev.planterUiScale === "number")
+      ? dev.planterUiScale
+      : (typeof window.planterUiScale === "number" ? window.planterUiScale : 0.25);
+
+    const targetWorldPos = [
+      planter.position[0] + sn[0] * upOffset + sr[0] * rightOffset + sf[0] * forwardOffset,
+      planter.position[1] + sn[1] * upOffset + sr[1] * rightOffset + sf[1] * forwardOffset,
+      planter.position[2] + sn[2] * upOffset + sr[2] * rightOffset + sf[2] * forwardOffset
+    ];
+
+    if (yawOffsetDeg !== 0) {
+      const yawRad = yawOffsetDeg * (Math.PI / 180);
+      const cosY = Math.cos(yawRad);
+      const sinY = Math.sin(yawRad);
+      const sf_old = [...sf];
+      sf = [
+        sf_old[0] * cosY + sr[0] * sinY,
+        sf_old[1] * cosY + sr[1] * sinY,
+        sf_old[2] * cosY + sr[2] * sinY
+      ];
+      sr = [
+        sr[0] * cosY - sf_old[0] * sinY,
+        sr[1] * cosY - sf_old[1] * sinY,
+        sr[2] * cosY - sf_old[2] * sinY
+      ];
+    }
+
+    if (pitchOffsetDeg !== 0) {
+      const pitchRad = pitchOffsetDeg * (Math.PI / 180);
+      const cosP = Math.cos(pitchRad);
+      const sinP = Math.sin(pitchRad);
+      const sf_old = [...sf];
+      sf = [
+        sf_old[0] * cosP + sn[0] * sinP,
+        sf_old[1] * cosP + sn[1] * sinP,
+        sf_old[2] * cosP + sn[2] * sinP
+      ];
+      sn = [
+        sn[0] * cosP - sf_old[0] * sinP,
+        sn[1] * cosP - sf_old[1] * sinP,
+        sn[2] * cosP - sf_old[2] * sinP
+      ];
+    }
+
+    const signNormal = [-sf[0], -sf[1], -sf[2]];
+    const signUp = [sn[0], sn[1], sn[2]];
+    const signW = 0.48 * scaleVal;
+    const signH = 0.19 * scaleVal;
+    const planterSignId = signId;
+    const isSeedian = (lang === "seedian");
+
+    if (!window._mech3dIconCache) window._mech3dIconCache = {};
+    const getCachedIcon = (type, size = 128) => {
+      if (!type) return null;
+      const cacheKey = `${type}_${size}`;
+      if (window._mech3dIconCache[cacheKey]) return window._mech3dIconCache[cacheKey];
+      if (typeof create3DIconCanvas === "function") {
+        const c = create3DIconCanvas(type, size, size);
+        if (c) {
+          window._mech3dIconCache[cacheKey] = c;
+          return c;
+        }
+      }
+      return null;
+    };
+
+    const stateKey = `${lang}_${seedType}_${plantName}_${timerText}_${statusText}_${filledSlots}_${isWatered}_${isMature}_${isEmpty}`;
+
+    const drawPlanterBoxUI = (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      const scale = w / 1024;
+
+      ctx.save();
+      // Flip horizontally for 3D Quad rendering (same as Mech Stand 3D UI)
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+
+      const cut = 26 * scale;
+      // Outer cyber border (2 cuts: Top-Right & Bottom-Left)
+      ctx.fillStyle = isMature
+        ? "rgba(74, 222, 128, 0.80)"
+        : (isEmpty ? "rgba(223, 183, 108, 0.55)" : (!isWatered ? "rgba(56, 189, 248, 0.72)" : "rgba(223, 183, 108, 0.65)"));
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(w - cut, 0);
+      ctx.lineTo(w, cut);
+      ctx.lineTo(w, h);
+      ctx.lineTo(cut, h);
+      ctx.lineTo(0, h - cut);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner glassy dark background (2 cuts: Top-Right & Bottom-Left)
+      const pad = 6 * scale;
+      ctx.fillStyle = "rgba(12, 16, 22, 0.94)";
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(w - cut, pad);
+      ctx.lineTo(w - pad, cut);
+      ctx.lineTo(w - pad, h - pad);
+      ctx.lineTo(cut, h - pad);
+      ctx.lineTo(pad, h - cut);
+      ctx.closePath();
+      ctx.fill();
+
+      // Header Row: 3D Seed Icon + Plant Name + Timer
+      const iconCanvas = getCachedIcon(seedType, Math.round(112 * scale));
+      if (iconCanvas) {
+        const iconSize = 92 * scale;
+        ctx.drawImage(iconCanvas, 44 * scale, 26 * scale, iconSize, iconSize);
+      } else {
+        ctx.fillStyle = "#4ade80";
+        ctx.font = `${Math.round(54 * scale)}px "Google Sans", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(seedIcon || "🌱", 90 * scale, 74 * scale);
+      }
+
+      // Plant Name
+      this._drawSeedianOrText(ctx, plantName, 152 * scale, 74 * scale, 50 * scale, "left", "#ffffff", isSeedian);
+
+      // Timer Text on Right
+      const timerColor = isMature ? "#4ade80" : (isEmpty ? "#94a3b8" : (!isWatered ? "#38bdf8" : "#fbbf24"));
+      this._drawSeedianOrText(ctx, timerText, w - 48 * scale, 74 * scale, 48 * scale, "right", timerColor, isSeedian);
+
+      // Header Separator Line
+      ctx.strokeStyle = isMature
+        ? "rgba(74, 222, 128, 0.35)"
+        : "rgba(223, 183, 108, 0.30)";
+      ctx.lineWidth = Math.max(1, 2.5 * scale);
+      ctx.beginPath();
+      ctx.moveTo(38 * scale, 134 * scale);
+      ctx.lineTo(w - 38 * scale, 134 * scale);
+      ctx.stroke();
+
+      // 5 Discrete HP-Style Growth Slots (Chamfered 3D UI Slots)
+      const startX = 48 * scale;
+      const startY = 164 * scale;
+      const gapX = 22 * scale;
+      const slotW = (w - startX * 2 - gapX * 4) / 5;
+      const slotH = 74 * scale;
+      const slotCut = 12 * scale;
+
+      for (let i = 0; i < 5; i++) {
+        const sx = startX + i * (slotW + gapX);
+        const sy = startY;
+        const isFilled = isMature || (i < filledSlots);
+
+        // Slot Outer Border
+        ctx.fillStyle = isFilled ? "#34d399" : "rgba(52, 211, 153, 0.38)";
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + slotW - slotCut, sy);
+        ctx.lineTo(sx + slotW, sy + slotCut);
+        ctx.lineTo(sx + slotW, sy + slotH);
+        ctx.lineTo(sx + slotCut, sy + slotH);
+        ctx.lineTo(sx, sy + slotH - slotCut);
+        ctx.closePath();
+        ctx.fill();
+
+        // Slot Inner Fill
+        const sPad = 3.5 * scale;
+        ctx.fillStyle = isFilled ? "#10b981" : "rgba(14, 30, 24, 0.88)";
+        ctx.beginPath();
+        ctx.moveTo(sx + sPad, sy + sPad);
+        ctx.lineTo(sx + slotW - slotCut, sy + sPad);
+        ctx.lineTo(sx + slotW - sPad, sy + slotCut);
+        ctx.lineTo(sx + slotW - sPad, sy + slotH - sPad);
+        ctx.lineTo(sx + slotCut, sy + slotH - sPad);
+        ctx.lineTo(sx + sPad, sy + slotH - slotCut);
+        ctx.closePath();
+        ctx.fill();
+
+        if (isFilled) {
+          ctx.fillStyle = "rgba(167, 243, 208, 0.38)";
+          ctx.fillRect(sx + sPad * 2, sy + sPad * 2, slotW - slotCut - sPad * 2, 12 * scale);
+        }
+      }
+
+      // Status Text at Bottom
+      const statusColor = isMature ? "#4ade80" : (isEmpty ? "#cbd5e1" : (!isWatered ? "#7dd3fc" : "rgba(241, 245, 249, 0.92)"));
+      this._drawSeedianOrText(ctx, statusText, w / 2, 322 * scale, 40 * scale, "center", statusColor, isSeedian);
+
+      ctx.restore();
+    };
+
+    if (!this.hasSign(planterSignId)) {
+      const sign = this.createSign({
+        id: planterSignId,
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        resolution: [1024, 400],
+        drawFn: drawPlanterBoxUI,
+        visible: true
+      });
+      if (sign) sign._lastStateKey = stateKey;
+    } else {
+      const sign = this.signs.get(planterSignId);
+      if (sign) {
+        sign.position = targetWorldPos;
+        sign.normal = signNormal;
+        sign.up = signUp;
+        sign.scale = [signW, signH, 1];
+        sign.visible = true;
+        if (sign._lastStateKey !== stateKey) {
+          sign._lastStateKey = stateKey;
+          sign.drawFn = drawPlanterBoxUI;
+          sign.needsTextureUpdate = true;
+        }
+      }
+    }
+  },
+
+  hidePlanterBoxUI(signId) {
+    if (signId) {
+      if (this.hasSign(signId)) this.removeSign(signId);
+      return;
+    }
+    const toRemove = [];
+    for (const [id] of this.signs) {
+      if (typeof id === "string" && id.startsWith("planter_box_world_sign")) {
+        toRemove.push(id);
+      }
+    }
+    for (const id of toRemove) {
+      this.removeSign(id);
+    }
+  },
+
+  cleanupUnusedPlanterSigns(activeSignIds) {
+    const toRemove = [];
+    for (const [id] of this.signs) {
+      if (typeof id === "string" && id.startsWith("planter_box_world_sign")) {
+        if (!activeSignIds || !activeSignIds.has(id)) {
+          toRemove.push(id);
+        }
+      }
+    }
+    for (const id of toRemove) {
+      this.removeSign(id);
     }
   },
 

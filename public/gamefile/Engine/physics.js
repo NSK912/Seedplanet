@@ -1962,6 +1962,7 @@ const CollisionCore = {
           item.type === "wood_bed" ||
           item.type === "wood_chest" ||
           item.type === "wood_table" ||
+          item.type === "wood_planter_box" ||
           item.type === "wood_chair"
         )) {
           structList.push(item);
@@ -2671,7 +2672,7 @@ const CollisionCore = {
           if (!other || !other.active || other.isPreview || other.isDemolished || !other.position) continue;
           const isBed = (other.type === "wood_bed");
           const isChest = (other.type === "wood_chest");
-          const isTable = (other.type === "wood_table");
+          const isTable = (other.type === "wood_table" || other.type === "wood_planter_box");
           const isChair = (other.type === "wood_chair");
           if (!isBed && !isChest && !isTable && !isChair) continue;
 
@@ -2741,7 +2742,7 @@ const CollisionCore = {
             continue;
           }
 
-          if (other.meshStart !== undefined && other.meshEnd !== undefined && colRawVerts) {
+          if (other.type !== "wood_planter_box" && other.meshStart !== undefined && other.meshEnd !== undefined && colRawVerts) {
             const count = other.meshEnd - other.meshStart;
             let pushedByMesh = false;
             const charHalfH = isRidingBoat ? 0.25 : (playerScale * 0.46);

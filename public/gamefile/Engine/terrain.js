@@ -2891,7 +2891,9 @@
         vertices,
         colors,
         indices,
-        isPreview
+        isPreview,
+        growthFactor,
+        options
       ) {
         let curSeed = seed;
         function prng() {
@@ -2900,9 +2902,11 @@
         }
 
         const isPreviewMode = isPreview || (window._disableTreeColorEncoding === true);
+        const gFactor = (typeof growthFactor === "number" && growthFactor > 0) ? growthFactor : 1.0;
+        const hasBolls = (options && options.hasBolls !== undefined) ? !!options.hasBolls : true;
 
-        // สัดส่วนพุ่มต้นฝ้ายโลโพลี (ย่อขนาดลงครึ่งหนึ่ง)
-        const scale = (0.085 + prng() * 0.032) * 0.5;
+        // สัดส่วนพุ่มต้นฝ้ายโลโพลี
+        const scale = (0.085 + prng() * 0.032) * 0.5 * gFactor;
         const stemHeight = scale * (2.2 + prng() * 0.7);
         const baseRadius = scale * 0.14;
         const plantYaw = prng() * Math.PI * 2;
@@ -3014,19 +3018,21 @@
           );
         }
 
-        // ดอกฝ้ายปุยขาวบนยอดสุดของลำต้นหลัก
+        // ดอกฝ้ายปุยขาวบนยอดสุดของลำต้นหลัก (สร้างเฉพาะเมื่อโตเต็มที่แล้วเท่านั้น)
         const bollBaseRadius = scale * (0.34 + prng() * 0.06);
-        buildCottonBollCluster(
-          stemPts[numStemSegs],
-          N,
-          bollBaseRadius,
-          curSeed + 101,
-          0.35,
-          vertices,
-          colors,
-          indices,
-          isPreviewMode
-        );
+        if (hasBolls) {
+          buildCottonBollCluster(
+            stemPts[numStemSegs],
+            N,
+            bollBaseRadius,
+            curSeed + 101,
+            0.35,
+            vertices,
+            colors,
+            indices,
+            isPreviewMode
+          );
+        }
 
         // 2. แตกกิ่งก้านสาขา (3 กิ่ง) พร้อมใบฝ้ายและปุยฝ้ายสีขาวที่ปลายกิ่ง (โครงสร้างโลโพลีคล่องตัว ไม่หนักเครื่อง)
         const numBranches = 3;
@@ -3124,21 +3130,291 @@
             );
           }
 
-          // สร้างปุยฝ้ายสีขาวโลโพลีที่ปลายกิ่ง
-          buildCottonBollCluster(
-            bTip,
-            tipDir,
-            bollBaseRadius * (0.88 + prng() * 0.15),
-            curSeed + b * 73,
-            tipSway,
-            vertices,
-            colors,
-            indices,
-            isPreviewMode
-          );
+          // สร้างปุยฝ้ายสีขาวโลโพลีที่ปลายกิ่ง (สร้างเฉพาะเมื่อโตเต็มที่แล้วเท่านั้น)
+          if (hasBolls) {
+            buildCottonBollCluster(
+              bTip,
+              tipDir,
+              bollBaseRadius * (0.88 + prng() * 0.15),
+              curSeed + b * 73,
+              tipSway,
+              vertices,
+              colors,
+              indices,
+              isPreviewMode
+            );
+          }
         }
       }
       window.buildCottonPlant = buildCottonPlant;
+
+      // สร้างโมเดลต้นอ่อน (Sprout) สำหรับพรีวิวก่อนวางและต้นอ่อนระยะแรกหลังปลูก (โมเดลเดียวกัน 100%)
+      function buildPlantSprout(
+        pos,
+        normal,
+        R,
+        F,
+        scale,
+        seedType,
+        vertices,
+        colors,
+        indices,
+        isPreview = false,
+        options = {}
+      ) {
+        const N = normal;
+        const sType = String(seedType || "").toUpperCase();
+
+        // สถานะพรีวิว: โทนเหลืองทอง [0.95, 0.85, 0.45] หรือแดง [0.85, 0.2, 0.2] เมื่ออยู่นอกระยะ เหมือนระบบกล่อง ประตู หน้าต่าง
+        const isValid = (options && options.isValid !== undefined) ? options.isValid : true;
+        const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.85, 0.20, 0.20];
+        const previewTip = isValid ? [0.98, 0.90, 0.55] : [0.92, 0.25, 0.25];
+
+        // ลำต้นอ่อนสีเขียวสด (เมื่อปลูกแล้ว) หรือสีพรีวิว (ก่อนวาง)
+        const stemHeight = scale * 1.5;
+        const stemRadius = scale * 0.14;
+        const stemColor = isPreview ? previewColor : [0.38, 0.76, 0.22];
+
+        // ข้อลำต้นอ่อนเอียงเล็กน้อยเป็นธรรมชาติ
+        const p0 = [pos[0], pos[1], pos[2]];
+        const pMid = [
+          pos[0] + N[0] * (stemHeight * 0.55) + R[0] * (scale * 0.10),
+          pos[1] + N[1] * (stemHeight * 0.55) + R[1] * (scale * 0.10),
+          pos[2] + N[2] * (stemHeight * 0.55) + R[2] * (scale * 0.10)
+        ];
+        const pTip = [
+          pos[0] + N[0] * stemHeight + R[0] * (scale * 0.16) + F[0] * (scale * 0.08),
+          pos[1] + N[1] * stemHeight + R[1] * (scale * 0.16) + F[1] * (scale * 0.08),
+          pos[2] + N[2] * stemHeight + R[2] * (scale * 0.16) + F[2] * (scale * 0.08)
+        ];
+
+        buildTaperedSegment(p0, pMid, stemRadius, stemRadius * 0.82, 4, stemColor, vertices, colors, indices, isPreview, 0.05, 0.08);
+        buildTaperedSegment(pMid, pTip, stemRadius * 0.82, stemRadius * 0.65, 4, stemColor, vertices, colors, indices, isPreview, 0.08, 0.12);
+
+        // ใบเลี้ยงคู่ของต้นอ่อน (Cotyledon Leaves)
+        let leafBaseColor = [0.26, 0.70, 0.18];
+        let leafTipColor = [0.38, 0.82, 0.24];
+        let numLeaves = 2;
+
+        if (sType.includes("DRAGON")) {
+          // ต้นอ่อนแก้วมังกร: ใบเขียวสดแต้มยอดสีแดงอมชมพูสวยงาม
+          leafBaseColor = [0.30, 0.68, 0.22];
+          leafTipColor = [0.92, 0.18, 0.26];
+          numLeaves = 3;
+        } else if (sType.includes("COTTON")) {
+          // ต้นอ่อนฝ้าย/นุ่น: ใบเลี้ยงสีเขียวตองอ่อนทรงหัวใจ/รูปไข่ ไม่มีปุยฝ้าย
+          leafBaseColor = [0.32, 0.75, 0.25];
+          leafTipColor = [0.44, 0.86, 0.35];
+          numLeaves = 2;
+        }
+
+        const leafLen = scale * 0.90;
+        const leafW = scale * 0.58;
+
+        for (let l = 0; l < numLeaves; l++) {
+          const ang = (l * (Math.PI * 2 / numLeaves)) + 0.35;
+          const lDirX = Math.cos(ang) * R[0] + Math.sin(ang) * F[0] + N[0] * 0.30;
+          const lDirY = Math.cos(ang) * R[1] + Math.sin(ang) * F[1] + N[1] * 0.30;
+          const lDirZ = Math.cos(ang) * R[2] + Math.sin(ang) * F[2] + N[2] * 0.30;
+          const dLen = Math.hypot(lDirX, lDirY, lDirZ) || 1;
+          const dir = [lDirX / dLen, lDirY / dLen, lDirZ / dLen];
+
+          let sx = dir[1] * N[2] - dir[2] * N[1];
+          let sy = dir[2] * N[0] - dir[0] * N[2];
+          let sz = dir[0] * N[1] - dir[1] * N[0];
+          const sLen = Math.hypot(sx, sy, sz) || 1;
+          const side = [sx / sLen, sy / sLen, sz / sLen];
+
+          const v0 = pTip;
+          const v1 = [
+            pTip[0] + dir[0] * (leafLen * 0.45) - side[0] * (leafW * 0.5) + N[0] * (scale * 0.08),
+            pTip[1] + dir[1] * (leafLen * 0.45) - side[1] * (leafW * 0.5) + N[1] * (scale * 0.08),
+            pTip[2] + dir[2] * (leafLen * 0.45) - side[2] * (leafW * 0.5) + N[2] * (scale * 0.08)
+          ];
+          const v2 = [
+            pTip[0] + dir[0] * (leafLen * 0.45) + side[0] * (leafW * 0.5) + N[0] * (scale * 0.08),
+            pTip[1] + dir[1] * (leafLen * 0.45) + side[0] * (leafW * 0.5) + N[1] * (scale * 0.08),
+            pTip[2] + dir[2] * (leafLen * 0.45) + side[0] * (leafW * 0.5) + N[2] * (scale * 0.08)
+          ];
+          const v3 = [
+            pTip[0] + dir[0] * leafLen - N[0] * (scale * 0.04),
+            pTip[1] + dir[1] * leafLen - N[1] * (scale * 0.04),
+            pTip[2] + dir[2] * leafLen - N[2] * (scale * 0.04)
+          ];
+
+          const cBase = isPreview ? previewColor : (typeof encodeTreeColor === "function" ? encodeTreeColor(leafBaseColor, true, 0.12) : leafBaseColor);
+          const cTip = isPreview ? previewTip : (typeof encodeTreeColor === "function" ? encodeTreeColor(leafTipColor, true, 0.20) : leafTipColor);
+
+          const bIdx = vertices.length / 3;
+          vertices.push(
+            v0[0], v0[1], v0[2],
+            v1[0], v1[1], v1[2],
+            v2[0], v2[1], v2[2],
+            v3[0], v3[1], v3[2]
+          );
+          colors.push(
+            cBase[0], cBase[1], cBase[2],
+            cBase[0], cBase[1], cBase[2],
+            cBase[0], cBase[1], cBase[2],
+            cTip[0], cTip[1], cTip[2]
+          );
+          indices.push(
+            bIdx, bIdx + 1, bIdx + 3,
+            bIdx, bIdx + 3, bIdx + 2,
+            bIdx, bIdx + 3, bIdx + 1,
+            bIdx, bIdx + 2, bIdx + 3
+          );
+        }
+      }
+      window.buildPlantSprout = buildPlantSprout;
+
+      // สร้างโมเดลต้นไม้เดี่ยวแบบ Procedural (ใช้โมเดลเดียวกับต้นไม้บนแผนที่)
+      function buildSingleTree(
+        pos,
+        normal,
+        R,
+        F,
+        scale,
+        leafColor,
+        seed,
+        vertices,
+        colors,
+        indices,
+        options = {}
+      ) {
+        let curSeed = seed || 1234;
+        function prng() {
+          const x = Math.sin(curSeed++) * 10000;
+          return x - Math.floor(x);
+        }
+
+        const trunkHeight = scale * (2.4 + prng() * 0.8);
+        const trunkBaseRadius = scale * 0.15;
+        const treeYaw = prng() * Math.PI * 2;
+        const numTrunkSegs = 3;
+
+        const tN = [normal[0], normal[1], normal[2]];
+        let tR = R ? [R[0], R[1], R[2]] : [1, 0, 0];
+        let tF = F ? [F[0], F[1], F[2]] : [0, 0, 1];
+        if (!R || !F) {
+          if (Math.abs(tN[1]) < 0.9) {
+            tR = [-tN[2], 0, tN[0]];
+          } else {
+            tR = [1, 0, 0];
+          }
+          const lR = Math.hypot(tR[0], tR[1], tR[2]) || 1;
+          tR = [tR[0] / lR, tR[1] / lR, tR[2] / lR];
+          tF = [
+            tR[1] * tN[2] - tR[2] * tN[1],
+            tR[2] * tN[0] - tR[0] * tN[2],
+            tR[0] * tN[1] - tR[1] * tN[0]
+          ];
+        }
+
+        // 1. Trunk segments
+        const T = [[pos[0], pos[1], pos[2]]];
+        for (let k = 1; k <= numTrunkSegs; k++) {
+          const bx = (prng() - 0.5) * 0.12 * scale;
+          const bz = (prng() - 0.5) * 0.12 * scale;
+          const stepX = (trunkHeight / numTrunkSegs) * tN[0] + bx * tR[0] + bz * tF[0];
+          const stepY = (trunkHeight / numTrunkSegs) * tN[1] + bx * tR[1] + bz * tF[1];
+          const stepZ = (trunkHeight / numTrunkSegs) * tN[2] + bx * tR[2] + bz * tF[2];
+          T.push([T[k - 1][0] + stepX, T[k - 1][1] + stepY, T[k - 1][2] + stepZ]);
+        }
+
+        const barkColor = [
+          0.38 + prng() * 0.05,
+          0.25 + prng() * 0.03,
+          0.15 + prng() * 0.02,
+        ];
+
+        for (let k = 1; k <= numTrunkSegs; k++) {
+          const rStart = trunkBaseRadius * (1.0 - (0.65 * (k - 1)) / numTrunkSegs);
+          const rEnd = trunkBaseRadius * (1.0 - (0.65 * k) / numTrunkSegs);
+          buildTaperedSegment(
+            T[k - 1],
+            T[k],
+            rStart,
+            rEnd,
+            5,
+            barkColor,
+            vertices,
+            colors,
+            indices,
+            false,
+            "bark"
+          );
+        }
+
+        // 2. Large branches
+        const branchCount = 6 + Math.floor(prng() * 3); // 6-8 branches
+        const branchLength = scale * (1.0 + prng() * 0.3);
+        const branchBaseRadius = trunkBaseRadius * 0.40;
+
+        const isWhiteRed = !!(leafColor && leafColor.isWhiteRedAlternating);
+        const hasDragonFruits = isWhiteRed && (options.hasFruits !== false);
+
+        for (let bIdx = 0; bIdx < branchCount; bIdx++) {
+          const fraction = 0.35 + 0.65 * (bIdx / (branchCount - 1 || 1));
+          const tVal = fraction * numTrunkSegs;
+          const idx = Math.min(numTrunkSegs - 1, Math.floor(tVal));
+          const frac = tVal - idx;
+          const p0 = T[idx];
+          const p1 = T[idx + 1];
+          const bOrigin = [
+            p0[0] + (p1[0] - p0[0]) * frac,
+            p0[1] + (p1[1] - p0[1]) * frac,
+            p0[2] + (p1[2] - p0[2]) * frac
+          ];
+
+          const bAngle = treeYaw + bIdx * 2.399963 + (prng() - 0.5) * 0.2;
+          const bTilt = 0.32 + prng() * 0.24;
+          const bDirX = Math.cos(bAngle) * tR[0] + Math.sin(bAngle) * tF[0] + bTilt * tN[0];
+          const bDirY = Math.cos(bAngle) * tR[1] + Math.sin(bAngle) * tF[1] + bTilt * tN[1];
+          const bDirZ = Math.cos(bAngle) * tR[2] + Math.sin(bAngle) * tF[2] + bTilt * tN[2];
+          const lenB = Math.hypot(bDirX, bDirY, bDirZ) || 1;
+          const bDirNorm = [bDirX / lenB, bDirY / lenB, bDirZ / lenB];
+
+          let bp = bOrigin;
+          const numBranchSegs = 2;
+          for (let j = 1; j <= numBranchSegs; j++) {
+            const nextBp = [
+              bp[0] + (branchLength / numBranchSegs) * bDirNorm[0],
+              bp[1] + (branchLength / numBranchSegs) * bDirNorm[1],
+              bp[2] + (branchLength / numBranchSegs) * bDirNorm[2]
+            ];
+            const rStart = branchBaseRadius * (1.0 - (0.6 * (j - 1)) / numBranchSegs);
+            const rEnd = branchBaseRadius * (1.0 - (0.6 * j) / numBranchSegs);
+            buildTaperedSegment(bp, nextBp, rStart, rEnd, 4, barkColor, vertices, colors, indices, false);
+            bp = nextBp;
+          }
+
+          // Foliage cluster at branch tip
+          const leafRadius = scale * (0.42 + prng() * 0.16);
+          buildFoliageCluster(bp, leafRadius, leafColor, (seed || 100) + bIdx * 100, vertices, colors, indices, 1.0, 1.1);
+
+          // If Dragon Fruit tree and mature, hang fruits from select branch tips
+          if (hasDragonFruits && (bIdx === 0 || bIdx === 2 || bIdx === 4) && typeof window.buildDragonFruitModel === "function") {
+            const fruitScale = scale * 1.8;
+            window.buildDragonFruitModel(
+              (seed || 555) + bIdx * 31,
+              fruitScale,
+              bp,
+              tR,
+              tN,
+              tF,
+              vertices,
+              colors,
+              indices
+            );
+          }
+        }
+
+        // Top crown foliage
+        const topLeafRadius = scale * (0.55 + prng() * 0.2);
+        buildFoliageCluster(T[numTrunkSegs], topLeafRadius, leafColor, (seed || 100) + 888, vertices, colors, indices, 0.0, 0.3);
+      }
+      window.buildSingleTree = buildSingleTree;
 
       class FastFloat32Array {
         constructor(cap) {

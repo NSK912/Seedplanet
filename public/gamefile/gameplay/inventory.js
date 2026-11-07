@@ -275,6 +275,7 @@
         { name: "WOOD_CHEST", icon: "📦" },
         { name: "WOOD_BED", icon: "🛏️" },
         { name: "WOOD_TABLE", icon: "🪑" },
+        { name: "WOOD_PLANTER_BOX", icon: "🪴" },
         { name: "WOOD_CHAIR", icon: "🪑" },
         { name: "LANTERN", icon: "🏮" },
         { name: "MEGANEURA", icon: "🦟" },
@@ -283,6 +284,8 @@
         { name: "DRAGON_FRUIT", icon: "🐉" },
         { name: "COTTON_PLANT", icon: "☁️" },
         { name: "SHOVEL", icon: "🥄" },
+        { name: "IRON_BUCKET", icon: "🪣" },
+        { name: "WATER_BUCKET", icon: "🪣💧" },
         { name: "ROBOT_STAND", icon: "🏗️" },
         { name: "ROBOT_COCKPIT", icon: "🤖" },
         { name: "ROBOT_LEFT_ARM", icon: "🦾" },
@@ -327,6 +330,10 @@
              const pct = Math.floor((item.rechargeTime / window.BatterySystem.REGEN_TIME) * 100);
              stateKey = `_${pct}`;
            }
+        } else if (name === "IRON_BUCKET") {
+           stateKey = "_empty";
+        } else if (name === "WATER_BUCKET") {
+           stateKey = "_water";
         }
 
         const cacheKey = `${name}_${width}_${height}_${dpr}${stateKey}`;
@@ -504,7 +511,7 @@
             mockItem.type = "wood_roof";
             mockItem.size = 0.25;
             mockItem.angle = 0.0;
-          } else if (name === "WOOD_CHEST" || name === "WOOD_BED") {
+          } else if (name === "WOOD_CHEST" || name === "WOOD_BED" || name === "WOOD_PLANTER_BOX") {
             scaleFactor = 1.1;
             mockItem.type = name.toLowerCase();
           } else if (name === "CAMPFIRE") {
@@ -527,6 +534,12 @@
           } else if (name === "COTTON_PLANT") {
             scaleFactor = 1.25;
             mockItem.seed = 98765;
+          } else if (name === "IRON_BUCKET") {
+            scaleFactor = 1.25;
+            mockItem.hasWater = false;
+          } else if (name === "WATER_BUCKET") {
+            scaleFactor = 1.25;
+            mockItem.hasWater = true;
           }
 
           try {
@@ -640,6 +653,16 @@
             buildTaperedSegment([0, -0.35, 0], [0.05, -0.42, 0], 0.015, 0.015, 4, partsColor, rawVertices, rawColors, rawIndices);
             // Horizontal grip
             buildTaperedSegment([-0.05, -0.42, 0], [0.05, -0.42, 0], 0.016, 0.016, 5, partsColor, rawVertices, rawColors, rawIndices);
+          } else if (name === "IRON_BUCKET" || name === "WATER_BUCKET") {
+            scaleFactor = 1.25;
+            if (typeof window.buildIronBucketModel === "function") {
+              window.buildIronBucketModel(0.55, [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], rawVertices, rawColors, rawIndices, name === "WATER_BUCKET");
+            } else {
+              buildTaperedSegment([0, -0.20, 0], [0, 0.16, 0], 0.14, 0.20, 8, [0.64, 0.68, 0.74], rawVertices, rawColors, rawIndices, true);
+              buildTaperedSegment([-0.20, 0.16, 0], [-0.12, 0.32, 0], 0.014, 0.014, 5, [0.45, 0.48, 0.52], rawVertices, rawColors, rawIndices);
+              buildTaperedSegment([-0.12, 0.32, 0], [0.12, 0.32, 0], 0.018, 0.018, 5, [0.42, 0.28, 0.16], rawVertices, rawColors, rawIndices);
+              buildTaperedSegment([0.12, 0.32, 0], [0.20, 0.16, 0], 0.014, 0.014, 5, [0.45, 0.48, 0.52], rawVertices, rawColors, rawIndices);
+            }
           } else if (name === "BOW") {
             scaleFactor = 1.25;
             const wGrip = [0, 0, 0];
@@ -721,6 +744,14 @@
             addBox([0, -0.08, 0], 0.8, 0.45, 0.5, [0.5, 0.3, 0.15], r, n, f, rawVertices, rawColors, rawIndices);
             addBox([0, 0.2, 0], 0.8, 0.15, 0.5, [0.65, 0.45, 0.25], r, n, f, rawVertices, rawColors, rawIndices);
             addBox([0, 0.1, 0.26], 0.1, 0.1, 0.02, [0.85, 0.7, 0.25], r, n, f, rawVertices, rawColors, rawIndices);
+          } else if (name === "WOOD_PLANTER_BOX") {
+            scaleFactor = 1.15;
+            if (typeof window.buildWoodPlanterBoxModel === "function") {
+              window.buildWoodPlanterBoxModel({ position: [0, 0, 0], R: r, F: f, normal: n, customScale: 1.5 }, rawVertices, rawColors, rawIndices);
+            } else {
+              addBox([0, -0.05, 0], 0.76, 0.32, 0.56, [0.52, 0.35, 0.19], r, n, f, rawVertices, rawColors, rawIndices);
+              addBox([0, 0.06, 0], 0.66, 0.14, 0.46, [0.33, 0.20, 0.10], r, n, f, rawVertices, rawColors, rawIndices);
+            }
           } else if (name === "CAMPFIRE") {
             scaleFactor = 1.15;
             const numRocks = 8;
@@ -827,9 +858,9 @@
             targetSize = 0.90; // Give the boat maximum visibility inside the slot
           } else if (name === "BOAT_WING") {
             targetSize = 0.85;
-          } else if (name === "WOOD_BED" || name === "WOOD_TABLE") {
+          } else if (name === "WOOD_BED" || name === "WOOD_TABLE" || name === "WOOD_PLANTER_BOX") {
             targetSize = 0.85;
-          } else if (name === "WOOD_CHAIR" || name === "LANTERN") {
+          } else if (name === "WOOD_CHAIR" || name === "LANTERN" || name === "IRON_BUCKET" || name === "WATER_BUCKET") {
             targetSize = 0.82;
           } else if (name === "IRON_BULLET") {
             targetSize = 0.68;
@@ -2387,6 +2418,170 @@
        }
     }
     
+    // Check mature trees in wood planter boxes (axe chopping and hand punching reuse map tree mechanics)
+    let bestPlanterTree = null;
+    let minPlanterScore = Infinity;
+
+    if (toolType === "AXE" || toolType === "HAND") {
+       const plantCandidates = (typeof collectibles !== "undefined" && collectibles) ? collectibles : [];
+       for (let i = 0; i < plantCandidates.length; i++) {
+          const c = plantCandidates[i];
+          if (!c || !c.active || c.isPreview || c.type !== "wood_planter_box" || !c.plantData || !c.position) continue;
+          const pData = c.plantData;
+          const sType = String(pData.seedType || "").toUpperCase();
+          if (!sType.includes("DRAGON") && !sType.includes("BRANCH")) continue;
+
+          const cNorm = (c.normal && c.normal.length === 3) ? c.normal : [0, 1, 0];
+          const treePos = [
+             c.position[0] + cNorm[0] * 0.15,
+             c.position[1] + cNorm[1] * 0.15,
+             c.position[2] + cNorm[2] * 0.15
+          ];
+
+          const dx = treePos[0] - hitCenter[0];
+          const dy = treePos[1] - hitCenter[1];
+          const dz = treePos[2] - hitCenter[2];
+
+          const h = dx * cNorm[0] + dy * cNorm[1] + dz * cNorm[2];
+          const t = dx * F[0] + dy * F[1] + dz * F[2];
+
+          const rx = dx - t * F[0];
+          const ry = dy - t * F[1];
+          const rz = dz - t * F[2];
+          const distToRaySq = rx * rx + ry * ry + rz * rz;
+
+          const treeRadius = 0.28;
+          const physicalRadius = treeRadius / 4.0;
+          const hitRadiusSq = treeRadius * treeRadius;
+
+          let isHit = false;
+          let score = Infinity;
+
+          if (actionReachMode === 1) {
+             if (distToRaySq <= hitRadiusSq) {
+                const distanceToSurface = Math.max(0, t - physicalRadius);
+                if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
+                   isHit = true;
+                   score = distToRaySq * 2.0 + t;
+                }
+             }
+          } else {
+             const reachInfo = (typeof isTargetWithinReach === "function")
+                ? isTargetWithinReach(treePos, actionReachDistance + physicalRadius)
+                : { valid: Math.hypot(dx, dy, dz) <= (actionReachDistance + physicalRadius), perpSq: dx*dx + dy*dy + dz*dz };
+             if (reachInfo.valid) {
+                isHit = true;
+                score = reachInfo.perpSq;
+             }
+          }
+
+          if (isHit && score < minPlanterScore) {
+             minPlanterScore = score;
+             bestPlanterTree = c;
+          }
+       }
+    }
+
+    if (bestPlanterTree && minPlanterScore < minScore) {
+       const pData = bestPlanterTree.plantData;
+       if (!pData.watered || !pData.plantTime) {
+          if (typeof showNotice === "function") {
+             showNotice(`💧 ต้นอ่อนยังไม่ได้รดน้ำ! กรุณาใช้ถังใส่น้ำ (Water Bucket) มารดน้ำเพื่อเริ่มเติบโต`);
+          }
+          return true;
+       }
+       const elapsed = (Date.now() - pData.plantTime) / 1000;
+       const isMature = elapsed >= (pData.growthDuration || 300);
+
+       if (!isMature) {
+          if (typeof playChopSound === "function") playChopSound(bestPlanterTree.position);
+          if (typeof showNotice === "function") {
+             const rem = Math.ceil((pData.growthDuration || 300) - elapsed);
+             const m = Math.floor(rem / 60);
+             const s = rem % 60;
+             showNotice(`⏳ ต้นไม้กำลังเติบโต เหลืออีก ${m}:${s < 10 ? '0' : ''}${s} นาที (ยังตัดไม่ได้)`);
+          }
+          return true;
+       }
+
+       if (typeof playChopSound === "function") playChopSound(bestPlanterTree.position);
+
+       if (toolType === "HAND") {
+          pData.handHits = (pData.handHits || 0) + 1;
+          if (pData.handHits >= 4) {
+             pData.handHits = 0;
+             const tNormal = bestPlanterTree.normal || [0, 1, 0];
+             let tTangent = [1, 0, 0];
+             if (Math.abs(tNormal[0]) > 0.9) tTangent = [0, 1, 0];
+             let tBitangent = [
+                tNormal[1] * tTangent[2] - tNormal[2] * tTangent[1],
+                tNormal[2] * tTangent[0] - tNormal[0] * tTangent[2],
+                tNormal[0] * tTangent[1] - tNormal[1] * tTangent[0]
+             ];
+             const tBLen = Math.hypot(tBitangent[0], tBitangent[1], tBitangent[2]) || 1;
+             tBitangent = [tBitangent[0]/tBLen, tBitangent[1]/tBLen, tBitangent[2]/tBLen];
+             tTangent = [
+                tBitangent[1] * tNormal[2] - tBitangent[2] * tNormal[1],
+                tBitangent[2] * tNormal[0] - tBitangent[0] * tNormal[2],
+                tBitangent[0] * tNormal[1] - tBitangent[1] * tNormal[0]
+             ];
+             const numDrops = 1 + Math.floor(Math.random() * 2);
+             for (let i = 0; i < numDrops; i++) {
+                spawnDrop(bestPlanterTree.position, "branch", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.015 + Math.random() * 0.02, true);
+             }
+          }
+          return true;
+       }
+
+       pData.hits = (pData.hits || 0) + 1;
+       const requiredHits = 3;
+       if (pData.hits >= requiredHits) {
+          const tNormal = bestPlanterTree.normal || [0, 1, 0];
+          let tTangent = [1, 0, 0];
+          if (Math.abs(tNormal[0]) > 0.9) tTangent = [0, 1, 0];
+          let tBitangent = [
+             tNormal[1] * tTangent[2] - tNormal[2] * tTangent[1],
+             tNormal[2] * tTangent[0] - tNormal[0] * tTangent[2],
+             tNormal[0] * tTangent[1] - tNormal[1] * tTangent[0]
+          ];
+          const tBLen = Math.hypot(tBitangent[0], tBitangent[1], tBitangent[2]) || 1;
+          tBitangent = [tBitangent[0]/tBLen, tBitangent[1]/tBLen, tBitangent[2]/tBLen];
+          tTangent = [
+             tBitangent[1] * tNormal[2] - tBitangent[2] * tNormal[1],
+             tBitangent[2] * tNormal[0] - tBitangent[0] * tNormal[2],
+             tBitangent[0] * tNormal[1] - tBitangent[1] * tNormal[0]
+          ];
+
+          const numLogs = 2 + Math.floor(Math.random() * 2);
+          for (let i = 0; i < numLogs; i++) {
+             spawnDrop(bestPlanterTree.position, "log", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.075 + Math.random() * 0.025);
+          }
+          const numBranches = 1 + Math.floor(Math.random() * 2);
+          for (let i = 0; i < numBranches; i++) {
+             spawnDrop(bestPlanterTree.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
+          }
+
+          const sType = String(pData.seedType || "").toUpperCase();
+          if (sType.includes("DRAGON")) {
+             const numFruits = 2 + Math.floor(Math.random() * 2);
+             for (let i = 0; i < numFruits; i++) {
+                spawnDrop(bestPlanterTree.position, "dragon_fruit", tNormal, tTangent, tBitangent, [0.95, 0.2, 0.4], 0.035 + Math.random() * 0.015);
+             }
+          }
+
+          bestPlanterTree.plantData = null;
+          bestPlanterTree.isDynamic = false;
+          if (typeof window !== "undefined") {
+             window.pendingCollectibleRefresh = true;
+             window.pendingDynamicCollectibleRefresh = true;
+          }
+          if (typeof saveSettingsToLocalStorage === "function") {
+             saveSettingsToLocalStorage();
+          }
+       }
+       return true;
+    }
+    
     if (bestIndex !== -1) {
        const obs = natureObstacles[bestIndex];
        const hitType = bestType;
@@ -2526,7 +2721,10 @@ function spawnDrop(pos, type, normal, tangent, bitangent, color, size, isHand=fa
    }
    
    collectibles.push(collectible);
-   if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
+   if (typeof window !== "undefined") {
+      window.pendingDynamicCollectibleRefresh = true;
+      window.spawnDrop = spawnDrop;
+   }
 }
 
 function cancelFloorPlacement() {
@@ -2713,7 +2911,8 @@ function cancelFloorPlacement() {
             let pR_len = Math.sqrt(floorPreviewCollectible.position[0]**2 + floorPreviewCollectible.position[1]**2 + floorPreviewCollectible.position[2]**2) || 1;
             let pTheta = Math.acos(Math.max(-1.0, Math.min(1.0, floorPreviewCollectible.position[1] / pR_len)));
             let pPhi = Math.atan2(floorPreviewCollectible.position[2], floorPreviewCollectible.position[0]);
-            let pHeight = getHeightOnSphere(pTheta, pPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+            const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+            let pHeight = sampleH(pTheta, pPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
             let pTerrainR = RADIUS + pHeight * HEIGHT_SCALE;
             let pWaterR = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * 0.15;
             if (isWaterPlacement && pTerrainR < pWaterR) {
@@ -2751,7 +2950,8 @@ function cancelFloorPlacement() {
           
           let previewTheta = Math.acos(Math.max(-1.0, Math.min(1.0, pny)));
           let previewPhi = Math.atan2(pnz, pnx);
-          let groundRad = RADIUS + getHeightOnSphere(previewTheta, previewPhi, globalSeed) * HEIGHT_SCALE;
+          const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+          let groundRad = RADIUS + sampleH(previewTheta, previewPhi, globalSeed) * HEIGHT_SCALE;
           const waterRadius = RADIUS + waterLevel * 0.15;
           if (waterEnabled && groundRad < waterRadius) groundRad = waterRadius;
           const exactGroundRad = groundRad + 0.002;
@@ -2834,6 +3034,26 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.type = "wood_table";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+        } else if (placingItemName === "WOOD_PLANTER_BOX") {
+          floorPreviewCollectible.type = "wood_planter_box";
+          floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+          if (!floorPreviewCollectible.isFloorSnapped) {
+            const pos = floorPreviewCollectible.position;
+            const rLen = Math.sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]) || 1;
+            const pnx = pos[0] / rLen, pny = pos[1] / rLen, pnz = pos[2] / rLen;
+            const previewTheta = Math.acos(Math.max(-1.0, Math.min(1.0, pny)));
+            const previewPhi = Math.atan2(pnz, pnx);
+            const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
+            let groundRad = RADIUS + sampleH(previewTheta, previewPhi, globalSeed) * HEIGHT_SCALE;
+            if (typeof getTerrainSurfaceAndCeiling === "function") {
+              const caveInfo = getTerrainSurfaceAndCeiling(pnx, pny, pnz, rLen - 0.15);
+              if (caveInfo && (caveInfo.insideTunnel || caveInfo.ground < groundRad - 0.35)) {
+                groundRad = caveInfo.ground;
+              }
+            }
+            floorPreviewCollectible.position = [pnx * groundRad, pny * groundRad, pnz * groundRad];
+          }
         } else if (placingItemName === "WOOD_CHAIR") {
           floorPreviewCollectible.type = "wood_chair";
           floorPreviewCollectible.angle = (typeof floorPreviewCollectible.angle === "number") ? floorPreviewCollectible.angle : placementRotationAngle;
@@ -2942,6 +3162,7 @@ function cancelFloorPlacement() {
             : placingItemName === "WOOD_CHEST" ? "wood_chest"
             : placingItemName === "WOOD_BED" ? "wood_bed"
             : placingItemName === "WOOD_TABLE" ? "wood_table"
+            : placingItemName === "WOOD_PLANTER_BOX" ? "wood_planter_box"
             : placingItemName === "WOOD_CHAIR" ? "wood_chair"
             : placingItemName === "LANTERN" ? "lantern"
             : placingItemName === "MEGANEURA" ? "meganeura_item"
@@ -2964,7 +3185,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -3493,6 +3714,134 @@ function cancelFloorPlacement() {
           if (dugSuccess) {
               addItemToInventory({ name: "DIRT", icon: "🟫", count: 1, label: "DIRT" }, false, true);
           }
+        } else if (itemName === "IRON_BUCKET" || itemName === "iron_bucket") {
+          if (source !== "action") {
+            showNotice("🪣 กรุณานำถังเหล็กไปใส่ในช่องแอคชั่น (Action Slot) เพื่อถือและตักน้ำ!");
+            return;
+          }
+          // Check if player is standing in water or looking/facing toward water within reach
+          let isNearWater = false;
+          const isWaterOn = (typeof waterEnabled !== "undefined") ? waterEnabled : true;
+          if (isWaterOn && typeof RADIUS === "number" && typeof waterLevel === "number") {
+            const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 0.6;
+            const wRad = RADIUS + waterLevel * (hScale * 0.25);
+            const getH = (typeof getVisualHeightOnSphere === "function")
+              ? getVisualHeightOnSphere
+              : ((typeof getHeightOnSphere === "function") ? getHeightOnSphere : null);
+
+            if (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0) {
+              isNearWater = true;
+            } else if (getH && typeof charTheta === "number" && typeof charPhi === "number") {
+              const playerTH = getH(charTheta, charPhi, window.globalSeed);
+              const playerTRad = RADIUS + playerTH * hScale;
+              if (playerTRad < wRad + 0.04) {
+                isNearWater = true;
+              } else {
+                const pRad = (typeof playerCenterRadius === "number" && playerCenterRadius > 0) ? playerCenterRadius : playerTRad;
+                // Ensure player isn't on a high mountain far above the water surface
+                if (pRad - wRad <= 0.45) {
+                  const sinT = Math.sin(charTheta), cosT = Math.cos(charTheta);
+                  const sinP = Math.sin(charPhi), cosP = Math.cos(charPhi);
+                  const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+                  const East = [-sinP, 0, cosP];
+                  const North = [-cosT * cosP, sinT, -cosT * sinP];
+
+                  const headingsToCheck = [];
+                  if (typeof charHeading === "number") headingsToCheck.push(charHeading);
+                  if (typeof rotationY === "number") headingsToCheck.push(rotationY);
+
+                  const reachMax = (typeof actionReachDistance === "number" ? actionReachDistance : 0.4) * 1.65;
+                  for (let hIdx = 0; hIdx < headingsToCheck.length && !isNearWater; hIdx++) {
+                    const ang = headingsToCheck[hIdx];
+                    const cosH = Math.cos(ang), sinH = Math.sin(ang);
+                    const fx = North[0] * cosH + East[0] * sinH;
+                    const fy = North[1] * cosH + East[1] * sinH;
+                    const fz = North[2] * cosH + East[2] * sinH;
+
+                    for (let d = 0.06; d <= reachMax; d += 0.06) {
+                      const px = nx * wRad + fx * d;
+                      const py = ny * wRad + fy * d;
+                      const pz = nz * wRad + fz * d;
+                      const dist = Math.hypot(px, py, pz);
+                      if (dist < 0.001) continue;
+                      const sTheta = Math.acos(Math.max(-1.0, Math.min(1.0, py / dist)));
+                      const sPhi = Math.atan2(pz / dist, px / dist);
+                      const sTH = getH(sTheta, sPhi, window.globalSeed);
+                      const sTRad = RADIUS + sTH * hScale;
+                      if (sTRad < wRad + 0.015) {
+                        isNearWater = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          if (isNearWater) {
+            const count = (typeof item.count === "number") ? item.count : 1;
+            const waterBucketObj = { name: "WATER_BUCKET", icon: "🪣💧", count: 1, label: "WATER_BUCKET" };
+            if (count <= 1) {
+              // Replace the single empty bucket directly in the action slot with a Water Bucket
+              actionSlotsItems[index] = waterBucketObj;
+            } else {
+              // Decrement empty bucket stack by 1 and add 1 separate Water Bucket item
+              const added = addItemToInventory(waterBucketObj, false, false);
+              if (!added) {
+                showNotice("❌ กระเป๋าเต็มแล้ว! ไม่สามารถรับถังใส่น้ำเพิ่มได้ (Inventory is full)");
+                return;
+              }
+              item.count = count - 1;
+            }
+
+            // Trigger bucket-only water scooping animation (does not animate character arms)
+            window.bucketScoopTimer = 1.0;
+            if (typeof playSplashSound === "function") {
+              playSplashSound(0.95, true);
+            } else if (typeof playCollectSound === "function") {
+              playCollectSound();
+            }
+            if (typeof renderActionSlots === "function") renderActionSlots();
+            if (typeof renderInventory === "function") renderInventory();
+            if (typeof updateBadge === "function") updateBadge();
+            showNotice("💧 ตักน้ำสำเร็จ! ได้รับ ถังใส่น้ำ (WATER BUCKET) x1");
+          } else {
+            showNotice("🚫 ต้องใช้ถังน้ำตรงจุดที่มีน้ำเพื่อเติมน้ำ! (Must use near water to fill the bucket!)");
+          }
+        } else if (itemName === "WATER_BUCKET" || itemName === "water_bucket") {
+          if (source !== "action") {
+            showNotice("🪣💧 ถังใส่น้ำ: กรุณานำไปใส่ในช่องแอคชั่น (Action Slot) เพื่อถือและใช้รดน้ำต้นไม้!");
+            return;
+          }
+          if (typeof window.PlanterSystem !== "undefined" && typeof window.PlanterSystem.water === "function") {
+            let targetPlanter = window.activeWateringTargetPlanter || null;
+            if (!targetPlanter && typeof collectibles !== "undefined" && collectibles) {
+              const pScale = (typeof playerScale === "number" && playerScale > 0) ? playerScale : 0.1;
+              const chestReachDist = Math.max(
+                (typeof actionReachDistance === "number" && actionReachDistance > 0.01) ? actionReachDistance : (0.15 * (pScale / 0.1)),
+                0.15 * (pScale / 0.1)
+              );
+              let bestT = Infinity;
+              for (let i = 0; i < collectibles.length; i++) {
+                const c = collectibles[i];
+                if (c && c.active && !c.isPreview && c.type === "wood_planter_box" && c.plantData && !c.plantData.watered && c.position) {
+                  if (typeof isTargetWithinReach === "function") {
+                    const reachInfo = isTargetWithinReach(c.position, chestReachDist);
+                    if (reachInfo && reachInfo.valid && reachInfo.t < bestT) {
+                      bestT = reachInfo.t;
+                      targetPlanter = c;
+                    }
+                  }
+                }
+              }
+            }
+            if (targetPlanter) {
+              window.PlanterSystem.water(targetPlanter);
+              return;
+            }
+          }
+          showNotice("💧 เดินเข้าไปชิดกล่องดินที่ปลูกต้นอ่อนไว้เพื่อรดน้ำ! (Stand next to a planted box to water it!)");
         } else if (itemName === "BOW") {
           showNotice("🚫 คันธนูถูกปิดใช้งาน กรุณาใช้ปืนไม้ติดแขน (ARM CANNON) แทน!");
           return;
@@ -4127,6 +4476,14 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "wood_planter_box",
+            output: { name: "WOOD_PLANTER_BOX", icon: "🪴", count: 1, label: "กล่องไม้ใส่ดิน (WOOD PLANTER BOX) x1" },
+            ingredients: [
+              { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" },
+              { name: "DIRT", icon: "🟫", count: 1, label: "ดิน (DIRT)" }
+            ]
+          },
+          {
             id: "wood_chair",
             output: { name: "WOOD_CHAIR", icon: "🪑", count: 1, label: "เก้าอี้ไม้ (WOODEN CHAIR) x1" },
             ingredients: [
@@ -4147,6 +4504,13 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "LOG", icon: "🪵", count: 1, label: "ท่อนไม้ (LOG)" },
               { name: "BIG_ROCK", icon: "🪨", count: 1, label: "หินใหญ่ (BIG ROCK)" }
+            ]
+          },
+          {
+            id: "iron_bucket",
+            output: { name: "IRON_BUCKET", icon: "🪣", count: 1, label: "ถังเหล็ก (IRON BUCKET) x1" },
+            ingredients: [
+              { name: "IRON_ORE", icon: "🟥", count: 1, label: "แร่เหล็ก (IRON ORE)" }
             ]
           },
           {
@@ -4698,6 +5062,14 @@ function cancelFloorPlacement() {
             ]
           },
           {
+            id: "wood_planter_box",
+            output: { name: "WOOD_PLANTER_BOX", icon: "🪴", count: 1 },
+            ingredients: [
+              { name: "LOG", count: 1 },
+              { name: "DIRT", count: 1 }
+            ]
+          },
+          {
             id: "wood_chair",
             output: { name: "WOOD_CHAIR", icon: "🪑", count: 1 },
             ingredients: [
@@ -4853,6 +5225,13 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "LOG", count: 1 },
               { name: "BIG_ROCK", count: 1 }
+            ]
+          },
+          {
+            id: "iron_bucket",
+            output: { name: "IRON_BUCKET", icon: "🪣", count: 1 },
+            ingredients: [
+              { name: "IRON_ORE", count: 1 }
             ]
           },
           {
@@ -5918,6 +6297,8 @@ function cancelFloorPlacement() {
           itemData = { name: "WOOD_BED", icon: "🛏️", label: "WOOD_BED" };
         } else if (closestDemolishItem.type === "wood_table") {
           itemData = { name: "WOOD_TABLE", icon: "🪑", label: "WOOD_TABLE" };
+        } else if (closestDemolishItem.type === "wood_planter_box") {
+          itemData = { name: "WOOD_PLANTER_BOX", icon: "🪴", label: "WOOD_PLANTER_BOX" };
         } else if (closestDemolishItem.type === "wood_chair") {
           itemData = { name: "WOOD_CHAIR", icon: "🪑", label: "WOOD_CHAIR" };
         } else if (closestDemolishItem.type === "lantern") {

@@ -236,6 +236,22 @@ function startGameWithSlot(loadedData, devMode = false) {
           } else {
               p.isDynamic = false;
           }
+          if (p.type === "wood_planter_box" && p.position) {
+              p.isDynamic = false;
+              p.vel = null;
+              const curR = Math.hypot(p.position[0], p.position[1], p.position[2]);
+              if (curR > 0.001) {
+                  const th = Math.acos(Math.max(-1, Math.min(1, p.position[1] / curR)));
+                  const ph = Math.atan2(p.position[2], p.position[0]);
+                  const h = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(th, ph, window.globalSeed || 0) : 0;
+                  const expectedGroundR = RADIUS + h * HEIGHT_SCALE;
+                  if (curR > expectedGroundR + 0.12) {
+                      p.position[0] = (p.position[0] / curR) * expectedGroundR;
+                      p.position[1] = (p.position[1] / curR) * expectedGroundR;
+                      p.position[2] = (p.position[2] / curR) * expectedGroundR;
+                  }
+              }
+          }
           const type = p.type;
           if (type === "stone_floor" || type === "wood_floor" || type === "thin_wood_floor" || type === "wood_wall" || type === "wood_window" || type === "wood_door" || type === "campfire") {
               const rad = getSuppressRadius(type, p.size);

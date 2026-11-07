@@ -488,9 +488,15 @@ window.characterVertexShaderSource = `#version 300 es
           item = activeItem;
         }
 
+        if (!item && window.devBucketGizmoEnabled) {
+          return { name: "WATER_BUCKET", isDevPreview: true };
+        }
         if (!item) return null;
 
         const itemName = item.name || item.label || "";
+        if (window.devBucketGizmoEnabled && itemName !== "IRON_BUCKET" && itemName !== "iron_bucket" && itemName !== "WATER_BUCKET" && itemName !== "water_bucket") {
+          return { name: "WATER_BUCKET", isDevPreview: true };
+        }
 
         // PRE_PLACE and NONE category items must NEVER be held in hand
         const isPlaceable = (typeof isPlaceableItem === "function") ? isPlaceableItem(itemName) : (window.isPlaceableItem ? window.isPlaceableItem(itemName) : false);
@@ -515,7 +521,12 @@ window.characterVertexShaderSource = `#version 300 es
         }
 
         // Specific whitelist for holdable tools/weapons
-        const holdableNames = ["AXE", "PICKAXE", "SHOVEL", "BOW", "WOODEN_ARM_CANNON", "ARM_CANNON", "BRANCH", "branch", "FRIED_BUG", "GLOW_BATTERY", "DRAGON_FRUIT", "dragon_fruit"];
+        const holdableNames = [
+          "AXE", "PICKAXE", "SHOVEL", "IRON_BUCKET", "WATER_BUCKET", "BOW",
+          "WOODEN_ARM_CANNON", "ARM_CANNON", "BRANCH", "branch", "FRIED_BUG",
+          "GLOW_BATTERY", "DRAGON_FRUIT", "dragon_fruit",
+          "COTTON_PLANT", "cotton_plant", "COTTON", "cotton"
+        ];
         if (holdableNames.includes(itemName)) {
           return item;
         }
@@ -576,9 +587,16 @@ window.characterVertexShaderSource = `#version 300 es
         if (typeof playerHungerTimer === "undefined") playerHungerTimer = 0.0;
         if (typeof playerStarvationTimer === "undefined") playerStarvationTimer = 0.0;
 
-        // 1 จุดใช้เวลา 2 นาที (120 วินาที) ในการลดลง
+        // ตรวจสอบว่าผู้เล่นอยู่ใต้น้ำหรือไม่ (เมื่ออยู่ใต้น้ำ ค่าความหิวจะลดเร็วขึ้น 3 เท่า)
+        const isPlayerUnderwater =
+          (typeof isDivingMode !== "undefined" && isDivingMode) ||
+          (typeof playerDiveDepth === "number" && playerDiveDepth > 0.005) ||
+          (typeof currentSwimFactor === "number" && currentSwimFactor > 0.25);
+        const hungerDrainMultiplier = isPlayerUnderwater ? 3.0 : 1.0;
+
+        // ปกติ 1 จุดใช้เวลา 2 นาที (120 วินาที) แต่เมื่ออยู่ใต้น้ำจะลดเร็วขึ้น 3 เท่า (40 วินาทีต่อ 1 จุด)
         if (playerHunger > 0) {
-          playerHungerTimer += dt;
+          playerHungerTimer += dt * hungerDrainMultiplier;
           if (playerHungerTimer >= 120.0) {
             playerHungerTimer -= 120.0;
             playerHunger = Math.max(0, playerHunger - 1);
@@ -590,7 +608,11 @@ window.characterVertexShaderSource = `#version 300 es
               }
             } else {
               if (typeof showNotice === "function") {
-                showNotice(`🍗 ค่าความหิวลดลงเหลือ ${playerHunger}/${playerMaxHunger} จุด`);
+                if (isPlayerUnderwater) {
+                  showNotice(`🌊 อยู่ใต้น้ำทำให้หิวเร็วขึ้น! ค่าความหิวลดลงเหลือ ${playerHunger}/${playerMaxHunger} จุด`);
+                } else {
+                  showNotice(`🍗 ค่าความหิวลดลงเหลือ ${playerHunger}/${playerMaxHunger} จุด`);
+                }
               }
             }
           }
@@ -1520,6 +1542,10 @@ window.characterVertexShaderSource = `#version 300 es
       let natureSway = 1.0;
       let waterPlantSway = 1.0;
       let showHitboxes = false;
+      let showPlanetWireframe = false;
+      if (typeof window !== "undefined") {
+        window.showPlanetWireframe = showPlanetWireframe;
+      }
       let frustumCullingEnabled = true;
       let maxColliderDistance = 20.0;
       let actionReachDistance = 0.15; // Auto-scales with playerScale * 1.5
@@ -4030,7 +4056,11 @@ window.characterVertexShaderSource = `#version 300 es
         const inWater = !isClone && typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.05;
         const isAirborne = !isClone && !inWater && !isRiding && typeof jumpBlend !== "undefined" && jumpBlend > 0.15;
 
-        const dt = 1.0 / 60.0;
+        const nowPerf = performance.now() * 0.001;
+        if (typeof window._charGlbLastPerfTime !== "number") window._charGlbLastPerfTime = nowPerf;
+        const rawDt = nowPerf - window._charGlbLastPerfTime;
+        if (!isClone && rawDt > 0.0001) window._charGlbLastPerfTime = nowPerf;
+        const dt = (!isClone && rawDt > 0.0001) ? Math.min(rawDt, 0.1) : (1.0 / 60.0);
 
         // Track Airborne / Jump animation playback timeline (takeoff @ 1.35s -> peak spread @ 1.85s -> fall @ 2.30s -> land @ 2.65s)
         if (typeof window.charJumpAnimTime === "undefined") window.charJumpAnimTime = 1.35;
@@ -4171,6 +4201,7 @@ window.characterVertexShaderSource = `#version 300 es
             if (typeof window.charLastAnimName === "undefined") window.charLastAnimName = lowerAnimName;
             if (window.charLastAnimName !== lowerAnimName) {
               window.charSwimIdleTime = 0;
+              window.charIdleCrossfade = 1.0;
               window.charLastAnimName = lowerAnimName;
             }
             
@@ -4178,7 +4209,13 @@ window.characterVertexShaderSource = `#version 300 es
             const deltaT = now - window.charSwimIdleLastUpdate;
             window.charSwimIdleLastUpdate = now;
             
-            window.charSwimIdleTime = (window.charSwimIdleTime + Math.min(deltaT, 0.1)) % idleDur;
+            const nextSwimIdle = window.charSwimIdleTime + Math.min(deltaT, 0.1);
+            if (nextSwimIdle >= idleDur) {
+              window.charIdleCrossfade = 0.0;
+              window.charSwimIdleTime = nextSwimIdle % idleDur;
+            } else {
+              window.charSwimIdleTime = nextSwimIdle;
+            }
             lowerAnimTime = window.charSwimIdleTime;
           } else if (lowerAnimName === "Swim_Forward") {
             // Forward swim stroke speed
@@ -4201,6 +4238,7 @@ window.characterVertexShaderSource = `#version 300 es
             if (typeof window.charLastAnimName === "undefined") window.charLastAnimName = lowerAnimName;
             if (window.charLastAnimName !== lowerAnimName) {
               window.charIdleTime = 0;
+              window.charIdleCrossfade = 1.0;
               window.charLastAnimName = lowerAnimName;
             }
             
@@ -4208,7 +4246,13 @@ window.characterVertexShaderSource = `#version 300 es
             const deltaT = now - window.charIdleLastUpdate;
             window.charIdleLastUpdate = now;
             
-            window.charIdleTime = (window.charIdleTime + Math.min(deltaT, 0.1)) % idleDur;
+            const nextIdle = window.charIdleTime + Math.min(deltaT, 0.1);
+            if (nextIdle >= idleDur) {
+              window.charIdleCrossfade = 0.0;
+              window.charIdleTime = nextIdle % idleDur;
+            } else {
+              window.charIdleTime = nextIdle;
+            }
             lowerAnimTime = window.charIdleTime;
           } else {
             lowerAnimTime = ((phase / (Math.PI * 2)) * lowerAnim.duration) % lowerAnim.duration;
@@ -4282,12 +4326,14 @@ window.characterVertexShaderSource = `#version 300 es
           const hipsBlend = (upperAnimName === "Jump_with_Arms_Open") ? 0.0 : (isMovingActive ? 0.0 : 0.35);
 
           if (!isClone && typeof window.charCrossfadeFactor !== "undefined" && window.charCrossfadeFactor < 1.0 && window.charPrevAnimName) {
+            const cf = Math.max(0.0, Math.min(1.0, window.charCrossfadeFactor));
+            const smoothCf = cf * cf * (3.0 - 2.0 * cf);
             skinned = model.getSkinnedMeshMixed({
               lowerAnim1: window.charPrevAnimName,
               lowerTime1: window.charPrevAnimTime,
               lowerAnim2: lowerAnimName,
               lowerTime2: lowerAnimTime,
-              lowerBlend: window.charCrossfadeFactor,
+              lowerBlend: smoothCf,
               upperAnim: upperAnimName,
               upperTime: upperAnimTime,
               upperWeight: window.chibiUpperWeight,
@@ -4296,6 +4342,26 @@ window.characterVertexShaderSource = `#version 300 es
             });
             window.charCrossfadeFactor += dt / 0.15;
             window.charPrevAnimTime += dt;
+          } else if (!isClone && (lowerAnimName === "01a090e9-3d6d-7643-a07b-75e0e18cdc29" || lowerAnimName === "01a090f9-e47a-7144-abc9-bc9fcc7af00e" || lowerAnimName === "Swim_Idle") && typeof window.charIdleCrossfade === "number" && window.charIdleCrossfade < 1.0) {
+            let idleDur = lowerAnim.duration;
+            if (lowerAnimName === "01a090e9-3d6d-7643-a07b-75e0e18cdc29") idleDur = Math.min(2.98, lowerAnim.duration);
+            if (lowerAnimName === "01a090f9-e47a-7144-abc9-bc9fcc7af00e") idleDur = Math.min(1.10, lowerAnim.duration);
+            const endPoseTime = Math.max(0.0, idleDur - 0.001);
+            const f = Math.max(0.0, Math.min(1.0, window.charIdleCrossfade));
+            const smoothF = f * f * (3.0 - 2.0 * f);
+            skinned = model.getSkinnedMeshMixed({
+              lowerAnim1: lowerAnimName,
+              lowerTime1: endPoseTime,
+              lowerAnim2: lowerAnimName,
+              lowerTime2: lowerAnimTime,
+              lowerBlend: smoothF,
+              upperAnim: upperAnimName,
+              upperTime: upperAnimTime,
+              upperWeight: window.chibiUpperWeight,
+              hipsBlend: hipsBlend,
+              loop: true
+            });
+            window.charIdleCrossfade += dt / 0.25;
           } else {
             skinned = model.getSkinnedMeshLayered(
               lowerAnimName,
@@ -4309,23 +4375,30 @@ window.characterVertexShaderSource = `#version 300 es
           }
         } 
         else if (!isClone && typeof window.charCrossfadeFactor !== "undefined" && window.charCrossfadeFactor < 1.0) {
-          skinned = model.getSkinnedMeshBlended(window.charPrevAnimName, window.charPrevAnimTime, lowerAnimName, lowerAnimTime, window.charCrossfadeFactor, true);
+          const cf = Math.max(0.0, Math.min(1.0, window.charCrossfadeFactor));
+          const smoothCf = cf * cf * (3.0 - 2.0 * cf);
+          skinned = model.getSkinnedMeshBlended(window.charPrevAnimName, window.charPrevAnimTime, lowerAnimName, lowerAnimTime, smoothCf, true);
           window.charCrossfadeFactor += dt / 0.15; // 150ms crossfade
           window.charPrevAnimTime += dt;
         } 
         else if (!isClone && isDevOverride && typeof window.devLoopCrossfadeFactor !== "undefined" && window.devLoopCrossfadeFactor < 1.0) {
           // Trim loop crossfading (blend End -> Start)
-          const prevTime = window.devAnimEndTime; // hold at end pose
-          skinned = model.getSkinnedMeshBlended(lowerAnimName, prevTime, lowerAnimName, lowerAnimTime, window.devLoopCrossfadeFactor, true);
-          window.devLoopCrossfadeFactor += dt / 0.2; // 200ms crossfade
+          const prevTime = Math.max(0.0, window.devAnimEndTime - 0.001); // hold at exact end pose without modulo wrap
+          const f = Math.max(0.0, Math.min(1.0, window.devLoopCrossfadeFactor));
+          const smoothF = f * f * (3.0 - 2.0 * f);
+          skinned = model.getSkinnedMeshBlended(lowerAnimName, prevTime, lowerAnimName, lowerAnimTime, smoothF, true);
+          window.devLoopCrossfadeFactor += dt / 0.25; // 250ms smooth crossfade
         } 
-        else if (!isClone && (lowerAnimName === "01a090e9-3d6d-7643-a07b-75e0e18cdc29" || lowerAnimName === "01a090f9-e47a-7144-abc9-bc9fcc7af00e" || lowerAnimName === "Swim_Idle") && typeof window.charIdleCrossfade !== "undefined" && window.charIdleCrossfade < 1.0) {
+        else if (!isClone && (lowerAnimName === "01a090e9-3d6d-7643-a07b-75e0e18cdc29" || lowerAnimName === "01a090f9-e47a-7144-abc9-bc9fcc7af00e" || lowerAnimName === "Swim_Idle") && typeof window.charIdleCrossfade === "number" && window.charIdleCrossfade < 1.0) {
           let idleDur = lowerAnim.duration;
           if (lowerAnimName === "01a090e9-3d6d-7643-a07b-75e0e18cdc29") idleDur = Math.min(2.98, lowerAnim.duration);
           if (lowerAnimName === "01a090f9-e47a-7144-abc9-bc9fcc7af00e") idleDur = Math.min(1.10, lowerAnim.duration);
           if (lowerAnimName === "Swim_Idle") idleDur = lowerAnim.duration;
-          skinned = model.getSkinnedMeshBlended(lowerAnimName, idleDur, lowerAnimName, lowerAnimTime, window.charIdleCrossfade, true);
-          window.charIdleCrossfade += dt / 0.2; // 200ms crossfade
+          const endPoseTime = Math.max(0.0, idleDur - 0.001);
+          const f = Math.max(0.0, Math.min(1.0, window.charIdleCrossfade));
+          const smoothF = f * f * (3.0 - 2.0 * f);
+          skinned = model.getSkinnedMeshBlended(lowerAnimName, endPoseTime, lowerAnimName, lowerAnimTime, smoothF, true);
+          window.charIdleCrossfade += dt / 0.25; // 250ms smooth crossfade
         }
         else {
           skinned = model.getSkinnedMesh(lowerAnimName, lowerAnimTime, true);
@@ -4532,6 +4605,338 @@ window.characterVertexShaderSource = `#version 300 es
         }
       }
 
+      function buildHeldIronBucketMesh(handPos, itemScale, heldItem, rawV, rawC, rawI) {
+        if (typeof window.buildIronBucketModel !== "function") return;
+        if (!window.devBucketOffset) {
+          window.devBucketOffset = { x: 0.016, y: -0.031, z: -0.007, scale: 1.0, rotX: 0.0, rotY: -90.0, rotZ: 0.0 };
+        }
+        const devOff = window.devBucketOffset;
+        const customScale = (typeof devOff.scale === "number" && !isNaN(devOff.scale)) ? devOff.scale : 1.0;
+        const bScale = 0.22 * itemScale * customScale;
+        const scoopTimer = (typeof window.bucketScoopTimer === "number" && window.bucketScoopTimer > 0) ? window.bucketScoopTimer : 0;
+        const waterTimer = (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0) ? window.bucketWaterTimer : 0;
+
+        let tiltAngle = ((typeof devOff.rotX === "number" ? devOff.rotX : 0.0) * Math.PI) / 180.0;
+        let offsetY = 0.0;
+        let offsetZ = 0.0;
+        const t = 1.0 - Math.max(0.0, Math.min(1.0, scoopTimer));
+        const tw = 1.0 - Math.max(0.0, Math.min(1.0, waterTimer));
+
+        if (scoopTimer > 0) {
+          if (t < 0.40) {
+            // Stage 1: Dip & tilt bucket mouth forward/down into the water
+            const s = Math.sin((t / 0.40) * (Math.PI * 0.5));
+            tiltAngle += s * 1.75;
+            offsetY = -0.22 * itemScale * s;
+            offsetZ = 0.25 * itemScale * s;
+          } else if (t < 0.75) {
+            // Stage 2: Drag through water & rotate upright with water inside
+            const u = (t - 0.40) / 0.35;
+            const su = u * u * (3.0 - 2.0 * u);
+            tiltAngle += 1.75 * (1.0 - su) - 0.22 * su;
+            offsetY = -0.22 * itemScale * (1.0 - su) + 0.04 * itemScale * su;
+            offsetZ = 0.25 * itemScale * (1.0 - su) + 0.10 * itemScale * su;
+          } else {
+            // Stage 3: Settle smoothly back to hand position
+            const v = (t - 0.75) / 0.25;
+            const sv = v * v * (3.0 - 2.0 * v);
+            tiltAngle += -0.22 * (1.0 - sv);
+            offsetY = 0.04 * itemScale * (1.0 - sv);
+            offsetZ = 0.10 * itemScale * (1.0 - sv);
+          }
+        } else if (waterTimer > 0 && (!window.activeWateringAnimPlanter || !window.activeWateringAnimPlanter.position)) {
+          if (tw < 0.35) {
+            const s = Math.sin((tw / 0.35) * (Math.PI * 0.5));
+            tiltAngle += s * 1.85;
+            offsetY = 0.06 * itemScale * s;
+            offsetZ = 0.26 * itemScale * s;
+          } else if (tw < 0.72) {
+            const u = (tw - 0.35) / 0.37;
+            const su = u * u * (3.0 - 2.0 * u);
+            tiltAngle += 1.85 * (1.0 - su * 0.12) + Math.sin(u * Math.PI * 2) * 0.08;
+            offsetY = (0.06 * (1.0 - su) - 0.04 * su) * itemScale;
+            offsetZ = (0.26 * (1.0 - su * 0.08)) * itemScale;
+          } else {
+            const v = (tw - 0.72) / 0.28;
+            const sv = v * v * (3.0 - 2.0 * v);
+            tiltAngle += (1.85 * 0.88) * (1.0 - sv);
+            offsetY = -0.04 * itemScale * (1.0 - sv);
+            offsetZ = (0.26 * 0.92) * itemScale * (1.0 - sv);
+          }
+        }
+
+        const rotXDeg = (typeof devOff.rotX === "number" ? devOff.rotX : 0.0);
+        const rotYDeg = (typeof devOff.rotY === "number" ? devOff.rotY : 0.0);
+        const rotZDeg = (typeof devOff.rotZ === "number" ? devOff.rotZ : 0.0);
+
+        const radX = (rotXDeg * Math.PI) / 180.0 + tiltAngle;
+        const radY = (rotYDeg * Math.PI) / 180.0;
+        const radZ = (rotZDeg * Math.PI) / 180.0;
+
+        const cX = Math.cos(radX), sX = Math.sin(radX);
+        const cY = Math.cos(radY), sY = Math.sin(radY);
+        const cZ = Math.cos(radZ), sZ = Math.sin(radZ);
+
+        // 3D Rotation function (Euler Z -> Y -> X)
+        const rotateVec3D = (v) => {
+          let x = v[0], y = v[1], z = v[2];
+          // 1. Roll around Z
+          let x1 = x * cZ - y * sZ;
+          let y1 = x * sZ + y * cZ;
+          let z1 = z;
+          // 2. Yaw around Y
+          let x2 = x1 * cY + z1 * sY;
+          let y2 = y1;
+          let z2 = -x1 * sY + z1 * cY;
+          // 3. Pitch around X
+          let x3 = x2;
+          let y3 = y2 * cX - z2 * sX;
+          let z3 = y2 * sX + z2 * cX;
+          return [x3, y3, z3];
+        };
+
+        let rVec = rotateVec3D([1, 0, 0]);
+        let nVec = rotateVec3D([0, 1, 0]);
+        let fVec = rotateVec3D([0, 0, 1]);
+
+        const dx = (typeof devOff.x === "number" ? devOff.x : 0.03) * itemScale;
+        const dy = (typeof devOff.y === "number" ? devOff.y : 0.00) * itemScale;
+        const dz = (typeof devOff.z === "number" ? devOff.z : 0.04) * itemScale;
+
+        let gripPos = [
+          handPos[0] + dx,
+          handPos[1] + dy + offsetY,
+          handPos[2] + dz + offsetZ
+        ];
+        // Pivot bucket around its top handle grip (ny = 0.55 * bScale)
+        let centerPos = [
+          gripPos[0] - nVec[0] * 0.55 * bScale,
+          gripPos[1] - nVec[1] * 0.55 * bScale,
+          gripPos[2] - nVec[2] * 0.55 * bScale
+        ];
+
+        let snappedSoilLocal = null;
+        let snappedUpLocal = null;
+
+        // Temporary Snap to Planter Box during watering animation so water pours directly onto the box & sprout from above
+        if (waterTimer > 0 && window.activeWateringAnimPlanter && window.activeWateringAnimPlanter.position && typeof getCharacterMatrix === "function") {
+          const planter = window.activeWateringAnimPlanter;
+          const pP = planter.position;
+          const pN = planter.normal || [0, 1, 0];
+          const pF = planter.F || [0, 0, 1];
+          const pS = planter.customScale || 0.46;
+
+          const charMat = getCharacterMatrix();
+          const cScale = Math.hypot(charMat[0], charMat[1], charMat[2]) || 0.1;
+          const cR = [charMat[0] / cScale, charMat[1] / cScale, charMat[2] / cScale];
+          const cUp = [charMat[4] / cScale, charMat[5] / cScale, charMat[6] / cScale];
+          const cFwd = [charMat[8] / cScale, charMat[9] / cScale, charMat[10] / cScale];
+          const charPos = [charMat[12], charMat[13], charMat[14]];
+
+          const worldToLocal = (wPos) => {
+            const dxW = wPos[0] - charPos[0];
+            const dyW = wPos[1] - charPos[1];
+            const dzW = wPos[2] - charPos[2];
+            return [
+              (dxW * cR[0] + dyW * cR[1] + dzW * cR[2]) / cScale,
+              (dxW * cUp[0] + dyW * cUp[1] + dzW * cUp[2]) / cScale,
+              (dxW * cFwd[0] + dyW * cFwd[1] + dzW * cFwd[2]) / cScale
+            ];
+          };
+          const worldDirToLocal = (wDir) => [
+            wDir[0] * cR[0] + wDir[1] * cR[1] + wDir[2] * cR[2],
+            wDir[0] * cUp[0] + wDir[1] * cUp[1] + wDir[2] * cUp[2],
+            wDir[0] * cFwd[0] + wDir[1] * cFwd[1] + wDir[2] * cFwd[2]
+          ];
+
+          // Horizontal direction from player to planter box center
+          const rawToBox = [pP[0] - charPos[0], pP[1] - charPos[1], pP[2] - charPos[2]];
+          const dotN = rawToBox[0] * pN[0] + rawToBox[1] * pN[1] + rawToBox[2] * pN[2];
+          const horizW = [rawToBox[0] - pN[0] * dotN, rawToBox[1] - pN[1] * dotN, rawToBox[2] - pN[2] * dotN];
+          const horizLen = Math.hypot(horizW[0], horizW[1], horizW[2]);
+          const pourDirW = horizLen > 0.001
+            ? [horizW[0] / horizLen, horizW[1] / horizLen, horizW[2] / horizLen]
+            : [pF[0], pF[1], pF[2]];
+
+          // Right-handed side axis: pN x pourDirW
+          let sideDirW = [
+            pN[1] * pourDirW[2] - pN[2] * pourDirW[1],
+            pN[2] * pourDirW[0] - pN[0] * pourDirW[2],
+            pN[0] * pourDirW[1] - pN[1] * pourDirW[0]
+          ];
+          const sideLen = Math.hypot(sideDirW[0], sideDirW[1], sideDirW[2]) || 1.0;
+          sideDirW = [sideDirW[0] / sideLen, sideDirW[1] / sideLen, sideDirW[2] / sideLen];
+
+          const upL = worldDirToLocal(pN);
+          const fwdL = worldDirToLocal(pourDirW);
+          const sideL = worldDirToLocal(sideDirW);
+          snappedUpLocal = upL;
+
+          // Pour tilt angle & vertical bob while snapped directly above the planter box
+          let pourTilt = 1.95; // ~112 degrees so bucket mouth points down into the planter box
+          let heightAboveBox = 0.24 * pS;
+          let backOffsetFromCenter = 0.045 * pS;
+          let snapBlend = 1.0;
+
+          if (tw < 0.20) {
+            const s = Math.sin((tw / 0.20) * (Math.PI * 0.5));
+            pourTilt = 0.75 + s * 1.20;
+            heightAboveBox = (0.26 - 0.02 * s) * pS;
+          } else if (tw <= 0.78) {
+            const u = (tw - 0.20) / 0.58;
+            pourTilt = 1.95 + Math.sin(u * Math.PI * 2.0) * 0.07;
+            heightAboveBox = (0.24 - Math.sin(u * Math.PI) * 0.012) * pS;
+          } else {
+            const v = (tw - 0.78) / 0.22;
+            const sv = v * v * (3.0 - 2.0 * v);
+            pourTilt = 1.95 * (1.0 - sv);
+            heightAboveBox = (0.24 + 0.03 * sv) * pS;
+            snapBlend = 1.0 - sv;
+          }
+
+          const cosP = Math.cos(pourTilt);
+          const sinP = Math.sin(pourTilt);
+
+          const snapRVec = [sideL[0], sideL[1], sideL[2]];
+          const snapNVec = [
+            upL[0] * cosP + fwdL[0] * sinP,
+            upL[1] * cosP + fwdL[1] * sinP,
+            upL[2] * cosP + fwdL[2] * sinP
+          ];
+          const snapFVec = [
+            -upL[0] * sinP + fwdL[0] * cosP,
+            -upL[1] * sinP + fwdL[1] * cosP,
+            -upL[2] * sinP + fwdL[2] * cosP
+          ];
+
+          const soilWorld = [
+            pP[0] + pN[0] * (0.095 * pS),
+            pP[1] + pN[1] * (0.095 * pS),
+            pP[2] + pN[2] * (0.095 * pS)
+          ];
+          snappedSoilLocal = worldToLocal(soilWorld);
+
+          const snapCenterWorld = [
+            pP[0] + pN[0] * heightAboveBox - pourDirW[0] * backOffsetFromCenter,
+            pP[1] + pN[1] * heightAboveBox - pourDirW[1] * backOffsetFromCenter,
+            pP[2] + pN[2] * heightAboveBox - pourDirW[2] * backOffsetFromCenter
+          ];
+          const snapCenterLocal = worldToLocal(snapCenterWorld);
+
+          centerPos = [
+            centerPos[0] * (1.0 - snapBlend) + snapCenterLocal[0] * snapBlend,
+            centerPos[1] * (1.0 - snapBlend) + snapCenterLocal[1] * snapBlend,
+            centerPos[2] * (1.0 - snapBlend) + snapCenterLocal[2] * snapBlend
+          ];
+          rVec = [
+            rVec[0] * (1.0 - snapBlend) + snapRVec[0] * snapBlend,
+            rVec[1] * (1.0 - snapBlend) + snapRVec[1] * snapBlend,
+            rVec[2] * (1.0 - snapBlend) + snapRVec[2] * snapBlend
+          ];
+          nVec = [
+            nVec[0] * (1.0 - snapBlend) + snapNVec[0] * snapBlend,
+            nVec[1] * (1.0 - snapBlend) + snapNVec[1] * snapBlend,
+            nVec[2] * (1.0 - snapBlend) + snapNVec[2] * snapBlend
+          ];
+          fVec = [
+            fVec[0] * (1.0 - snapBlend) + snapFVec[0] * snapBlend,
+            fVec[1] * (1.0 - snapBlend) + snapFVec[1] * snapBlend,
+            fVec[2] * (1.0 - snapBlend) + snapFVec[2] * snapBlend
+          ];
+          const rL = Math.hypot(rVec[0], rVec[1], rVec[2]) || 1.0;
+          const nL = Math.hypot(nVec[0], nVec[1], nVec[2]) || 1.0;
+          const fL = Math.hypot(fVec[0], fVec[1], fVec[2]) || 1.0;
+          rVec = [rVec[0] / rL, rVec[1] / rL, rVec[2] / rL];
+          nVec = [nVec[0] / nL, nVec[1] / nL, nVec[2] / nL];
+          fVec = [fVec[0] / fL, fVec[1] / fL, fVec[2] / fL];
+
+          gripPos = [
+            centerPos[0] + nVec[0] * 0.55 * bScale,
+            centerPos[1] + nVec[1] * 0.55 * bScale,
+            centerPos[2] + nVec[2] * 0.55 * bScale
+          ];
+        }
+
+        window._lastBucketGripLocalPos = [gripPos[0], gripPos[1], gripPos[2]];
+        window._lastBucketCenterLocalPos = [centerPos[0], centerPos[1], centerPos[2]];
+        window._lastBucketItemScale = itemScale;
+
+        const isWaterBucketItem = !!(heldItem && (heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || heldItem.hasWater));
+        const showWater = (waterTimer > 0) ? (tw < 0.65) : (isWaterBucketItem && (scoopTimer <= 0 || t >= 0.35));
+
+        window.buildIronBucketModel(
+          bScale,
+          centerPos,
+          rVec,
+          nVec,
+          fVec,
+          rawV,
+          rawC,
+          rawI,
+          showWater
+        );
+
+        // Render pouring water stream directly from snapped bucket mouth down onto the planter box soil
+        if (waterTimer > 0 && tw >= 0.12 && tw <= 0.78 && typeof buildTaperedSegment === "function") {
+          const pourProgress = (tw - 0.12) / 0.66;
+          const mouthPos = [
+            centerPos[0] + nVec[0] * (0.24 * bScale),
+            centerPos[1] + nVec[1] * (0.24 * bScale),
+            centerPos[2] + nVec[2] * (0.24 * bScale)
+          ];
+          let streamEnd;
+          if (snappedSoilLocal) {
+            const reachSoil = Math.min(1.0, pourProgress * 4.0);
+            streamEnd = [
+              mouthPos[0] + (snappedSoilLocal[0] - mouthPos[0]) * reachSoil,
+              mouthPos[1] + (snappedSoilLocal[1] - mouthPos[1]) * reachSoil,
+              mouthPos[2] + (snappedSoilLocal[2] - mouthPos[2]) * reachSoil
+            ];
+          } else {
+            const streamLen = 0.28 * itemScale * Math.sin(pourProgress * Math.PI);
+            streamEnd = [
+              mouthPos[0] + nVec[0] * (0.10 * bScale),
+              mouthPos[1] - streamLen,
+              mouthPos[2] + 0.06 * itemScale
+            ];
+          }
+          buildTaperedSegment(
+            mouthPos,
+            streamEnd,
+            0.15 * bScale,
+            0.08 * bScale,
+            6,
+            [0.24, 0.72, 0.98],
+            rawV,
+            rawC,
+            rawI,
+            true
+          );
+
+          // Water splash ring on the planter box soil surface around the sprout
+          if (snappedSoilLocal && snappedUpLocal && pourProgress > 0.15) {
+            const splashWave = Math.sin(((pourProgress - 0.15) / 0.85) * Math.PI);
+            const splashTop = [
+              snappedSoilLocal[0] + snappedUpLocal[0] * (0.025 * bScale),
+              snappedSoilLocal[1] + snappedUpLocal[1] * (0.025 * bScale),
+              snappedSoilLocal[2] + snappedUpLocal[2] * (0.025 * bScale)
+            ];
+            buildTaperedSegment(
+              snappedSoilLocal,
+              splashTop,
+              0.24 * bScale * splashWave,
+              0.14 * bScale * splashWave,
+              8,
+              [0.36, 0.80, 1.0],
+              rawV,
+              rawC,
+              rawI,
+              true
+            );
+          }
+        }
+      }
+
       function updateChibiEquipMesh() {
         const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
         if (!activeGl) return;
@@ -4596,6 +5001,12 @@ window.characterVertexShaderSource = `#version 300 es
 
             buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale);
           }
+        } else if ((heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.buildIronBucketModel === "function") {
+          const rH = model.nodes.find(n => n && n.name === "RightHand");
+          const pHand = (rH && rH.matrix)
+            ? [ rH.matrix[12] * scale, rH.matrix[13] * scale + yOffset, rH.matrix[14] * scale ]
+            : [ 0.15 * itemScale, -0.09 + yOffset, 0.02 * itemScale ];
+          buildHeldIronBucketMesh(pHand, itemScale, heldItem, rawV, rawC, rawI);
         }
 
         if (rawI.length > 0) {
@@ -4624,6 +5035,7 @@ window.characterVertexShaderSource = `#version 300 es
           equipIndicesLength = 0;
         }
       }
+      window.updateChibiEquipMesh = updateChibiEquipMesh;
 
       function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0, cloneSwimFactor = 0.0, cloneSwimMove = 0.0) {
         const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
@@ -6556,6 +6968,31 @@ window.characterVertexShaderSource = `#version 300 es
                     rawC,
                     rawI
                 );
+            } else if ((heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.buildIronBucketModel === "function") {
+                const wHandleP1 = transformPt(axeHandleP1Rot);
+                const wHandleP2 = transformPt(axeHandleP2Rot);
+                const handPos = [
+                    (wHandleP1[0] + wHandleP2[0]) * 0.5,
+                    (wHandleP1[1] + wHandleP2[1]) * 0.5,
+                    (wHandleP1[2] + wHandleP2[2]) * 0.5
+                ];
+                buildHeldIronBucketMesh(handPos, itemScale, heldItem, rawV, rawC, rawI);
+            } else if ((heldItem.name === "COTTON_PLANT" || heldItem.name === "cotton_plant" || heldItem.name === "COTTON" || heldItem.name === "cotton") && typeof window.buildCottonPlant === "function") {
+                const wHandleP1 = transformPt(axeHandleP1Rot);
+                const wHandleP2 = transformPt(axeHandleP2Rot);
+                const handPos = [
+                    (wHandleP1[0] + wHandleP2[0]) * 0.5,
+                    (wHandleP1[1] + wHandleP2[1]) * 0.5,
+                    (wHandleP1[2] + wHandleP2[2]) * 0.5
+                ];
+                window.buildCottonPlant(
+                    handPos[0], handPos[1], handPos[2],
+                    0, 1, 0,
+                    [1, 0, 0], [0, 0, 1], [0, 1, 0],
+                    1234,
+                    rawV, rawC, rawI,
+                    false
+                );
             }
             
             if (!isClone) {
@@ -7285,6 +7722,13 @@ window.characterVertexShaderSource = `#version 300 es
             if (npcPrompt) npcPrompt.style.display = "none";
             activeInteractNPC = null;
           } else {
+            // Check Planter System (Planting snap target or Mature harvest target)
+            if (window.PlanterSystem && typeof window.PlanterSystem.handleInteract === "function") {
+              if (window.PlanterSystem.handleInteract()) {
+                return;
+              }
+            }
+
             // 1. Action Reach check for Axe and Pickaxe
             let bestLineItemT = Infinity;
             let bestLineItem = null;
@@ -7310,7 +7754,7 @@ window.characterVertexShaderSource = `#version 300 es
               // 2. Action Reach check for other collectibles
               for (let item of collectibles) {
                 if (!item.active) continue;
-                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
                 
                 const checkDist = (item.type === "cotton_plant") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);

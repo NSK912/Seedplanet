@@ -183,7 +183,7 @@
               worldKey: c.worldKey,
               storage: c.storage
             })),
-            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isDynamic && !c.isWorldGenerated && !c.isProceduralHouse && !c.isHouse && !c.isRuin && (c.isPlayerPlaced || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "folding_ladder" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_roof" || c.type === "wood_chest" || c.type === "wood_bed" || c.type === "wood_table" || c.type === "wood_chair" || c.type === "lantern" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "obsidian_pad_warp_item" || c.type === "obsidian_compass_pad_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine" || c.type === "boat_wing" || (typeof c.type === "string" && c.type.startsWith("robot_")))),
+            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isWorldGenerated && !c.isProceduralHouse && !c.isHouse && !c.isRuin && (c.isPlayerPlaced || c.type === "wood_planter_box" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "folding_ladder" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_roof" || c.type === "wood_chest" || c.type === "wood_bed" || c.type === "wood_table" || c.type === "wood_chair" || c.type === "lantern" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "obsidian_pad_warp_item" || c.type === "obsidian_compass_pad_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine" || c.type === "boat_wing" || (typeof c.type === "string" && c.type.startsWith("robot_")))),
             dynamicCollectibles: collectibles.filter(c => c.isDynamic && c.active && !c.isPreview),
             amphibiansState: amphibians.map((a) => ({
               theta: a.theta,
@@ -972,6 +972,22 @@
                   p.isDynamic = true;
               } else {
                   p.isDynamic = false;
+              }
+              if (p.type === "wood_planter_box" && p.position) {
+                  p.isDynamic = false;
+                  p.vel = null;
+                  const curR = Math.hypot(p.position[0], p.position[1], p.position[2]);
+                  if (curR > 0.001) {
+                      const th = Math.acos(Math.max(-1, Math.min(1, p.position[1] / curR)));
+                      const ph = Math.atan2(p.position[2], p.position[0]);
+                      const h = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(th, ph, window.globalSeed || 0) : 0;
+                      const expectedGroundR = RADIUS + h * HEIGHT_SCALE;
+                      if (curR > expectedGroundR + 0.12) {
+                          p.position[0] = (p.position[0] / curR) * expectedGroundR;
+                          p.position[1] = (p.position[1] / curR) * expectedGroundR;
+                          p.position[2] = (p.position[2] / curR) * expectedGroundR;
+                      }
+                  }
               }
               const type = p.type;
               if (type === "stone_floor" || type === "wood_floor" || type === "thin_wood_floor" || type === "wood_wall" || type === "wood_window" || type === "wood_door" || type === "campfire") {

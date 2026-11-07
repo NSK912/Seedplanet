@@ -172,13 +172,17 @@
       item_WOOD_CHEST: "กล่องไม้",
       item_WOOD_BED: "เตียงไม้พร้อมฟูก",
       item_WOOD_TABLE: "โต๊ะไม้",
+      item_WOOD_PLANTER_BOX: "กล่องไม้ใส่ดิน",
       item_WOOD_CHAIR: "เก้าอี้ไม้",
       item_LANTERN: "ตะเกียง",
       item_MEGANEURA: "แมลงปอยักษ์",
       item_ISOPOD: "ไอโซพอด",
       item_FRIED_BUG: "แมลงทอด",
       item_DRAGON_FRUIT: "แก้วมังกร",
+      item_COTTON_PLANT: "ต้นฝ้าย (นุ่น)",
       item_SHOVEL: "พลั่ว",
+      item_IRON_BUCKET: "ถังเหล็ก",
+      item_WATER_BUCKET: "ถังใส่น้ำ",
       item_DIRT: "ดิน",
       item_ROBOT_STAND: "แท่นประกอบหุ่นยนต์",
       item_ROBOT_COCKPIT: "ห้องคนขับหุ่นยนต์",
@@ -235,6 +239,7 @@
       input_keyboard: "โหมดอินพุต: คีย์บอร์ด/เมาส์ (Keyboard/Mouse)",
       input_auto: "โหมดอินพุต: อัตโนมัติ (Auto)",
       toggle_hitboxes: "แสดงโครงสร้างการชน (Show Hitboxes)",
+      toggle_planet_wireframe: "แสดงเส้นโครงสร้างดาว (Planet Wireframe)",
       frustum_culling: "Frustum Culling (คัดออกวัตถุนอกจอ)",
       cave_water: "น้ำในถ้ำ (Cave Water)",
       action_reach: "แสดงวงระยะทำการ",
@@ -252,7 +257,31 @@
       cook_success: "ปรุงสำเร็จ",
       summon_success: "เสกสำเร็จ: ได้รับ",
       inventory_full: "กระเป๋าเต็มแล้ว!",
-      chest_full: "กล่องเต็มแล้ว!"
+      chest_full: "กล่องเต็มแล้ว!",
+
+      // Planter Box System & 3D UI
+      planter_empty_title: "กล่องไม้ใส่ดิน",
+      planter_timer_empty: "ว่างเปล่า",
+      planter_status_empty: "🌱 ใช้พืชหรือกิ่งไม้เพื่อปลูก",
+      planter_timer_preview: "พร้อมปลูก",
+      planter_status_preview: "🌱 กด [{key}] หรือคลิกซ้ายเพื่อปลูก",
+      planter_timer_unwatered: "รอการรดน้ำ",
+      planter_status_unwatered: "💧 ใช้ถังใส่น้ำรดเพื่อเริ่มโต",
+      planter_timer_mature: "โตเต็มที่!",
+      planter_status_growing: "กำลังเติบโต ({filled}/5)",
+      planter_status_harvest_cotton: "✨ [{key}] เก็บต้นฝ้าย",
+      planter_status_mature_tree: "✨ โตเต็มที่แล้ว (ใช้ขวานตัด)",
+      planter_prompt_plant: "[{key} / คลิกซ้าย] ปลูก{plant}",
+      planter_prompt_water: "[{key} / คลิกซ้าย] รดน้ำ{plant} 🪣💧 (เริ่มนับเวลาเติบโต 5 นาที)",
+      planter_prompt_need_water: "💧 ต้องใช้ถังใส่น้ำ (Water Bucket) มารดน้ำ{plant}เพื่อเริ่มนับเวลาเติบโต",
+      planter_prompt_harvest_cotton: "[{key}] เก็บต้นฝ้าย",
+      planter_prompt_chop_tree: "[คลิกซ้าย] ตัดต้นไม้ 🪓",
+      planter_notice_planted: "🌱 ปลูก {plant} ในกล่องดินแล้ว! กรุณาใช้ถังใส่น้ำมารดน้ำเพื่อเริ่มนับเวลาเติบโต",
+      planter_notice_watered: "💧 รดน้ำ{plant}สำเร็จ! เริ่มนับเวลาเติบโต 5 นาที (ได้รับถังเปล่าคืน)",
+      planter_notice_already_watered: "💧 ต้นไม้นี้ได้รับการรดน้ำและกำลังเติบโตอยู่แล้ว!",
+      planter_notice_out_of_reach: "🚫 อยู่นอกระยะประชิด กรุณาเดินเข้าไปชิดกล่องดิน",
+      planter_notice_cotton_collected: "☁️ เก็บต้นฝ้ายแล้ว!",
+      planter_notice_chop_with_axe: "🪓 ใช้ขวาน (Axe) ตัดต้นไม้เพื่อเก็บเกี่ยวไม้และผลผลิต"
     },
     en: {
       // General & Common
@@ -424,13 +453,17 @@
       item_WOOD_CHEST: "Wooden Chest",
       item_WOOD_BED: "Wooden Bed with Mattress",
       item_WOOD_TABLE: "Wooden Table",
+      item_WOOD_PLANTER_BOX: "Wooden Planter Box",
       item_WOOD_CHAIR: "Wooden Chair",
       item_LANTERN: "Lantern",
       item_MEGANEURA: "Meganeura",
       item_ISOPOD: "Giant Isopod",
       item_FRIED_BUG: "Fried Bug",
       item_DRAGON_FRUIT: "Dragon Fruit",
+      item_COTTON_PLANT: "Cotton Plant",
       item_SHOVEL: "Shovel",
+      item_IRON_BUCKET: "Iron Bucket",
+      item_WATER_BUCKET: "Water Bucket",
       item_DIRT: "Dirt",
       item_ROBOT_STAND: "Robot Stand",
       item_ROBOT_COCKPIT: "Robot Cockpit",
@@ -487,6 +520,7 @@
       input_keyboard: "Input Mode: Keyboard/Mouse",
       input_auto: "Input Mode: Auto",
       toggle_hitboxes: "Show Hitboxes",
+      toggle_planet_wireframe: "Show Planet Wireframe",
       frustum_culling: "Frustum Culling",
       cave_water: "Cave Water",
       action_reach: "Show Action Reach",
@@ -504,7 +538,31 @@
       cook_success: "Cooked Successfully",
       summon_success: "Spawned: Received",
       inventory_full: "Inventory Full!",
-      chest_full: "Chest Full!"
+      chest_full: "Chest Full!",
+
+      // Planter Box System & 3D UI
+      planter_empty_title: "Planter Box",
+      planter_timer_empty: "Empty",
+      planter_status_empty: "🌱 Use plant or branch to grow",
+      planter_timer_preview: "Ready",
+      planter_status_preview: "🌱 [{key} / LMB] Plant seed",
+      planter_timer_unwatered: "Needs Water",
+      planter_status_unwatered: "💧 Water with bucket to grow",
+      planter_timer_mature: "Fully Grown!",
+      planter_status_growing: "Growing ({filled}/5)",
+      planter_status_harvest_cotton: "✨ [{key}] Harvest Cotton",
+      planter_status_mature_tree: "✨ Fully Grown (Chop with Axe)",
+      planter_prompt_plant: "[{key} / LMB] Plant {plant}",
+      planter_prompt_water: "[{key} / LMB] Water {plant} 🪣💧 (Start 5m growth)",
+      planter_prompt_need_water: "💧 Use a Water Bucket to water {plant} and start growing",
+      planter_prompt_harvest_cotton: "[{key}] Harvest Cotton Plant",
+      planter_prompt_chop_tree: "[LMB] Chop Tree 🪓",
+      planter_notice_planted: "🌱 Planted {plant}! Use a Water Bucket to water it and start growing.",
+      planter_notice_watered: "💧 Watered {plant}! 5-minute growth started (Empty bucket returned)",
+      planter_notice_already_watered: "💧 This plant is already watered and growing!",
+      planter_notice_out_of_reach: "🚫 Out of melee reach! Step closer to the planter box.",
+      planter_notice_cotton_collected: "☁️ Cotton plant collected!",
+      planter_notice_chop_with_axe: "🪓 Use an Axe to chop the tree and harvest wood & fruit"
     },
 
     ja: {
@@ -677,13 +735,17 @@
       item_WOOD_CHEST: "木製チェスト",
       item_WOOD_BED: "マットレス付き木製ベッド",
       item_WOOD_TABLE: "木製テーブル",
+      item_WOOD_PLANTER_BOX: "木製プランター（土入り）",
       item_WOOD_CHAIR: "木製椅子",
       item_LANTERN: "ランタン",
       item_MEGANEURA: "メガネウラ",
       item_ISOPOD: "ダイオウグソクムシ",
       item_FRIED_BUG: "昆虫の素揚げ",
       item_DRAGON_FRUIT: "ドラゴンフルーツ",
+      item_COTTON_PLANT: "綿の木（コットン）",
       item_SHOVEL: "スコップ",
+      item_IRON_BUCKET: "鉄のバケツ",
+      item_WATER_BUCKET: "水入りバケツ",
       item_DIRT: "土",
       item_ROBOT_STAND: "ロボット台座",
       item_ROBOT_COCKPIT: "ロボットコクピット",
@@ -740,6 +802,7 @@
       input_keyboard: "入力モード: キーボード/マウス",
       input_auto: "入力モード: 自動",
       toggle_hitboxes: "ヒットボックス表示",
+      toggle_planet_wireframe: "惑星ワイヤーフレーム表示",
       frustum_culling: "視界外描画カリング",
       cave_water: "洞窟の水面",
       action_reach: "アクション届く範囲を表示",
@@ -757,7 +820,31 @@
       cook_success: "調理完了",
       summon_success: "生成完了",
       inventory_full: "インベントリがいっぱいです！",
-      chest_full: "チェストがいっぱいです！"
+      chest_full: "チェストがいっぱいです！",
+
+      // Planter Box System & 3D UI
+      planter_empty_title: "木製プランター",
+      planter_timer_empty: "空き",
+      planter_status_empty: "🌱 苗や枝を使って植える",
+      planter_timer_preview: "準備完了",
+      planter_status_preview: "🌱 [{key} / 左クリック] 植える",
+      planter_timer_unwatered: "水やり待ち",
+      planter_status_unwatered: "💧 水入りバケツで水をやる",
+      planter_timer_mature: "成長完了！",
+      planter_status_growing: "成長中 ({filled}/5)",
+      planter_status_harvest_cotton: "✨ [{key}] 綿を収穫",
+      planter_status_mature_tree: "✨ 成長完了（斧で伐採）",
+      planter_prompt_plant: "[{key} / 左クリック] {plant}を植える",
+      planter_prompt_water: "[{key} / 左クリック] {plant}に水をやる 🪣💧 (5分成長開始)",
+      planter_prompt_need_water: "💧 水入りバケツを使って{plant}に水をやってください",
+      planter_prompt_harvest_cotton: "[{key}] 綿の木を収穫",
+      planter_prompt_chop_tree: "[左クリック] 木を伐採 🪓",
+      planter_notice_planted: "🌱 {plant}を植えました！水入りバケツで水をやると成長が始まります。",
+      planter_notice_watered: "💧 {plant}に水をやりました！5分間の成長開始（空のバケツを回収）",
+      planter_notice_already_watered: "💧 この植物はすでに水やり済みで成長中です！",
+      planter_notice_out_of_reach: "🚫 距離が遠すぎます。プランターに近づいてください。",
+      planter_notice_cotton_collected: "☁️ 綿の木を収穫しました！",
+      planter_notice_chop_with_axe: "🪓 斧を使って木を伐採し、木材と果実を収穫してください"
     }
   };
 
@@ -992,6 +1079,9 @@
     }
     if (typeof window.renderMechStandUI === "function" && typeof window._lastActiveStand !== "undefined" && window._lastActiveStand) {
       window.renderMechStandUI(window._lastActiveStand, window._lastAttachedCollectibles);
+    }
+    if (window.PlanterSystem && typeof window.PlanterSystem.renderFloatingGrowthUI === "function") {
+      window.PlanterSystem.renderFloatingGrowthUI();
     }
 
     // Refresh start screen title SVG if present

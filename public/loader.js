@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789500000011';
+  const version = '1789500000037';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -90,6 +90,7 @@
     'gamefile/items/robot_stand.js',
     'gamefile/items/fried_bug.js',
     'gamefile/items/dragon_fruit.js',
+    'gamefile/items/planter_system.js',
 
     // --- NPCs ---
     'gamefile/npcs/meganeura.js',
