@@ -26,6 +26,7 @@
             out vec4 vPositionLightSpace;
             out float vDist;
             out float vIsGrass;
+            out float vIsTreeLeaf;
             
             void main() {
                 vec3 pos = aPosition;
@@ -141,9 +142,15 @@
                 if (isGrass) {
                     vWorldNormal = normalize(pos);
                     vIsGrass = 1.0;
+                    vIsTreeLeaf = 0.0;
+                } else if (isTreeLeaf) {
+                    vWorldNormal = normalize(pos);
+                    vIsGrass = 0.0;
+                    vIsTreeLeaf = 1.0;
                 } else {
                     vWorldNormal = aNormal;
                     vIsGrass = 0.0;
+                    vIsTreeLeaf = 0.0;
                 }
 
                 vViewPos = mvPosition.xyz;
@@ -165,6 +172,7 @@
             in vec4 vPositionLightSpace;
             in float vDist;
             in float vIsGrass;
+            in float vIsTreeLeaf;
             uniform vec3 uLightDir;
             uniform highp sampler2DShadow uShadowMap;
             
@@ -191,6 +199,7 @@
 
             ${window.SHARED_SHADOW_GLSL = `
             uniform mat4 uLightSpaceMatrix;
+            uniform float uShadowDist;
             float calculateShadow(vec4 lightSpacePos, vec3 normal, vec3 lightDir) {
                 if (uShadowsEnabled < 0.5) return 1.0;
                 vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
@@ -207,8 +216,8 @@
                 vec2 nDirXY = length(lightNormalXY) > 0.0 ? normalize(lightNormalXY) : vec2(0.0);
 
                 float kernelRadius = length(vec2(1.0, 1.0));
-                vec2 uvOffset = nDirXY * (sinTheta * kernelRadius * uShadowTexelSize.x);
-                float depthBias = uShadowTexelSize.y * (1.0 + cosTheta * kernelRadius);
+                vec2 uvOffset = nDirXY * (sinTheta * 0.65 * uShadowTexelSize.x);
+                float depthBias = uShadowTexelSize.y * (0.85 + sinTheta * 0.95);
                 vec2 baseUv = projCoords.xy + uvOffset;
                 float refDepth = projCoords.z - depthBias;
                 vec2 stepOffset = uShadowTexelSize.x * vec2(0.5, 0.5);
@@ -220,18 +229,17 @@
                 return shadow * 0.25;
             }
 
-            uniform vec4 uPointLightOccluders[72];
+            uniform vec4 uPointLightOccluders[144];
             uniform int uPointLightOccluderCount;
 
             float calculatePointLightOcclusion(vec3 fragPos, vec3 lightPos) {
                 if (uPointLightOccluderCount <= 0) return 1.0;
                 float vis = 1.0;
-                for (int j = 0; j < 24; j++) {
+                for (int j = 0; j < 48; j++) {
                     if (j >= uPointLightOccluderCount) break;
                     vec4 r0 = uPointLightOccluders[j * 3];
                     vec4 r1 = uPointLightOccluders[j * 3 + 1];
                     vec4 r2 = uPointLightOccluders[j * 3 + 2];
-
                     vec3 la = vec3(
                         dot(r0.xyz, fragPos) + r0.w,
                         dot(r1.xyz, fragPos) + r1.w,
@@ -242,13 +250,11 @@
                         dot(r1.xyz, lightPos) + r1.w,
                         dot(r2.xyz, lightPos) + r2.w
                     );
-
                     if ((la.x > 1.0 && lb.x > 1.0) || (la.x < -1.0 && lb.x < -1.0) ||
                         (la.y > 1.0 && lb.y > 1.0) || (la.y < -1.0 && lb.y < -1.0) ||
                         (la.z > 1.0 && lb.z > 1.0) || (la.z < -1.0 && lb.z < -1.0)) {
                         continue;
                     }
-
                     vec3 ld = lb - la;
                     vec3 invD = vec3(
                         abs(ld.x) > 1e-5 ? (1.0 / ld.x) : 1e5,
@@ -275,7 +281,8 @@
                 vec3 worldPos,
                 vec3 lightDir,
                 vec4 lightSpacePos,
-                bool isGrass
+                bool isGrass,
+                bool isTreeLeaf
             ) {
                 if (uShadowsEnabled < 0.5) {
                     return baseColor;
@@ -285,12 +292,37 @@
                 vec3 planetUp = length(worldPos) > 0.001 ? normalize(worldPos) : N;
                 float horizonVis = smoothstep(-0.02, 0.08, dot(planetUp, L));
                 float nDotL = max(dot(N, L), 0.0) * horizonVis;
-                float shadow = (nDotL > 0.0) ? calculateShadow(lightSpacePos, N, L) : 0.0;
+
+                // Strictly enforce Central Shadow Distance LOD (shadowRenderDistValue)
+                float camDist = length(worldPos - uCameraPos);
+                float shadowLOD = 1.0;
+                if (uShadowDist > 0.0) {
+                    shadowLOD = clamp((uShadowDist - camDist) / 0.5, 0.0, 1.0);
+                }
+
+                float rawShadow = (shadowLOD > 0.0 && nDotL > 0.0) ? calculateShadow(lightSpacePos, N, L) : 0.0;
+                // Beyond uShadowDist (shadowLOD == 0.0), shadow is strictly 1.0 (unshadowed)
+                float shadow = mix(1.0, rawShadow, shadowLOD);
+
                 float diffuse = 0.40 + nDotL * shadow * 0.60;
                 if (isGrass) {
                     diffuse = max(diffuse, mix(0.40, 0.65, shadow * horizonVis));
+                } else if (isTreeLeaf) {
+                    // Leaves use planet-up normal so distant trees outside uShadowDist have no self-shadow,
+                    // while trees inside uShadowDist receive full, clear Shadow Map LOD contrast
+                    diffuse = max(diffuse, mix(0.40, 0.68, shadow * horizonVis));
                 }
                 return baseColor * diffuse;
+            }
+            vec3 calculateUnifiedLighting(
+                vec3 baseColor,
+                vec3 worldNormal,
+                vec3 worldPos,
+                vec3 lightDir,
+                vec4 lightSpacePos,
+                bool isGrass
+            ) {
+                return calculateUnifiedLighting(baseColor, worldNormal, worldPos, lightDir, lightSpacePos, isGrass, false);
             }
             `}
 
@@ -325,7 +357,7 @@
                 float spec = pow(max(dot(normal, halfDir), 0.0), 16.0);
                 float diffuseVal = max(dot(normal, lightDir), 0.0);
                 
-                vec3 finalColor = calculateUnifiedLighting(vColor, normal, vWorldPos, lightDir, vPositionLightSpace, vIsGrass > 0.5);
+                vec3 finalColor = calculateUnifiedLighting(vColor, normal, vWorldPos, lightDir, vPositionLightSpace, vIsGrass > 0.5, vIsTreeLeaf > 0.5);
 
                  // Point Lights from Lanterns (ตะเกียงหินเรืองแสง), Glowing Stones (หินเรืองแสง), and Campfires
                  if (uPointLightCount > 0) {
@@ -343,11 +375,12 @@
                                  vec3 L = d > 0.0001 ? (toLight / d) : normal;
                                  float ndl = max(dot(normal, L), 0.0);
                                  if (ndl > 0.001) {
-                                     float occl = calculatePointLightOcclusion(vWorldPos + normal * 0.012, pl.xyz);
+                                     float nOff = clamp(d * 0.06, 0.002, 0.012);
+                                     float occl = calculatePointLightOcclusion(vWorldPos + normal * nOff, pl.xyz);
                                      if (occl > 0.001) {
                                          float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
                                          float atten = falloff * falloff * (3.0 - 2.0 * falloff);
-                                         float cageMask = smoothstep(0.016, 0.034, d);
+                                         float cageMask = smoothstep(0.011, 0.022, d);
                                          float facing = ndl * smoothstep(0.0, 0.12, ndl);
                                          float wLight = atten * cageMask * facing * occl * plc.w;
                                          pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
@@ -1271,6 +1304,7 @@ if (gl) {
       const terrainLightSpaceLoc = gl.getUniformLocation(program, "uLightSpaceMatrix");
       const terrainShadowMapLoc = gl.getUniformLocation(program, "uShadowMap");
       const terrainShadowTexelSizeLoc = gl.getUniformLocation(program, "uShadowTexelSize");
+      const terrainShadowDistLoc = gl.getUniformLocation(program, "uShadowDist");
       const terrainWaterMaskLoc = gl.getUniformLocation(program, "uWaterMaskTex");
       const terrainPointLightsLoc = gl.getUniformLocation(program, "uPointLights");
       const terrainPointLightColorsLoc = gl.getUniformLocation(program, "uPointLightColors");
@@ -1346,6 +1380,7 @@ if (gl) {
       const modelLightSpaceLoc = gl.getUniformLocation(modelProgram, "uLightSpaceMatrix");
       const modelShadowMapLoc = gl.getUniformLocation(modelProgram, "uShadowMap");
       const modelShadowTexelSizeLoc = gl.getUniformLocation(modelProgram, "uShadowTexelSize");
+      const modelShadowDistLoc = gl.getUniformLocation(modelProgram, "uShadowDist");
       const modelWaterMaskLoc = gl.getUniformLocation(modelProgram, "uWaterMaskTex");
       const modelPointLightsLoc = gl.getUniformLocation(modelProgram, "uPointLights");
       const modelPointLightColorsLoc = gl.getUniformLocation(modelProgram, "uPointLightColors");
@@ -1430,6 +1465,7 @@ if (gl) {
       const charLightSpaceLoc = gl.getUniformLocation(charProgram, "uLightSpaceMatrix");
       const charShadowMapLoc = gl.getUniformLocation(charProgram, "uShadowMap");
       const charShadowTexelSizeLoc = gl.getUniformLocation(charProgram, "uShadowTexelSize");
+      const charShadowDistLoc = gl.getUniformLocation(charProgram, "uShadowDist");
       const charWaterMaskLoc = gl.getUniformLocation(charProgram, "uWaterMaskTex");
       const charModelMatrixLoc = gl.getUniformLocation(charProgram, "uModelMatrix");
       const charPointLightsLoc = gl.getUniformLocation(charProgram, "uPointLights");
@@ -1439,7 +1475,7 @@ if (gl) {
       const charPointLightOccluderCountLoc = gl.getUniformLocation(charProgram, "uPointLightOccluderCount");
       const f32_pointLights = new Float32Array(16 * 4);
       const f32_pointLightColors = new Float32Array(16 * 4);
-      const f32_pointLightOccluders = new Float32Array(72 * 4);
+      const f32_pointLightOccluders = new Float32Array(144 * 4);
       const _pointLightCandidates = [];
       const _pointLightOccluderCandidates = [];
 
@@ -3436,6 +3472,9 @@ window.cloud3DProgram = cloud3DProgram;
             }
           }
         }
+
+        window.playerVerticalVel = playerVerticalVel;
+        window.isPlayerGrounded = isPlayerGrounded;
 
 
 
@@ -6740,7 +6779,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         const minSpan = curPlayerScale * 32.0;
         let orthoSize = Math.ceil(Math.max(shadowCamDist * 2.0, minSpan) / stepSpan) * stepSpan;
         if (renderDistEnabled && curShadowDist > 0) {
-          orthoSize = Math.min(orthoSize, Math.max(minSpan * 0.75, curShadowDist + 2.0));
+          orthoSize = Math.min(orthoSize, Math.max(minSpan * 0.75, curShadowDist + 1.5));
         }
 
         // Respect user's Shadow Map Quality setting without querying gl.getParameter every frame
@@ -6774,6 +6813,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         let lightDistance = Math.max(orthoSize * 2.0, curPlanetRad + orthoSize);
         let lightFarPlane = lightDistance * 2.0;
         const shadowTexelDepthBias = (orthoSize * 2.0) / (SHADOW_WIDTH * (lightFarPlane - lightNearPlane));
+        if (typeof window !== "undefined") window.shadowTexelDepthBias = shadowTexelDepthBias;
         const lightUp =
           Math.abs(finalLightDir[1]) > 0.99 ? [0.0, 0.0, 1.0] : [0.0, 1.0, 0.0];
 
@@ -6851,8 +6891,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         if (depthRenderDistEnabledLoc) gl.uniform1f(depthRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
 
         // Planet terrain surface & cave shells to depth (cull beyond shadow ortho range)
+        // Use hardware slope-scaled depth offset ONLY for terrain/cave receivers so steep hills,
+        // mountains, and dug trenches never self-shadow in stripes, while keeping 0 offset for trees/grass/objects.
         if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, Math.max(curShadowDist + 6.0, orthoSize + 4.0));
         if (vertexBuffer && indexBuffer && indicesLength > 0 && typeof SurfaceSystem !== "undefined" && SurfaceSystem.drawSurfaceDepth) {
+          gl.enable(gl.POLYGON_OFFSET_FILL);
+          gl.polygonOffset(4.5, 6.0);
           SurfaceSystem.drawSurfaceDepth(gl, {
             vertexBuffer,
             indexBuffer,
@@ -6862,7 +6906,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             depthModelLoc,
             depthPosLoc,
             terrainRadiusAttrLoc: depthTerrainRadiusAttrLoc,
-            tunnelCenterAttrLoc: depthTunnelCenterAttrLoc,
+            tunnelCenterAttrLoc: depthTerrainRadiusAttrLoc !== undefined ? depthTunnelCenterAttrLoc : -1,
             tunnelsLoc: depthTunnelsLoc,
             tunnelCountLoc: depthTunnelCountLoc,
             isTunnelMeshLoc: depthIsTunnelMeshLoc,
@@ -6876,6 +6920,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               tunnelCenterAttrLoc: depthTunnelCenterAttrLoc
             });
           }
+          gl.disable(gl.POLYGON_OFFSET_FILL);
         }
         // Cubes to depth (Cull by shadow landmark render distance)
         if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, curShadowLandmarkDist);
@@ -6925,6 +6970,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
         // Nature / tree objects to depth (Cull by shadow landmark render distance)
         if (typeof TreeSystem !== "undefined" && TreeSystem.drawTreeDepth) {
+          if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, curShadowLandmarkDist);
           TreeSystem.drawTreeDepth(gl, {
             natureVertexBuffer,
             natureIndexBuffer,
@@ -6937,6 +6983,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             depthModelLoc,
             depthPosLoc,
             depthColorLoc,
+            depthMaxShadowDistLoc,
             natureSway,
             waterPlantSway,
             createIdentity,
@@ -6960,6 +7007,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             natureIndicesLength,
             natureGrassStartIndex,
             supportUint32,
+            depthMaxShadowDistLoc,
             grassChunks,
             eyePos,
             renderDistValue: grassShadowDist
@@ -6972,7 +7020,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
         // Ensure CULL_FACE stays disabled for all subsequent depth pass draws (Collectibles, Houses, Character, Equipment)
         gl.disable(gl.CULL_FACE);
-        const objShadowDist = Math.min(curObjectDist, curShadowDist);
+        const objShadowDist = Math.max(curObjectDist, curShadowLandmarkDist, curShadowDist) + 4.0;
         if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, objShadowDist);
 
         // Collectibles to depth (Cull by object/shadow render distance)
@@ -7153,8 +7201,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         if (equipVertexBuffer && equipIndexBuffer && equipIndicesLength > 0) {
           gl.uniform1f(depthSwayFactorLoc, 0.0);
           gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
-          const isClassicRag = (ragdollEnabled && ragdollInitialized && (typeof window === "undefined" || window.characterModel !== "chibi"));
-          const equipCharModelMatrix = isClassicRag ? createIdentity() : getCharacterMatrix();
+          const equipCharModelMatrix = getCharacterMatrix();
           gl.uniformMatrix4fv(
             depthModelLoc,
             false,
@@ -7443,10 +7490,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               const n = c.normal || [0, 1, 0];
               const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + px * 2.8 + py * 2.8 + pz * 2.8);
               if (t === "lantern") {
+                const lOff = 0.049 * 0.46; // Exact center of glowing crystal core & 4 corner pillars
                 _pointLightCandidates.push({
-                  x: px + n[0] * 0.030,
-                  y: py + n[1] * 0.030,
-                  z: pz + n[2] * 0.030,
+                  x: px + n[0] * lOff,
+                  y: py + n[1] * lOff,
+                  z: pz + n[2] * lOff,
                   rad: 0.62,
                   r: 0.22, g: 0.95, b: 0.88,
                   intensity: 0.42 * pulse,
@@ -7481,11 +7529,12 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           if (typeof floorPreviewCollectible !== "undefined" && floorPreviewCollectible && floorPreviewCollectible.active && floorPreviewCollectible.type === "lantern" && floorPreviewCollectible.position) {
             const fp = floorPreviewCollectible.position;
             const fn = floorPreviewCollectible.normal || [0, 1, 0];
+            const lOff = 0.049 * 0.46;
             const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + fp[0] * 2.8 + fp[1] * 2.8 + fp[2] * 2.8);
             _pointLightCandidates.push({
-              x: fp[0] + fn[0] * 0.030,
-              y: fp[1] + fn[1] * 0.030,
-              z: fp[2] + fn[2] * 0.030,
+              x: fp[0] + fn[0] * lOff,
+              y: fp[1] + fn[1] * lOff,
+              z: fp[2] + fn[2] * lOff,
               rad: 0.56,
               r: 0.22, g: 0.95, b: 0.88,
               intensity: 0.35 * pulse,
@@ -7604,18 +7653,80 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               const f = c.F || [0, 0, 1];
               const n = c.normal || [0, 1, 0];
 
-              if (t === "wood_table" || t === "wood_planter_box") {
+              if (t === "lantern") {
                 const s = 0.46;
-                // Tabletop + apron occluder strictly below the top plank surface (0.145 * s = 0.0667)
-                const cyOff = 0.118 * s;
+                // 1) Solid Stepped Iron Base occluder (ฐานเหล็กทึบของตะเกียง บังไม่ให้แสงทะลุฐานลงด้านล่าง)
+                const baseCy = 0.012 * s;
+                pushOBB(
+                  p[0] + n[0] * baseCy,
+                  p[1] + n[1] * baseCy,
+                  p[2] + n[2] * baseCy,
+                  r, n, f,
+                  0.040 * s, 0.012 * s, 0.040 * s,
+                  0.05
+                );
+                // 2) Solid Stepped Iron Hood / Cap occluder (ฝาครอบเหล็กทึบด้านบนของตะเกียง)
+                const hoodCy = 0.091 * s;
+                pushOBB(
+                  p[0] + n[0] * hoodCy,
+                  p[1] + n[1] * hoodCy,
+                  p[2] + n[2] * hoodCy,
+                  r, n, f,
+                  0.036 * s, 0.015 * s, 0.036 * s,
+                  0.05
+                );
+                // 3) 4 Iron Corner Cage Bars occluders (เสาโครงเหล็กทั้ง 4 มุมของตะเกียง)
+                const pillarOff = 0.023 * s;
+                const pillarCy = 0.049 * s;
+                const pillarHx = 0.0042 * s;
+                const pillarHy = 0.030 * s;
+                const pSigns = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+                for (let pi = 0; pi < 4; pi++) {
+                  const pox = pSigns[pi][0] * pillarOff;
+                  const poz = pSigns[pi][1] * pillarOff;
+                  pushOBB(
+                    p[0] + r[0] * pox + n[0] * pillarCy + f[0] * poz,
+                    p[1] + r[1] * pox + n[1] * pillarCy + f[1] * poz,
+                    p[2] + r[2] * pox + n[2] * pillarCy + f[2] * poz,
+                    r, n, f,
+                    pillarHx, pillarHy, pillarHx,
+                    0.05
+                  );
+                }
+              } else if (t === "wood_table" || t === "wood_planter_box") {
+                const s = 0.46;
+                // Tabletop + apron occluder flush up to 0.142 * s (just below 0.145 * s top plank surface so zero light leaks through table)
+                const cyOff = 0.122 * s;
                 pushOBB(
                   p[0] + n[0] * cyOff,
                   p[1] + n[1] * cyOff,
                   p[2] + n[2] * cyOff,
                   r, n, f,
-                  0.132 * s, 0.017 * s, 0.102 * s,
-                  0.2 // High priority for tabletops directly under lanterns
+                  0.136 * s, 0.020 * s, 0.106 * s,
+                  0.15 // High priority for tabletops directly under lanterns
                 );
+                if (t === "wood_table") {
+                  // 4 Wooden Table Legs occluders (ขาโต๊ะไม้ทั้ง 4 มุม)
+                  const legX = 0.105 * s;
+                  const legY = 0.062 * s;
+                  const legZ = 0.075 * s;
+                  const legHx = 0.015 * s;
+                  const legHy = 0.062 * s;
+                  const legHz = 0.015 * s;
+                  const signs = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+                  for (let li = 0; li < 4; li++) {
+                    const ox = signs[li][0] * legX;
+                    const oz = signs[li][1] * legZ;
+                    pushOBB(
+                      p[0] + r[0] * ox + n[0] * legY + f[0] * oz,
+                      p[1] + r[1] * ox + n[1] * legY + f[1] * oz,
+                      p[2] + r[2] * ox + n[2] * legY + f[2] * oz,
+                      r, n, f,
+                      legHx, legHy, legHz,
+                      0.35
+                    );
+                  }
+                }
               } else if (t === "wood_chest") {
                 const s = 0.46;
                 const cyOff = 0.072 * s;
@@ -7957,10 +8068,53 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             emitMergedFloors(woodFloorPieces, false);
             emitMergedFloors(thinFloorPieces, true);
 
+            if (typeof floorPreviewCollectible !== "undefined" && floorPreviewCollectible && floorPreviewCollectible.active && floorPreviewCollectible.type === "lantern" && floorPreviewCollectible.position) {
+              const s = 0.46;
+              const fp = floorPreviewCollectible.position;
+              const fr = floorPreviewCollectible.R || [1, 0, 0];
+              const ff = floorPreviewCollectible.F || [0, 0, 1];
+              const fn = floorPreviewCollectible.normal || [0, 1, 0];
+              const baseCy = 0.012 * s;
+              pushOBB(
+                fp[0] + fn[0] * baseCy,
+                fp[1] + fn[1] * baseCy,
+                fp[2] + fn[2] * baseCy,
+                fr, fn, ff,
+                0.040 * s, 0.012 * s, 0.040 * s,
+                0.05
+              );
+              const hoodCy = 0.091 * s;
+              pushOBB(
+                fp[0] + fn[0] * hoodCy,
+                fp[1] + fn[1] * hoodCy,
+                fp[2] + fn[2] * hoodCy,
+                fr, fn, ff,
+                0.036 * s, 0.015 * s, 0.036 * s,
+                0.05
+              );
+              const pillarOff = 0.023 * s;
+              const pillarCy = 0.049 * s;
+              const pillarHx = 0.0042 * s;
+              const pillarHy = 0.030 * s;
+              const pSigns = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+              for (let pi = 0; pi < 4; pi++) {
+                const pox = pSigns[pi][0] * pillarOff;
+                const poz = pSigns[pi][1] * pillarOff;
+                pushOBB(
+                  fp[0] + fr[0] * pox + fn[0] * pillarCy + ff[0] * poz,
+                  fp[1] + fr[1] * pox + fn[1] * pillarCy + ff[1] * poz,
+                  fp[2] + fr[2] * pox + fn[2] * pillarCy + ff[2] * poz,
+                  fr, fn, ff,
+                  pillarHx, pillarHy, pillarHx,
+                  0.05
+                );
+              }
+            }
+
             if (_pointLightOccluderCandidates.length > 1) {
               _pointLightOccluderCandidates.sort((a, b) => a.sortKey - b.sortKey);
             }
-            activePointLightOccluderCount = Math.min(24, _pointLightOccluderCandidates.length);
+            activePointLightOccluderCount = Math.min(48, _pointLightOccluderCandidates.length);
             for (let i = 0; i < activePointLightOccluderCount; i++) {
               const obb = _pointLightOccluderCandidates[i];
               const base = i * 12;
@@ -7981,8 +8135,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         }
 
         // Upload point lights and 3D occluder OBBs to modelProgram
+        const activeShadowDist = renderDistEnabled ? curShadowDist : 0.0;
         if (modelProgram) {
           gl.useProgram(modelProgram);
+          if (modelShadowDistLoc) gl.uniform1f(modelShadowDistLoc, activeShadowDist);
           if (modelPointLightCountLoc) gl.uniform1i(modelPointLightCountLoc, activePointLightCount);
           if (modelPointLightOccluderCountLoc) gl.uniform1i(modelPointLightOccluderCountLoc, activePointLightOccluderCount);
           if (activePointLightCount > 0) {
@@ -8012,6 +8168,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
           }
           gl.uniform1f(terrainShadowsEnabledLoc, activeShadowMode);
+          if (terrainShadowDistLoc) gl.uniform1f(terrainShadowDistLoc, activeShadowDist);
           gl.uniform1f(useLightingLoc, 1.0); // เปิดแสงเงาดิฟฟิวส์
           gl.uniform3fv(lightDirLoc, setF32(f32_finalLightDir, finalLightDir));
           gl.uniformMatrix4fv(
@@ -8110,6 +8267,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
           }
           gl.uniform1f(charShadowsEnabledLoc, activeShadowQualityVal);
+          if (charShadowDistLoc) gl.uniform1f(charShadowDistLoc, activeShadowDist);
 
           gl.uniformMatrix4fv(charProjLoc, false, setF32(f32_projMatrix, projMatrix));
           gl.uniform3fv(charLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
@@ -8160,7 +8318,23 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           // Draw main player ONLY if not hidden by player's own camera (FPS mode / camera zoom)
           if (!hideCharacter) {
-            if (charUseFaceTexLoc) {
+            const getFaceTexFn = (window.CapsuleModel && window.CapsuleModel.getChibiSvgFaceTexture) || window.getChibiSvgFaceTexture || window.getCloneFaceTexture;
+            if (charFaceTexLoc && charUseFaceTexLoc && typeof getFaceTexFn === "function") {
+              const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+              const isBlink = (nowMs % 4200) > 4040;
+              const expr = window.playerFaceExpression || (isBlink ? "blink" : "default");
+              getFaceTexFn(gl, "default");
+              getFaceTexFn(gl, "blink");
+              const pFaceTex = getFaceTexFn(gl, expr);
+              if (pFaceTex) {
+                gl.activeTexture(gl.TEXTURE3);
+                gl.bindTexture(gl.TEXTURE_2D, pFaceTex);
+                gl.uniform1i(charFaceTexLoc, 3);
+                gl.uniform1f(charUseFaceTexLoc, 1.0);
+              } else {
+                gl.uniform1f(charUseFaceTexLoc, 0.0);
+              }
+            } else if (charUseFaceTexLoc) {
               gl.uniform1f(charUseFaceTexLoc, 0.0);
             }
             if (window.characterModel === "chibi") {
@@ -8169,7 +8343,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               }
             }
             const isDevColorOrBone = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
-            if (window.characterModel === "chibi" && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBone) {
+            const isGlbSource = !!(typeof charColorBuffer !== "undefined" && charColorBuffer && charColorBuffer._sourceType === "chibi");
+            if (window.characterModel === "chibi" && isGlbSource && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBone) {
               gl.activeTexture(gl.TEXTURE5);
               gl.bindTexture(gl.TEXTURE_2D, window.chibiGlbTexture);
               gl.uniform1i(charMainTexLoc, 5);
@@ -8221,6 +8396,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               charPosLoc,
               charNormLoc,
               charColorLoc,
+              charTexCoordLoc,
               charLocalPosLoc,
               charFaceTexLoc,
               charUseFaceTexLoc,
@@ -8428,7 +8604,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               }
             }
             const isDevColorOrBoneRefl = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
-            if (window.characterModel === "chibi" && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBoneRefl) {
+            const isGlbSourceRefl = !!(typeof charColorBuffer !== "undefined" && charColorBuffer && charColorBuffer._sourceType === "chibi");
+            if (window.characterModel === "chibi" && isGlbSourceRefl && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBoneRefl) {
               gl.activeTexture(gl.TEXTURE5);
               gl.bindTexture(gl.TEXTURE_2D, window.chibiGlbTexture);
               gl.uniform1i(charMainTexLoc, 5);
@@ -8789,7 +8966,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             natureGrassStartIndex,
             shadowMapEnabled,
             shadowWidth: SHADOW_WIDTH,
-            shadowHeight: SHADOW_HEIGHT
+            shadowHeight: SHADOW_HEIGHT,
+            shadowTexelDepthBias
           });
         }
 
@@ -9034,11 +9212,10 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
         ) {
           gl.useProgram(modelProgram);
 
-          const isRag = (ragdollEnabled && ragdollInitialized && (typeof window === "undefined" || window.characterModel !== "chibi"));
-          if (!isRag && modelPointLightCountLoc) {
+          if (modelPointLightCountLoc) {
             gl.uniform1i(modelPointLightCountLoc, 0);
           }
-          const equipCharModelMatrix = isRag ? createIdentity() : getCharacterMatrix();
+          const equipCharModelMatrix = getCharacterMatrix();
           const equipModelViewMatrix = multiplyMatrices(viewMatrix, equipCharModelMatrix);
 
           gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, equipModelViewMatrix));
@@ -9054,7 +9231,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           // For local space vertices, prevent underwater fog unless player is actually underwater
           const isPlayerUnderwater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.5);
-          gl.uniform1f(modelWaterRadiusLoc, isRag ? (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15)) : (isPlayerUnderwater ? 999.0 : -999.0));
+          gl.uniform1f(modelWaterRadiusLoc, isPlayerUnderwater ? 999.0 : -999.0);
           gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
           gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
           gl.uniform1f(modelRenderDistEnabledLoc, 0.0);
@@ -9067,7 +9244,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           // Rotate light direction to local model space so lighting on item is bright and consistent
           let localLightDir = finalLightDir;
-          if (!isRag) {
+          {
             const m = equipCharModelMatrix;
             const lx = (m[0]*finalLightDir[0] + m[1]*finalLightDir[1] + m[2]*finalLightDir[2]);
             const ly = (m[4]*finalLightDir[0] + m[5]*finalLightDir[1] + m[6]*finalLightDir[2]);
@@ -9109,7 +9286,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             );
           }
           gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
-          if (!isRag && modelPointLightCountLoc) {
+          if (modelPointLightCountLoc) {
             gl.uniform1i(modelPointLightCountLoc, activePointLightCount);
           }
         }

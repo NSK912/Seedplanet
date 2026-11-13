@@ -2,48 +2,17 @@
 // Independent Player Clones System (Spawned at procedural houses)
 
 (function() {
+  // Shared Central Capsule Model reference (from capsuleModel.js)
+  const CapsuleModel = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel : null;
+
   const f32_cloneModel = new Float32Array(16);
   const f32_cloneMV = new Float32Array(16);
 
-  // Rich collection of cute expressive anime / kaomoji / emoji faces
-  const CLONE_EMOJI_FACES = [
-    "(^_^)",    // Happy smile
-    "(o_o)",    // Curious wide-eyed
-    "(^o^)",    // Big cheering smile
-    "(¬_¬)",    // Sassy side-eye
-    "(*_*)",    // Star-struck
-    "(•‿•)",    // Sweet gentle smile
-    "(^_-)",    // Playful wink
-    "(◕‿◕)",    // Big anime sparkle eyes
-    "(>_<)",    // Cute scrunched eyes
-    "(≧◡≦)",    // Blushing glee
-    "(•ω•)",    // Chibi cat mouth
-    "(•̀ᴗ•́)",    // Determined hero grin
-    "(♥_♥)",    // Heart eyes
-    "(^з^)",    // Whistle kiss
-    "(UwU)",    // Classic UwU
-    "(OwO)",    // Surprised OwO
-    "(^人^)",    // Polite thank-you
-    "(•_•)",    // Cool stoic look
-    "(¬‿¬)",    // Cheeky sly grin
-    "(ᵔᴥᵔ)",    // Cute puppy / bear
-    "(⌒‿⌒)",    // Serene closed-eyes smile
-    "(★‿★)",    // Starry eyes grin
-    "(◕ω◕)",    // Shiny chibi kitty
-    "(ʘ‿ʘ)",    // Excited round eyes
-    "(•ө•)",    // Cute chick face
-    "(´∀｀)",    // Cozy happy warmth
-    "(✿◠‿◠)",   // Flower maiden smile
-    "(¬o¬)",    // Pouting eyebrow
-    "(^Д^)",    // Joyful laughing
-    "(｡♥‿♥｡)",  // Romantic heart chibi
-    "(=^･ω･^=)",// Little kitty with whiskers
-    "(•̀o•́)",    // Brave little face
-    "( ˘ ³˘)",   // Whistling tune
-    "(∩_∩)",    // Shy cute hands up
-    "(ﾟヮﾟ)",    // Retro anime happy
-    "(~_~)"     // Sleepy cozy
-  ];
+  // Rich collection of cute expressive anime / kaomoji / emoji faces (Delegated to CapsuleModel)
+  const CLONE_EMOJI_FACES = (typeof window !== "undefined" && window.CapsuleModel && window.CapsuleModel.CLONE_EMOJI_FACES)
+    ? window.CapsuleModel.CLONE_EMOJI_FACES
+    : ["(^_^)", "(o_o)", "(^o^)", "(¬_¬)", "(*_*)", "(•‿•)", "(^_-)", "(◕‿◕)", "(>_<)", "(≧◡≦)", "(•ω•)", "(•̀ᴗ•́)", "(♥_♥)", "(^з^)", "(UwU)", "(OwO)", "(^人^)", "(•_•)", "(¬‿¬)", "(ᵔᴥᵔ)", "(⌒‿⌒)", "(★‿★)", "(◕ω◕)", "(ʘ‿ʘ)", "(•ө•)", "(´∀｀)", "(✿◠‿◠)", "(¬o¬)", "(^Д^)", "(｡♥‿♥｡)", "(=^･ω･^=)", "(•̀o•́)", "( ˘ ³˘)", "(∩_∩)", "(ﾟヮﾟ)", "(~_~)" ];
+
 
   function getCloneVectors(cState, charScale, planetRadius) {
     const cSinT = Math.sin(cState.theta);
@@ -177,113 +146,18 @@
     };
   }
 
-  const cloneFaceTextureCache = new Map();
+  // Face texture generation delegated to CapsuleModel
+  const cloneFaceTextureCache = (typeof window !== "undefined" && window.CapsuleModel && window.CapsuleModel.cloneFaceTextureCache)
+    ? window.CapsuleModel.cloneFaceTextureCache
+    : new Map();
 
   function getCloneFaceTexture(gl, faceText) {
-    const key = (!faceText || faceText === "traveler" || faceText === "svg") ? "traveler_1.5x" : faceText;
-    if (cloneFaceTextureCache.has(key)) {
-      return cloneFaceTextureCache.get(key);
+    if (typeof window !== "undefined" && window.CapsuleModel && typeof window.CapsuleModel.getCloneFaceTexture === "function") {
+      return window.CapsuleModel.getCloneFaceTexture(gl, faceText);
     }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 256;
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, 512, 256);
-
-    if (key === "traveler_1.5x") {
-      // 1. Left Eye: 1.5x larger tall vertical oval with subtle soft rim & top crescent highlight (image_5b46f111.png)
-      ctx.save();
-      ctx.fillStyle = "#0e0e12";
-      ctx.strokeStyle = "rgba(205, 215, 228, 0.45)";
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.ellipse(133, 118, 63, 117, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Top soft accent arc on left eye
-      ctx.strokeStyle = "rgba(225, 235, 248, 0.75)";
-      ctx.lineWidth = 5.0;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.arc(133, 72, 45, Math.PI * 1.08, Math.PI * 1.92);
-      ctx.stroke();
-
-      // 2. Right Eye: 1.5x larger tall vertical oval with subtle soft rim & top crescent highlight
-      ctx.strokeStyle = "rgba(205, 215, 228, 0.45)";
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.ellipse(379, 118, 63, 117, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.strokeStyle = "rgba(225, 235, 248, 0.75)";
-      ctx.lineWidth = 5.0;
-      ctx.beginPath();
-      ctx.arc(379, 72, 45, Math.PI * 1.08, Math.PI * 1.92);
-      ctx.stroke();
-
-      // 3. 'X' Mouth: 1.5x larger centered cross with rounded ends
-      ctx.strokeStyle = "#0e0e12";
-      ctx.lineWidth = 16;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(228, 182);
-      ctx.lineTo(284, 238);
-      ctx.moveTo(284, 182);
-      ctx.lineTo(228, 238);
-      ctx.stroke();
-      ctx.restore();
-    } else {
-      // Emoji / Kaomoji Face
-      // Soft rosy chibi blush cheeks on left and right
-      const drawCheek = (cx, cy) => {
-        const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 42);
-        grad.addColorStop(0, "rgba(255, 110, 145, 0.75)");
-        grad.addColorStop(0.55, "rgba(255, 110, 145, 0.35)");
-        grad.addColorStop(1, "rgba(255, 110, 145, 0.0)");
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 42, 0, Math.PI * 2);
-        ctx.fill();
-      };
-      drawCheek(102, 162);
-      drawCheek(410, 162);
-
-      // Dynamic font sizing based on emoji string length
-      let fontSize = 84;
-      if (key.length >= 9) fontSize = 56;
-      else if (key.length >= 7) fontSize = 66;
-      else if (key.length >= 5) fontSize = 76;
-
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#161616";
-      ctx.font = "900 " + fontSize + "px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', monospace, 'Courier New', sans-serif";
-
-      // Auto-scale if text exceeds available head face width
-      const maxTextWidth = 360;
-      const measuredWidth = ctx.measureText(key).width;
-      if (measuredWidth > maxTextWidth && measuredWidth > 0) {
-        fontSize = Math.floor(fontSize * (maxTextWidth / measuredWidth));
-        ctx.font = "900 " + fontSize + "px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', monospace, 'Courier New', sans-serif";
-      }
-
-      ctx.fillText(key, 256, 126);
-    }
-
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-
-    cloneFaceTextureCache.set(key, tex);
-    return tex;
+    return null;
   }
+
 
   // Helper to retrieve spawn location near a specific house (matching player's house spawn system)
   function getCloneHouseSpawn(hIdx, houses, seed, planetRadius) {
@@ -611,12 +485,11 @@
   }
 
   if (modifiedChests) {
-    if (typeof refreshCollectiblesVBO === "function") {
-      refreshCollectiblesVBO();
-    }
     if (typeof window !== "undefined") {
       window.pendingCollectibleRefresh = true;
-      window.pendingDynamicCollectibleRefresh = true;
+    }
+    if (typeof pendingCollectibleRefresh !== "undefined") {
+      pendingCollectibleRefresh = true;
     }
   }
 }
@@ -1423,6 +1296,23 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     }
   }
 
+  function ensureCloneAppearance(cState) {
+    if (!cState) return;
+    const numStyles = (typeof window !== "undefined" && window.NUM_HAIR_STYLES) ? window.NUM_HAIR_STYLES : 9;
+    const numColors = (typeof window !== "undefined" && window.ANIME_HAIR_COLORS && window.ANIME_HAIR_COLORS.length)
+      ? window.ANIME_HAIR_COLORS.length
+      : 9;
+    if (typeof cState.hairStyle !== "number") {
+      cState.hairStyle = Math.floor(Math.random() * numStyles);
+    }
+    if (typeof cState.hairColorIdx !== "number") {
+      cState.hairColorIdx = Math.floor(Math.random() * numColors);
+    }
+    if (typeof cState.hoodOpen !== "boolean") {
+      cState.hoodOpen = Math.random() < 0.5;
+    }
+  }
+
   window.initPlayerClonesIfNeeded = function(forceRespawn = false) {
     clearOldCloneFaceSigns();
 
@@ -1433,6 +1323,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
     // Check if we already have valid clones and houses haven't changed
     if (!forceRespawn && window.playerClonesState && window.playerClonesState.length > 0 && typeof window.playerClonesState[0].theta === "number") {
+      for (let i = 0; i < window.playerClonesState.length; i++) {
+        ensureCloneAppearance(window.playerClonesState[i]);
+      }
       if (numHouses > 0 && lastTrackedHousesCount === 0) {
         // Proceed to spawn at houses
       } else if (lastTrackedHousesRef === houses && lastTrackedHousesCount === numHouses) {
@@ -1519,6 +1412,13 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
 
       const face = shuffledFaces[i % shuffledFaces.length];
+      const numStyles = (typeof window !== "undefined" && window.NUM_HAIR_STYLES) ? window.NUM_HAIR_STYLES : 9;
+      const numColors = (typeof window !== "undefined" && window.ANIME_HAIR_COLORS && window.ANIME_HAIR_COLORS.length)
+        ? window.ANIME_HAIR_COLORS.length
+        : 9;
+      const randomHairStyle = Math.floor(Math.random() * numStyles);
+      const randomHairColorIdx = Math.floor(Math.random() * numColors);
+      const randomHoodOpen = Math.random() < 0.5;
 
       clones.push({
         houseIndex: hIdx,
@@ -1538,6 +1438,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         faceText: (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? face : "traveler",
         baseFaceText: (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? face : "traveler",
         emojiFaceText: face,
+        hairStyle: randomHairStyle,
+        hairColorIdx: randomHairColorIdx,
+        hoodOpen: randomHoodOpen,
         // LIFE SYSTEM ATTRIBUTES:
         hp: 5,
         maxHp: 5,
@@ -2655,15 +2558,23 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
           if (dropReach.valid) {
             drop.active = false;
+            if (drop.cottonId) {
+              const obsId = parseInt(String(drop.cottonId).replace("cotton_", ""), 10);
+              const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
+              const obs = natureList.find(o => o && o.id === obsId);
+              if (obs) obs.active = false;
+            }
             const dropType = (drop.type || "").toUpperCase();
             addCloneItem(cState, dropType, getResourceIcon(dropType), 1);
-            if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
-            if (typeof pendingDynamicCollectibleRefresh !== "undefined") pendingDynamicCollectibleRefresh = true;
-            if (typeof window !== "undefined") {
-              window.pendingCollectibleRefresh = true;
-              window.pendingDynamicCollectibleRefresh = true;
+            if (drop.isDynamic) {
+              if (typeof pendingDynamicCollectibleRefresh !== "undefined") pendingDynamicCollectibleRefresh = true;
+              if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
+            } else if (typeof window !== "undefined" && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(drop)) {
+              // Fast surgical GPU sub-buffer zero-out: no full-planet VBO or SpatialGrid rebuild needed
+            } else {
+              if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+              if (typeof window !== "undefined") window.pendingCollectibleRefresh = true;
             }
-            if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO();
             cState.targetDrop = null;
             executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
           }
@@ -2823,6 +2734,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       charPosLoc,
       charNormLoc,
       charColorLoc,
+      charTexCoordLoc,
       charLocalPosLoc,
       charFaceTexLoc,
       charUseFaceTexLoc,
@@ -2838,28 +2750,41 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     let currentIndicesLen = originalCharIndicesLength;
     let useCloneBuffers = false;
 
-    if (window.cloneMeshBuffers && window.cloneMeshBuffers.vertexBuffer) {
-      const cb = window.cloneMeshBuffers;
-      useCloneBuffers = true;
-      currentIndicesLen = cb.indicesLength;
-      
+    const bindCloneBufferSet = (cb) => {
+      if (!cb || !cb.vertexBuffer) return false;
       if (typeof charPosLoc !== "undefined" && charPosLoc !== -1) {
         gl.bindBuffer(gl.ARRAY_BUFFER, cb.vertexBuffer);
         gl.vertexAttribPointer(charPosLoc, 3, gl.FLOAT, false, 0, 0);
       }
-      if (typeof charLocalPosLoc !== "undefined" && charLocalPosLoc !== -1) {
+      if (typeof charLocalPosLoc !== "undefined" && charLocalPosLoc !== -1 && cb.localVertexBuffer) {
         gl.bindBuffer(gl.ARRAY_BUFFER, cb.localVertexBuffer);
         gl.vertexAttribPointer(charLocalPosLoc, 3, gl.FLOAT, false, 0, 0);
       }
-      if (typeof charNormLoc !== "undefined" && charNormLoc !== -1) {
+      if (typeof charNormLoc !== "undefined" && charNormLoc !== -1 && cb.normalBuffer) {
         gl.bindBuffer(gl.ARRAY_BUFFER, cb.normalBuffer);
         gl.vertexAttribPointer(charNormLoc, 3, gl.FLOAT, false, 0, 0);
       }
-      if (typeof charColorLoc !== "undefined" && charColorLoc !== -1) {
+      if (typeof charColorLoc !== "undefined" && charColorLoc !== -1 && cb.colorBuffer) {
         gl.bindBuffer(gl.ARRAY_BUFFER, cb.colorBuffer);
         gl.vertexAttribPointer(charColorLoc, 3, gl.FLOAT, false, 0, 0);
       }
+      if (typeof charTexCoordLoc !== "undefined" && charTexCoordLoc !== -1) {
+        if (cb.texCoordBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, cb.texCoordBuffer);
+          gl.enableVertexAttribArray(charTexCoordLoc);
+          gl.vertexAttribPointer(charTexCoordLoc, 2, gl.FLOAT, false, 0, 0);
+        } else {
+          gl.disableVertexAttribArray(charTexCoordLoc);
+        }
+      }
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cb.indexBuffer);
+      return true;
+    };
+
+    if (window.cloneMeshBuffers && window.cloneMeshBuffers.vertexBuffer) {
+      useCloneBuffers = true;
+      currentIndicesLen = window.cloneMeshBuffers.indicesLength;
+      bindCloneBufferSet(window.cloneMeshBuffers);
     } else {
       if (charLocalPosLoc !== -1 && typeof charLocalVertexBuffer !== "undefined" && charLocalVertexBuffer) {
         gl.bindBuffer(gl.ARRAY_BUFFER, charLocalVertexBuffer);
@@ -2897,6 +2822,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
     for (let i = 0; i < window.playerClonesState.length; i++) {
       const cState = window.playerClonesState[i];
+      ensureCloneAppearance(cState);
       const { cPos, cR, cF, cN } = getCloneVectors(cState, charScale, planetRadius);
 
       const actionBob = (cState.actionAnim && cState.actionAnim > 0)
@@ -2939,8 +2865,6 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
       if (charFaceTexLoc) {
         gl.activeTexture(gl.TEXTURE3);
-        // User request: PlayerClones uses SVG face as primary face exclusively,
-        // while preserving emoji expressions in cState.emojiFaceText for future toggle.
         const currentFace = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji")
           ? (cState.emojiFaceText || (cState.faceText !== "traveler" ? cState.faceText : "(•‿•)"))
           : "traveler";
@@ -2951,10 +2875,32 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         gl.uniform1f(charUseFaceTexLoc, 1.0);
       }
 
+      // 1. Draw clone body + hoodie (open or closed variant)
+      if (useCloneBuffers) {
+        const activeBodyBuf = (cState.hoodOpen && window.cloneOpenHoodieMeshBuffers && window.cloneOpenHoodieMeshBuffers.vertexBuffer)
+          ? window.cloneOpenHoodieMeshBuffers
+          : window.cloneMeshBuffers;
+        bindCloneBufferSet(activeBodyBuf);
+        currentIndicesLen = activeBodyBuf.indicesLength;
+      }
+
       if (currentIndicesLen > 65535) {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_INT, 0);
       } else {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_SHORT, 0);
+      }
+
+      // 2. Draw clone's randomized 3D anime hair
+      if (typeof window.getCloneHairBuffers === "function") {
+        const hairBuf = window.getCloneHairBuffers(gl, cState.hairStyle, cState.hairColorIdx, !!cState.hoodOpen);
+        if (hairBuf && hairBuf.vertexBuffer && hairBuf.indicesLength > 0) {
+          bindCloneBufferSet(hairBuf);
+          if (hairBuf.indicesLength > 65535) {
+            gl.drawElements(gl.TRIANGLES, hairBuf.indicesLength, gl.UNSIGNED_INT, 0);
+          } else {
+            gl.drawElements(gl.TRIANGLES, hairBuf.indicesLength, gl.UNSIGNED_SHORT, 0);
+          }
+        }
       }
     }
 
@@ -2983,6 +2929,11 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         gl.bindBuffer(gl.ARRAY_BUFFER, charColorBuffer);
         gl.vertexAttribPointer(charColorLoc, 3, gl.FLOAT, false, 0, 0);
       }
+      if (typeof charTexCoordLoc !== "undefined" && charTexCoordLoc !== -1 && typeof window.charTexCoordBuffer !== "undefined" && window.charTexCoordBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, window.charTexCoordBuffer);
+        gl.enableVertexAttribArray(charTexCoordLoc);
+        gl.vertexAttribPointer(charTexCoordLoc, 2, gl.FLOAT, false, 0, 0);
+      }
       if (typeof charIndexBuffer !== "undefined" && charIndexBuffer) {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, charIndexBuffer);
       }
@@ -3005,16 +2956,11 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     if (window.cloneMeshBuffers && window.cloneMeshBuffers.vertexBuffer) {
       useCloneBuffers = true;
       currentIndicesLen = window.cloneMeshBuffers.indicesLength;
-      
-      if (typeof depthPosLoc !== "undefined" && depthPosLoc !== -1) {
-        gl.bindBuffer(gl.ARRAY_BUFFER, window.cloneMeshBuffers.vertexBuffer);
-        gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
-      }
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, window.cloneMeshBuffers.indexBuffer);
     }
 
     for (let i = 0; i < window.playerClonesState.length; i++) {
       const cState = window.playerClonesState[i];
+      ensureCloneAppearance(cState);
       const { cPos, cR, cF, cN } = getCloneVectors(cState, charScale, planetRadius);
 
       const actionBob = (cState.actionAnim && cState.actionAnim > 0)
@@ -3035,10 +2981,38 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
       gl.uniformMatrix4fv(depthModelLoc, false, f32_cloneModel);
 
+      if (useCloneBuffers) {
+        const activeBodyBuf = (cState.hoodOpen && window.cloneOpenHoodieMeshBuffers && window.cloneOpenHoodieMeshBuffers.vertexBuffer)
+          ? window.cloneOpenHoodieMeshBuffers
+          : window.cloneMeshBuffers;
+        if (typeof depthPosLoc !== "undefined" && depthPosLoc !== -1) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, activeBodyBuf.vertexBuffer);
+          gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
+        }
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBodyBuf.indexBuffer);
+        currentIndicesLen = activeBodyBuf.indicesLength;
+      }
+
       if (currentIndicesLen > 65535) {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_INT, 0);
       } else {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_SHORT, 0);
+      }
+
+      if (typeof window.getCloneHairBuffers === "function") {
+        const hairBuf = window.getCloneHairBuffers(gl, cState.hairStyle, cState.hairColorIdx, !!cState.hoodOpen);
+        if (hairBuf && hairBuf.vertexBuffer && hairBuf.indicesLength > 0) {
+          if (typeof depthPosLoc !== "undefined" && depthPosLoc !== -1) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, hairBuf.vertexBuffer);
+            gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
+          }
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, hairBuf.indexBuffer);
+          if (hairBuf.indicesLength > 65535) {
+            gl.drawElements(gl.TRIANGLES, hairBuf.indicesLength, gl.UNSIGNED_INT, 0);
+          } else {
+            gl.drawElements(gl.TRIANGLES, hairBuf.indicesLength, gl.UNSIGNED_SHORT, 0);
+          }
+        }
       }
     }
     

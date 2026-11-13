@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789500000037';
+  const version = '1789500000072';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -103,6 +103,7 @@
 
     // --- Gameplay Core & System ---
     'gamefile/gameplay/GLBLoader.js',
+    'gamefile/gameplay/capsuleModel.js',
     'gamefile/gameplay/inventory.js',
     'gamefile/gameplay/player.js',
     'gamefile/gameplay/TheCube.js',

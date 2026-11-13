@@ -96,6 +96,7 @@
             cameraWaterCollisionEnabled: typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : (typeof window !== "undefined" && typeof window.cameraWaterCollisionEnabled === "boolean" ? window.cameraWaterCollisionEnabled : true),
             zoomLimitEnabled,
             ragdollEnabled,
+            characterModel: (typeof window !== "undefined" && window.characterModel === "chibi") ? "chibi" : "classic",
             fullscreen: isCurrentFullscreen,
 
             // Planet parameters
@@ -153,6 +154,7 @@
             // Player State
             inventory,
             actionSlotsItems,
+            equipSlotsItems: typeof equipSlotsItems !== "undefined" ? equipSlotsItems : (window.equipSlotsItems || [null, null, null, null, null]),
             charTheta,
             charPhi,
             collectedCount,
@@ -390,6 +392,12 @@
               ? "🦴 โหมด Ragdoll: เปิด"
               : "🦴 โหมด Ragdoll: ปิด";
             toggleBtn.classList.toggle("active", ragdollEnabled);
+          }
+        }
+        if (typeof window !== "undefined") {
+          window.characterModel = (settings.characterModel === "chibi" || settings.characterModel === "chibi_white") ? "chibi" : "classic";
+          if (typeof window.updateDevCharacterModelUI === "function") {
+            window.updateDevCharacterModelUI();
           }
         }
 
@@ -850,6 +858,67 @@
           }
           if (typeof renderActionSlots === "function") renderActionSlots();
         }
+        const isBuiltInBodysuit = (it) => {
+          if (!it) return false;
+          const nm = String(it.name || it.label || "").toUpperCase();
+          return nm === "WHITE_BODYSUIT_TOP" || nm === "WHITE_BODYSUIT_SHORTS";
+        };
+        if (Array.isArray(settings.equipSlotsItems)) {
+          equipSlotsItems = settings.equipSlotsItems.slice(0, 5).map(it => (isBuiltInBodysuit(it) ? null : it));
+          while (equipSlotsItems.length < 5) {
+            equipSlotsItems.push(null);
+          }
+          window.equipSlotsItems = equipSlotsItems;
+        } else if (typeof window.createDefaultEquipSlotsItems === "function") {
+          equipSlotsItems = window.createDefaultEquipSlotsItems();
+          window.equipSlotsItems = equipSlotsItems;
+        }
+        if (Array.isArray(actionSlotsItems)) {
+          for (let i = 0; i < actionSlotsItems.length; i++) {
+            if (isBuiltInBodysuit(actionSlotsItems[i])) actionSlotsItems[i] = null;
+          }
+        }
+        // Ensure the 5 non-craftable outer clothing items are present in equip slots, bag, action bar, or chests
+        if (Array.isArray(inventory)) {
+          for (let i = 0; i < inventory.length; i++) {
+            if (isBuiltInBodysuit(inventory[i])) inventory[i] = null;
+          }
+          const starterClothes = [
+            { slot: 0, item: { name: "WHITE_SHIRT_SHORT", icon: "👔", label: "WHITE_SHIRT_SHORT", count: 1 } },
+            { slot: 1, item: { name: "BLACK_PLEATED_SKIRT", icon: "👗", label: "BLACK_PLEATED_SKIRT", count: 1 } },
+            { slot: 2, item: { name: "TRAVELER_BOOTS", icon: "🥾", label: "TRAVELER_BOOTS", count: 1 } },
+            { slot: 3, item: { name: "TRAVELER_HOODIE", icon: "🧥", label: "TRAVELER_HOODIE", count: 1 } },
+            { slot: 4, item: { name: "BLACK_LEGGINGS", icon: "👖", label: "BLACK_LEGGINGS", count: 1 } }
+          ];
+          const hasItemAnywhere = (itemName) => {
+            const checkArr = (arr) => Array.isArray(arr) && arr.some(it => it && (it.name === itemName || it.label === itemName));
+            if (checkArr(inventory) || checkArr(actionSlotsItems) || checkArr(window.equipSlotsItems)) return true;
+            if (Array.isArray(settings.placedStructures) && settings.placedStructures.some(p => p && checkArr(p.storage))) return true;
+            if (Array.isArray(settings.houseChestsStorage) && settings.houseChestsStorage.some(h => h && checkArr(h.storage))) return true;
+            if (typeof collectibles !== "undefined" && Array.isArray(collectibles) && collectibles.some(c => c && c.active && checkArr(c.storage))) return true;
+            return false;
+          };
+          let addedToBag = false;
+          for (const sc of starterClothes) {
+            if (!hasItemAnywhere(sc.item.name)) {
+              if (Array.isArray(window.equipSlotsItems) && window.equipSlotsItems[sc.slot] === null) {
+                window.equipSlotsItems[sc.slot] = { ...sc.item };
+                if (typeof equipSlotsItems !== "undefined" && Array.isArray(equipSlotsItems)) {
+                  equipSlotsItems[sc.slot] = window.equipSlotsItems[sc.slot];
+                }
+              } else {
+                const emptyIdx = inventory.findIndex((slot, idx) => slot === null && idx < 10);
+                if (emptyIdx !== -1) {
+                  inventory[emptyIdx] = { ...sc.item };
+                  addedToBag = true;
+                }
+              }
+            }
+          }
+          if (addedToBag && typeof renderInventory === "function") renderInventory();
+        }
+        if (typeof renderEquipSlots === "function") renderEquipSlots();
+        if (typeof window.refreshCharacterAppearanceNow === "function") window.refreshCharacterAppearanceNow();
         if (typeof settings.charTheta === "number")
           charTheta = settings.charTheta;
         if (typeof settings.charPhi === "number") charPhi = settings.charPhi;
@@ -1061,6 +1130,7 @@
         cameraWaterCollisionEnabled: true,
         zoomLimitEnabled: true,
         ragdollEnabled: false,
+        characterModel: "classic",
         currentGridSize: 400,
         RADIUS: 32.0,
         globalSeed: 13585,
@@ -1611,6 +1681,13 @@
                 ? "🦴 โหมด Ragdoll: เปิด"
                 : "🦴 โหมด Ragdoll: ปิด";
               ragBtn.classList.toggle("active", ragdollEnabled);
+            }
+            if (typeof window !== "undefined") {
+              if (typeof window.switchCharacterModel === "function") {
+                window.switchCharacterModel(DEFAULT_SETTINGS.characterModel || "classic");
+              } else {
+                window.characterModel = DEFAULT_SETTINGS.characterModel || "classic";
+              }
             }
 
             natureSway = DEFAULT_SETTINGS.natureSway;

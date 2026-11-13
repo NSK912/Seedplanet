@@ -6,15 +6,28 @@
       const TOTAL_SLOTS = 20;
       const UNLOCKED_SLOTS = 10;
 
+      function createDefaultEquipSlotsItems() {
+        return [
+          { name: "WHITE_SHIRT_SHORT", icon: "👔", label: "WHITE_SHIRT_SHORT", count: 1 },
+          { name: "BLACK_PLEATED_SKIRT", icon: "👗", label: "BLACK_PLEATED_SKIRT", count: 1 },
+          { name: "TRAVELER_BOOTS", icon: "🥾", label: "TRAVELER_BOOTS", count: 1 },
+          { name: "TRAVELER_HOODIE", icon: "🧥", label: "TRAVELER_HOODIE", count: 1 },
+          { name: "BLACK_LEGGINGS", icon: "👖", label: "BLACK_LEGGINGS", count: 1 }
+        ];
+      }
+      window.createDefaultEquipSlotsItems = createDefaultEquipSlotsItems;
+
       let inventory = [];
       for (let i = 0; i < TOTAL_SLOTS; i++) {
         inventory.push(null);
       }
       let actionSlotsItems = new Array(8).fill(null);
+      let equipSlotsItems = createDefaultEquipSlotsItems();
       let isMoveModeEnabled = false;
       let selectedActionSlotIndex = -1;
       window.inventory = inventory;
       window.actionSlotsItems = actionSlotsItems;
+      window.equipSlotsItems = equipSlotsItems;
 
       // ============================================
       // ระบบพลังงานแบตเตอรี่หินเรืองแสง (Glow Battery Energy Points System)
@@ -295,6 +308,13 @@
         { name: "OBSIDIAN_CUBE", icon: "🔶" },
         { name: "OBSIDIAN_PAD_WARP", icon: "🧭" },
         { name: "OBSIDIAN_FLUX", icon: "⚫" },
+        { name: "WHITE_BODYSUIT_TOP", icon: "👕" },
+        { name: "WHITE_BODYSUIT_SHORTS", icon: "🩳" },
+        { name: "TRAVELER_HOODIE", icon: "🧥" },
+        { name: "TRAVELER_BOOTS", icon: "🥾" },
+        { name: "WHITE_SHIRT_SHORT", icon: "👔" },
+        { name: "BLACK_PLEATED_SKIRT", icon: "👗" },
+        { name: "BLACK_LEGGINGS", icon: "👖" },
       ];
 
       const icon3DCache = new Map();
@@ -815,6 +835,34 @@
                 rawVertices, rawColors, rawIndices
               );
             }
+          } else if (name === "WHITE_BODYSUIT_TOP") {
+            if (typeof window.buildWhiteBodysuitTopIconMesh === "function") {
+              window.buildWhiteBodysuitTopIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "WHITE_BODYSUIT_SHORTS") {
+            if (typeof window.buildWhiteBodysuitShortsIconMesh === "function") {
+              window.buildWhiteBodysuitShortsIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "TRAVELER_HOODIE") {
+            if (typeof window.buildTravelerHoodieIconMesh === "function") {
+              window.buildTravelerHoodieIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "TRAVELER_BOOTS") {
+            if (typeof window.buildTravelerBootsIconMesh === "function") {
+              window.buildTravelerBootsIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "WHITE_SHIRT_SHORT") {
+            if (typeof window.buildWhiteShirtIconMesh === "function") {
+              window.buildWhiteShirtIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "BLACK_PLEATED_SKIRT") {
+            if (typeof window.buildBlackPleatedSkirtIconMesh === "function") {
+              window.buildBlackPleatedSkirtIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "BLACK_LEGGINGS") {
+            if (typeof window.buildBlackLeggingsIconMesh === "function") {
+              window.buildBlackLeggingsIconMesh(rawVertices, rawColors, rawIndices);
+            }
           } else {
             return null; // Return null if not a 3D item
           }
@@ -864,6 +912,8 @@
             targetSize = 0.82;
           } else if (name === "IRON_BULLET") {
             targetSize = 0.68;
+          } else if (name === "WHITE_BODYSUIT_TOP" || name === "WHITE_BODYSUIT_SHORTS" || name === "TRAVELER_HOODIE" || name === "TRAVELER_BOOTS" || name === "WHITE_SHIRT_SHORT" || name === "BLACK_PLEATED_SKIRT" || name === "BLACK_LEGGINGS") {
+            targetSize = 0.86;
           }
           
           const scale = maxDim > 0.0001 ? (targetSize / maxDim) : 1.0;
@@ -1179,8 +1229,12 @@
           }
           const divider = document.getElementById("inventoryVerticalDivider");
           if (divider) divider.style.display = "block";
+          const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
+          if (leftDivider) leftDivider.style.display = "block";
           const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
+          const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "flex";
         }
         document.getElementById("tabCooking").style.display = "none";
 
@@ -1549,17 +1603,55 @@
           return inventory[index];
         } else if (source === "action") {
           return actionSlotsItems[index];
+        } else if (source === "equip") {
+          return equipSlotsItems[index];
         } else if (source === "chest") {
           return (currentOpenChest && currentOpenChest.storage) ? currentOpenChest.storage[index] : null;
         }
         return null;
       }
 
+      function getValidEquipSlotsForItem(item) {
+        if (!item) return [];
+        const raw = String(item.name || item.label || "").toUpperCase();
+        const def = (typeof window !== "undefined" && window.ITEM_DEFINITIONS && window.ITEM_DEFINITIONS[raw]) ? window.ITEM_DEFINITIONS[raw] : null;
+        const slotType = item.equipSlot || (def && def.equipSlot) || "";
+        if (raw === "WHITE_BODYSUIT_TOP" || raw === "WHITE_SHIRT_SHORT" || slotType === "shirt") return [0];
+        if (raw === "WHITE_BODYSUIT_SHORTS" || raw === "BLACK_PLEATED_SKIRT" || slotType === "pants") return [1];
+        if (raw === "TRAVELER_BOOTS" || raw === "HOODIE_BOOTS" || slotType === "shoes") return [2];
+        if (raw === "TRAVELER_HOODIE" || raw === "BLACK_LEGGINGS" || slotType === "accessory") return [3, 4];
+        return [];
+      }
+      window.getValidEquipSlotsForItem = getValidEquipSlotsForItem;
+
+      function getEquipSlotIndexForItem(item, preferredIndex = -1) {
+        const valid = getValidEquipSlotsForItem(item);
+        if (valid.length === 0) return -1;
+        if (typeof preferredIndex === "number" && valid.includes(preferredIndex)) return preferredIndex;
+        for (let i = 0; i < valid.length; i++) {
+          if (!equipSlotsItems[valid[i]]) return valid[i];
+        }
+        return valid[0];
+      }
+      window.getEquipSlotIndexForItem = getEquipSlotIndexForItem;
+
+      function refreshCharacterAppearanceNow() {
+        if (typeof window.updateCharacterMesh === "function") {
+          try {
+            window.updateCharacterMesh(typeof window.walkPhase === "number" ? window.walkPhase : 0.0, false);
+          } catch (e) {}
+        }
+      }
+      window.refreshCharacterAppearanceNow = refreshCharacterAppearanceNow;
+
       function setSlotItem(source, index, item) {
         if (source === "inventory" || source === "chestPlayerInventory") {
           inventory[index] = item;
         } else if (source === "action") {
           actionSlotsItems[index] = item;
+        } else if (source === "equip") {
+          equipSlotsItems[index] = item;
+          refreshCharacterAppearanceNow();
         } else if (source === "chest") {
           if (currentOpenChest && currentOpenChest.storage) {
             currentOpenChest.storage[index] = item;
@@ -1777,22 +1869,39 @@
                 // Move/swap/stack from prev to target slot
                 const fromItem = getSlotItem(prev.source, prev.index);
                 if (fromItem) {
-                  const toItem = getSlotItem(source, index);
+                  let effTargetIndex = index;
+                  if (source === "equip") {
+                    const reqEquipIdx = getEquipSlotIndexForItem(fromItem, index);
+                    if (reqEquipIdx === -1) {
+                      if (typeof showNotice === "function") showNotice("⚠️ ไอเทมนี้ไม่ใช่เสื้อผ้าหรือของตกแต่งตัวละคร");
+                      return;
+                    }
+                    effTargetIndex = reqEquipIdx;
+                  }
+                  const toItem = getSlotItem(source, effTargetIndex);
+                  if (prev.source === "equip" && toItem) {
+                    const validBack = getValidEquipSlotsForItem(toItem);
+                    if (!validBack.includes(prev.index)) {
+                      if (typeof showNotice === "function") showNotice("⚠️ ช่องสวมใส่นี้ใช้สำหรับไอเทมคนละประเภท");
+                      return;
+                    }
+                  }
                   const fromName = fromItem.name || fromItem.label;
                   const toName = toItem ? (toItem.name || toItem.label) : null;
 
-                  if (toItem && fromName === toName) {
+                  if (toItem && fromName === toName && source !== "equip") {
                     toItem.count = (toItem.count || 1) + (fromItem.count || 1);
                     setSlotItem(prev.source, prev.index, null);
                   } else {
                     setSlotItem(prev.source, prev.index, toItem);
-                    setSlotItem(source, index, fromItem);
+                    setSlotItem(source, effTargetIndex, fromItem);
                   }
 
                   window.selectedInventorySlot = null;
                   if (currentOpenChest) renderChest();
                   renderInventory();
                   renderActionSlots();
+                  if (typeof renderEquipSlots === "function") renderEquipSlots();
                   updateBadge();
                   saveSettingsToLocalStorage();
                   if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
@@ -1838,12 +1947,23 @@
               const prev = window.selectedInventorySlot;
               const fromItem = getSlotItem(prev.source, prev.index);
               if (fromItem) {
-                setSlotItem(source, index, fromItem);
-                setSlotItem(prev.source, prev.index, null);
+                let effTargetIndex = index;
+                if (source === "equip") {
+                  const reqEquipIdx = getEquipSlotIndexForItem(fromItem, index);
+                  if (reqEquipIdx === -1) {
+                    if (typeof showNotice === "function") showNotice("⚠️ ไอเทมนี้ไม่ใช่เสื้อผ้าหรือของตกแต่งตัวละคร");
+                    return;
+                  }
+                  effTargetIndex = reqEquipIdx;
+                }
+                const existingInEquip = (source === "equip") ? getSlotItem("equip", effTargetIndex) : null;
+                setSlotItem(source, effTargetIndex, fromItem);
+                setSlotItem(prev.source, prev.index, existingInEquip);
                 window.selectedInventorySlot = null;
                 if (currentOpenChest) renderChest();
                 renderInventory();
                 renderActionSlots();
+                if (typeof renderEquipSlots === "function") renderEquipSlots();
                 updateBadge();
                 saveSettingsToLocalStorage();
                 if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
@@ -2089,14 +2209,19 @@
           }
           const divider = document.getElementById("inventoryVerticalDivider");
           if (divider) divider.style.display = "block";
+          const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
+          if (leftDivider) leftDivider.style.display = "block";
           const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
+          const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "flex";
 
           // Auto-enable move mode when inventory opens
           isMoveModeEnabled = true;
 
           renderInventory();
           renderActionSlots();
+          if (typeof renderEquipSlots === "function") renderEquipSlots();
 
         }
       }
@@ -4039,26 +4164,42 @@ function cancelFloorPlacement() {
           if (source === targetSource && sourceIndex === targetIndex) return;
 
           let fromItem = getSlotItem(source, sourceIndex);
-          let toItem = getSlotItem(targetSource, targetIndex);
-
           if (!fromItem) return;
+
+          let effTargetIndex = targetIndex;
+          if (targetSource === "equip") {
+            const reqEquipIdx = getEquipSlotIndexForItem(fromItem, targetIndex);
+            if (reqEquipIdx === -1) {
+              if (typeof showNotice === "function") showNotice("⚠️ ไอเทมนี้ไม่ใช่เสื้อผ้าหรือของตกแต่งตัวละคร");
+              return;
+            }
+            effTargetIndex = reqEquipIdx;
+          }
+          if (source === targetSource && sourceIndex === effTargetIndex) return;
+
+          let toItem = getSlotItem(targetSource, effTargetIndex);
+          if (source === "equip" && toItem) {
+            const validBack = getValidEquipSlotsForItem(toItem);
+            if (!validBack.includes(sourceIndex)) return;
+          }
 
           const fromName = fromItem.name || fromItem.label;
           const toName = toItem ? (toItem.name || toItem.label) : null;
 
           // Stacking if dropping onto same item type
-          if (toItem && fromName === toName) {
+          if (toItem && fromName === toName && targetSource !== "equip") {
             toItem.count = (toItem.count || 1) + (fromItem.count || 1);
             setSlotItem(source, sourceIndex, null);
           } else {
             // Swap/Move items
             setSlotItem(source, sourceIndex, toItem);
-            setSlotItem(targetSource, targetIndex, fromItem);
+            setSlotItem(targetSource, effTargetIndex, fromItem);
           }
 
           if (currentOpenChest) renderChest();
           renderInventory();
           renderActionSlots();
+          if (typeof renderEquipSlots === "function") renderEquipSlots();
           updateBadge();
           saveSettingsToLocalStorage();
         } catch (err) {
@@ -5371,6 +5512,9 @@ function cancelFloorPlacement() {
         } else if (source === "action") {
           item = actionSlotsItems[index];
           sourceArray = actionSlotsItems;
+        } else if (source === "equip") {
+          item = equipSlotsItems[index];
+          sourceArray = inventory;
         } else if (source === "chest") {
           if (!currentOpenChest) return;
           item = currentOpenChest.storage[index];
@@ -5633,6 +5777,35 @@ function cancelFloorPlacement() {
             return;
           }
           const { source, index, item } = window.selectedInventorySlot;
+          const equipIdx = getEquipSlotIndexForItem(item);
+          if (equipIdx !== -1) {
+            if (source === "equip") {
+              // Unequip back to inventory
+              let emptyInv = inventory.slice(0, UNLOCKED_SLOTS).findIndex(s => s === null);
+              if (emptyInv === -1) {
+                if (typeof showNotice === "function") showNotice("⚠️ กระเป๋าเต็ม ไม่สามารถถอดชุดได้");
+                return;
+              }
+              setSlotItem("equip", index, null);
+              setSlotItem("inventory", emptyInv, item);
+              window.selectedInventorySlot = { source: "inventory", index: emptyInv, item: item };
+            } else {
+              // Equip directly into the matching character equipment slot
+              const toItem = equipSlotsItems[equipIdx];
+              setSlotItem(source, index, toItem);
+              setSlotItem("equip", equipIdx, item);
+              window.selectedInventorySlot = { source: "equip", index: equipIdx, item: item };
+            }
+            if (typeof renderChest === "function" && currentOpenChest) renderChest();
+            renderInventory();
+            renderActionSlots();
+            if (typeof renderEquipSlots === "function") renderEquipSlots();
+            updateBadge();
+            saveSettingsToLocalStorage();
+            if (typeof playCollectSound === "function") playCollectSound();
+            return;
+          }
+
           if (source === "action") {
             if (typeof showNotice === "function") {
               showNotice(`ℹ️ ไอเทมอยู่ในช่องแอคชั่น [ช่อง ${index + 1}] อยู่แล้ว`);
@@ -5938,6 +6111,11 @@ function cancelFloorPlacement() {
           inventory[index] = null;
         } else if (source === "action") {
           actionSlotsItems[index] = null;
+        } else if (source === "equip") {
+          equipSlotsItems[index] = null;
+          if (typeof refreshCharacterAppearanceNow === "function") {
+            refreshCharacterAppearanceNow();
+          }
         } else if (source === "chest") {
           if (currentOpenChest) currentOpenChest.storage[index] = null;
         } else if (source === "chestPlayerInventory") {
@@ -5980,6 +6158,8 @@ function cancelFloorPlacement() {
             item = inventory[sourceIndex];
           } else if (source === "action") {
             item = actionSlotsItems[sourceIndex];
+          } else if (source === "equip") {
+            item = equipSlotsItems[sourceIndex];
           } else if (source === "chest") {
             item = currentOpenChest ? currentOpenChest.storage[sourceIndex] : null;
           } else if (source === "chestPlayerInventory") {
@@ -6060,14 +6240,117 @@ function cancelFloorPlacement() {
         if (bottomBtns) {
           bottomBtns.style.display = (isTabInventoryActive && activeTab === "inventory") ? "flex" : "none";
         }
+        if (typeof renderEquipSlots === "function") renderEquipSlots();
         if (typeof updateSelectedSlotVisuals === "function") updateSelectedSlotVisuals();
         if (typeof updateBottomButtonsState === "function") updateBottomButtonsState();
         if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
       window.renderInventory = renderInventory;
 
+      const EQUIP_SLOT_META = [
+        {
+          id: "shirt",
+          i18nKey: "equip_shirt",
+          fallbackTh: "เสื้อ",
+          svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(223, 183, 108, 0.35)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" fill="rgba(223, 183, 108, 0.06)"/></svg>`
+        },
+        {
+          id: "pants",
+          i18nKey: "equip_pants",
+          fallbackTh: "กางเกง/กระโปรง",
+          svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(223, 183, 108, 0.35)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l1.5 18h-5.2L12 11 9.7 21H4.5L6 3z" fill="rgba(223, 183, 108, 0.06)"/><line x1="6" y1="6.5" x2="18" y2="6.5"/></svg>`
+        },
+        {
+          id: "shoes",
+          i18nKey: "equip_shoes",
+          fallbackTh: "รองเท้า",
+          svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(223, 183, 108, 0.35)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18v-9h5l2 5 6 1.5a3 3 0 0 1 2.2 2.9V18H4z" fill="rgba(223, 183, 108, 0.06)"/><line x1="4" y1="20" x2="19.2" y2="20"/></svg>`
+        },
+        {
+          id: "accessory",
+          i18nKey: "equip_accessory",
+          fallbackTh: "ของตกแต่ง",
+          svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(223, 183, 108, 0.35)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="rgba(223, 183, 108, 0.06)"/></svg>`
+        },
+        {
+          id: "accessory",
+          i18nKey: "equip_accessory2",
+          fallbackTh: "ของตกแต่ง 2",
+          svg: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(223, 183, 108, 0.35)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="rgba(223, 183, 108, 0.06)"/></svg>`
+        }
+      ];
+
+      function renderEquipSlots() {
+        window.renderEquipSlots = renderEquipSlots;
+        const slots = document.querySelectorAll("#inventoryEquipSlots .action-slot");
+        for (let i = 0; i < slots.length && i < 5; i++) {
+          const slotEl = slots[i];
+          if (!slotEl) continue;
+
+          const item = equipSlotsItems[i];
+          const meta = EQUIP_SLOT_META[i];
+          const slotTitle = (typeof t === "function" && meta) ? t(meta.i18nKey) : (meta ? meta.fallbackTh : "");
+
+          populateSlotElement(slotEl, {
+            source: "equip",
+            index: i,
+            item: item,
+            keyLabel: null,
+            cursor: isMoveModeEnabled ? "grab" : "pointer",
+            labelStyle: {
+              fontSize: "8px",
+              position: "absolute",
+              bottom: "2px",
+              color: "rgba(223, 183, 108, 0.7)",
+              fontFamily: "'Google Sans', sans-serif"
+            },
+            onRightClick: () => {
+              handleSplitItem("equip", i);
+            }
+          });
+
+          if (!item && meta) {
+            slotEl.style.position = "relative";
+            slotEl.title = slotTitle;
+
+            const iconWrap = document.createElement("span");
+            iconWrap.className = "slot-content equip-placeholder-icon";
+            iconWrap.style.display = "flex";
+            iconWrap.style.alignItems = "center";
+            iconWrap.style.justifyContent = "center";
+            iconWrap.style.pointerEvents = "none";
+            iconWrap.style.marginBottom = "8px";
+            iconWrap.innerHTML = meta.svg;
+            slotEl.appendChild(iconWrap);
+
+            const emptyLabel = document.createElement("span");
+            emptyLabel.className = "slot-label";
+            emptyLabel.style.fontSize = "8px";
+            emptyLabel.style.position = "absolute";
+            emptyLabel.style.bottom = "3px";
+            emptyLabel.style.left = "2px";
+            emptyLabel.style.right = "2px";
+            emptyLabel.style.textAlign = "center";
+            emptyLabel.style.color = "rgba(223, 183, 108, 0.45)";
+            emptyLabel.style.fontFamily = "'Google Sans', sans-serif";
+            emptyLabel.style.pointerEvents = "none";
+            emptyLabel.style.whiteSpace = "nowrap";
+            emptyLabel.style.overflow = "hidden";
+            emptyLabel.style.textOverflow = "ellipsis";
+            if (typeof window.setElementTextOrHTML === "function") {
+              window.setElementTextOrHTML(emptyLabel, slotTitle);
+            } else {
+              emptyLabel.textContent = slotTitle;
+            }
+            slotEl.appendChild(emptyLabel);
+          }
+        }
+      }
+      window.renderEquipSlots = renderEquipSlots;
+
       function renderActionSlots() {
         window.renderActionSlots = renderActionSlots;
+        if (typeof renderEquipSlots === "function") renderEquipSlots();
         const containers = [
           document.querySelectorAll(".action-slots .action-slot"),
           document.querySelectorAll(".inventory-action-slots .action-slot")

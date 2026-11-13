@@ -565,7 +565,27 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
 
 
-        <div id="inventoryMainLayout" style="display: flex; gap: 20px; align-items: flex-start; justify-content: center; width: auto; margin: 16px auto; box-sizing: border-box;">
+        <div id="inventoryMainLayout" style="display: flex; gap: 16px; align-items: flex-start; justify-content: center; width: auto; margin: 16px auto; box-sizing: border-box;">
+          <!-- ช่องสวมใส่เสื้อผ้าตัวละครด้านซ้ายหน้าต่างกระเป๋า (Character Equipment Slots) -->
+          <div id="inventoryEquipSlotsWrapper" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 72px; flex-shrink: 0; margin-top: 4px; border: none; padding: 0; position: relative;">
+            <div style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 9px; font-weight: bold; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; line-height: 1; pointer-events: none;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+                <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" fill="rgba(223, 183, 108, 0.25)"></path>
+              </svg>
+              <span data-i18n="character_equip_label">CHARACTER</span>
+            </div>
+            <div class="inventory-equip-slots keyboard-mode" id="inventoryEquipSlots">
+              <div class="action-slot equip-slot game-ui" data-equip-type="shirt"></div>
+              <div class="action-slot equip-slot game-ui" data-equip-type="pants"></div>
+              <div class="action-slot equip-slot game-ui" data-equip-type="shoes"></div>
+              <div class="action-slot equip-slot game-ui" data-equip-type="accessory"></div>
+              <div class="action-slot equip-slot game-ui" data-equip-type="accessory"></div>
+            </div>
+          </div>
+
+          <!-- Left Vertical Divider line for Inventory Tab -->
+          <div id="inventoryLeftVerticalDivider" style="width: 1px; background: rgba(255, 255, 255, 0.1); margin: 0 4px; height: 312px; display: block;"></div>
+
           <div class="inventory-grid" id="inventoryGrid" style="margin: 0;">
             <!-- สร้างช่องกระเป๋าผ่าน JavaScript -->
           </div>
@@ -3093,8 +3113,12 @@ window.addEventListener("keyup", (e) => {
         if (mainLayout) mainLayout.style.display = "none";
         const divider = document.getElementById("inventoryVerticalDivider");
         if (divider) divider.style.display = "none";
+        const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
+        if (leftDivider) leftDivider.style.display = "none";
         const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
         if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+        const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
+        if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
         if (typeof renderCooking === "function") renderCooking();
         else if (typeof window.renderCooking === "function") window.renderCooking();
       });
@@ -3125,7 +3149,9 @@ window.addEventListener("keyup", (e) => {
         const bottomBtns = document.getElementById("inventoryBottomButtons");
         const mainLayout = document.getElementById("inventoryMainLayout");
         const divider = document.getElementById("inventoryVerticalDivider");
+        const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
         const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
+        const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
 
         if (tabName === "inventory") {
           if (inventoryGrid) inventoryGrid.style.display = "grid";
@@ -3135,7 +3161,9 @@ window.addEventListener("keyup", (e) => {
           if (bottomBtns) bottomBtns.style.display = "flex";
           if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
           if (divider) divider.style.display = "block";
+          if (leftDivider) leftDivider.style.display = "block";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "flex";
           if (typeof renderInventory === "function") renderInventory();
           else if (typeof window.renderInventory === "function") window.renderInventory();
         } else if (tabName === "crafting") {
@@ -3146,7 +3174,9 @@ window.addEventListener("keyup", (e) => {
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) mainLayout.style.display = "none";
           if (divider) divider.style.display = "none";
+          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           if (typeof renderCrafting === "function") renderCrafting();
           else if (typeof window.renderCrafting === "function") window.renderCrafting();
         } else if (tabName === "settings") {
@@ -3157,7 +3187,9 @@ window.addEventListener("keyup", (e) => {
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) mainLayout.style.display = "none";
           if (divider) divider.style.display = "none";
+          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           syncInventorySettingsUI();
         } else if (tabName === "itemsList") {
           if (inventoryGrid) inventoryGrid.style.display = "grid";
@@ -3167,7 +3199,9 @@ window.addEventListener("keyup", (e) => {
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
           if (divider) divider.style.display = "block";
+          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           if (typeof renderInventory === "function") renderInventory();
           else if (typeof window.renderInventory === "function") window.renderInventory();
         } else if (tabName === "cooking") {
@@ -3178,7 +3212,9 @@ window.addEventListener("keyup", (e) => {
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) mainLayout.style.display = "none";
           if (divider) divider.style.display = "none";
+          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+          if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           if (typeof renderCooking === "function") renderCooking();
           else if (typeof window.renderCooking === "function") window.renderCooking();
         }
@@ -5282,7 +5318,7 @@ window.addEventListener("keyup", (e) => {
         // 1. Inventory Panel (#inventoryOverlay)
         const invPanel = document.querySelector("#inventoryOverlay .inventory-panel");
         if (invPanel) {
-          const baseW = 580;
+          const baseW = 684;
           const baseH = isCompactH ? 464 : 520;
           invPanel.style.setProperty("--panel-base-h", `${baseH}px`);
           invPanel.style.setProperty("--panel-pad-y", isCompactH ? "16px" : "24px");
@@ -5679,6 +5715,9 @@ window.addEventListener("keyup", (e) => {
 
       function setRagdoll(enabled) {
         ragdollEnabled = enabled;
+        if (typeof ragdollInitialized !== "undefined") {
+          ragdollInitialized = false;
+        }
         if (ragdollEnabled) {
           if (typeof window.exitBoatCamera === "function") window.exitBoatCamera();
           if (typeof window.exitMechCamera === "function") window.exitMechCamera();
@@ -5711,6 +5750,19 @@ window.addEventListener("keyup", (e) => {
           invToggle.textContent = ragdollEnabled ? "เปิด" : "ปิด";
         }
       }
+      window.setRagdoll = setRagdoll;
+      window.toggleRagdoll = function() {
+        setRagdoll(!ragdollEnabled);
+        return ragdollEnabled;
+      };
+
+      document.addEventListener("click", (e) => {
+        if (!e.target) return;
+        const rag = e.target.closest("#ragdollToggle") || e.target.closest("#invRagdollToggle") || e.target.closest(".ragdoll-toggle-btn");
+        if (rag) {
+          setRagdoll(!ragdollEnabled);
+        }
+      });
 
       function setPlayerSpeed(val) {
         playerSpeed = val;

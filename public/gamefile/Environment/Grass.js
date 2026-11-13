@@ -15,10 +15,19 @@
     
     const chunks = opts.grassChunks !== undefined ? opts.grassChunks : global.grassChunks;
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
-    const maxDist = opts.renderDistValue !== undefined 
+    const shadowDist = typeof global.shadowRenderDistValue === "number"
+      ? global.shadowRenderDistValue
+      : (typeof global.window !== "undefined" && typeof global.window.shadowRenderDistValue === "number"
+        ? global.window.shadowRenderDistValue
+        : 14.0);
+    const rawGrassDist = opts.renderDistValue !== undefined 
       ? opts.renderDistValue 
       : (typeof global.grassRenderDistValue === "number" ? global.grassRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.grassRenderDistValue === "number" ? global.window.grassRenderDistValue : 4.5));
-    const maxDistSq = maxDist * maxDist;
+    const maxDist = Math.min(rawGrassDist, shadowDist);
+
+    if (opts.depthMaxShadowDistLoc) {
+      gl.uniform1f(opts.depthMaxShadowDistLoc, maxDist);
+    }
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
     
@@ -37,7 +46,7 @@
         const dz = chunk.pos[2] - ez;
         const distSq = dx * dx + dy * dy + dz * dz;
 
-        // Shadow distance limit for grass based on shadow/grass render distance
+        // Shadow distance limit for grass based on central shadow/grass render distance
         const r = chunk.radius || 0;
         const maxThreshold = maxDist + r;
         if (distSq <= maxThreshold * maxThreshold) {

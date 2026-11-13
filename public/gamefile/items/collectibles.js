@@ -1949,15 +1949,20 @@ function buildCollectibles(count, seed) {
         const isUint32 = flatGeom && flatGeom.indices && flatGeom.indices.length > 65535;
 
         if (targetBuffer === 'main') {
+            const flatVerts =
+              flatGeom.vertices instanceof Float32Array
+                ? flatGeom.vertices
+                : new Float32Array(flatGeom.vertices);
             collectibleIndicesLength = flatGeom.indices.length;
-            window.collectibleRawVertices = flatGeom.vertices;
+            window.collectibleRawVertices = flatVerts;
 
             if (!collectibleVertexBuffer)
               collectibleVertexBuffer = gl.createBuffer();
+            window.collectibleVertexBuffer = collectibleVertexBuffer;
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              flatGeom.vertices instanceof Float32Array ? flatGeom.vertices : new Float32Array(flatGeom.vertices),
+              flatVerts,
               gl.STATIC_DRAW,
             );
 
@@ -2059,6 +2064,37 @@ function buildCollectibles(count, seed) {
             );
         }
       }
+
+      // Fast surgical GPU sub-buffer update when picking up a static collectible:
+      // zeroes out only the item's vertex range in collectibleVertexBuffer via gl.bufferSubData
+      // instead of rebuilding the entire planet's static collectibles & house structures VBO.
+      window.hideStaticCollectibleInVBO = function(item) {
+        if (!item || item.isDynamic) return false;
+        if (
+          item.meshStart !== undefined &&
+          item.meshEnd !== undefined &&
+          item.meshEnd > item.meshStart &&
+          window.collectibleRawVertices &&
+          collectibleVertexBuffer &&
+          typeof gl !== "undefined" &&
+          gl
+        ) {
+          const startF = item.meshStart * 3;
+          const endF = item.meshEnd * 3;
+          const rawV = window.collectibleRawVertices;
+          if (endF <= rawV.length) {
+            for (let j = startF; j < endF; j++) rawV[j] = 0;
+            const sliceView =
+              typeof rawV.subarray === "function"
+                ? rawV.subarray(startF, endF)
+                : new Float32Array(rawV.slice(startF, endF));
+            gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
+            gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, sliceView);
+            return true;
+          }
+        }
+        return false;
+      };
 
       // === AUTHORITATIVE CENTRALIZED WHEELED BOAT CONTROLLER ===
       window.updateWheeledBoatControls = function(boat, inputState, dt) {
@@ -6958,16 +6994,89 @@ function buildCollectibles(count, seed) {
           usage_en: "Obsidian Flux warp item. Equip in Action UI and use to open the Warp UI and teleport to any placed Obsidian Pad in placement order (consumes 1 Obsidian Flux per warp).",
           maxStack: 99
         },
-        "OBSIDIAN_FLUX": {
-          id: "OBSIDIAN_FLUX",
+        "WHITE_BODYSUIT_TOP": {
+          id: "WHITE_BODYSUIT_TOP",
           category: ITEM_CATEGORIES.HOLDABLE,
-          name_th: "ออบซิเดียนฟลักซ์ (Obsidian Flux)",
-          name_en: "Obsidian Flux",
-          icon: "⚫",
-          actionType: "WARP_ITEM",
-          usage_th: "ไอเทมวาร์ปออบซิเดียนฟลักซ์ ใส่ในช่อง UI แอคชั่นแล้วกดใช้งานเพื่อเปิดหน้าต่างวาร์ปไปยังแท่นวาร์ป (Obsidian Pad) ที่วางไว้ตามลำดับ (การวาร์ป 1 ครั้งจะทำลาย Obsidian Flux 1 อัน)",
-          usage_en: "Obsidian Flux warp item. Equip in Action UI and use to open the Warp UI and teleport to any placed Obsidian Pad in placement order (consumes 1 Obsidian Flux per warp).",
-          maxStack: 99
+          equipSlot: "shirt",
+          name_th: "เสื้อบอดี้สูทแขนสั้นสีขาว",
+          name_en: "White Short-Sleeve Bodysuit Top",
+          icon: "👕",
+          actionType: "EQUIP_SHIRT",
+          usage_th: "เสื้อบอดี้สูทแขนสั้นสีขาวแบบแนบเนื้อ สวมใส่ในช่องเสื้อของตัวละคร (เมื่อใส่คู่กับกางเกงขาสั้นบอดี้สูทสีขาวจะเชื่อมต่อกันเนียนเป็นเนื้อเดียวกัน)",
+          usage_en: "Form-fitting white short-sleeve bodysuit top. Equips in the character Shirt slot (seamlessly merges into a single continuous bodysuit when worn with the White Bodysuit Shorts).",
+          maxStack: 1
+        },
+        "WHITE_BODYSUIT_SHORTS": {
+          id: "WHITE_BODYSUIT_SHORTS",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "pants",
+          name_th: "กางเกงขาสั้นบอดี้สูทสีขาว",
+          name_en: "White Bodysuit Shorts",
+          icon: "🩳",
+          actionType: "EQUIP_PANTS",
+          usage_th: "กางเกงขาสั้นบอดี้สูทสีขาวแบบแนบเนื้อพร้อมตะเข็บเว้าทรงวี สวมใส่ในช่องกางเกง/กระโปรงของตัวละคร (เมื่อใส่คู่กับเสื้อบอดี้สูทแขนสั้นสีขาวจะเชื่อมต่อกันเนียนเป็นเนื้อเดียวกัน)",
+          usage_en: "Form-fitting white bodysuit shorts with V-hip seams. Equips in the character Pants/Skirt slot (seamlessly merges into a single continuous bodysuit when worn with the White Bodysuit Top).",
+          maxStack: 1
+        },
+        "TRAVELER_HOODIE": {
+          id: "TRAVELER_HOODIE",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "accessory",
+          name_th: "เสื้อฮูดผ้าคลุมนักเดินทาง",
+          name_en: "Traveler Hoodie Cloak",
+          icon: "🧥",
+          actionType: "EQUIP_ACCESSORY",
+          usage_th: "เสื้อฮูดผ้าคลุมนักเดินทางสีครีม-ลายข้าวหลามตัดสีดำพร้อมเข็มกลัดดอกไม้ทองคำ สวมใส่ในช่องของตกแต่งตัวละคร",
+          usage_en: "Cream and black diamond-patterned traveler hoodie cloak with a golden flower brooch. Equips in the character Accessory slot.",
+          maxStack: 1
+        },
+        "TRAVELER_BOOTS": {
+          id: "TRAVELER_BOOTS",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "shoes",
+          name_th: "รองเท้าบูทนักเดินทาง",
+          name_en: "Traveler Ankle Boots",
+          icon: "🥾",
+          actionType: "EQUIP_SHOES",
+          usage_th: "รองเท้าบูทหุ้มข้อสีเข้มขอบครีมของชุดนักเดินทาง สวมใส่ในช่องรองเท้าของตัวละคร",
+          usage_en: "Dark ankle boots with cream folded cuffs from the traveler outfit. Equips in the character Shoes slot.",
+          maxStack: 1
+        },
+        "WHITE_SHIRT_SHORT": {
+          id: "WHITE_SHIRT_SHORT",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "shirt",
+          name_th: "เสื้อเชิ้ตสีขาวแขนสั้น",
+          name_en: "White Short-Sleeve Shirt",
+          icon: "👔",
+          actionType: "EQUIP_SHIRT",
+          usage_th: "เสื้อเชิ้ตสีขาวแขนสั้นแบบคอปกติดกระดุมหน้า สวมใส่ในช่องเสื้อของตัวละคร",
+          usage_en: "Crisp white short-sleeve collared button-up shirt. Equips in the character Shirt slot.",
+          maxStack: 1
+        },
+        "BLACK_PLEATED_SKIRT": {
+          id: "BLACK_PLEATED_SKIRT",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "pants",
+          name_th: "กระโปรงพลีทสีดำ",
+          name_en: "Black Pleated Skirt",
+          icon: "👗",
+          actionType: "EQUIP_PANTS",
+          usage_th: "กระโปรงจีบพลีทสีดำเอวสูงทรงเอพร้อมผ้าพลิ้วและกันจม สวมใส่ในช่องกางเกง/กระโปรงของตัวละคร",
+          usage_en: "High-waisted A-line black knife-pleated mini skirt with dynamic cloth simulation. Equips in the character Pants/Skirt slot.",
+          maxStack: 1
+        },
+        "BLACK_LEGGINGS": {
+          id: "BLACK_LEGGINGS",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "accessory",
+          name_th: "กางเกงเลกกิ้งสีดำ",
+          name_en: "Black Leggings",
+          icon: "👖",
+          actionType: "EQUIP_ACCESSORY",
+          usage_th: "กางเกงเลกกิ้งสีดำรัดรูปขายาวแบบแนบเนื้อ ใส่คู่กับกระโปรงหรือเสื้อได้หลายสไตล์ สวมใส่ในช่องของตกแต่ง (ของเสริม) ของตัวละคร",
+          usage_en: "Matte black form-fitting full-length leggings. Equips in a character Accessory slot so it can be layered under skirts.",
+          maxStack: 1
         }
       };
       window.ITEM_DEFINITIONS = ITEM_DEFINITIONS;

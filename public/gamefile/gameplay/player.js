@@ -96,15 +96,29 @@ window.characterVertexShaderSource = `#version 300 es
                 
                 // Character base color
                 vec3 baseColor = vColor;
-                if (uHasMainTex > 0.5) {
+                if (vColor.b > 1.5) {
+                    baseColor = vec3(vColor.r, vColor.g, vColor.b - 2.0);
+                } else if (uHasMainTex > 0.5) {
                     baseColor = texture(uMainTex, vTexCoord).rgb;
+                } else if (uUseFaceTex > 0.5 && vTexCoord.x > 0.01 && vTexCoord.x < 0.99 && vTexCoord.y > 0.01 && vTexCoord.y < 0.99) {
+                    vec4 faceSample = texture(uFaceTex, vTexCoord);
+                    baseColor = mix(baseColor, faceSample.rgb, faceSample.a);
                 }
 
-                if (uHasMainTex < 0.5 && vLocalPos.x > 5.0) {
+                if (uHasMainTex < 0.5 && vLocalPos.x > 5.0 && vTexCoord.x > -5.0) {
                     vec3 clothPos = vec3(vLocalPos.x - 10.0, vLocalPos.y, vLocalPos.z);
                     vec2 cellId;
                     vec2 gv;
-                    if (clothPos.y >= 0.215) {
+                    if (vTexCoord.x <= -1.5 && vTexCoord.x >= -3.5) {
+                        // Connected Long Sleeves cylindrical diamond pattern
+                        float sU = clamp(-2.0 - vTexCoord.x, 0.0, 1.0);
+                        float nSleeveCols = 6.0;
+                        float rowCoord = vTexCoord.y / 0.056;
+                        float rowId = floor(rowCoord);
+                        float colCoord = sU * nSleeveCols + mod(rowId, 2.0) * 0.5;
+                        cellId = vec2(mod(floor(colCoord), nSleeveCols) + 80.0, rowId + 80.0);
+                        gv = vec2(fract(colCoord), fract(rowCoord)) - 0.5;
+                    } else if (clothPos.y >= 0.215) {
                         // Hood region (outer hood, front rim, and inner hood ceiling)
                         float hAng = atan(clothPos.x, clothPos.y - 0.41);
                         float hRad = length(vec2(clothPos.x, clothPos.y - 0.41));
@@ -115,7 +129,7 @@ window.characterVertexShaderSource = `#version 300 es
                         cellId = vec2(mod(floor(hColCoord), nHoodCols) + 50.0, hRowId + 50.0);
                         gv = vec2(fract(hColCoord), fract(hDepth)) - 0.5;
                     } else {
-                        // Cloak, Capelet, Collar & Sleeves region
+                        // Cloak, Capelet & Collar region
                         float cAng = atan(clothPos.x, clothPos.z);
                         float nCols = 12.0;
                         float rowCoord = (0.215 - clothPos.y) / 0.068;
@@ -134,113 +148,10 @@ window.characterVertexShaderSource = `#version 300 es
                     float sqDist = max(abs(pr.x), abs(pr.y));
                     float sqMask = 1.0 - smoothstep(sqSize - 0.018, sqSize + 0.018, sqDist);
                     if (sqMask > 0.001) {
-                        float colH = hash12(cellId * 1.73 + vec2(uCloneSeed, uCloneSeed * 0.618));
+                        float effSeed = uCloneSeed > 0.001 ? uCloneSeed : 1.0;
+                        float colH = hash12(cellId * 1.73 + vec2(effSeed, effSeed * 0.618));
                         vec3 sqColor = getHoodieSquareColor(colH);
                         baseColor = mix(baseColor, sqColor, sqMask);
-                    }
-                } else if (uHasMainTex < 0.5 && vLocalPos.y > 0.22 && vLocalPos.y < 0.67 && vLocalPos.z > 0.04 && vLocalPos.z < 0.28) {
-                    vec2 uv = vec2(vLocalPos.x, vLocalPos.y - 0.43) / 0.24;
-                    
-                    if (uUseFaceTex > 0.5) {
-                        float halfW = 0.75;
-                        float halfH = 0.375;
-                        float texU = (uv.x / (halfW * 2.0)) + 0.5;
-                        float texV = 0.5 - ((uv.y - (-0.01)) / (halfH * 2.0));
-                        if (texU >= 0.0 && texU <= 1.0 && texV >= 0.0 && texV <= 1.0) {
-                            vec4 faceCol = texture(uFaceTex, vec2(texU, texV));
-                            baseColor = mix(baseColor, faceCol.rgb, faceCol.a);
-                        }
-                    } else {
-                        // --- 1. Rosy ChiBi Blush Cheeks ---
-                    float dLeftCheek = length(vec2(uv.x - (-0.38), (uv.y - (-0.18)) * 1.3));
-                    float dRightCheek = length(vec2(uv.x - 0.38, (uv.y - (-0.18)) * 1.3));
-                    float sCheeks = max(smoothstep(0.14, 0.02, dLeftCheek), smoothstep(0.14, 0.02, dRightCheek)) * 0.55;
-                    vec3 cheekColor = vec3(1.0, 0.52, 0.60);
-                    
-                    // --- 2. Large Anime Chibi Eyes ---
-                    vec2 leftEyeUv = vec2(uv.x - (-0.23), (uv.y - 0.01) * 0.75);
-                    vec2 rightEyeUv = vec2(uv.x - 0.23, (uv.y - 0.01) * 0.75);
-                    float dLeftEye = length(leftEyeUv);
-                    float dRightEye = length(rightEyeUv);
-                    
-                    // Sclera / Eye White
-                    float eyeRadius = 0.125;
-                    float sEyeWhite = max(smoothstep(eyeRadius, eyeRadius - 0.015, dLeftEye),
-                                          smoothstep(eyeRadius, eyeRadius - 0.015, dRightEye));
-                    
-                    // Large Warm Amber Gradient Iris
-                    float dLeftIris = length(vec2(leftEyeUv.x, leftEyeUv.y * 0.88));
-                    float dRightIris = length(vec2(rightEyeUv.x, rightEyeUv.y * 0.88));
-                    float irisRadius = 0.098;
-                    float sIris = max(smoothstep(irisRadius, irisRadius - 0.015, dLeftIris),
-                                      smoothstep(irisRadius, irisRadius - 0.015, dRightIris));
-                    
-                    float irisY = clamp((uv.y - 0.01) / 0.12, -1.0, 1.0);
-                    vec3 irisColor = mix(vec3(0.85, 0.52, 0.18), vec3(0.24, 0.11, 0.05), irisY * 0.5 + 0.5);
-                    
-                    // Dark Pupil
-                    float dLeftPupil = length(vec2(leftEyeUv.x, leftEyeUv.y - 0.01));
-                    float dRightPupil = length(vec2(rightEyeUv.x, rightEyeUv.y - 0.01));
-                    float sPupil = max(smoothstep(0.045, 0.028, dLeftPupil),
-                                       smoothstep(0.045, 0.028, dRightPupil));
-                    vec3 pupilColor = vec3(0.08, 0.04, 0.02);
-                    
-                    // Dual Glossy White Sparkle Catchlights
-                    float dLeftH1 = length(leftEyeUv - vec2(-0.038, 0.038));
-                    float dRightH1 = length(rightEyeUv - vec2(-0.038, 0.038));
-                    float sH1 = max(smoothstep(0.035, 0.018, dLeftH1),
-                                    smoothstep(0.035, 0.018, dRightH1));
-                                    
-                    float dLeftH2 = length(leftEyeUv - vec2(0.032, -0.038));
-                    float dRightH2 = length(rightEyeUv - vec2(0.032, -0.038));
-                    float sH2 = max(smoothstep(0.020, 0.008, dLeftH2),
-                                    smoothstep(0.020, 0.008, dRightH2));
-                                    
-                    // Eyelashes & Eyeliner
-                    float dLeftLash = distToSegment(uv, vec2(-0.35, 0.08), vec2(-0.11, 0.13));
-                    float dRightLash = distToSegment(uv, vec2(0.11, 0.13), vec2(0.35, 0.08));
-                    float sEyelash = max(smoothstep(0.032, 0.010, dLeftLash),
-                                         smoothstep(0.032, 0.010, dRightLash));
-                    
-                    // --- 3. Anime Eyebrows ---
-                    float dLeftBrow = distToSegment(uv, vec2(-0.32, 0.18), vec2(-0.14, 0.22));
-                    float dRightBrow = distToSegment(uv, vec2(0.14, 0.22), vec2(0.32, 0.18));
-                    float sEyebrow = max(smoothstep(0.020, 0.006, dLeftBrow),
-                                         smoothstep(0.020, 0.006, dRightBrow));
-                    vec3 browColor = vec3(0.32, 0.18, 0.10);
-                    
-                    // --- 4. Cute Open Chibi Mouth ---
-                    vec2 mouthUv = vec2(uv.x, (uv.y - (-0.17)) * 1.3);
-                    float dMouthOpen = length(vec2(mouthUv.x, max(0.0, mouthUv.y)));
-                    float sMouthOutline = smoothstep(0.060, 0.042, dMouthOpen) * step(-0.035, mouthUv.y);
-                    float sMouthInner = smoothstep(0.042, 0.028, dMouthOpen) * step(-0.025, mouthUv.y);
-                    
-                    float dTongue = length(vec2(mouthUv.x, mouthUv.y - (-0.015)));
-                    float sTongue = smoothstep(0.032, 0.015, dTongue) * sMouthInner;
-                    
-                    vec3 mouthBorderColor = vec3(0.22, 0.08, 0.08);
-                    vec3 mouthInnerColor = vec3(0.88, 0.32, 0.38);
-                    vec3 tongueColor = vec3(0.98, 0.58, 0.65);
-                    
-                    // Apply Face Composite Layers
-                    baseColor = mix(baseColor, cheekColor, sCheeks);
-                    
-                    if (sEyeWhite > 0.01) {
-                        vec3 eyeCol = vec3(0.98, 0.98, 0.98);
-                        eyeCol = mix(eyeCol, irisColor, sIris);
-                        eyeCol = mix(eyeCol, pupilColor, sPupil);
-                        eyeCol = mix(eyeCol, vec3(1.0), max(sH1, sH2));
-                        baseColor = mix(baseColor, eyeCol, sEyeWhite);
-                    }
-                    
-                    baseColor = mix(baseColor, vec3(0.15, 0.10, 0.08), sEyelash);
-                    baseColor = mix(baseColor, browColor, sEyebrow);
-                    
-                    if (sMouthOutline > 0.01) {
-                        vec3 mCol = mix(mouthBorderColor, mouthInnerColor, clamp(sMouthInner / max(0.001, sMouthOutline), 0.0, 1.0));
-                        mCol = mix(mCol, tongueColor, sTongue);
-                        baseColor = mix(baseColor, mCol, sMouthOutline);
-                    }
                     }
                 }
                 vec3 pointLightAccum = vec3(0.0);
@@ -271,7 +182,46 @@ window.characterVertexShaderSource = `#version 300 es
                 }
                 vec3 baseLit = calculateUnifiedLighting(baseColor, normal, vWorldPos, lightDir, vPositionLightSpace, false);
                 vec3 addedCharLight = baseColor * pointLightAccum + pointTintAccum;
-                vec3 finalColor = clamp(baseLit + addedCharLight * (1.0 - baseLit * 0.55), 0.0, 1.0);
+                vec3 combinedLit = clamp(baseLit + addedCharLight * (1.0 - baseLit * 0.55), 0.0, 1.0);
+
+                // Clean Soft Anime Cel-Shading & 3D Sculpted Bevel Hair Sheen
+                float NdotL = dot(normal, lightDir);
+                float NdotV = max(0.0, dot(normal, viewDir));
+                vec3 celColor;
+                float animeRim;
+
+                if (vLocalPos.y < -500.0) {
+                    // 3D Sculpted Beveled Curve Hair Shading (Clean satin bevel contrast like ANIME HAIR 2)
+                    // Sharp facet normal contrast across split-normal bevel slopes & V-grooves
+                    float lumaMask = smoothstep(0.04, 0.18, max(baseColor.r, max(baseColor.g, baseColor.b)));
+                    float bevelLight = smoothstep(-0.42, 0.58, NdotL);
+                    float bevelCoreHighlight = smoothstep(0.28, 0.85, NdotL);
+                    vec3 deepGrooveShadow = baseColor * vec3(0.58, 0.56, 0.64);
+                    vec3 midSatinTone = combinedLit * 1.02;
+                    vec3 ridgeCrestTone = clamp(combinedLit * 1.24 + vec3(0.07, 0.06, 0.04) * lumaMask, 0.0, 1.0);
+
+                    celColor = mix(deepGrooveShadow, midSatinTone, bevelLight);
+                    celColor = mix(celColor, ridgeCrestTone, bevelCoreHighlight * 0.68);
+
+                    // Smooth anisotropic Kajiya-Kay / Half-vector satin sheen along the 3D sculpted curve
+                    vec3 H = normalize(lightDir + viewDir);
+                    float NdotH = max(0.0, dot(normal, H));
+                    float satinSheen = pow(NdotH, 18.0) * smoothstep(-0.05, 0.45, NdotL) * lumaMask;
+                    celColor = clamp(celColor + (baseColor * 0.35 + vec3(0.14, 0.13, 0.10)) * satinSheen, 0.0, 1.0);
+
+                    animeRim = pow(1.0 - NdotV, 3.0) * smoothstep(-0.15, 0.40, NdotL) * 1.35 * lumaMask;
+                } else {
+                    // Soft Subsurface-Scattering (Half-Lambert) Anime Chibi Skin Lighting:
+                    // Prevents harsh shadow steps across facial curves and body joints while keeping a warm rosy-peach tone!
+                    float halfLambert = NdotL * 0.5 + 0.5;
+                    float toonStep = smoothstep(0.14, 0.78, halfLambert);
+                    vec3 warmSkinShadow = vec3(0.955, 0.905, 0.895);
+                    vec3 softLit = max(combinedLit, baseColor * vec3(0.76, 0.71, 0.69));
+                    celColor = mix(softLit * warmSkinShadow, softLit * 1.03, toonStep);
+                    animeRim = pow(1.0 - NdotV, 3.5) * smoothstep(-0.15, 0.35, NdotL);
+                }
+
+                vec3 finalColor = clamp(celColor + vec3(1.0, 0.95, 0.92) * (animeRim * 0.07), 0.0, 1.0);
 
                 // Apply Water Volume Tint & Fog
                 float dist = length(vWorldPos);
@@ -1597,394 +1547,27 @@ window.characterVertexShaderSource = `#version 300 es
 
 
       // ============================================
-      // ฟังก์ชันระบบสร้างเชิงลึกของตัวละครสามมิติดินปั้นขาวเงา
+      // ฟังก์ชันระบบสร้างเชิงลึกของตัวละครสามมิติดินปั้นขาวเงา (ดึงจาก capsuleModel.js ส่วนกลาง)
       // ============================================
-      function rotatePointX(pivot, point, theta) {
-        if (theta === 0) return point;
-        const dy = point[1] - pivot[1];
-        const dz = point[2] - pivot[2];
-        const cosT = Math.cos(theta);
-        const sinT = Math.sin(theta);
-        const ry = dy * cosT - dz * sinT;
-        const rz = dy * sinT + dz * cosT;
-        return [point[0], pivot[1] + ry, pivot[2] + rz];
-      }
-
-      function rotatePointY(pivot, point, theta) {
-        if (theta === 0) return point;
-        const dx = point[0] - pivot[0];
-        const dz = point[2] - pivot[2];
-        const cosT = Math.cos(theta);
-        const sinT = Math.sin(theta);
-        const rx = dx * cosT + dz * sinT;
-        const rz = -dx * sinT + dz * cosT;
-        return [pivot[0] + rx, point[1], pivot[2] + rz];
-      }
-
-      function rotatePointZ(pivot, point, theta) {
-        if (theta === 0) return point;
-        const dx = point[0] - pivot[0];
-        const dy = point[1] - pivot[1];
-        const cosT = Math.cos(theta);
-        const sinT = Math.sin(theta);
-        const rx = dx * cosT - dy * sinT;
-        const ry = dx * sinT + dy * cosT;
-        return [pivot[0] + rx, pivot[1] + ry, point[2]];
-      }
-
-      const _capsuleIndexCache = {};
-
-      function getCapsuleIndices(radialSegments, axialSegments) {
-        const key = radialSegments + "_" + axialSegments;
-        if (_capsuleIndexCache[key]) return _capsuleIndexCache[key];
-        const indices = [];
-        for (let i = 0; i < axialSegments; i++) {
-          for (let j = 0; j < radialSegments; j++) {
-            const row1 = i * (radialSegments + 1);
-            const row2 = (i + 1) * (radialSegments + 1);
-
-            const a = row1 + j;
-            const b = row1 + j + 1;
-            const c = row2 + j;
-            const d = row2 + j + 1;
-
-            indices.push(a, b, c);
-            indices.push(c, b, d);
-          }
-        }
-        _capsuleIndexCache[key] = indices;
-        return indices;
-      }
-
-      const _capsuleBufferPool = [];
-      let _capsulePoolIndex = 0;
-      function resetCapsuleBufferPool() {
-        _capsulePoolIndex = 0;
-      }
-      function getPooledCapsuleBuffers(totalVerts) {
-        const reqLen = totalVerts * 3;
-        if (_capsulePoolIndex >= _capsuleBufferPool.length) {
-          _capsuleBufferPool.push({
-            vertices: new Float32Array(reqLen),
-            normals: new Float32Array(reqLen),
-          });
-        }
-        const item = _capsuleBufferPool[_capsulePoolIndex++];
-        if (item.vertices.length < reqLen) {
-          item.vertices = new Float32Array(reqLen);
-          item.normals = new Float32Array(reqLen);
-        }
-        return item;
-      }
-
-      function generateCapsule(
-        p1,
-        p2,
-        r,
-        radialSegments = 16,
-        axialSegments = 24,
-      ) {
-        const totalSlices = axialSegments;
-        const totalVerts = (totalSlices + 1) * (radialSegments + 1);
-        const pooled = getPooledCapsuleBuffers(totalVerts);
-        const vertices = pooled.vertices.subarray(0, totalVerts * 3);
-        const normals = pooled.normals.subarray(0, totalVerts * 3);
-
-        const dX = p2[0] - p1[0];
-        const dY = p2[1] - p1[1];
-        const dZ = p2[2] - p1[2];
-        const L = Math.sqrt(dX * dX + dY * dY + dZ * dZ);
-
-        let zAxis = [0, 1, 0];
-        if (L > 0.00001) {
-          zAxis = [dX / L, dY / L, dZ / L];
-        }
-
-        let up = [0, 1, 0];
-        if (Math.abs(zAxis[1]) > 0.99) {
-          up = [1, 0, 0];
-        }
-
-        let xAxis = [
-          up[1] * zAxis[2] - up[2] * zAxis[1],
-          up[2] * zAxis[0] - up[0] * zAxis[2],
-          up[0] * zAxis[1] - up[1] * zAxis[0],
-        ];
-        let lenX = Math.sqrt(
-          xAxis[0] * xAxis[0] + xAxis[1] * xAxis[1] + xAxis[2] * xAxis[2],
-        );
-        xAxis = [xAxis[0] / lenX, xAxis[1] / lenX, xAxis[2] / lenX];
-
-        let yAxis = [
-          zAxis[1] * xAxis[2] - zAxis[2] * xAxis[1],
-          zAxis[2] * xAxis[0] - zAxis[0] * xAxis[2],
-          zAxis[0] * xAxis[1] - zAxis[1] * xAxis[0],
-        ];
-
-        let vIdx = 0;
-        for (let i = 0; i <= totalSlices; i++) {
-          const angle = -Math.PI / 2 + Math.PI * (i / totalSlices);
-          const sinA = Math.sin(angle);
-          const cosA = Math.cos(angle);
-
-          let zPos = 0;
-          let ringRadius = r * cosA;
-
-          if (sinA < 0) {
-            zPos = sinA * r;
-          } else {
-            zPos = L + sinA * r;
-          }
-
-          for (let j = 0; j <= radialSegments; j++) {
-            const phi = (j / radialSegments) * Math.PI * 2;
-            const cosP = Math.cos(phi);
-            const sinP = Math.sin(phi);
-
-            const ringX = xAxis[0] * cosP + yAxis[0] * sinP;
-            const ringY = xAxis[1] * cosP + yAxis[1] * sinP;
-            const ringZ = xAxis[2] * cosP + yAxis[2] * sinP;
-
-            vertices[vIdx] = p1[0] + zAxis[0] * zPos + ringX * ringRadius;
-            vertices[vIdx + 1] = p1[1] + zAxis[1] * zPos + ringY * ringRadius;
-            vertices[vIdx + 2] = p1[2] + zAxis[2] * zPos + ringZ * ringRadius;
-
-            normals[vIdx] = ringX * cosA + zAxis[0] * sinA;
-            normals[vIdx + 1] = ringY * cosA + zAxis[1] * sinA;
-            normals[vIdx + 2] = ringZ * cosA + zAxis[2] * sinA;
-
-            vIdx += 3;
-          }
-        }
-
-        const indices = getCapsuleIndices(radialSegments, axialSegments);
-        return { vertices, normals, indices };
-      }
-
-      const _mergeBufferPool = [];
-      let _mergePoolIndex = 0;
-      function resetMergeBufferPool() {
-        _mergePoolIndex = 0;
-      }
-      function getPooledMergeBuffers(totalVerts, totalIndices) {
-        const vLen = totalVerts * 3;
-        const tLen = totalVerts * 2;
-        const iLen = totalIndices;
-        if (_mergePoolIndex >= _mergeBufferPool.length) {
-          _mergeBufferPool.push({
-            vertices: new Float32Array(Math.max(vLen, 1024)),
-            normals: new Float32Array(Math.max(vLen, 1024)),
-            colors: new Float32Array(Math.max(vLen, 1024)),
-            texcoords: new Float32Array(Math.max(tLen, 1024)),
-            indices16: new Uint16Array(Math.max(iLen, 1024)),
-            indices32: new Uint32Array(Math.max(iLen, 1024)),
-          });
-        }
-        const item = _mergeBufferPool[_mergePoolIndex++];
-        if (item.vertices.length < vLen) {
-          item.vertices = new Float32Array(vLen);
-          item.normals = new Float32Array(vLen);
-          item.colors = new Float32Array(vLen);
-        }
-        if (item.texcoords.length < tLen) {
-          item.texcoords = new Float32Array(tLen);
-        }
-        if (item.indices16.length < iLen) {
-          item.indices16 = new Uint16Array(iLen);
-          item.indices32 = new Uint32Array(iLen);
-        }
-        return item;
-      }
-
-      function mergeMeshes(meshes) {
-        let totalVerts = 0;
-        let totalIndices = 0;
-        for (let k = 0; k < meshes.length; k++) {
-          const m = meshes[k];
-          if (!m || !m.vertices) continue;
-          totalVerts += (m.vertices.length / 3) | 0;
-          if (m.indices) totalIndices += m.indices.length;
-        }
-
-        const pool = getPooledMergeBuffers(totalVerts, totalIndices);
-        const combinedVertices = pool.vertices.subarray(0, totalVerts * 3);
-        const combinedNormals = pool.normals.subarray(0, totalVerts * 3);
-        const combinedColors = pool.colors.subarray(0, totalVerts * 3);
-        const combinedTexCoords = pool.texcoords.subarray(0, totalVerts * 2);
-        const combinedIndices = totalVerts > 65535 ? pool.indices32.subarray(0, totalIndices) : pool.indices16.subarray(0, totalIndices);
-
-        let vertexOffset = 0;
-        let vOffset = 0;
-        let cOffset = 0;
-        let tOffset = 0;
-        let iOffset = 0;
-
-        for (let k = 0; k < meshes.length; k++) {
-          const mesh = meshes[k];
-          if (!mesh || !mesh.vertices) continue;
-          const mv = mesh.vertices;
-          const mn = mesh.normals;
-          const mc = mesh.colors;
-          const mt = mesh.texcoords;
-          const mi = mesh.indices;
-          const vertCount = (mv.length / 3) | 0;
-
-          if (mv instanceof Float32Array) {
-            combinedVertices.set(mv, vOffset);
-          } else {
-            for (let i = 0; i < mv.length; i++) combinedVertices[vOffset + i] = mv[i];
-          }
-
-          if (mn instanceof Float32Array) {
-            combinedNormals.set(mn, vOffset);
-          } else {
-            for (let i = 0; i < mn.length; i++) combinedNormals[vOffset + i] = mn[i];
-          }
-
-          if (mt && mt.length >= vertCount * 2) {
-            if (mt instanceof Float32Array) {
-              combinedTexCoords.set(mt.subarray(0, vertCount * 2), tOffset);
-            } else {
-              for (let i = 0; i < vertCount * 2; i++) combinedTexCoords[tOffset + i] = mt[i];
-            }
-          }
-
-          if (mc && mc.length >= vertCount * 3) {
-            if (mc instanceof Float32Array) {
-              combinedColors.set(mc.subarray(0, vertCount * 3), cOffset);
-            } else {
-              for (let i = 0; i < vertCount * 3; i++) combinedColors[cOffset + i] = mc[i];
-            }
-          } else {
-            for (let i = 0; i < vertCount; i++) {
-              const base = cOffset + i * 3;
-              combinedColors[base] = 0.96;
-              combinedColors[base + 1] = 0.96;
-              combinedColors[base + 2] = 0.96;
-            }
-          }
-
-          if (mi) {
-            for (let i = 0; i < mi.length; i++) {
-              combinedIndices[iOffset++] = mi[i] + vertexOffset;
-            }
-          }
-
-          vOffset += mv.length;
-          cOffset += vertCount * 3;
-          tOffset += vertCount * 2;
-          vertexOffset += vertCount;
-        }
-
-        return {
-          vertices: combinedVertices,
-          normals: combinedNormals,
-          colors: combinedColors,
-          texcoords: combinedTexCoords,
-          indices: combinedIndices,
-        };
-      }
-
-      function buildHandAndFingers(pElbow, pHand, isLeft, scaleFactor) {
-        const dX = pHand[0] - pElbow[0];
-        const dY = pHand[1] - pElbow[1];
-        const dZ = pHand[2] - pElbow[2];
-        let len = Math.sqrt(dX * dX + dY * dY + dZ * dZ);
-        let dArm = len > 1e-4 ? [dX / len, dY / len, dZ / len] : [0, -1, 0];
-
-        const sideVec = isLeft ? [-1, 0, 0] : [1, 0, 0];
-        let rArm = [
-          dArm[1] * sideVec[2] - dArm[2] * sideVec[1],
-          dArm[2] * sideVec[0] - dArm[0] * sideVec[2],
-          dArm[0] * sideVec[1] - dArm[1] * sideVec[0],
-        ];
-        let rLen = Math.sqrt(rArm[0] * rArm[0] + rArm[1] * rArm[1] + rArm[2] * rArm[2]);
-        if (rLen < 1e-3) {
-          rArm = isLeft ? [0, 0, -1] : [0, 0, 1];
-        } else {
-          rArm = [rArm[0] / rLen, rArm[1] / rLen, rArm[2] / rLen];
-        }
-
-        const sf = scaleFactor;
-        const palmTip = [
-          pHand[0] + dArm[0] * 0.02 * sf,
-          pHand[1] + dArm[1] * 0.02 * sf,
-          pHand[2] + dArm[2] * 0.02 * sf,
-        ];
-
-        const palm = generateCapsule(pHand, palmTip, 0.022 * sf, 8, 8);
-        const parts = [palm];
-
-        // 5 Chibi Fingers (Thumb, Index, Middle, Ring, Pinky)
-        const fingerOffsets = isLeft ? [-0.012, -0.005, 0.002, 0.008, 0.014] : [0.012, 0.005, -0.002, -0.008, -0.014];
-        const fingerLengths = [0.015, 0.019, 0.021, 0.018, 0.014];
-        const fingerRadii = [0.0075, 0.007, 0.007, 0.0065, 0.0055];
-
-        for (let f = 0; f < 5; f++) {
-          const off = fingerOffsets[f] * sf;
-          const flen = fingerLengths[f] * sf;
-          const frad = fingerRadii[f] * sf;
-
-          let fBase, fTip;
-          if (f === 0) { // Thumb
-            fBase = [
-              pHand[0] + dArm[0] * 0.008 * sf + rArm[0] * off,
-              pHand[1] + dArm[1] * 0.008 * sf + rArm[1] * off,
-              pHand[2] + dArm[2] * 0.008 * sf + rArm[2] * off,
-            ];
-            fTip = [
-              fBase[0] + dArm[0] * flen + rArm[0] * (isLeft ? -0.008 : 0.008) * sf,
-              fBase[1] + dArm[1] * flen + rArm[1] * (isLeft ? -0.008 : 0.008) * sf,
-              fBase[2] + dArm[2] * flen + rArm[2] * (isLeft ? -0.008 : 0.008) * sf,
-            ];
-          } else {
-            fBase = [
-              palmTip[0] + rArm[0] * off,
-              palmTip[1] + rArm[1] * off,
-              palmTip[2] + rArm[2] * off,
-            ];
-            fTip = [
-              fBase[0] + dArm[0] * flen,
-              fBase[1] + dArm[1] * flen,
-              fBase[2] + dArm[2] * flen,
-            ];
-          }
-          parts.push(generateCapsule(fBase, fTip, frad, 6, 6));
-        }
-        return parts;
-      }
-
-      function buildFootAnkleToes(pKnee, pFoot, isLeft, scaleFactor) {
-        const sf = scaleFactor;
-        // 1. Ankle Joint
-        const ankle = generateCapsule(pFoot, [pFoot[0], pFoot[1] - 0.008 * sf, pFoot[2]], 0.032 * sf, 8, 8);
-
-        // 2. Foot Body
-        const footTip = [
-          pFoot[0],
-          pFoot[1] - 0.012 * sf,
-          pFoot[2] + 0.040 * sf,
-        ];
-        const footBody = generateCapsule([pFoot[0], pFoot[1] - 0.008 * sf, pFoot[2]], footTip, 0.026 * sf, 8, 8);
-
-        const parts = [ankle, footBody];
-
-        // 3. 5 Chibi Toes
-        const toeXOffsets = isLeft ? [0.012, 0.006, 0.0, -0.006, -0.011] : [-0.012, -0.006, 0.0, 0.006, 0.011];
-        const toeLengths = [0.014, 0.013, 0.012, 0.010, 0.008];
-        const toeRadii = [0.008, 0.007, 0.007, 0.006, 0.005];
-
-        for (let t = 0; t < 5; t++) {
-          const tx = toeXOffsets[t] * sf;
-          const tlen = toeLengths[t] * sf;
-          const trad = toeRadii[t] * sf;
-
-          const tBase = [footTip[0] + tx, footTip[1], footTip[2]];
-          const tTip = [tBase[0], tBase[1] - 0.002 * sf, tBase[2] + tlen];
-          parts.push(generateCapsule(tBase, tTip, trad, 6, 6));
-        }
-        return parts;
-      }
+      const rotatePointX = (pivot, point, theta) => (window.CapsuleModel ? window.CapsuleModel.rotatePointX(pivot, point, theta) : window.rotatePointX(pivot, point, theta));
+      const rotatePointY = (pivot, point, theta) => (window.CapsuleModel ? window.CapsuleModel.rotatePointY(pivot, point, theta) : window.rotatePointY(pivot, point, theta));
+      const rotatePointZ = (pivot, point, theta) => (window.CapsuleModel ? window.CapsuleModel.rotatePointZ(pivot, point, theta) : window.rotatePointZ(pivot, point, theta));
+      const generateCapsule = (p1, p2, r, rad, ax) => (window.CapsuleModel ? window.CapsuleModel.generateCapsule(p1, p2, r, rad, ax) : window.generateCapsule(p1, p2, r, rad, ax));
+      const generateChibiHead = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiHead ? window.CapsuleModel.generateChibiHead(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 16));
+      const generateChibiNeck = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiNeck ? window.CapsuleModel.generateChibiNeck(p1, p2, r, sf) : generateCapsule(p1, p2, r, 12, 8));
+      const generateChibiEar = (p1, p2, isL, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiEar ? window.CapsuleModel.generateChibiEar(p1, p2, isL, sf) : generateCapsule(p1, p2, 0.018 * sf, 10, 8));
+      const generateChibiTorso = (p1, p2, r, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiTorso ? window.CapsuleModel.generateChibiTorso(p1, p2, r, sf, ...rest) : (window.CapsuleModel && window.CapsuleModel.generateChibiChest ? window.CapsuleModel.generateChibiChest(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 12)));
+      const generateChibiChest = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiChest ? window.CapsuleModel.generateChibiChest(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 12));
+      const generateChibiPelvis = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiPelvis ? window.CapsuleModel.generateChibiPelvis(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 12));
+      const generateChibiUpperArm = (p1, p2, isL, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiUpperArm ? window.CapsuleModel.generateChibiUpperArm(p1, p2, isL, sf, ...rest) : generateCapsule(p1, p2, 0.038 * sf, 12, 10));
+      const generateChibiForeArm = (p1, p2, isL, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiForeArm ? window.CapsuleModel.generateChibiForeArm(p1, p2, isL, sf) : generateCapsule(p1, p2, 0.032 * sf, 12, 10));
+      const generateChibiThigh = (p1, p2, isL, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiThigh ? window.CapsuleModel.generateChibiThigh(p1, p2, isL, sf, ...rest) : generateCapsule(p1, p2, 0.048 * sf, 12, 10));
+      const generateChibiCalf = (p1, p2, isL, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiCalf ? window.CapsuleModel.generateChibiCalf(p1, p2, isL, sf, ...rest) : generateCapsule(p1, p2, 0.040 * sf, 12, 10));
+      const mergeMeshes = (meshes, verticesOnly = false) => (window.CapsuleModel ? window.CapsuleModel.mergeMeshes(meshes, verticesOnly) : window.mergeMeshes(meshes, verticesOnly));
+      const buildHandAndFingers = (pElbow, pHand, isLeft, sf) => (window.CapsuleModel ? window.CapsuleModel.buildHandAndFingers(pElbow, pHand, isLeft, sf) : window.buildHandAndFingers(pElbow, pHand, isLeft, sf));
+      const buildFootAnkleToes = (pKnee, pFoot, isLeft, sf) => (window.CapsuleModel ? window.CapsuleModel.buildFootAnkleToes(pKnee, pFoot, isLeft, sf) : window.buildFootAnkleToes(pKnee, pFoot, isLeft, sf));
+      const resetCapsuleBufferPool = () => (window.CapsuleModel ? window.CapsuleModel.resetCapsuleBufferPool() : (window.resetCapsuleBufferPool && window.resetCapsuleBufferPool()));
+      const resetMergeBufferPool = () => (window.CapsuleModel ? window.CapsuleModel.resetMergeBufferPool() : (window.resetMergeBufferPool && window.resetMergeBufferPool()));
 
       function initRagdoll(px, py, pz, rx_scaled, ry_scaled, rz_scaled, phase) {
         ragdollPos = [px, py, pz];
@@ -2202,7 +1785,28 @@ window.characterVertexShaderSource = `#version 300 es
       }
 
       function updateRagdoll(dt) {
-        if (!ragdollInitialized) return;
+        if (!ragdollInitialized) {
+          if (ragdollEnabled) {
+            const sinT = Math.sin(charTheta);
+            const cosT = Math.cos(charTheta);
+            const sinP = Math.sin(charPhi);
+            const cosP = Math.cos(charPhi);
+            const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0);
+            const curHeight = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(charTheta, charPhi, seed) : 0;
+            const rPos = RADIUS + curHeight * HEIGHT_SCALE + 0.46 * playerScale;
+            const px = sinT * cosP * rPos;
+            const py = cosT * rPos;
+            const pz = sinT * sinP * rPos;
+
+            const N = [sinT * cosP, cosT, sinT * sinP];
+            const F = [-cosT * cosP, sinT, -cosT * sinP];
+            const R = [-sinP, 0, cosP];
+
+            initRagdoll(px, py, pz, R, N, F, typeof walkPhase !== "undefined" ? walkPhase : 0);
+          } else {
+            return;
+          }
+        }
         const dtScale = dt / 0.016666;
         let isRagdollOnGround = false;
 
@@ -2743,413 +2347,20 @@ window.characterVertexShaderSource = `#version 300 es
       }
 
       // =========================================================================
-      // 3D Stylized Anime Hair Generator (Merged from hairstyles.js)
-      // Provides 100% full scalp coverage with 10+ dense staggered 3D hair strand layers covering 360° of the skull.
+      // 3D Stylized Anime Hair Generator (Modular Data-Driven System)
+      // Delegated to CapsuleModel engine (capsuleModel.js)
       // =========================================================================
-      window.ANIME_HAIR_COLORS = [
-        [0.85, 0.90, 0.96], // 0: Platinum Silver / Ice Blue
-        [0.18, 0.18, 0.22], // 1: Jet Black / Raven
-        [0.88, 0.72, 0.52], // 2: Blonde Gold
-        [0.72, 0.35, 0.22], // 3: Chestnut Brown
-        [0.85, 0.45, 0.55], // 4: Sakura Pink
-        [0.45, 0.65, 0.85], // 5: Sky Blue
-        [0.55, 0.40, 0.70], // 6: Deep Purple
-      ];
+      const build3DAnimeHair = (typeof window !== "undefined" && window.CapsuleModel && window.CapsuleModel.build3DAnimeHair)
+        ? window.CapsuleModel.build3DAnimeHair
+        : (typeof window !== "undefined" ? window.build3DAnimeHair : null);
 
-      window.NUM_HAIR_STYLES = 1;
-
-      window.HAIR_STYLE_NAMES = [
-        "Anime Stylized Hair (ทรงผมอนิเมะ 3D ละเอียด 10 ชั้น)",
-      ];
-
-      window.build3DAnimeHair = function(
-        styleIdx,
-        color,
-        scale,
-        ptTransformFn,
-        headTilt,
-        outV,
-        outC,
-        outI
-      ) {
-        // 1. UNIFORM HAIR COLOR ACCURACY
-        const colBase = (color && Array.isArray(color) && color.length >= 3)
-          ? [color[0], color[1], color[2]]
-          : [0.85, 0.90, 0.96]; // Default Silver/Platinum
-
-        const bo = headTilt || 0;
-
-        // Add vertex with light shading factor
-        const addVertex = (localP, shadeFactor = 1.0) => {
-          const p = ptTransformFn(localP[0], localP[1] + bo, localP[2]);
-          const vIdx = outV.length / 3;
-          outV.push(p[0], p[1], p[2]);
-          outC.push(
-            Math.min(1.0, Math.max(0.0, colBase[0] * shadeFactor)),
-            Math.min(1.0, Math.max(0.0, colBase[1] * shadeFactor)),
-            Math.min(1.0, Math.max(0.0, colBase[2] * shadeFactor))
-          );
-          return vIdx;
-        };
-
-        const addTri = (v1, v2, v3) => {
-          outI.push(v1, v2, v3);
-        };
-
-        // Double-sided quad (renders both CCW & CW to guarantee 360° visibility)
-        const addTwoSidedQuad = (v1, v2, v3, v4) => {
-          // Front face
-          outI.push(v1, v2, v3);
-          outI.push(v1, v3, v4);
-          // Back face
-          outI.push(v1, v4, v3);
-          outI.push(v1, v3, v2);
-        };
-
-        // ----------------------------------------------------
-        // 2. HAIRLINE BOUNDARY FUNCTION (ขอบไรผมรอบศีรษะ)
-        // Head sphere radius R_HEAD = 0.240
-        // Hair dome sits outside head sphere at R = 0.255
-        // ----------------------------------------------------
-        const getHairlineMinElevation = (azDeg) => {
-          let az = azDeg;
-          while (az > 180) az -= 360;
-          while (az < -180) az += 360;
-          const absAz = Math.abs(az);
-
-          if (absAz < 60) {
-            // Forehead hairline (Above eyebrows)
-            const t = absAz / 60;
-            return 28.0 - 14.0 * (t * t); // 28° center -> 14° temples
-          } else if (absAz < 95) {
-            // Temples down to sideburns
-            const t = (absAz - 60) / 35;
-            return 14.0 - 46.0 * t; // 14° -> -32°
-          } else {
-            // Back of head & deep nape (ท้ายทอย คลุมลึกลงถึงระดับลำคอ)
-            const t = (absAz - 95) / 85;
-            return -32.0 - 28.0 * t; // -32° -> -60°
-          }
-        };
-
-        // Calculates scalp root coordinates and normal on hair dome
-        const getHairRoot = (azimuthDeg, elevationDeg, radiusOffset = 0.015) => {
-          const minEl = getHairlineMinElevation(azimuthDeg);
-          const safeEl = Math.max(elevationDeg, minEl);
-
-          const az = (azimuthDeg * Math.PI) / 180;
-          const el = (safeEl * Math.PI) / 180;
-
-          const cosEl = Math.cos(el);
-          const sinEl = Math.sin(el);
-          const sinAz = Math.sin(az);
-          const cosAz = Math.cos(az);
-
-          const r = 0.240 + radiusOffset; // Hair sits outside head sphere (R=0.240)
-
-          const x = r * sinAz * cosEl;
-          const y = r * sinEl;
-          const z = r * cosAz * cosEl;
-
-          return {
-            p: [x, y, z],
-            n: [sinAz * cosEl, sinEl, cosAz * cosEl],
-            azDeg: azimuthDeg,
-            elDeg: safeEl,
-          };
-        };
-
-        // ----------------------------------------------------
-        // 3. SOLID 3D BASE HAIR DOME CAP (หมวกทรงผมรองพื้นปิดศีรษะ 100% ไร้รอยโหว่)
-        // High-density grid that fully encloses the head sphere
-        // ----------------------------------------------------
-        const addSolidHairDome = () => {
-          const nLon = 24;
-          const nLat = 10;
-          const grid = [];
-
-          for (let lon = 0; lon <= nLon; lon++) {
-            const azDeg = -180 + (lon / nLon) * 360;
-            const minEl = getHairlineMinElevation(azDeg);
-            const maxEl = 88.0;
-
-            const col = [];
-            for (let lat = 0; lat <= nLat; lat++) {
-              const u = lat / nLat;
-              const elDeg = minEl + u * (maxEl - minEl);
-              // Base Cap radius R = 0.255 (0.240 + 0.015 offset)
-              const root = getHairRoot(azDeg, elDeg, 0.015);
-              // Subtle vertical lighting gradient
-              const shade = 0.86 + 0.14 * u;
-              col.push(addVertex(root.p, shade));
-            }
-            grid.push(col);
-          }
-
-          // Connect dome grid cells with double-sided quads
-          for (let lon = 0; lon < nLon; lon++) {
-            for (let lat = 0; lat < nLat; lat++) {
-              const v1 = grid[lon][lat];
-              const v2 = grid[lon + 1][lat];
-              const v3 = grid[lon + 1][lat + 1];
-              const v4 = grid[lon][lat + 1];
-              addTwoSidedQuad(v1, v2, v3, v4);
-            }
-          }
-
-          // Seal top crown zenith cap
-          const vZenith = addVertex([0, 0.256, 0], 1.00);
-          for (let lon = 0; lon < nLon; lon++) {
-            const v1 = grid[lon][nLat];
-            const v2 = grid[lon + 1][nLat];
-            addTri(vZenith, v2, v1);
-            addTri(vZenith, v1, v2);
-          }
-        };
-
-        // ----------------------------------------------------
-        // 4. HIGH-PRECISION 3D ANIME HAIR STRAND GENERATOR
-        // Creates voluminous 3D anime hair locks with natural gravity droop & Bezier curvature
-        // ----------------------------------------------------
-        const addHairStrand = (
-          rootAz, rootEl,            // Scalp Root Angles
-          length,                    // Strand Length
-          archOut,                   // Bulge distance from scalp
-          dirX, dirY, dirZ,          // Direction vector
-          wStart = 0.038,            // Broad root width
-          wMid = 0.065,              // Volumetric mid width
-          thick = 0.016,             // 3D Volume thickness
-          steps = 6,                 // Smooth organic curve divisions
-          shadeRoot = 0.86,
-          shadeTip = 1.00,
-          radiusOffset = 0.018,
-          gravity = 0.06             // Soft natural gravity droop on hair tips
-        ) => {
-          // Root on scalp hair layer
-          const root = getHairRoot(rootAz, rootEl, radiusOffset);
-          const P0 = root.p;
-          const N = root.n;
-
-          const fLen = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ) || 1;
-          const D = [dirX / fLen, dirY / fLen, dirZ / fLen];
-
-          // Bezier control points sprouting out from scalp normal N and curving with graceful natural gravity
-          const P1 = [
-            P0[0] + N[0] * (archOut * 1.25) + D[0] * (length * 0.42),
-            P0[1] + N[1] * (archOut * 1.25) + D[1] * (length * 0.42) - gravity * 0.4,
-            P0[2] + N[2] * (archOut * 1.25) + D[2] * (length * 0.42),
-          ];
-          const P2 = [
-            P0[0] + N[0] * (archOut * 0.25) + D[0] * length,
-            P0[1] + N[1] * (archOut * 0.25) + D[1] * length - gravity * 1.1,
-            P0[2] + N[2] * (archOut * 0.25) + D[2] * length,
-          ];
-
-          const rings = [];
-
-          for (let s = 0; s <= steps; s++) {
-            const u = s / steps;
-            const invU = 1 - u;
-
-            // Quadratic Bezier curve point P(u)
-            const px = invU * invU * P0[0] + 2 * invU * u * P1[0] + u * u * P2[0];
-            const py = invU * invU * P0[1] + 2 * invU * u * P1[1] + u * u * P2[1];
-            const pz = invU * invU * P0[2] + 2 * invU * u * P1[2] + u * u * P2[2];
-            const currP = [px, py, pz];
-
-            // Local tangent vector T(u) = dP/du along Bezier curve
-            let tx = 2 * (invU * (P1[0] - P0[0]) + u * (P2[0] - P1[0]));
-            let ty = 2 * (invU * (P1[1] - P0[1]) + u * (P2[1] - P1[1]));
-            let tz = 2 * (invU * (P1[2] - P0[2]) + u * (P2[2] - P1[2]));
-            let tLen = Math.sqrt(tx * tx + ty * ty + tz * tz);
-            if (tLen < 0.0001) {
-              tx = D[0]; ty = D[1]; tz = D[2]; tLen = 1;
-            }
-            const T = [tx / tLen, ty / tLen, tz / tLen];
-
-            // Binormal vector across hair strand width
-            let bx = N[1] * T[2] - N[2] * T[1];
-            let by = N[2] * T[0] - N[0] * T[2];
-            let bz = N[0] * T[1] - N[1] * T[0];
-            let bLen = Math.sqrt(bx * bx + by * by + bz * bz);
-            if (bLen < 0.001) {
-              bx = 1; by = 0; bz = 0; bLen = 1;
-            }
-            const B = [bx / bLen, by / bLen, bz / bLen];
-
-            // Strand Normal vector
-            const StrandN = [
-              B[1] * T[2] - B[2] * T[1],
-              B[2] * T[0] - B[0] * T[2],
-              B[0] * T[1] - B[1] * T[0],
-            ];
-
-            let w = (u < 0.25) ? (1 - u / 0.25) * wStart + (u / 0.25) * wMid : (1 - (u - 0.25) / 0.75) * wMid;
-            let t = (1 - u * 0.75) * thick;
-
-            const curShade = shadeRoot + u * (shadeTip - shadeRoot);
-
-            if (s === steps || w <= 0.002) {
-              // Tapered sharp tip point
-              const vTip = addVertex(currP, curShade);
-              rings.push([vTip, vTip, vTip, vTip]);
-            } else {
-              const vTop   = addVertex([currP[0] + StrandN[0] * t, currP[1] + StrandN[1] * t, currP[2] + StrandN[2] * t], curShade);
-              const vRight = addVertex([currP[0] + B[0] * w, currP[1] + B[1] * w, currP[2] + B[2] * w], curShade * 0.96);
-              const vBot   = addVertex([currP[0] - StrandN[0] * t, currP[1] - StrandN[1] * t, currP[2] - StrandN[2] * t], curShade * 0.92);
-              const vLeft  = addVertex([currP[0] - B[0] * w, currP[1] - B[1] * w, currP[2] - B[2] * w], curShade * 0.96);
-
-              rings.push([vTop, vRight, vBot, vLeft]);
-            }
-          }
-
-          // Connect rings into 3D volume mesh with double-sided quads
-          for (let s = 0; s < steps; s++) {
-            const r1 = rings[s];
-            const r2 = rings[s + 1];
-
-            if (s === steps - 1) {
-              const vTip = r2[0];
-              addTwoSidedQuad(r1[0], r1[1], vTip, r1[0]);
-              addTwoSidedQuad(r1[1], r1[2], vTip, r1[1]);
-              addTwoSidedQuad(r1[2], r1[3], vTip, r1[2]);
-              addTwoSidedQuad(r1[3], r1[0], vTip, r1[3]);
-            } else {
-              addTwoSidedQuad(r1[0], r1[1], r2[1], r2[0]);
-              addTwoSidedQuad(r1[1], r1[2], r2[2], r2[1]);
-              addTwoSidedQuad(r1[2], r1[3], r2[3], r2[2]);
-              addTwoSidedQuad(r1[3], r1[0], r2[0], r2[3]);
-            }
-          }
-        };
-
-        // Helper function to render a full circular ring of staggered strands around the skull
-        const addStrandRing = (
-          numStrands,
-          elevationDeg,
-          azimuthOffsetDeg,
-          length,
-          archOut,
-          wStart,
-          wMid,
-          thick,
-          radiusOffset,
-          downSlope = 0.80
-        ) => {
-          for (let i = 0; i < numStrands; i++) {
-            const az = -180 + (i / numStrands) * 360 + azimuthOffsetDeg;
-            const isFront = Math.abs(az) < 55;
-            const rad = (az * Math.PI) / 180;
-
-            // Flow direction outwards and downwards
-            const fx = Math.sin(rad) * 0.80;
-            const fy = -downSlope;
-            const fz = Math.cos(rad) * 0.80;
-
-            const actualLen = isFront && elevationDeg < 45 ? length * 0.60 : length;
-
-            addHairStrand(
-              az, elevationDeg,
-              actualLen, archOut,
-              fx, fy, fz,
-              wStart, wMid, thick, 6, 0.86, 0.98, radiusOffset
-            );
-          }
-        };
-
-        // ----------------------------------------------------
-        // 5. BUILD COMPLETE 10-LAYER DENSE 360° ANIME HAIR MESH
-        // ----------------------------------------------------
-
-        // Layer 0: Solid base cap (100% full scalp seal)
-        addSolidHairDome();
-
-        // Layer 1: Top Crown Zenith (elevation = +80°, 12 strands)
-        addStrandRing(12, 80, 0, 0.22, 0.040, 0.035, 0.055, 0.014, 0.018, 0.65);
-
-        // Layer 2: Upper Crown Ring (elevation = +68°, 20 strands, staggered offset)
-        addStrandRing(20, 68, (360 / 20) / 2, 0.25, 0.038, 0.038, 0.062, 0.015, 0.020, 0.70);
-
-        // Layer 3: High Skull Ring (elevation = +54°, 26 strands)
-        addStrandRing(26, 54, 0, 0.28, 0.036, 0.040, 0.065, 0.015, 0.022, 0.75);
-
-        // Layer 4: Mid-Upper Skull Ring (elevation = +40°, 30 strands, staggered offset)
-        addStrandRing(30, 40, (360 / 30) / 2, 0.32, 0.034, 0.042, 0.068, 0.016, 0.024, 0.80);
-
-        // Layer 5: Mid Skull Ring (elevation = +26°, 32 strands)
-        addStrandRing(32, 26, 0, 0.35, 0.032, 0.042, 0.070, 0.016, 0.026, 0.82);
-
-        // Layer 6: Lower Skull Ring (elevation = +12°, 30 strands, staggered offset)
-        addStrandRing(30, 12, (360 / 30) / 2, 0.36, 0.030, 0.044, 0.070, 0.016, 0.028, 0.85);
-
-        // Layer 7: Lower Head & Ear Line (elevation = -2°, 28 strands)
-        addStrandRing(28, -2, 0, 0.38, 0.028, 0.044, 0.068, 0.016, 0.030, 0.88);
-
-        // Layer 8: Upper Nape & Neck Coverage (elevation = -16°, 24 strands, staggered offset)
-        addStrandRing(24, -16, (360 / 24) / 2, 0.36, 0.025, 0.042, 0.065, 0.015, 0.032, 0.90);
-
-        // Layer 9: Deep Nape & Lower Neck Coverage (elevation = -30°, 20 strands)
-        addStrandRing(20, -30, 0, 0.32, 0.022, 0.040, 0.060, 0.015, 0.034, 0.92);
-
-        // Layer 10: Lowest Neck Boundary (elevation = -44°, 16 strands)
-        addStrandRing(16, -44, (360 / 16) / 2, 0.28, 0.018, 0.038, 0.055, 0.014, 0.036, 0.95);
-
-        // ----------------------------------------------------
-        // 6. SPECIALIZED FACE FRAMING, BANGS & ANIME STYLES
-        // ----------------------------------------------------
-
-        // Layer 11: Inner Forehead Bangs (15 overlapping close bangs)
-        for (let i = 0; i <= 14; i++) {
-          const az = -56 + (i / 14) * 112; // -56° to +56°
-          const t = Math.abs(az) / 56;
-          const bangLen = 0.15 + 0.06 * t;
-          const rad = (az * Math.PI) / 180;
-          addHairStrand(
-            az, 36,
-            bangLen, 0.028,
-            Math.sin(rad) * 0.35, -0.85, Math.cos(rad) * 0.65,
-            0.028, 0.052, 0.014, 6, 0.94, 1.00, 0.032
-          );
-        }
-
-        // Layer 12: Outer Swept Bangs (13 layered outer bangs)
-        for (let i = 0; i <= 12; i++) {
-          const az = -50 + (i / 12) * 100;
-          const t = Math.abs(az) / 50;
-          const bangLen = 0.18 + 0.07 * t;
-          const rad = (az * Math.PI) / 180;
-          addHairStrand(
-            az, 46,
-            bangLen, 0.038,
-            Math.sin(rad) * 0.45, -0.80, Math.cos(rad) * 0.70,
-            0.032, 0.058, 0.015, 6, 0.96, 1.00, 0.038
-          );
-        }
-
-        // Layer 13: Sideburns & Cheek Framing Locks (ปอยผมข้างแก้มและจรไทร)
-        addHairStrand(-68, 18, 0.28, 0.032, -0.75, -0.85, 0.10, 0.036, 0.055, 0.015, 7, 0.92, 0.98, 0.035);
-        addHairStrand( 68, 18, 0.28, 0.032,  0.75, -0.85, 0.10, 0.036, 0.055, 0.015, 7, 0.92, 0.98, 0.035);
-
-        addHairStrand(-82, 8, 0.32, 0.034, -0.82, -0.85, -0.15, 0.038, 0.058, 0.015, 7, 0.90, 0.96, 0.035);
-        addHairStrand( 82, 8, 0.32, 0.034,  0.82, -0.85, -0.15, 0.038, 0.058, 0.015, 7, 0.90, 0.96, 0.035);
-
-        // Layer 14: Volumetric Crown Anime Spikes & Ahoge (ปอยผมชี้อนิเมะ)
-        addHairStrand(-35, 62, 0.20, 0.048, -0.5, -0.65, 0.2, 0.032, 0.050, 0.014, 6, 0.98, 1.00, 0.040);
-        addHairStrand( 35, 62, 0.20, 0.048,  0.5, -0.65, 0.2, 0.032, 0.050, 0.014, 6, 0.98, 1.00, 0.040);
-
-        addHairStrand(-72, 54, 0.26, 0.050, -0.8, -0.55, -0.1, 0.034, 0.052, 0.015, 6, 0.96, 1.00, 0.040);
-        addHairStrand( 72, 54, 0.26, 0.050,  0.8, -0.55, -0.1, 0.034, 0.052, 0.015, 6, 0.96, 1.00, 0.040);
-
-        // Ahoge (ขวัญผมชี้อนิเมะยอดหัว)
-        addHairStrand(0, 84, 0.22, 0.065, -0.2, 0.65, 0.35, 0.020, 0.035, 0.012, 6, 1.00, 1.00, 0.042);
-      };
 
       // =========================================================================
       // ระบบโมเดลตัวละคร: Classic (Procedural) & Chibi White (GLB)
       // =========================================================================
       if (typeof window !== "undefined") {
         if (!window.characterModel) {
-          window.characterModel = "chibi"; // ค่าเริ่มต้น: Chibi
+          window.characterModel = "classic"; // ค่าเริ่มต้น: Classic (Base Procedural Chibi)
         }
 
         window.switchCharacterModel = function(modelName) {
@@ -3158,6 +2369,9 @@ window.characterVertexShaderSource = `#version 300 es
           } else {
             window.characterModel = "classic";
           }
+          if (typeof equipIndicesLength !== "undefined") {
+            equipIndicesLength = 0;
+          }
           if (typeof updateCharacterMesh === "function") {
             updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
           }
@@ -3165,7 +2379,7 @@ window.characterVertexShaderSource = `#version 300 es
             window.updateDevCharacterModelUI();
           }
           if (typeof showNotice === "function") {
-            let msg = window.characterModel === "chibi" ? "✨ Chibi White Model (GLB)" : "🧑 Classic Model (Procedural)";
+            let msg = window.characterModel === "chibi" ? "✨ Chibi White Model (GLB)" : "🧑 Classic (Base)";
             showNotice("👤 สลับโมเดลตัวละคร: " + msg);
           }
           return window.characterModel;
@@ -3246,802 +2460,20 @@ window.characterVertexShaderSource = `#version 300 es
       let _glbCachedColors = null;
 
       // =========================================================================
-      // Procedural Virtual Bone Hair Spring Physics (แนวทางที่ 3: Virtual Bone Skinning)
+      // Dynamic Hair, Hoodie, Hand Controls & Traveler Hoodie Cloak Mesh
+      // Delegated to CapsuleModel engine (capsuleModel.js)
       // =========================================================================
-      // PROCEDURAL PONYTAIL SPRING PHYSICS (Virtual Bone Injection)
-      // =========================================================================
-      const chibiHairPhysics = {
-        enabled: true,
-        stiffness: 85.0,     // Spring tension (bouncy & responsive)
-        damping: 9.0,        // Damping (fluid oscillation)
-        inertia: 1.0,        // Movement & turning sensitivity
-        maxAngle: 0.85,      // Max rotation radians (~49 deg)
-        pitch: 0.0,
-        pitchVel: 0.0,
-        yaw: 0.0,
-        yawVel: 0.0,
-        roll: 0.0,
-        rollVel: 0.0,
-        lastHeading: 0.0,
-        _lastTime: 0.0
-      };
+      const chibiHairPhysics = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.chibiHairPhysics : {};
+      const updateChibiVirtualHair = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.updateChibiVirtualHair : () => {};
+      const chibiHoodiePhysics = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.chibiHoodiePhysics : {};
+      const updateChibiHoodiePhysics = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.updateChibiHoodiePhysics : () => {};
+      const chibiHandState = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.chibiHandState : {};
+      const updateChibiHandPose = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.updateChibiHandPose : () => {};
+      const buildTravelerHoodieCloakMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildTravelerHoodieCloakMesh : () => ({ vertices: [], normals: [], colors: [], indices: [] });
+      const buildTravelerBootsMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildTravelerBootsMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
+      const buildWhiteShirtCollarMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildWhiteShirtCollarMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
+      const buildBlackPleatedSkirtMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildBlackPleatedSkirtMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
 
-      if (typeof window !== "undefined") {
-        window.chibiHairPhysics = chibiHairPhysics;
-        window.triggerHairJiggle = function(impulsePitch = 40.0, impulseYaw = 50.0, impulseRoll = 25.0) {
-          chibiHairPhysics.pitchVel += impulsePitch;
-          chibiHairPhysics.yawVel += impulseYaw;
-          chibiHairPhysics.rollVel += impulseRoll;
-        };
-      }
-
-      function updateChibiVirtualHair(model, isMovingActive, isSprintingActive, phase) {
-        if (!model || typeof model.setPonytailRotation !== "function") return;
-        if (!chibiHairPhysics.enabled) {
-          model.setPonytailRotation(0, 0, 0, 1);
-          return;
-        }
-
-        const hairPhys = chibiHairPhysics;
-        const nowSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
-        if (!hairPhys._lastTime) hairPhys._lastTime = nowSec;
-        const clampedDt = Math.min(0.05, Math.max(0.001, nowSec - hairPhys._lastTime));
-        hairPhys._lastTime = nowSec;
-
-        let forcePitch = 0.0;
-        let forceYaw = 0.0;
-        let forceRoll = 0.0;
-
-        const inertia = hairPhys.inertia;
-
-        if (isMovingActive) {
-          // Bobbing from footsteps (twice per stride)
-          const bounce = Math.sin(phase * 2.0);
-          forcePitch += bounce * (isSprintingActive ? 42.0 : 24.0) * inertia;
-          // Air resistance / forward inertia tilts ponytail backward
-          forcePitch += (isSprintingActive ? 36.0 : 18.0) * inertia;
-          // Lateral sway from side-to-side weight transfer
-          const sway = Math.cos(phase);
-          forceYaw += sway * (isSprintingActive ? 30.0 : 18.0) * inertia;
-          forceRoll += sway * (isSprintingActive ? 22.0 : 12.0) * inertia;
-        } else {
-          // Organic breathing & gentle ambient breeze when standing still
-          forcePitch += Math.sin(nowSec * 2.8) * 8.0 * inertia;
-          forceYaw += Math.cos(nowSec * 1.8) * 12.0 * inertia;
-          forceRoll += Math.sin(nowSec * 2.2 + 0.6) * 7.0 * inertia;
-        }
-
-        // Turning / Angular velocity centrifugal inertia
-        const currentHeading = (typeof charHeading !== "undefined") ? charHeading : 0.0;
-        let dHeading = currentHeading - hairPhys.lastHeading;
-        while (dHeading < -Math.PI) dHeading += Math.PI * 2;
-        while (dHeading > Math.PI) dHeading -= Math.PI * 2;
-        hairPhys.lastHeading = currentHeading;
-
-        const turnRate = Math.max(-10.0, Math.min(10.0, dHeading / clampedDt));
-        forceYaw -= turnRate * 2.2 * inertia;
-        forceRoll -= turnRate * 1.4 * inertia;
-
-        // Spring-damper integration
-        const stiffness = hairPhys.stiffness;
-        const damping = hairPhys.damping;
-
-        const accPitch = -stiffness * hairPhys.pitch - damping * hairPhys.pitchVel + forcePitch;
-        const accYaw   = -stiffness * hairPhys.yaw   - damping * hairPhys.yawVel   + forceYaw;
-        const accRoll  = -stiffness * hairPhys.roll  - damping * hairPhys.rollVel  + forceRoll;
-
-        hairPhys.pitchVel += accPitch * clampedDt;
-        hairPhys.yawVel   += accYaw   * clampedDt;
-        hairPhys.rollVel  += accRoll  * clampedDt;
-
-        hairPhys.pitch += hairPhys.pitchVel * clampedDt;
-        hairPhys.yaw   += hairPhys.yawVel   * clampedDt;
-        hairPhys.roll  += hairPhys.rollVel  * clampedDt;
-
-        const maxA = hairPhys.maxAngle;
-        hairPhys.pitch = Math.max(-maxA, Math.min(maxA, hairPhys.pitch));
-        hairPhys.yaw   = Math.max(-maxA, Math.min(maxA, hairPhys.yaw));
-        hairPhys.roll  = Math.max(-maxA, Math.min(maxA, hairPhys.roll));
-
-        // Convert (pitch, yaw, roll) into Quaternion
-        const p = hairPhys.pitch, y = hairPhys.yaw, r = hairPhys.roll;
-        const cp = Math.cos(p * 0.5), sp = Math.sin(p * 0.5);
-        const cy = Math.cos(y * 0.5), sy = Math.sin(y * 0.5);
-        const cr = Math.cos(r * 0.5), sr = Math.sin(r * 0.5);
-
-        const qx = sp * cy * cr + cp * sy * sr;
-        const qy = cp * sy * cr - sp * cy * sr;
-        const qz = cp * cy * sr + sp * sy * cr;
-        const qw = cp * cy * cr - sp * sy * sr;
-
-        model.setPonytailRotation(qx, qy, qz, qw);
-      }
-
-      // =========================================================================
-      // Traveler Hoodie & Cloak Dynamic Gravity & Cloth Physics
-      // (ระบบแรงโน้มถ่วงและแรงสปริงสำหรับเสื้อฮู้ดและผ้าคลุม เลียนแบบระบบช่อผม GLB)
-      // =========================================================================
-      const chibiHoodiePhysics = {
-        enabled: true,
-        stiffness: 72.0,     // Spring tension (bouncy & fluid cloth response)
-        damping: 8.5,        // Cloth oscillation damping
-        inertia: 1.15,       // Sensitivity to footsteps, wind, and body turning
-        maxAngle: 0.75,      // Max deflection (~43 degrees)
-        gravity: 0.050,      // Constant downward gravitational droop on cloak hem & hood tip
-        pitch: 0.0,
-        pitchVel: 0.0,
-        yaw: 0.0,
-        yawVel: 0.0,
-        roll: 0.0,
-        rollVel: 0.0,
-        lastHeading: 0.0,
-        _lastTime: 0.0
-      };
-
-      if (typeof window !== "undefined") {
-        window.chibiHoodiePhysics = chibiHoodiePhysics;
-        window.triggerHoodieJiggle = function(impulsePitch = 35.0, impulseYaw = 40.0, impulseRoll = 20.0) {
-          chibiHoodiePhysics.pitchVel += impulsePitch;
-          chibiHoodiePhysics.yawVel += impulseYaw;
-          chibiHoodiePhysics.rollVel += impulseRoll;
-        };
-      }
-
-      function updateChibiHoodiePhysics(isMovingActive, isSprintingActive, phase, currentHeading) {
-        if (!chibiHoodiePhysics.enabled) {
-          chibiHoodiePhysics.pitch = 0.0;
-          chibiHoodiePhysics.yaw = 0.0;
-          chibiHoodiePhysics.roll = 0.0;
-          return;
-        }
-
-        const hoodiePhys = chibiHoodiePhysics;
-        const nowSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
-        if (!hoodiePhys._lastTime) hoodiePhys._lastTime = nowSec;
-        const clampedDt = Math.min(0.05, Math.max(0.001, nowSec - hoodiePhys._lastTime));
-        hoodiePhys._lastTime = nowSec;
-
-        let forcePitch = 0.0;
-        let forceYaw = 0.0;
-        let forceRoll = 0.0;
-
-        const inertia = hoodiePhys.inertia;
-
-        if (isMovingActive) {
-          // Footstep bobbing (twice per stride, spring bounce)
-          const bounce = Math.sin(phase * 2.0);
-          forcePitch += bounce * (isSprintingActive ? 36.0 : 22.0) * inertia;
-          // Movement wind drag & inertia tilts cloak and hood tip backward
-          forcePitch += (isSprintingActive ? 32.0 : 18.0) * inertia;
-          // Lateral weight transfer sway
-          const sway = Math.cos(phase);
-          forceYaw += sway * (isSprintingActive ? 26.0 : 16.0) * inertia;
-          forceRoll += sway * (isSprintingActive ? 20.0 : 12.0) * inertia;
-        } else {
-          // Organic breathing & ambient wind breeze
-          forcePitch += Math.sin(nowSec * 2.5) * 6.0 * inertia;
-          forceYaw += Math.cos(nowSec * 1.6) * 9.0 * inertia;
-          forceRoll += Math.sin(nowSec * 2.0 + 0.6) * 5.0 * inertia;
-        }
-
-        // Turning / Angular velocity centrifugal inertia
-        let dHeading = (currentHeading || 0.0) - hoodiePhys.lastHeading;
-        while (dHeading < -Math.PI) dHeading += Math.PI * 2;
-        while (dHeading > Math.PI) dHeading -= Math.PI * 2;
-        hoodiePhys.lastHeading = (currentHeading || 0.0);
-
-        const turnRate = Math.max(-10.0, Math.min(10.0, dHeading / clampedDt));
-        forceYaw -= turnRate * 2.4 * inertia;
-        forceRoll -= turnRate * 1.5 * inertia;
-
-        // Spring-damper integration (matching GLB hair physics model)
-        const stiffness = hoodiePhys.stiffness;
-        const damping = hoodiePhys.damping;
-
-        const accPitch = -stiffness * hoodiePhys.pitch - damping * hoodiePhys.pitchVel + forcePitch;
-        const accYaw   = -stiffness * hoodiePhys.yaw   - damping * hoodiePhys.yawVel   + forceYaw;
-        const accRoll  = -stiffness * hoodiePhys.roll  - damping * hoodiePhys.rollVel  + forceRoll;
-
-        hoodiePhys.pitchVel += accPitch * clampedDt;
-        hoodiePhys.yawVel   += accYaw   * clampedDt;
-        hoodiePhys.rollVel  += accRoll  * clampedDt;
-
-        hoodiePhys.pitch += hoodiePhys.pitchVel * clampedDt;
-        hoodiePhys.yaw   += hoodiePhys.yawVel   * clampedDt;
-        hoodiePhys.roll  += hoodiePhys.rollVel  * clampedDt;
-
-        const maxA = hoodiePhys.maxAngle;
-        hoodiePhys.pitch = Math.max(-maxA, Math.min(maxA, hoodiePhys.pitch));
-        hoodiePhys.yaw   = Math.max(-maxA, Math.min(maxA, hoodiePhys.yaw));
-        hoodiePhys.roll  = Math.max(-maxA, Math.min(maxA, hoodiePhys.roll));
-      }
-
-      // =========================================================================
-      // Chibi Hand Pose & Finger Controls (กำมือ, แบมือ, แยกนิ้ว)
-      // =========================================================================
-      const chibiHandState = {
-        rightCurl: 0.0,    // -0.5 (แบมือกางสุด) to 0.0 (ธรรมชาติ) to 1.0 (กำมือ)
-        leftCurl: 0.0,
-        rightSpread: 0.0,  // -1.0 (หุบนิ้วชิดกัน) to 0.0 (ธรรมชาติ) to 1.0 (แยกนิ้วกว้าง)
-        leftSpread: 0.0,
-        syncBoth: true
-      };
-
-      if (typeof window !== "undefined") {
-        window.chibiHandState = chibiHandState;
-        window.setChibiHandCurl = function(val, hand = "both") {
-          if (hand === "both" || hand === "right") chibiHandState.rightCurl = val;
-          if (hand === "both" || hand === "left") chibiHandState.leftCurl = val;
-          if (window.chibiGlbModel && typeof window.chibiGlbModel.setHandPose === "function") {
-            window.chibiGlbModel.setHandPose(chibiHandState);
-          }
-          if (typeof window.updateCharacterMesh === "function") {
-            window.updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
-          }
-        };
-        window.setChibiHandSpread = function(val, hand = "both") {
-          if (hand === "both" || hand === "right") chibiHandState.rightSpread = val;
-          if (hand === "both" || hand === "left") chibiHandState.leftSpread = val;
-          if (window.chibiGlbModel && typeof window.chibiGlbModel.setHandPose === "function") {
-            window.chibiGlbModel.setHandPose(chibiHandState);
-          }
-          if (typeof window.updateCharacterMesh === "function") {
-            window.updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
-          }
-        };
-      }
-
-      function updateChibiHandPose(model, heldItem, isItemAction) {
-        if (!model || typeof model.setHandPose !== "function") return;
-
-        // Base values from dev sliders
-        let rCurl = chibiHandState.rightCurl;
-        let lCurl = chibiHandState.leftCurl;
-        let rSpread = chibiHandState.rightSpread;
-        let lSpread = chibiHandState.leftSpread;
-
-        // If character is holding a tool/item and no manual override is active, naturally grip hand
-        if (heldItem && rCurl === 0.0) {
-          rCurl = 0.85; // Natural firm grip on tool handle
-        }
-
-        model.setHandPose({
-          rightCurl: rCurl,
-          leftCurl: lCurl,
-          rightSpread: rSpread,
-          leftSpread: lSpread
-        });
-      }
-
-      function buildTravelerHoodieCloakMesh(
-        headP1, headP2,
-        chestP1, chestP2,
-        neckP1, neckP2,
-        leftArmPivot, leftElbowRot, leftHandRot,
-        rightArmPivot, rightElbowRot, rightHandRot,
-        scale,
-        phase,
-        isLocal,
-        leftFootRot, rightFootRot
-      ) {
-        const outV = [];
-        const outC = [];
-        const outI = [];
-
-        // Head center
-        const hx = (headP1[0] + headP2[0]) * 0.5;
-        const hy = (headP1[1] + headP2[1]) * 0.5;
-        const hz = (headP1[2] + headP2[2]) * 0.5;
-
-        // Neck center
-        const nx = (neckP1[0] + neckP2[0]) * 0.5;
-        const ny = (neckP1[1] + neckP2[1]) * 0.5;
-        const nz = (neckP1[2] + neckP2[2]) * 0.5;
-
-        // Chest center
-        const cx = (chestP1[0] + chestP2[0]) * 0.5;
-        const cy = (chestP1[1] + chestP2[1]) * 0.5;
-        const cz = (chestP1[2] + chestP2[2]) * 0.5;
-
-        // Color palette based on reference artwork (image_7de34809.png):
-        // Main fabric: Warm ivory / pearlescent off-white
-        const colCloth = [0.95, 0.94, 0.91];
-        const colHighlight = [0.99, 0.98, 0.96];
-        const colCrease = [0.82, 0.79, 0.75];
-        const colDark = [0.12, 0.12, 0.15];
-        const colBrooch = [0.98, 0.85, 0.45];
-        const colBroochCenter = [1.0, 0.96, 0.88];
-
-        const s = scale || 1.0;
-        let isClothSection = true;
-
-        const addV = (px, py, pz, color) => {
-          const idx = (outV.length / 3) | 0;
-          if (isLocal && isClothSection) {
-            outV.push((px / s) + 10.0, py / s, pz / s);
-          } else {
-            outV.push(px, py, pz);
-          }
-          outC.push(color[0], color[1], color[2]);
-          return idx;
-        };
-
-        const addTri = (v0, v1, v2) => {
-          outI.push(v0, v1, v2);
-        };
-
-        const addQuad = (v0, v1, v2, v3) => {
-          outI.push(v0, v1, v2);
-          outI.push(v0, v2, v3);
-        };
-
-        const addCylinder = (p0, p1, r0, r1, sides, color, capStart = false, capEnd = false, innerSides = false) => {
-          if (!p0 || !p1) return;
-          const dx = p1[0] - p0[0];
-          const dy = p1[1] - p0[1];
-          const dz = p1[2] - p0[2];
-          const len = Math.hypot(dx, dy, dz) || 0.001;
-          const dir = [dx / len, dy / len, dz / len];
-
-          let up = Math.abs(dir[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
-          let uX = up[1] * dir[2] - up[2] * dir[1];
-          let uY = up[2] * dir[0] - up[0] * dir[2];
-          let uZ = up[0] * dir[1] - up[1] * dir[0];
-          const uLen = Math.hypot(uX, uY, uZ) || 1;
-          uX /= uLen; uY /= uLen; uZ /= uLen;
-
-          const vX = dir[1] * uZ - dir[2] * uY;
-          const vY = dir[2] * uX - dir[0] * uZ;
-          const vZ = dir[0] * uY - dir[1] * uX;
-
-          const ring0 = [];
-          const ring1 = [];
-          for (let i = 0; i < sides; i++) {
-            const ang = (i / sides) * Math.PI * 2;
-            const cosA = Math.cos(ang);
-            const sinA = Math.sin(ang);
-
-            const offX0 = (uX * cosA + vX * sinA) * r0;
-            const offY0 = (uY * cosA + vY * sinA) * r0;
-            const offZ0 = (uZ * cosA + vZ * sinA) * r0;
-
-            const offX1 = (uX * cosA + vX * sinA) * r1;
-            const offY1 = (uY * cosA + vY * sinA) * r1;
-            const offZ1 = (uZ * cosA + vZ * sinA) * r1;
-
-            ring0.push(addV(p0[0] + offX0, p0[1] + offY0, p0[2] + offZ0, color));
-            ring1.push(addV(p1[0] + offX1, p1[1] + offY1, p1[2] + offZ1, color));
-          }
-
-          for (let i = 0; i < sides; i++) {
-            const nextI = (i + 1) % sides;
-            addQuad(ring0[i], ring0[nextI], ring1[nextI], ring1[i]);
-          }
-
-          if (innerSides) {
-            const inRing0 = [];
-            const inRing1 = [];
-            const rIn0 = r0 * 0.92;
-            const rIn1 = r1 * 0.92;
-            for (let i = 0; i < sides; i++) {
-              const ang = (i / sides) * Math.PI * 2;
-              const cosA = Math.cos(ang);
-              const sinA = Math.sin(ang);
-              const offX0 = (uX * cosA + vX * sinA) * rIn0;
-              const offY0 = (uY * cosA + vY * sinA) * rIn0;
-              const offZ0 = (uZ * cosA + vZ * sinA) * rIn0;
-              const offX1 = (uX * cosA + vX * sinA) * rIn1;
-              const offY1 = (uY * cosA + vY * sinA) * rIn1;
-              const offZ1 = (uZ * cosA + vZ * sinA) * rIn1;
-              inRing0.push(addV(p0[0] + offX0, p0[1] + offY0, p0[2] + offZ0, colCrease));
-              inRing1.push(addV(p1[0] + offX1, p1[1] + offY1, p1[2] + offZ1, colCrease));
-            }
-            for (let i = 0; i < sides; i++) {
-              const nextI = (i + 1) % sides;
-              addQuad(inRing0[nextI], inRing0[i], inRing1[i], inRing1[nextI]);
-              // Bridge opening cuff rim
-              addQuad(ring1[i], ring1[nextI], inRing1[nextI], inRing1[i]);
-            }
-          }
-
-          if (capStart) {
-            const vC0 = addV(p0[0], p0[1], p0[2], color);
-            for (let i = 0; i < sides; i++) {
-              const nextI = (i + 1) % sides;
-              addTri(vC0, ring0[nextI], ring0[i]);
-            }
-          }
-          if (capEnd) {
-            const vC1 = addV(p1[0], p1[1], p1[2], color);
-            for (let i = 0; i < sides; i++) {
-              const nextI = (i + 1) % sides;
-              addTri(vC1, ring1[i], ring1[nextI]);
-            }
-          }
-        };
-
-        // -------------------------------------------------------------
-        // PART 1: THE FULL POINTED TRAVELER HOOD (หมวกฮู้ดคลุมศีรษะทรงแหลมมน ลึก มิดชิด)
-        // -------------------------------------------------------------
-        // Ring 0: Face Aperture Rim (8 vertices framing the face opening)
-        const apertureOffsets = [
-          [ 0.00 * s,  0.31 * s,  0.28 * s], // 0: Top visor peak
-          [-0.20 * s,  0.26 * s,  0.25 * s], // 1: Top left
-          [-0.28 * s,  0.06 * s,  0.20 * s], // 2: Left cheek
-          [-0.21 * s, -0.14 * s,  0.16 * s], // 3: Left jaw
-          [ 0.00 * s, -0.19 * s,  0.15 * s], // 4: Chin bottom
-          [ 0.21 * s, -0.14 * s,  0.16 * s], // 5: Right jaw
-          [ 0.28 * s,  0.06 * s,  0.20 * s], // 6: Right cheek
-          [ 0.20 * s,  0.26 * s,  0.25 * s]  // 7: Top right
-        ];
-        const vAperture = [];
-        for (let i = 0; i < 8; i++) {
-          const off = apertureOffsets[i];
-          const col = (i === 0) ? colHighlight : colCloth;
-          vAperture.push(addV(hx + off[0], hy + off[1], hz + off[2], col));
-        }
-
-        // Inner hood lining rim (frames the face and displays square patches cleanly)
-        const vInner = [];
-        for (let i = 0; i < 8; i++) {
-          const off = apertureOffsets[i];
-          const px = hx + off[0] * 0.88;
-          const py = hy + off[1] * 0.88;
-          const pz = hz + off[2] - 0.09 * s;
-          vInner.push(addV(px, py, pz, colCrease));
-        }
-        for (let i = 0; i < 8; i++) {
-          const nextI = (i + 1) % 8;
-          addQuad(vAperture[i], vAperture[nextI], vInner[nextI], vInner[i]);
-        }
-
-        // Ring 1: Mid-Crown & Temples (encasing skull top, sides, and temples)
-        const crownOffsets = [
-          [ 0.00 * s,  0.34 * s,  0.06 * s], // 0: Top ridge
-          [-0.23 * s,  0.29 * s,  0.03 * s], // 1: Top-left
-          [-0.30 * s,  0.06 * s, -0.03 * s], // 2: Left temple
-          [-0.23 * s, -0.14 * s, -0.05 * s], // 3: Low-left
-          [ 0.00 * s, -0.18 * s, -0.07 * s], // 4: Low-mid
-          [ 0.23 * s, -0.14 * s, -0.05 * s], // 5: Low-right
-          [ 0.30 * s,  0.06 * s, -0.03 * s], // 6: Right temple
-          [ 0.23 * s,  0.29 * s,  0.03 * s]  // 7: Top-right
-        ];
-        const vCrown = [];
-        for (let i = 0; i < 8; i++) {
-          const off = crownOffsets[i];
-          vCrown.push(addV(hx + off[0], hy + off[1], hz + off[2], colCloth));
-        }
-        for (let i = 0; i < 8; i++) {
-          const nextI = (i + 1) % 8;
-          addQuad(vAperture[i], vCrown[i], vCrown[nextI], vAperture[nextI]);
-        }
-
-        // Ring 2: Rear Skull (covering back of head fully)
-        const rearOffsets = [
-          [ 0.00 * s,  0.30 * s, -0.16 * s], // 0: Top rear
-          [-0.19 * s,  0.25 * s, -0.18 * s], // 1: Upper-left rear
-          [-0.24 * s,  0.06 * s, -0.21 * s], // 2: Mid-left rear
-          [-0.18 * s, -0.13 * s, -0.19 * s], // 3: Low-left rear
-          [ 0.00 * s, -0.16 * s, -0.18 * s], // 4: Low-mid rear
-          [ 0.18 * s, -0.13 * s, -0.19 * s], // 5: Low-right rear
-          [ 0.24 * s,  0.06 * s, -0.21 * s], // 6: Mid-right rear
-          [ 0.19 * s,  0.25 * s, -0.18 * s]  // 7: Upper-right rear
-        ];
-        const vRear = [];
-        for (let i = 0; i < 8; i++) {
-          const off = rearOffsets[i];
-          vRear.push(addV(hx + off[0], hy + off[1], hz + off[2], colCloth));
-        }
-        for (let i = 0; i < 8; i++) {
-          const nextI = (i + 1) % 8;
-          addQuad(vCrown[i], vRear[i], vRear[nextI], vCrown[nextI]);
-        }
-
-        // -------------------------------------------------------------
-        // HOOD APEX TIP DYNAMIC GRAVITY & SWAY (เลียนแบบฟิสิกส์ช่อผม GLB)
-        // -------------------------------------------------------------
-        const hPhys = (typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : {
-          pitch: 0.0, yaw: 0.0, roll: 0.0, gravity: 0.050
-        };
-        const pAngle = isLocal ? 0.0 : (hPhys.pitch || 0.0);
-        const yAngle = isLocal ? 0.0 : (hPhys.yaw || 0.0);
-        const rAngle = isLocal ? 0.0 : (hPhys.roll || 0.0);
-        const grav = (typeof hPhys.gravity === "number") ? hPhys.gravity : 0.050;
-        const effPhase = isLocal ? 0.0 : phase;
-
-        // Drooping Pointed Apex Cone Tip (swept backwards with natural gravity sag & turning sway)
-        const tipGravY = -grav * 1.5 * s;
-        const tipPitchZ = -pAngle * 0.16 * s;
-        const tipPitchY = isLocal ? 0.0 : (Math.sin(effPhase * 2.0) * 0.016 * s);
-        const tipYawX = (yAngle * 0.18 + rAngle * 0.10) * s;
-        const vApexTip = addV(
-          hx + tipYawX,
-          hy + 0.18 * s + tipGravY + tipPitchY,
-          hz - 0.38 * s + tipPitchZ,
-          colHighlight
-        );
-        for (let i = 0; i < 8; i++) {
-          const nextI = (i + 1) % 8;
-          addTri(vRear[i], vApexTip, vRear[nextI]);
-        }
-
-        // Neck Collar Ring (seals the hood bottom to the neck and shoulders)
-        const collarOffsets = [
-          [ 0.00 * s,  0.02 * s,  0.15 * s], // 0: Throat front
-          [-0.14 * s,  0.00 * s,  0.12 * s], // 1: Front-left
-          [-0.19 * s, -0.01 * s, -0.01 * s], // 2: Left neck
-          [-0.15 * s, -0.01 * s, -0.14 * s], // 3: Back-left
-          [ 0.00 * s,  0.00 * s, -0.16 * s], // 4: Back neck
-          [ 0.15 * s, -0.01 * s, -0.14 * s], // 5: Back-right
-          [ 0.19 * s, -0.01 * s, -0.01 * s], // 6: Right neck
-          [ 0.14 * s,  0.00 * s,  0.12 * s]  // 7: Front-right
-        ];
-        const vCollar = [];
-        for (let i = 0; i < 8; i++) {
-          const off = collarOffsets[i];
-          vCollar.push(addV(nx + off[0], ny + off[1], nz + off[2], colCloth));
-        }
-
-        // Bridge hood bottom tightly down to collar
-        addQuad(vAperture[3], vAperture[4], vCollar[0], vCollar[1]);
-        addQuad(vAperture[4], vAperture[5], vCollar[7], vCollar[0]);
-        addQuad(vAperture[2], vAperture[3], vCollar[1], vCollar[2]);
-        addQuad(vAperture[5], vAperture[6], vCollar[6], vCollar[7]);
-        addQuad(vRear[3], vRear[4], vCollar[4], vCollar[3]);
-        addQuad(vRear[4], vRear[5], vCollar[5], vCollar[4]);
-        addQuad(vRear[2], vRear[3], vCollar[3], vCollar[2]);
-        addQuad(vRear[5], vRear[6], vCollar[6], vCollar[5]);
-        addQuad(vCrown[3], vCrown[4], vCollar[4], vCollar[3]);
-        addQuad(vCrown[4], vCrown[5], vCollar[5], vCollar[4]);
-
-        // -------------------------------------------------------------
-        // PART 2: TWO-TIERED FLUTTERING CLOAK / PONCHO WITH REAL GRAVITY & INERTIA
-        // (ระบบแรงโน้มถ่วงและแรงสปริงเลียนแบบฟิสิกส์ช่อผม GLB)
-        // -------------------------------------------------------------
-        // 2.1 Upper Tier: Shoulder Capelet / Cowl Mantle (ผ้าคลุมไหล่ชั้นบน)
-        const N_CAPELET = 12;
-        const capeletLevels = [
-          { y: ny + 0.005 * s, rx: 0.22 * s, rz: 0.17 * s, t: 0.0 },
-          { y: ny - 0.150 * s, rx: 0.33 * s, rz: 0.25 * s, t: 0.32 }
-        ];
-        const capeletRings = [];
-        for (let rIdx = 0; rIdx < capeletLevels.length; rIdx++) {
-          const lvl = capeletLevels[rIdx];
-          const ring = [];
-          const t = lvl.t;
-          const w = t * t * (3.0 - 2.0 * t); // Cubic Hermite weight from GLB hair physics
-          const capGravY = -grav * w * s;
-          const capPitchZ = -pAngle * 0.08 * w * s;
-          const capYawX = (yAngle * 0.08 + rAngle * 0.04) * w * s;
-          const capBounceY = isLocal ? 0.0 : (Math.sin(effPhase * 2.0) * 0.008 * w * s);
-
-          for (let j = 0; j < N_CAPELET; j++) {
-            const ang = (j / N_CAPELET) * Math.PI * 2;
-            let px = cx + Math.sin(ang) * lvl.rx + capYawX;
-            let py = lvl.y + capGravY + capBounceY;
-            let pz = cz + Math.cos(ang) * lvl.rz + capPitchZ;
-            if (rIdx === 1) {
-              const isRidge = (j % 2 === 0);
-              py += isRidge ? -0.015 * s : 0.010 * s;
-            }
-            ring.push(addV(px, py, pz, (rIdx === 1 && j % 2 === 0) ? colHighlight : colCloth));
-          }
-          capeletRings.push(ring);
-        }
-        for (let j = 0; j < N_CAPELET; j++) {
-          const nextJ = (j + 1) % N_CAPELET;
-          addQuad(capeletRings[0][j], capeletRings[1][j], capeletRings[1][nextJ], capeletRings[0][nextJ]);
-        }
-
-        // 2.2 Lower Tier: Main Flowing Cloak with Hermite Progressive Gravity & Air Drag
-        const N_CLOAK = 16;
-        const cloakRings = [];
-        const ponchoLevels = [
-          { y: ny - 0.080 * s, rx: 0.28 * s, rz: 0.21 * s, t: 0.18, scalloped: false },
-          { y: ny - 0.220 * s, rx: 0.37 * s, rz: 0.29 * s, t: 0.58, scalloped: false },
-          { y: ny - 0.380 * s, rx: 0.46 * s, rz: 0.36 * s, t: 1.00, scalloped: true }
-        ];
-
-        for (let rIdx = 0; rIdx < ponchoLevels.length; rIdx++) {
-          const lvl = ponchoLevels[rIdx];
-          const ringVerts = [];
-          const t = lvl.t;
-          // Smooth progressive bending curve borrowed from GLB hair strands (Hermite cubic)
-          const w = t * t * (3.0 - 2.0 * t);
-
-          // Physical displacements from chibiHoodiePhysics
-          const gravSag = -grav * w * s;
-          const footstepBounce = isLocal ? 0.0 : (Math.sin(effPhase * 2.0) * 0.020 * w * s);
-          const dragZ = -pAngle * 0.24 * w * s;
-          const swayX = (yAngle * 0.22 + rAngle * 0.14) * w * s;
-
-          for (let j = 0; j < N_CLOAK; j++) {
-            const ang = (j / N_CLOAK) * Math.PI * 2;
-            const cosA = Math.cos(ang);
-            const sinA = Math.sin(ang);
-            const isRidge = (j % 2 === 0);
-
-            // Natural cloth fluttering ripples across hem
-            const rippleY = isLocal ? 0.0 : (Math.sin(effPhase * 2.2 + ang * 2.0) * 0.012 * w * s);
-            const rippleRad = isLocal ? 0.0 : (Math.cos(effPhase * 1.8 + ang * 2.0) * 0.009 * w * s);
-
-            let px = cx + sinA * (lvl.rx + rippleRad) + swayX;
-            let py = lvl.y + gravSag + footstepBounce + rippleY;
-            let pz = cz + cosA * (lvl.rz + rippleRad) + dragZ;
-
-            if (lvl.scalloped) {
-              if (isRidge) {
-                py -= 0.055 * s;
-                px += sinA * (0.025 * s);
-                pz += cosA * (0.025 * s);
-              } else {
-                py += 0.030 * s;
-                px -= sinA * (0.015 * s);
-                pz -= cosA * (0.015 * s);
-              }
-            }
-
-            const col = isRidge ? colHighlight : colCrease;
-            ringVerts.push(addV(px, py, pz, col));
-          }
-          cloakRings.push(ringVerts);
-        }
-
-        for (let r = 0; r < cloakRings.length - 1; r++) {
-          const r0 = cloakRings[r];
-          const r1 = cloakRings[r + 1];
-          for (let j = 0; j < N_CLOAK; j++) {
-            const nextJ = (j + 1) % N_CLOAK;
-            addQuad(r0[j], r1[j], r1[nextJ], r0[nextJ]);
-          }
-        }
-
-        // -------------------------------------------------------------
-        // PART 3: CHEST BROOCH & ROSETTE RIBBON BOW (ด้านหน้าชุดคลุม ติดแนบชิดคอเสื้อ)
-        // -------------------------------------------------------------
-        // Positioned flush on the front surface of the collar and mantle
-        const bX = nx;
-        const bY = ny - 0.010 * s;
-        const bZ = nz + 0.175 * s;
-
-        // 3.1 Faceted Gold Brooch Button with Center Pearl (Exclude from cloth square pattern)
-        isClothSection = false;
-        const rBrooch = 0.026 * s;
-        const vBroochC = addV(bX, bY, bZ + rBrooch * 0.8, colBroochCenter);
-        const broochRing = [];
-        for (let j = 0; j < 8; j++) {
-          const ang = (j / 8) * Math.PI * 2;
-          const bx = bX + Math.sin(ang) * rBrooch;
-          const by = bY + Math.cos(ang) * rBrooch;
-          broochRing.push(addV(bx, by, bZ, colBrooch));
-        }
-        for (let j = 0; j < 8; j++) {
-          const nextJ = (j + 1) % 8;
-          addTri(broochRing[j], vBroochC, broochRing[nextJ]);
-        }
-
-        // 3.2 Rosette Ribbon Bow (radiating folded ribbon petals flush against the mantle)
-        isClothSection = true;
-        const rPetal = 0.048 * s;
-        for (let j = 0; j < 6; j++) {
-          const ang = (j / 6) * Math.PI * 2;
-          const pTipX = bX + Math.sin(ang) * rPetal;
-          const pTipY = bY + Math.cos(ang) * rPetal;
-          const pTipZ = bZ + 0.005 * s;
-          const angL = ang - 0.30;
-          const angR = ang + 0.30;
-          const pBaseLX = bX + Math.sin(angL) * (rBrooch * 0.85);
-          const pBaseLY = bY + Math.cos(angL) * (rBrooch * 0.85);
-          const pBaseRX = bX + Math.sin(angR) * (rBrooch * 0.85);
-          const pBaseRY = bY + Math.cos(angR) * (rBrooch * 0.85);
-          const vTipP = addV(pTipX, pTipY, pTipZ, colHighlight);
-          const vBaseL = addV(pBaseLX, pBaseLY, bZ, colCloth);
-          const vBaseR = addV(pBaseRX, pBaseRY, bZ, colCloth);
-          addTri(vBaseL, vTipP, vBaseR);
-        }
-
-        // -------------------------------------------------------------
-        // PART 4: VOLUMINOUS TRAVELER BELL SLEEVES (เสื้อพร้อมแขนเสื้อบานทรงกระดิ่ง สวมทับแขนเดิม)
-        // -------------------------------------------------------------
-        if (leftArmPivot && leftElbowRot && leftHandRot) {
-          // Upper arm sleeve - wraps over upper arm
-          addCylinder(leftArmPivot, leftElbowRot, 0.058 * s, 0.054 * s, 8, colCloth, false, false, false);
-          // Forearm flared bell sleeve - expands outwards towards hand with hollow inner lining
-          addCylinder(leftElbowRot, leftHandRot, 0.054 * s, 0.084 * s, 8, colCloth, false, false, true);
-        }
-        if (rightArmPivot && rightElbowRot && rightHandRot) {
-          // Upper arm sleeve - wraps over upper arm
-          addCylinder(rightArmPivot, rightElbowRot, 0.058 * s, 0.054 * s, 8, colCloth, false, false, false);
-          // Forearm flared bell sleeve - expands outwards towards hand with hollow inner lining
-          addCylinder(rightElbowRot, rightHandRot, 0.054 * s, 0.084 * s, 8, colCloth, false, false, true);
-        }
-
-        // -------------------------------------------------------------
-        // PART 5: ROOMY TRAVELER BOOTS (รองเท้าบูทนักเดินทางทรงสวย หุ้มมิดชิดทั้งข้อเท้า หลังเท้า และนิ้วเท้า)
-        // -------------------------------------------------------------
-        isClothSection = false;
-        const addTravelerBoot = (pFoot) => {
-          if (!pFoot) return;
-          const fx = pFoot[0];
-          const fy = pFoot[1];
-          const fz = pFoot[2];
-
-          // 1. Ankle shaft - wraps around lower leg and ankle
-          const pAnkleTop = [fx, fy + 0.028 * s, fz];
-          const pAnkleBot = [fx, fy - 0.010 * s, fz];
-          addCylinder(pAnkleTop, pAnkleBot, 0.048 * s, 0.046 * s, 8, colDark, false, false, false);
-
-          // Top folded cuff trim
-          const pCuffRim = [fx, fy + 0.032 * s, fz];
-          addCylinder(pAnkleTop, pCuffRim, 0.052 * s, 0.050 * s, 8, colCrease, true, false, false);
-
-          // 2. Full Shoe Body & Roomy Toe Box (extends forward along Z to fully encase heel, instep, and all 5 toes)
-          const pHeel = [fx, fy - 0.013 * s, fz - 0.022 * s];
-          const pToeTip = [fx, fy - 0.015 * s, fz + 0.076 * s];
-          addCylinder(pHeel, pToeTip, 0.046 * s, 0.042 * s, 8, colDark, true, true, false);
-
-          // 3. Sturdy Sole Tread (underneath the shoe)
-          const pSoleHeel = [fx, fy - 0.026 * s, fz - 0.020 * s];
-          const pSoleToe = [fx, fy - 0.026 * s, fz + 0.074 * s];
-          addCylinder(pSoleHeel, pSoleToe, 0.046 * s, 0.042 * s, 6, [0.08, 0.08, 0.10], true, true, false);
-        };
-
-        if (leftFootRot) {
-          addTravelerBoot(leftFootRot);
-        }
-        if (rightFootRot) {
-          addTravelerBoot(rightFootRot);
-        }
-
-        // -------------------------------------------------------------
-        // CALCULATE NORMALS (SMOOTH LIGHTING)
-        // -------------------------------------------------------------
-        const frontTriCount = outI.length;
-        const normals = new Float32Array(outV.length);
-        for (let k = 0; k < frontTriCount; k += 3) {
-          const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
-          const p0x = outV[i0 * 3], p0y = outV[i0 * 3 + 1], p0z = outV[i0 * 3 + 2];
-          const p1x = outV[i1 * 3], p1y = outV[i1 * 3 + 1], p1z = outV[i1 * 3 + 2];
-          const p2x = outV[i2 * 3], p2y = outV[i2 * 3 + 1], p2z = outV[i2 * 3 + 2];
-
-          const uX = p1x - p0x, uY = p1y - p0y, uZ = p1z - p0z;
-          const vX = p2x - p0x, vY = p2y - p0y, vZ = p2z - p0z;
-
-          const nX = uY * vZ - uZ * vY;
-          const nY = uZ * vX - uX * vZ;
-          const nZ = uX * vY - uY * vX;
-
-          normals[i0 * 3]     += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
-          normals[i1 * 3]     += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
-          normals[i2 * 3]     += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
-        }
-
-        for (let k = 0; k < normals.length; k += 3) {
-          const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
-          if (l > 0.0001) {
-            normals[k] /= l;
-            normals[k + 1] /= l;
-            normals[k + 2] /= l;
-          } else {
-            normals[k + 1] = 1.0;
-          }
-        }
-
-        // -------------------------------------------------------------
-        // DOUBLE-SIDED WINDING (ป้องกันหน้าตาข่ายแหว่ง/ทะลุจากทุกมุมมอง)
-        // -------------------------------------------------------------
-        // Appends reverse triangles so WebGL backface culling never makes the cloth transparent!
-        for (let k = 0; k < frontTriCount; k += 3) {
-          outI.push(outI[k], outI[k + 2], outI[k + 1]);
-        }
-
-        return {
-          vertices: outV,
-          normals: normals,
-          colors: outC,
-          indices: outI
-        };
-      }
 
       function getGlbCharacterMeshData(phase, isClone = false, cloneWalkBlend = 1.0) {
         if (typeof window === "undefined" || !window.chibiGlbModel) return null;
@@ -4305,6 +2737,15 @@ window.characterVertexShaderSource = `#version 300 es
 
         // 7. Update Procedural Virtual Bone Hair Spring Physics before skinning
         if (!isClone && typeof updateChibiVirtualHair === "function") {
+          if (chibiHairPhysics && chibiHairPhysics.enabled) {
+            if (isRagdoll && typeof ragdollVel !== "undefined" && ragdollVel) {
+              const rSpeed = Math.hypot(ragdollVel[0], ragdollVel[1], ragdollVel[2]);
+              chibiHairPhysics.pitchVel += Math.min(25.0, rSpeed * 420.0) * 0.016;
+              chibiHairPhysics.yawVel   += Math.sin(nowPerf * 9.0) * Math.min(18.0, rSpeed * 320.0) * 0.016;
+            } else if (typeof playerVerticalVel === "number" && Math.abs(playerVerticalVel) > 0.001) {
+              chibiHairPhysics.pitchVel += Math.max(-22.0, Math.min(22.0, -playerVerticalVel * 480.0)) * 0.016;
+            }
+          }
           updateChibiVirtualHair(model, !isRagdoll && isMovingActive, !isRagdoll && isSprintingActive, isRagdoll ? 0 : phase, dt);
         }
 
@@ -4443,7 +2884,7 @@ window.characterVertexShaderSource = `#version 300 es
           : -1;
 
         if (!colorByParts && !hasHiddenParts && selectedBoneNodeIdx === -1) {
-          // Fast-path for production gameplay: direct flat transforms without dev branching
+          // Fast-path for production gameplay: direct flat transforms without dev branching (GLB keeps original appearance without wearable clothing)
           for (let i = 0; i < vCount; i++) {
             const i3 = i * 3;
             outVertices[i3] = positions[i3] * scale;
@@ -4452,6 +2893,7 @@ window.characterVertexShaderSource = `#version 300 es
             outNormals[i3] = normals[i3];
             outNormals[i3 + 1] = normals[i3 + 1];
             outNormals[i3 + 2] = normals[i3 + 2];
+
             if (modelColors && modelColors.length >= (i + 1) * 3) {
               outColors[i3] = modelColors[i3];
               outColors[i3 + 1] = modelColors[i3 + 1];
@@ -4942,7 +3384,8 @@ window.characterVertexShaderSource = `#version 300 es
         if (!activeGl) return;
         if (typeof gl === "undefined" || !gl) gl = activeGl;
         const heldItem = (typeof window.getHeldItem === "function" ? window.getHeldItem() : (typeof getHeldItem === "function" ? getHeldItem() : null));
-        if (!heldItem || !window.chibiGlbModel || !window.chibiGlbModel.nodes || (typeof ragdollEnabled !== "undefined" && ragdollEnabled)) {
+        const isRag = !!(typeof ragdollEnabled !== "undefined" && ragdollEnabled);
+        if (!heldItem || isRag || !window.chibiGlbModel || !window.chibiGlbModel.nodes) {
           equipIndicesLength = 0;
           return;
         }
@@ -4955,7 +3398,7 @@ window.characterVertexShaderSource = `#version 300 es
         else if (typeof activeRidingMech !== "undefined" && activeRidingMech) yOffset = -0.15;
         else if (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0) yOffset = -0.46 - currentSwimFactor * 0.12;
 
-        if (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON") {
+        if (!isRag && heldItem && (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON")) {
           const rFA = model.nodes.find(n => n && n.name === "RightForeArm");
           const rH = model.nodes.find(n => n && n.name === "RightHand");
           if (rFA && rH && rFA.matrix && rH.matrix) {
@@ -5001,7 +3444,7 @@ window.characterVertexShaderSource = `#version 300 es
 
             buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale);
           }
-        } else if ((heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.buildIronBucketModel === "function") {
+        } else if (!isRag && heldItem && (heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.buildIronBucketModel === "function") {
           const rH = model.nodes.find(n => n && n.name === "RightHand");
           const pHand = (rH && rH.matrix)
             ? [ rH.matrix[12] * scale, rH.matrix[13] * scale + yOffset, rH.matrix[14] * scale ]
@@ -5117,10 +3560,11 @@ window.characterVertexShaderSource = `#version 300 es
         let leftLegPivot, leftKneeRot, leftFootRot;
         let rightLegPivot, rightKneeRot, rightFootRot;
 
-        const bOffset = ragdollEnabled
+        const isPlayerRagdoll = !isClone && ragdollEnabled && ragdollInitialized;
+        const bOffset = isPlayerRagdoll
           ? 0.0
           : Math.sin(waterAnimTime * 2.5) * 0.006;
-        const bRadius = ragdollEnabled
+        const bRadius = isPlayerRagdoll
           ? 0.0
           : Math.sin(waterAnimTime * 2.5) * 0.002;
 
@@ -5348,40 +3792,42 @@ window.characterVertexShaderSource = `#version 300 es
 
         const isRiding = activeRidingBoat || (typeof activeRidingMech !== "undefined" && activeRidingMech);
 
-        chestP1 = [0, 0.02 + bOffset, 0];
-        let defaultChestP2 = [0, 0.17 + bOffset, 0];
+        // Unified torso extends from pelvic floor / groin (-0.090) up to neck collar (0.170)
+        chestP1 = [0, -0.090 + bOffset, 0];
+        let defaultChestP2 = [0, 0.170 + bOffset, 0];
         chestP2 = isRiding ? rotatePointX(chestP1, defaultChestP2, torsoTilt) : defaultChestP2;
         
-        pelvisP1 = [0, -0.15, 0];
-        pelvisP2 = [0, 0.02 + bOffset, 0];
+        pelvisP1 = [0, -0.090 + bOffset, 0];
+        pelvisP2 = [0, -0.090 + bOffset, 0];
         
-        let defaultNeckP1 = [0, 0.17 + bOffset, 0];
-        let defaultNeckP2 = [0, 0.23 + bOffset, 0];
-        let defaultHeadP1 = [0, 0.43 + bOffset, 0];
-        let defaultHeadP2 = [0, 0.43 + bOffset, 0];
+        let defaultNeckP1 = [0, 0.162 + bOffset, 0];
+        let defaultNeckP2 = [0, 0.212 + bOffset, 0];
+        let defaultHeadP1 = [0, 0.336 + bOffset, 0];
+        let defaultHeadP2 = [0, 0.336 + bOffset, 0];
         
         neckP1 = isRiding ? rotatePointX(chestP1, defaultNeckP1, torsoTilt) : defaultNeckP1;
         neckP2 = isRiding ? rotatePointX(chestP1, defaultNeckP2, torsoTilt) : defaultNeckP2;
         headP1 = isRiding ? rotatePointX(chestP1, defaultHeadP1, torsoTilt) : defaultHeadP1;
         headP2 = headP1;
         
-        let defaultLeftEarP1 = [-0.21, 0.41 + bOffset, -0.01];
-        let defaultLeftEarP2 = [-0.23, 0.408 + bOffset, -0.01];
-        let defaultRightEarP1 = [0.21, 0.41 + bOffset, -0.01];
-        let defaultRightEarP2 = [0.23, 0.408 + bOffset, -0.01];
+        let defaultLeftEarP1 = [-0.140, 0.268 + bOffset, -0.018];
+        let defaultLeftEarP2 = [-0.145, 0.312 + bOffset, -0.024];
+        let defaultRightEarP1 = [0.140, 0.268 + bOffset, -0.018];
+        let defaultRightEarP2 = [0.145, 0.312 + bOffset, -0.024];
         
         leftEarP1 = isRiding ? rotatePointX(chestP1, defaultLeftEarP1, torsoTilt) : defaultLeftEarP1;
         leftEarP2 = isRiding ? rotatePointX(chestP1, defaultLeftEarP2, torsoTilt) : defaultLeftEarP2;
         rightEarP1 = isRiding ? rotatePointX(chestP1, defaultRightEarP1, torsoTilt) : defaultRightEarP1;
         rightEarP2 = isRiding ? rotatePointX(chestP1, defaultRightEarP2, torsoTilt) : defaultRightEarP2;
 
-        let defaultLeftArmPivot = [-0.09, 0.11 + bOffset, 0];
-        let defaultLeftElbowBase = [-0.15, 0.01 + bOffset, -0.01];
-        let defaultLeftHandBase = [-0.18, -0.09 + bOffset, 0.04];
+        // Arm joints firmly seated inside the torso shoulder contours (zero gap)
+        let defaultLeftArmPivot = [-0.074, 0.124 + bOffset, 0];
+        let defaultLeftElbowBase = [-0.116, 0.012 + bOffset, -0.006];
+        let defaultLeftHandBase = [-0.146, -0.095 + bOffset, 0.022];
 
-        let defaultRightArmPivot = [0.09, 0.11 + bOffset, 0];
-        let defaultRightElbowBase = [0.15, 0.01 + bOffset, -0.01];
-        let defaultRightHandBase = [0.18, -0.09 + bOffset, 0.04];
+        let defaultRightArmPivot = [0.074, 0.124 + bOffset, 0];
+        let defaultRightElbowBase = [0.116, 0.012 + bOffset, -0.006];
+        let defaultRightHandBase = [0.146, -0.095 + bOffset, 0.022];
 
         leftArmPivot = isRiding ? rotatePointX(chestP1, defaultLeftArmPivot, torsoTilt) : defaultLeftArmPivot;
         const leftElbowBase = isRiding ? rotatePointX(chestP1, defaultLeftElbowBase, torsoTilt) : defaultLeftElbowBase;
@@ -5391,13 +3837,14 @@ window.characterVertexShaderSource = `#version 300 es
         const rightElbowBase = isRiding ? rotatePointX(chestP1, defaultRightElbowBase, torsoTilt) : defaultRightElbowBase;
         const rightHandBase = isRiding ? rotatePointX(chestP1, defaultRightHandBase, torsoTilt) : defaultRightHandBase;
 
-        leftLegPivot = [-0.055, -0.12, 0];
-        const leftKneeBase = [-0.055, -0.27, 0.015];
-        const leftFootBase = [-0.055, -0.42, 0.0];
+        // Hip joints firmly seated inside the wide pelvic hip volume (zero gap, seamless leg transition)
+        leftLegPivot = [-0.052, -0.068 + bOffset, 0];
+        const leftKneeBase = [-0.052, -0.246, 0.010];
+        const leftFootBase = [-0.052, -0.420, 0.0];
 
-        rightLegPivot = [0.055, -0.12, 0];
-        const rightKneeBase = [0.055, -0.27, 0.015];
-        const rightFootBase = [0.055, -0.42, 0.0];
+        rightLegPivot = [0.052, -0.068 + bOffset, 0];
+        const rightKneeBase = [0.052, -0.246, 0.010];
+        const rightFootBase = [0.052, -0.420, 0.0];
 
         leftElbowRot = rotatePointX(leftArmPivot, leftElbowBase, armAngle);
         const leftHandLocal = rotatePointX(
@@ -5948,7 +4395,7 @@ window.characterVertexShaderSource = `#version 300 es
 
         let R_rot = null, N_rot = null, F_rot = null;
 
-        if (ragdollEnabled && ragdollInitialized) {
+        if (!isClone && ragdollEnabled && ragdollInitialized) {
           if (typeof ragdollQuat !== "undefined" && ragdollQuat && ragdollQuat.length === 4) {
             const m = quatToMatrix3(ragdollQuat);
             R_rot = m.R;
@@ -6000,7 +4447,7 @@ window.characterVertexShaderSource = `#version 300 es
               ? [-rp[0] / r_len, -rp[1] / r_len, -rp[2] / r_len]
               : [0, -1, 0];
 
-          const toWorld = (pt, thickness, sagScale) => {
+          const sagLimbLocal = (pt, thickness, sagScale) => {
             let px =
               rp[0] +
               playerScale *
@@ -6019,7 +4466,7 @@ window.characterVertexShaderSource = `#version 300 es
             py += gravityDir[1] * sagScale * playerScale;
             pz += gravityDir[2] * sagScale * playerScale;
 
-            // Clamping to terrain to make it floppy and perfectly aligned with floor
+            // Clamping to terrain to make limbs rest naturally on the floor
             const dist = Math.sqrt(px * px + py * py + pz * pz);
             if (dist > 0.001) {
               const ux = px / dist;
@@ -6054,202 +4501,144 @@ window.characterVertexShaderSource = `#version 300 es
                   }
               }
             }
-            return [px, py, pz];
+            const sc = (typeof playerScale === "number" && playerScale > 0.001) ? playerScale : 1.0;
+            const dx = (px - rp[0]) / sc;
+            const dy = (py - rp[1]) / sc;
+            const dz = (pz - rp[2]) / sc;
+            return [
+              dx * R_rot[0] + dy * R_rot[1] + dz * R_rot[2],
+              dx * N_rot[0] + dy * N_rot[1] + dz * N_rot[2],
+              dx * F_rot[0] + dy * F_rot[1] + dz * F_rot[2],
+            ];
           };
 
-          chestP1 = toWorld(chestP1, 0.09, 0.02);
-          chestP2 = toWorld(chestP2, 0.09, 0.04);
-          pelvisP1 = toWorld(pelvisP1, 0.085, 0.0);
-          pelvisP2 = toWorld(pelvisP2, 0.085, 0.0);
-          neckP1 = toWorld(neckP1, 0.045, 0.04);
-          neckP2 = toWorld(neckP2, 0.045, 0.05);
-          headP1 = toWorld(headP1, 0.16, 0.06);
-          headP2 = toWorld(headP2, 0.16, 0.06);
-          leftEarP1 = toWorld(leftEarP1, 0.035, 0.07);
-          leftEarP2 = toWorld(leftEarP2, 0.035, 0.07);
-          rightEarP1 = toWorld(rightEarP1, 0.035, 0.07);
-          rightEarP2 = toWorld(rightEarP2, 0.035, 0.07);
+          // Keep torso, neck, head, ears, and shoulder/hip pivots 100% locked in local character space
+          // so generateChibiTorso, generateChibiHead, generateChibiEar, and createHairMesh share the exact same local axes and center!
+          leftElbowRot = sagLimbLocal(leftElbowRot, 0.038, 0.04);
+          leftHandRot = sagLimbLocal(leftHandRot, 0.032, 0.08);
 
-          leftArmPivot = toWorld(leftArmPivot, 0.038, 0.02);
-          leftElbowRot = toWorld(leftElbowRot, 0.038, 0.05);
-          leftHandRot = toWorld(leftHandRot, 0.032, 0.1);
+          rightElbowRot = sagLimbLocal(rightElbowRot, 0.038, 0.04);
+          rightHandRot = sagLimbLocal(rightHandRot, 0.032, 0.08);
 
-          rightArmPivot = toWorld(rightArmPivot, 0.038, 0.02);
-          rightElbowRot = toWorld(rightElbowRot, 0.038, 0.05);
-          rightHandRot = toWorld(rightHandRot, 0.032, 0.1);
+          leftKneeRot = sagLimbLocal(leftKneeRot, 0.048, 0.04);
+          leftFootRot = sagLimbLocal(leftFootRot, 0.04, 0.08);
 
-          leftLegPivot = toWorld(leftLegPivot, 0.048, 0.02);
-          leftKneeRot = toWorld(leftKneeRot, 0.048, 0.05);
-          leftFootRot = toWorld(leftFootRot, 0.04, 0.1);
-
-          rightLegPivot = toWorld(rightLegPivot, 0.048, 0.02);
-          rightKneeRot = toWorld(rightKneeRot, 0.048, 0.05);
-          rightFootRot = toWorld(rightFootRot, 0.04, 0.1);
+          rightKneeRot = sagLimbLocal(rightKneeRot, 0.048, 0.04);
+          rightFootRot = sagLimbLocal(rightFootRot, 0.04, 0.08);
           
           if (heldItem) {
               if (heldItem.name === "BOW") {
-                  bowGripRot = toWorld(bowGripRot, 0.03, 0.1);
-                  bowUpperTipRot = toWorld(bowUpperTipRot, 0.03, 0.1);
-                  bowLowerTipRot = toWorld(bowLowerTipRot, 0.03, 0.1);
+                  bowGripRot = sagLimbLocal(bowGripRot, 0.03, 0.08);
+                  bowUpperTipRot = sagLimbLocal(bowUpperTipRot, 0.03, 0.08);
+                  bowLowerTipRot = sagLimbLocal(bowLowerTipRot, 0.03, 0.08);
               } else {
-                  axeHandleP1Rot = toWorld(axeHandleP1Rot, 0.03, 0.1);
-                  axeHandleP2Rot = toWorld(axeHandleP2Rot, 0.03, 0.1);
-                  axeBladeP1Rot = toWorld(axeBladeP1Rot, 0.04, 0.1);
-                  axeBladeP2Rot = toWorld(axeBladeP2Rot, 0.04, 0.1);
+                  axeHandleP1Rot = sagLimbLocal(axeHandleP1Rot, 0.03, 0.08);
+                  axeHandleP2Rot = sagLimbLocal(axeHandleP2Rot, 0.03, 0.08);
+                  axeBladeP1Rot = sagLimbLocal(axeBladeP1Rot, 0.04, 0.08);
+                  axeBladeP2Rot = sagLimbLocal(axeBladeP2Rot, 0.04, 0.08);
                   if (heldItem.name === "PICKAXE") {
-                      axeBlade2P1Rot = toWorld(axeBlade2P1Rot, 0.04, 0.1);
-                      axeBlade2P2Rot = toWorld(axeBlade2P2Rot, 0.04, 0.1);
+                      axeBlade2P1Rot = sagLimbLocal(axeBlade2P1Rot, 0.04, 0.08);
+                      axeBlade2P2Rot = sagLimbLocal(axeBlade2P2Rot, 0.04, 0.08);
                   }
               }
           }
         }
 
-        const scaleFactor = ragdollEnabled ? playerScale : 1.0;
-        const chest = generateCapsule(
+        const scaleFactor = 1.0;
+        const cloneEq = isClone
+          ? (typeof window.getCharacterEquippedClothingState === "function"
+              ? window.getCharacterEquippedClothingState(true)
+              : { wearTop: true, wearShorts: true, wearShirt: false, wearLeggings: false })
+          : null;
+        const chest = generateChibiTorso(
           chestP1,
           chestP2,
           (0.09 + bRadius) * scaleFactor,
-          8,
-          8,
+          scaleFactor,
+          cloneEq ? cloneEq.wearTop : null,
+          cloneEq ? cloneEq.wearShorts : null,
+          cloneEq ? cloneEq.wearShirt : null,
+          cloneEq ? cloneEq.wearLeggings : null,
         );
-        const pelvis = generateCapsule(
-          pelvisP1,
-          pelvisP2,
-          0.085 * scaleFactor,
-          8,
-          8,
-        );
-        const neck = generateCapsule(
-          neckP1,
-          neckP2,
-          0.045 * scaleFactor,
-          6,
-          6,
-        );
-        const head = generateCapsule(
+        const head = generateChibiHead(
           headP1,
           headP2,
-          0.24 * scaleFactor,
-          8,
-          8,
+          0.192 * scaleFactor,
+          scaleFactor,
         );
-        const leftEar = generateCapsule(
+        const leftEar = generateChibiEar(
           leftEarP1,
           leftEarP2,
-          0.035 * scaleFactor,
-          6,
-          6,
+          true,
+          scaleFactor,
         );
-        const rightEar = generateCapsule(
+        const rightEar = generateChibiEar(
           rightEarP1,
           rightEarP2,
-          0.035 * scaleFactor,
-          6,
-          6,
+          false,
+          scaleFactor,
         );
 
-        // Generate unpitched, un-yawed counterparts for local coordinate face mapping
-        const localChest = generateCapsule(
-          localChestP1,
-          localChestP2,
-          (0.09 + bRadius) * scaleFactor,
-          8,
-          8,
-        );
-        const localPelvis = generateCapsule(
-          localPelvisP1,
-          localPelvisP2,
-          0.085 * scaleFactor,
-          8,
-          8,
-        );
-        const localNeck = generateCapsule(
-          localNeckP1,
-          localNeckP2,
-          0.045 * scaleFactor,
-          6,
-          6,
-        );
-        const localHead = generateCapsule(
-          localHeadP1,
-          localHeadP2,
-          0.24 * scaleFactor,
-          8,
-          8,
-        );
-        const localLeftEar = generateCapsule(
-          localLeftEarP1,
-          localLeftEarP2,
-          0.035 * scaleFactor,
-          6,
-          6,
-        );
-        const localRightEar = generateCapsule(
-          localRightEarP1,
-          localRightEarP2,
-          0.035 * scaleFactor,
-          6,
-          6,
-        );
-
-        const leftArmUpper = generateCapsule(
+        const leftArmUpper = generateChibiUpperArm(
           leftArmPivot,
           leftElbowRot,
-          0.038 * scaleFactor,
-          6,
-          6,
+          true,
+          scaleFactor,
+          cloneEq ? cloneEq.wearTop : null,
+          cloneEq ? cloneEq.wearShirt : null,
         );
-        const leftArmLower = generateCapsule(
+        const leftArmLower = generateChibiForeArm(
           leftElbowRot,
           leftHandRot,
-          0.032 * scaleFactor,
-          6,
-          6,
+          true,
+          scaleFactor,
         );
 
-        const rightArmUpper = generateCapsule(
+        const rightArmUpper = generateChibiUpperArm(
           rightArmPivot,
           rightElbowRot,
-          0.038 * scaleFactor,
-          6,
-          6,
+          false,
+          scaleFactor,
+          cloneEq ? cloneEq.wearTop : null,
+          cloneEq ? cloneEq.wearShirt : null,
         );
-        const rightArmLower = generateCapsule(
+        const rightArmLower = generateChibiForeArm(
           rightElbowRot,
           rightHandRot,
-          0.032 * scaleFactor,
-          6,
-          6,
+          false,
+          scaleFactor,
         );
 
-        const leftLegUpper = generateCapsule(
+        const leftLegUpper = generateChibiThigh(
           leftLegPivot,
           leftKneeRot,
-          0.048 * scaleFactor,
-          6,
-          6,
+          true,
+          scaleFactor,
+          cloneEq ? cloneEq.wearShorts : null,
+          cloneEq ? cloneEq.wearLeggings : null,
         );
-        const leftLegLower = generateCapsule(
+        const leftLegLower = generateChibiCalf(
           leftKneeRot,
           leftFootRot,
-          0.04 * scaleFactor,
-          6,
-          6,
+          true,
+          scaleFactor,
+          cloneEq ? cloneEq.wearLeggings : null,
         );
 
-        const rightLegUpper = generateCapsule(
+        const rightLegUpper = generateChibiThigh(
           rightLegPivot,
           rightKneeRot,
-          0.048 * scaleFactor,
-          6,
-          6,
+          false,
+          scaleFactor,
+          cloneEq ? cloneEq.wearShorts : null,
+          cloneEq ? cloneEq.wearLeggings : null,
         );
-        const rightLegLower = generateCapsule(
+        const rightLegLower = generateChibiCalf(
           rightKneeRot,
           rightFootRot,
-          0.04 * scaleFactor,
-          6,
-          6,
+          false,
+          scaleFactor,
+          cloneEq ? cloneEq.wearLeggings : null,
         );
 
         // Build Chibi detailed hands, fingers, ankles, feet, toes
@@ -6270,15 +4659,16 @@ window.characterVertexShaderSource = `#version 300 es
             window.playerHairColor = colors[0];
           }
           const color = window.playerHairColor;
-          const key = `${style}_${color.join(",")}_${scaleFactor}`;
+          const key = `v16_chibi_hair_soft_whip_${style}_${color.join(",")}_${scaleFactor}`;
 
           if (window._cachedHairState.baseMesh && window._cachedHairState.key === key) {
             return window._cachedHairState;
           }
 
-          const localV = [], c = [], i = [];
+          const localV = [], c = [], i = [], flexW = [];
           if (typeof window.build3DAnimeHair === "function") {
-            const identityPtFn = (lx, ly, lz) => [lx, ly, lz];
+            const headFit = 0.192 / 0.240;
+            const identityPtFn = (lx, ly, lz) => [lx * headFit, ly * headFit, lz * headFit];
             window.build3DAnimeHair(
               style,
               color,
@@ -6287,14 +4677,15 @@ window.characterVertexShaderSource = `#version 300 es
               0, // headTilt
               localV,
               c,
-              i
+              i,
+              flexW
             );
           }
 
           if (localV.length === 0) {
             window._cachedHairState = {
               key,
-              baseMesh: { localV: [], colors: [], normals: [], indices: [] },
+              baseMesh: { localV: [], colors: [], normals: [], indices: [], flexW: [] },
               localDummyV: []
             };
             return window._cachedHairState;
@@ -6333,9 +4724,9 @@ window.characterVertexShaderSource = `#version 300 es
 
           const localDummyV = new Array(localV.length);
           for (let k = 0; k < localV.length; k += 3) {
-            localDummyV[k] = 0;
-            localDummyV[k+1] = -999.0;
-            localDummyV[k+2] = 0;
+            localDummyV[k] = localV[k];
+            localDummyV[k+1] = localV[k+1] - 1000.0;
+            localDummyV[k+2] = localV[k+2];
           }
 
           window._cachedHairState = {
@@ -6344,7 +4735,8 @@ window.characterVertexShaderSource = `#version 300 es
               localV,
               colors: c,
               normals: Array.from(normals),
-              indices: i
+              indices: i,
+              flexW
             },
             localDummyV
           };
@@ -6368,110 +4760,367 @@ window.characterVertexShaderSource = `#version 300 es
             };
           }
 
-          const isRag = !!(ragdollEnabled && ragdollInitialized && R_rot && N_rot && F_rot);
+          const isRag = !!(!isClone && ragdollEnabled && ragdollInitialized && R_rot && N_rot && F_rot);
           const targetHeadP = headP1;
           const numCoords = bm.localV.length;
-          const worldV = new Array(numCoords);
-          const worldNormals = isRag ? new Array(numCoords) : bm.normals;
+          if (!cached.worldV || cached.worldV.length !== numCoords) {
+            cached.worldV = new Float32Array(numCoords);
+          }
+          const worldV = cached.worldV;
+          const worldNormals = bm.normals;
           const hx = targetHeadP[0];
           const hy = targetHeadP[1];
           const hz = targetHeadP[2];
           const scale = scaleFactor;
 
-          const timeSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.0028;
+          const nowPerfSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
+          const timeSec = nowPerfSec * 1.4;
 
-          // Action & Jump physics parameters
-          const vertVel = (typeof playerVerticalVel !== "undefined") ? playerVerticalVel : 0.0;
-          const isGrounded = (typeof isPlayerGrounded !== "undefined") ? isPlayerGrounded : true;
+          // Action, Jump & Ragdoll Freefall physics parameters
+          const vertVel = (typeof window.playerVerticalVel === "number") ? window.playerVerticalVel : ((typeof playerVerticalVel !== "undefined") ? playerVerticalVel : 0.0);
+          const isGrounded = isRag
+            ? !!(typeof chibiRagdollState !== "undefined" && chibiRagdollState && chibiRagdollState.isGrounded)
+            : ((typeof window.isPlayerGrounded === "boolean") ? window.isPlayerGrounded : ((typeof isPlayerGrounded !== "undefined") ? isPlayerGrounded : true));
+          const curHeading = (typeof charHeading !== "undefined") ? charHeading : 0.0;
 
-          // Landing spring simulation
-          if (!window._hairSpring) {
-            window._hairSpring = { y: 0.0, vy: 0.0, lastGrounded: true };
+          // Compute 3D character head world position & head-local orientation axes (R_head, N_head, F_head) in ALL modes
+          let worldPx = hx, worldPy = hy, worldPz = hz;
+          let R_head = [1.0, 0.0, 0.0];
+          let N_head = [0.0, 1.0, 0.0];
+          let F_head = [0.0, 0.0, 1.0];
+
+          if (isRag && typeof ragdollPos !== "undefined" && ragdollPos) {
+            const pScale = (typeof playerScale === "number") ? playerScale : 1.0;
+            R_head = R_rot;
+            N_head = N_rot;
+            F_head = F_rot;
+            worldPx = ragdollPos[0] + pScale * (hx * R_head[0] + hy * N_head[0] + hz * F_head[0]);
+            worldPy = ragdollPos[1] + pScale * (hx * R_head[1] + hy * N_head[1] + hz * F_head[1]);
+            worldPz = ragdollPos[2] + pScale * (hx * R_head[2] + hy * N_head[2] + hz * F_head[2]);
+          } else if (typeof getCharacterMatrix === "function") {
+            const cMat = getCharacterMatrix();
+            if (cMat && cMat.length >= 16) {
+              const rLen = Math.hypot(cMat[0], cMat[1], cMat[2]) || 1.0;
+              const nLen = Math.hypot(cMat[4], cMat[5], cMat[6]) || 1.0;
+              const fLen = Math.hypot(cMat[8], cMat[9], cMat[10]) || 1.0;
+              R_head = [cMat[0] / rLen, cMat[1] / rLen, cMat[2] / rLen];
+              N_head = [cMat[4] / nLen, cMat[5] / nLen, cMat[6] / nLen];
+              F_head = [cMat[8] / fLen, cMat[9] / fLen, cMat[10] / fLen];
+
+              // Include upper-body pitch/tilt if present (e.g. aiming or leaning)
+              const bodyTilt = (typeof torsoTilt === "number" && !isNaN(torsoTilt)) ? torsoTilt : 0.0;
+              if (Math.abs(bodyTilt) > 0.001) {
+                const ct = Math.cos(bodyTilt);
+                const st = Math.sin(bodyTilt);
+                const nTilt = [
+                  N_head[0] * ct + F_head[0] * st,
+                  N_head[1] * ct + F_head[1] * st,
+                  N_head[2] * ct + F_head[2] * st
+                ];
+                const fTilt = [
+                  -N_head[0] * st + F_head[0] * ct,
+                  -N_head[1] * st + F_head[1] * ct,
+                  -N_head[2] * st + F_head[2] * ct
+                ];
+                N_head = nTilt;
+                F_head = fTilt;
+              }
+
+              worldPx = cMat[12] + hx * cMat[0] + hy * cMat[4] + hz * cMat[8];
+              worldPy = cMat[13] + hx * cMat[1] + hy * cMat[5] + hz * cMat[9];
+              worldPz = cMat[14] + hx * cMat[2] + hy * cMat[6] + hz * cMat[10];
+            }
+          }
+
+          // Project 3D Planetary Gravity Vector (-normalize(worldPos)) into Local Head Space
+          const rpLen = Math.hypot(worldPx, worldPy, worldPz) || 1.0;
+          const gxWorld = -worldPx / rpLen;
+          const gyWorld = -worldPy / rpLen;
+          const gzWorld = -worldPz / rpLen;
+          const gravLocalX = gxWorld * R_head[0] + gyWorld * R_head[1] + gzWorld * R_head[2];
+          const gravLocalY = gxWorld * N_head[0] + gyWorld * N_head[1] + gzWorld * N_head[2];
+          const gravLocalZ = gxWorld * F_head[0] + gyWorld * F_head[1] + gzWorld * F_head[2];
+
+          // Gravity delta relative to upright rest pose [0, -1, 0], plus natural downward gravity weight
+          const gravDeltaX = gravLocalX;
+          const gravDeltaY = gravLocalY + 1.0;
+          const gravDeltaZ = gravLocalZ;
+          const gravSteadyWeightY = -0.015 * Math.max(0.0, -gravLocalY);
+
+          // 3D Head-Velocity, Gravity & Rotational-Inertia Spring Simulation (O(1) Dual-Stage Whip Spring)
+          if (!window._hairSpring || typeof window._hairSpring.x !== "number" || typeof window._hairSpring.tx !== "number") {
+            window._hairSpring = {
+              x: 0.0, vx: 0.0,
+              y: 0.0, vy: 0.0,
+              z: 0.0, vz: 0.0,
+              tx: 0.0, vtx: 0.0,
+              ty: 0.0, vty: 0.0,
+              tz: 0.0, vtz: 0.0,
+              yawLag: 0.0, vYaw: 0.0,
+              lastHx: worldPx, lastHy: worldPy, lastHz: worldPz,
+              lastHeading: curHeading,
+              lastTime: nowPerfSec,
+              lastGrounded: isGrounded
+            };
           }
           const spring = window._hairSpring;
+          const dt = Math.min(0.033, Math.max(0.004, nowPerfSec - (spring.lastTime || nowPerfSec)));
+          spring.lastTime = nowPerfSec;
+
+          // World-space movement delta -> local head-space lag impulse
+          const rawDx = Math.max(-0.25, Math.min(0.25, worldPx - spring.lastHx));
+          const rawDy = Math.max(-0.25, Math.min(0.25, worldPy - spring.lastHy));
+          const rawDz = Math.max(-0.25, Math.min(0.25, worldPz - spring.lastHz));
+          spring.lastHx = worldPx;
+          spring.lastHy = worldPy;
+          spring.lastHz = worldPz;
+
+          // Heading rotation delta -> gentle rotational lag
+          let dYaw = curHeading - spring.lastHeading;
+          while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+          while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+          spring.lastHeading = curHeading;
+
+          let dhx = 0.0, dhy = 0.0, dhz = 0.0;
+          if (isRag) {
+            dhx = rawDx * R_head[0] + rawDy * R_head[1] + rawDz * R_head[2];
+            dhy = rawDx * N_head[0] + rawDy * N_head[1] + rawDz * N_head[2];
+            dhz = rawDx * F_head[0] + rawDy * F_head[1] + rawDz * F_head[2];
+          } else {
+            const isMovingNow = (typeof isWalking !== "undefined" && isWalking);
+            const isSprintNow = (typeof isSprinting !== "undefined" && isSprinting);
+            const moveSpeedZ = isMovingNow ? (isSprintNow ? 0.040 : 0.022) : 0.0;
+            dhx = dYaw * 0.12;
+            dhy = vertVel;
+            dhz = moveSpeedZ;
+          }
 
           if (isGrounded && !spring.lastGrounded) {
-            // Landing impact
-            spring.vy = -0.016;
+            spring.vy -= 0.038;
+            spring.vty -= 0.055;
           }
           spring.lastGrounded = isGrounded;
 
-          // Update spring oscillator (harmonic damping)
-          spring.vy += (-180.0 * spring.y - 12.0 * spring.vy) * 0.016;
-          spring.y += spring.vy * 0.016;
-          const bounceY = spring.y;
+          // Continuous 3D Gravity Equilibrium Target for Primary Spring (Bangs & Mid-Lock) & Secondary Tip-Whip Follower
+          const gravTargetX = gravDeltaX * 0.052;
+          const gravTargetY = gravDeltaY * 0.048 + gravSteadyWeightY;
+          const gravTargetZ = gravDeltaZ * 0.052;
 
-          // Air displacement from vertical jump velocity
+          const whipTargetX = gravDeltaX * 0.145;
+          const whipTargetY = gravDeltaY * 0.140 + gravSteadyWeightY * 1.6;
+          const whipTargetZ = gravDeltaZ * 0.145;
+
+          // Sub-stepped oscillator: Stage 1 (soft bangs/mid-strand) + Stage 2 (delayed supple whip for long hair & ponytails)
+          const subDt = dt * 0.5;
+          for (let step = 0; step < 2; step++) {
+            spring.vx += (-dhx * 22.0 + 62.0 * (gravTargetX - spring.x) - 13.5 * spring.vx) * subDt;
+            spring.vy += (-dhy * 26.0 + 66.0 * (gravTargetY - spring.y) - 14.0 * spring.vy) * subDt;
+            spring.vz += (-dhz * 22.0 + 62.0 * (gravTargetZ - spring.z) - 13.5 * spring.vz) * subDt;
+            spring.vYaw += (-dYaw * 9.5 - 60.0 * spring.yawLag - 13.5 * spring.vYaw) * subDt;
+
+            spring.x = Math.max(-0.095, Math.min(0.095, spring.x + spring.vx * subDt));
+            spring.y = Math.max(-0.095, Math.min(0.095, spring.y + spring.vy * subDt));
+            spring.z = Math.max(-0.095, Math.min(0.095, spring.z + spring.vz * subDt));
+            spring.yawLag = Math.max(-0.35, Math.min(0.35, spring.yawLag + spring.vYaw * subDt));
+
+            // Stage 2 softer tip-whip oscillator (stiffness 28, damping 8.2 -> supple follow-through for long locks & ponytails)
+            spring.vtx += (-dhx * 30.0 + 28.0 * (whipTargetX + spring.x * 0.85 - spring.tx) - 8.2 * spring.vtx) * subDt;
+            spring.vty += (-dhy * 34.0 + 28.0 * (whipTargetY + spring.y * 0.85 - spring.ty) - 8.2 * spring.vty) * subDt;
+            spring.vtz += (-dhz * 30.0 + 28.0 * (whipTargetZ + spring.z * 0.85 - spring.tz) - 8.2 * spring.vtz) * subDt;
+
+            spring.tx = Math.max(-0.28, Math.min(0.28, spring.tx + spring.vtx * subDt));
+            spring.ty = Math.max(-0.28, Math.min(0.28, spring.ty + spring.vty * subDt));
+            spring.tz = Math.max(-0.28, Math.min(0.28, spring.tz + spring.vtz * subDt));
+          }
+
+          const bounceY = spring.y * 0.45;
+
+          // === 3D Freefall, Jump & Ragdoll Airflow Forces in Local Head Space ===
+          let airX = 0.0;
           let airY = 0.0;
+          let airZ = 0.0;
           let airFlare = 0.0;
-          if (vertVel > 0.0005) {
-            // Ascending jump (lag downward)
-            airY = -vertVel * 6.5;
-            airFlare = vertVel * 2.5;
-          } else if (vertVel < -0.0005) {
-            // Descending / falling (float upward & flare outward)
-            const fallSpeed = Math.abs(vertVel);
-            airY = fallSpeed * 9.0;
-            airFlare = fallSpeed * 5.0;
+          let windTurb = 0.0;
+
+          if (isRag) {
+            const rvx = (typeof ragdollVel !== "undefined" && ragdollVel) ? ragdollVel[0] : 0.0;
+            const rvy = (typeof ragdollVel !== "undefined" && ragdollVel) ? ragdollVel[1] : 0.0;
+            const rvz = (typeof ragdollVel !== "undefined" && ragdollVel) ? ragdollVel[2] : 0.0;
+            const fallSpeed3D = Math.hypot(rvx, rvy, rvz);
+
+            const relWindX = -(rvx * R_head[0] + rvy * R_head[1] + rvz * R_head[2]);
+            const relWindY = -(rvx * N_head[0] + rvy * N_head[1] + rvz * N_head[2]);
+            const relWindZ = -(rvx * F_head[0] + rvy * F_head[1] + rvz * F_head[2]);
+
+            const windGain = 14.5;
+            airX = Math.max(-0.14, Math.min(0.14, relWindX * windGain));
+            airY = Math.max(-0.12, Math.min(0.16, relWindY * windGain));
+            airZ = Math.max(-0.14, Math.min(0.14, relWindZ * windGain));
+
+            airFlare = Math.min(0.095, fallSpeed3D * 9.5 + Math.max(0.0, gravLocalY + 0.5) * 0.032);
+            windTurb = Math.min(1.0, fallSpeed3D * 45.0);
+          } else {
+            if (vertVel > 0.0005) {
+              airY = Math.max(-0.072, -vertVel * 10.5);
+              airFlare = Math.min(0.035, vertVel * 3.8);
+              windTurb = Math.min(0.5, vertVel * 25.0);
+            } else if (vertVel < -0.0005) {
+              const fallSpeed = Math.abs(vertVel);
+              airY = Math.min(0.145, fallSpeed * 14.0);
+              airFlare = Math.min(0.090, fallSpeed * 8.5);
+              windTurb = Math.min(1.0, fallSpeed * 45.0);
+            }
           }
 
           // Walk / Run cycle sway
-          const walkX = Math.sin(phase) * 0.014;
-          const walkZ = Math.cos(phase * 2.0) * 0.010;
-          const walkY = -Math.abs(Math.sin(phase)) * 0.006;
+          const isMovingNow = !isRag && (typeof isWalking !== "undefined" && isWalking);
+          const moveAmp = isMovingNow ? 1.0 : 0.0;
+          const walkX = Math.sin(phase) * 0.0075 * moveAmp;
+          const walkZ = Math.cos(phase * 2.0) * 0.0065 * moveAmp;
+          const walkY = -Math.abs(Math.sin(phase)) * 0.0045 * moveAmp;
 
           // Item / Tool swing action whip
           let actionZ = 0.0;
           let actionY = 0.0;
-          if (typeof isUsingItem !== "undefined" && isUsingItem && typeof useAnimTimer !== "undefined") {
+          if (!isRag && typeof isUsingItem !== "undefined" && isUsingItem && typeof useAnimTimer !== "undefined") {
             const swingFactor = Math.sin((1.0 - useAnimTimer) * Math.PI);
-            actionZ = swingFactor * 0.024;
-            actionY = -Math.abs(swingFactor) * 0.008;
+            actionZ = swingFactor * 0.015;
+            actionY = -Math.abs(swingFactor) * 0.006;
           }
 
+          // Connect chibiHairPhysics inertia
+          const hairPhys = (typeof window !== "undefined" && window.chibiHairPhysics) ? window.chibiHairPhysics : null;
+          const physPitch = hairPhys ? hairPhys.pitch * 0.022 : 0.0;
+          const physYaw   = hairPhys ? hairPhys.yaw * 0.022 : 0.0;
+          const physRoll  = hairPhys ? hairPhys.roll * 0.018 : 0.0;
+
+          // Fast high-frequency wind flutter phase during freefall
+          const flutterTime = nowPerfSec * (12.0 + windTurb * 14.0);
+
+          // === Continuous organic ambient breathing micro-sway (active ALWAYS!) ===
+          const breezeX = Math.sin(timeSec * 1.5) * 0.0030;
+          const breezeZ = Math.cos(timeSec * 1.2) * 0.0030;
+          const breezeY = Math.sin(timeSec * 1.8) * 0.0015;
+
+          // Freefall wind turbulence
+          const turbX = windTurb > 0 ? Math.sin(flutterTime) * (windTurb * 0.020) : 0.0;
+          const turbZ = windTurb > 0 ? Math.cos(flutterTime * 1.1) * (windTurb * 0.020) : 0.0;
+          const turbY = windTurb > 0 ? Math.sin(flutterTime * 0.85) * (windTurb * 0.015) : 0.0;
+
+          const baseDx = spring.x + physYaw + physRoll + airX + walkX + breezeX + turbX;
+          const baseDy = spring.y + airY + walkY + actionY + bounceY + breezeY + turbY;
+          const baseDz = spring.z - physPitch + airZ + walkZ + actionZ + breezeZ + turbZ;
+          const yawLagTerm = spring.yawLag * 0.35;
+          const flareTerm = airFlare + Math.abs(spring.yawLag) * 0.012;
+
+          const clampHeadFn = (typeof window !== "undefined" && window.CapsuleModel && typeof window.CapsuleModel.clampPointOutsideChibiHead === "function")
+            ? window.CapsuleModel.clampPointOutsideChibiHead
+            : (typeof window !== "undefined" && typeof window.clampPointOutsideChibiHead === "function" ? window.clampPointOutsideChibiHead : null);
+          const clampBodyFn = (typeof window !== "undefined" && window.CapsuleModel && typeof window.CapsuleModel.clampPointOutsideChibiBodyForCloth === "function")
+            ? window.CapsuleModel.clampPointOutsideChibiBodyForCloth
+            : (typeof window !== "undefined" && typeof window.clampPointOutsideChibiBodyForCloth === "function" ? window.clampPointOutsideChibiBodyForCloth : null);
+          const hairBodyCollider = clampBodyFn ? {
+            headP1: null,
+            chestP1,
+            chestP2,
+            leftArmPivot,
+            leftElbowRot,
+            leftHandRot,
+            rightArmPivot,
+            rightElbowRot,
+            rightHandRot,
+            scale: scaleFactor
+          } : null;
+
+          // Interior centroid of the 0.192 Chibi Head for tangential skull sliding when close to the scalp
+          const headCx = 0.0;
+          const headCy = -0.0096;
+          const headCz = -0.0163;
+          const skullSlideRadiusSq = 0.204 * 0.204;
+
           for (let k = 0; k < numCoords; k += 3) {
+            const flex = (bm.flexW && bm.flexW[k / 3] !== undefined)
+              ? bm.flexW[k / 3]
+              : 0.0;
             const lx = bm.localV[k];
-            const ly = bm.localV[k+1];
-            const lz = bm.localV[k+2];
+            const ly = bm.localV[k + 1];
+            const lz = bm.localV[k + 2];
 
-            // Flex factor increases naturally towards hair tips (scalp root lx,ly is anchored)
-            const flex = Math.max(0.0, (0.24 - ly) * 1.5);
-            const flexSq = flex * flex;
-
-            // Outward direction vector from skull center for flare outwards during jump
-            const distXZ = Math.sqrt(lx * lx + lz * lz) || 0.001;
-            const dirX = lx / distXZ;
-            const dirZ = lz / distXZ;
-
-            // Gentle organic ambient breeze
-            const breezeX = Math.sin(timeSec * 2.6 + ly * 12.0 + lx * 5.0) * 0.006 * flexSq;
-            const breezeZ = Math.cos(timeSec * 2.1 + ly * 10.0 + lz * 5.0) * 0.006 * flexSq;
-
-            // Combine all physical forces
-            const totalDx = breezeX + (isRag ? 0.0 : (walkX * flexSq + dirX * airFlare * flexSq));
-            const totalDy = (isRag ? 0.0 : ((walkY + actionY + airY + bounceY) * flexSq - Math.abs(totalDx) * 0.12));
-            const totalDz = breezeZ + (isRag ? 0.0 : (walkZ * flexSq + actionZ * flexSq + dirZ * airFlare * flexSq));
-
-            const offX = (lx + totalDx) * scale;
-            const offY = (ly + totalDy) * scale;
-            const offZ = (lz + totalDz) * scale;
-
-            if (isRag) {
-              worldV[k]   = hx + (offX * R_rot[0] + offY * N_rot[0] + offZ * F_rot[0]);
-              worldV[k+1] = hy + (offX * R_rot[1] + offY * N_rot[1] + offZ * F_rot[1]);
-              worldV[k+2] = hz + (offX * R_rot[2] + offY * N_rot[2] + offZ * F_rot[2]);
-
-              const nx = bm.normals[k];
-              const ny = bm.normals[k+1];
-              const nz = bm.normals[k+2];
-              worldNormals[k]   = nx * R_rot[0] + ny * N_rot[0] + nz * F_rot[0];
-              worldNormals[k+1] = nx * R_rot[1] + ny * N_rot[1] + nz * F_rot[1];
-              worldNormals[k+2] = nx * R_rot[2] + ny * N_rot[2] + nz * F_rot[2];
-            } else {
-              worldV[k]   = hx + offX;
-              worldV[k+1] = hy + offY;
-              worldV[k+2] = hz + offZ;
+            // 1. Root & skull-wrapping base: ZERO physics (flex <= 0.0001) - 100% anchored to the head in local space!
+            if (flex <= 0.0001) {
+              worldV[k]   = hx + lx * scale;
+              worldV[k+1] = hy + ly * scale;
+              worldV[k+2] = hz + lz * scale;
+              continue;
             }
+
+            // 2. Same lightweight O(1) spring principle as Forehead Bangs, extended with 2nd-stage supple whip for Long & Tied Hair!
+            const flexW = flex * (0.48 + 0.52 * flex);
+            const whipW = flex * flex * (0.35 + 0.65 * flex);
+
+            // Effective hanging reach below/behind the crown tie so long locks & ponytails bend with real pendulum leverage
+            const dropBelowTie = Math.max(0.0, 0.125 - ly);
+            const reachBehindSkull = Math.max(0.0, -lz - 0.165);
+            const reachSideTwin = Math.max(0.0, Math.abs(lx) - 0.165);
+            const longReach = dropBelowTie * 0.85 + reachBehindSkull * 0.95 + reachSideTwin * 0.75;
+            const hangFactor = 0.62 + 1.85 * longReach;
+
+            const vGravX = gravDeltaX * 0.072 * hangFactor * flexW + spring.tx * whipW * (0.55 + longReach * 1.4);
+            const vGravY = (gravDeltaY * 0.068 + gravSteadyWeightY * 0.60) * hangFactor * flexW + spring.ty * whipW * (0.55 + longReach * 1.4);
+            const vGravZ = gravDeltaZ * 0.072 * hangFactor * flexW + spring.tz * whipW * (0.55 + longReach * 1.4);
+
+            // Soft arch uncurling: when tilted/lying/upside-down, relax the high ponytail/twin-tail arch toward gravity
+            // so tied hair uncurls and drapes naturally instead of moving as a stiff C-hook!
+            const tiltAmount = Math.min(1.0, Math.hypot(gravDeltaX, gravDeltaY, gravDeltaZ) * 0.55);
+            const archRelax = (reachBehindSkull > 0.01 || reachSideTwin > 0.01) ? (tiltAmount * whipW * 0.38) : 0.0;
+            const relaxDx = archRelax * (gravLocalX * 0.16);
+            const relaxDy = archRelax * (gravLocalY * 0.18 - Math.max(0.0, ly - 0.08) * 0.55);
+            const relaxDz = archRelax * (gravLocalZ * 0.16);
+
+            let dispX = lx + (baseDx - lz * yawLagTerm + lx * flareTerm) * flexW + vGravX + relaxDx;
+            let dispY = ly + baseDy * flexW + vGravY + relaxDy;
+            let dispZ = lz + (baseDz + lx * yawLagTerm + lz * flareTerm) * flexW + vGravZ + relaxDz;
+
+            // 3. Soft Tangential Slide ONLY when a vertex actually approaches the real skull sphere (r < 0.204)
+            // (Never lock long hair or ponytails in mid-air at their outer rest radius!)
+            if (ly > -0.10) {
+              const ndx = dispX - headCx;
+              const ndy = dispY - headCy;
+              const ndz = dispZ - headCz;
+              const rNewSq = ndx * ndx + ndy * ndy + ndz * ndz;
+              const targetR = Math.min(skullSlideRadiusSq, (lx - headCx) ** 2 + (ly - headCy) ** 2 + (lz - headCz) ** 2);
+              if (rNewSq < targetR && rNewSq > 0.00001) {
+                const pushOut = Math.sqrt(targetR / rNewSq);
+                dispX = headCx + ndx * pushOut;
+                dispY = headCy + ndy * pushOut;
+                dispZ = headCz + ndz * pushOut;
+              }
+            }
+
+            // 4. Exact 3D Sculpted Chibi Head, Convex Facial Shield & Neck Non-Penetration Clamp
+            if (clampHeadFn) {
+              const clamped = clampHeadFn(dispX, dispY, dispZ, 0.192, 0.0038);
+              dispX = clamped[0];
+              dispY = clamped[1];
+              dispZ = clamped[2];
+            }
+            if (clampBodyFn && (hy + dispY * scale) < neckP2[1]) {
+              const bClamped = clampBodyFn(
+                hx + dispX * scale,
+                hy + dispY * scale,
+                hz + dispZ * scale,
+                hairBodyCollider,
+                0.005,
+                true
+              );
+              dispX = (bClamped[0] - hx) / scale;
+              dispY = (bClamped[1] - hy) / scale;
+              dispZ = (bClamped[2] - hz) / scale;
+            }
+
+            worldV[k]   = hx + dispX * scale;
+            worldV[k+1] = hy + dispY * scale;
+            worldV[k+2] = hz + dispZ * scale;
           }
 
           return {
@@ -6488,15 +5137,57 @@ window.characterVertexShaderSource = `#version 300 es
 
         let cloneHoodieMesh = null;
         let cloneLocalHoodieMesh = null;
+        let cloneOpenHoodieMesh = null;
+        let cloneLocalOpenHoodieMesh = null;
+        let cloneBootsMesh = null;
+        let playerHoodieMesh = null;
+        let playerLocalHoodieMesh = null;
+        let playerBootsMesh = null;
+        let playerSkirtMesh = null;
+        let playerShirtCollarMesh = null;
+
+        const shiftMeshX = (srcMesh, dx) => {
+          const srcV = srcMesh.vertices;
+          const n = srcV.length;
+          const dstV = new Float32Array(n);
+          for (let k = 0; k < n; k += 3) {
+            dstV[k]     = srcV[k] + dx;
+            dstV[k + 1] = srcV[k + 1];
+            dstV[k + 2] = srcV[k + 2];
+          }
+          return {
+            vertices: dstV,
+            normals: srcMesh.normals,
+            colors: srcMesh.colors,
+            texcoords: srcMesh.texcoords,
+            indices: srcMesh.indices
+          };
+        };
+
         if (isClone) {
+          window._cloneCurrentHeadP1 = [headP1[0], headP1[1], headP1[2]];
+          window._cloneCurrentScale = scaleFactor;
+          window._cloneCurrentPhase = phase;
+          window._cloneCurrentWalkBlend = cloneWalkBlend;
+          window._cloneAnimTick = (window._cloneAnimTick || 0) + 1;
+
           const isMoving = cloneWalkBlend > 0.05;
           const cloneHeading = (typeof window.playerClonesState !== "undefined" && window.playerClonesState[0])
             ? (window.playerClonesState[0].heading || 0.0)
             : 0.0;
           if (typeof updateChibiHoodiePhysics === "function") {
-            updateChibiHoodiePhysics(isMoving, false, phase, cloneHeading);
+            updateChibiHoodiePhysics(isMoving, false, phase, cloneHeading, { isClone: true });
           }
 
+          const cloneClothCtx = {
+            isClone: true,
+            leftLegPivot,
+            leftKneeRot,
+            leftFootRot,
+            rightLegPivot,
+            rightKneeRot,
+            rightFootRot
+          };
           cloneHoodieMesh = buildTravelerHoodieCloakMesh(
             headP1, headP2,
             chestP1, chestP2,
@@ -6506,25 +5197,136 @@ window.characterVertexShaderSource = `#version 300 es
             scaleFactor,
             phase,
             false,
-            leftFootRot, rightFootRot
+            leftFootRot, rightFootRot,
+            false,
+            cloneClothCtx
           );
-          cloneLocalHoodieMesh = buildTravelerHoodieCloakMesh(
-            localHeadP1, localHeadP2,
-            localChestP1, localChestP2,
-            localNeckP1, localNeckP2,
+          cloneLocalHoodieMesh = shiftMeshX(cloneHoodieMesh, 10.0);
+
+          cloneOpenHoodieMesh = buildTravelerHoodieCloakMesh(
+            headP1, headP2,
+            chestP1, chestP2,
+            neckP1, neckP2,
             leftArmPivot, leftElbowRot, leftHandRot,
             rightArmPivot, rightElbowRot, rightHandRot,
             scaleFactor,
             phase,
+            false,
+            leftFootRot, rightFootRot,
             true,
-            leftFootRot, rightFootRot
+            cloneClothCtx
           );
+          cloneLocalOpenHoodieMesh = shiftMeshX(cloneOpenHoodieMesh, 10.0);
+
+          if (typeof buildTravelerBootsMesh === "function") {
+            cloneBootsMesh = buildTravelerBootsMesh(leftFootRot, rightFootRot, scaleFactor, cloneClothCtx);
+          }
+        } else {
+          const playerEq = (typeof window.getCharacterEquippedClothingState === "function")
+            ? window.getCharacterEquippedClothingState(false)
+            : null;
+          const needClothPhys = !!(playerEq && (playerEq.wearHoodie || playerEq.wearSkirt));
+          if (needClothPhys) {
+            const isRag = !!(ragdollEnabled && ragdollInitialized && R_rot && N_rot && F_rot);
+            const pMoving = !isRag && !!(
+              (typeof isWalking !== "undefined" && isWalking) ||
+              (typeof currentWalkBlend !== "undefined" && currentWalkBlend > 0.05)
+            );
+            const pSprint = !isRag && !!(typeof isSprinting !== "undefined" && isSprinting && pMoving);
+            const pHeading = (typeof charHeading === "number") ? charHeading : 0.0;
+
+            let physR = [1, 0, 0], physN = [0, 1, 0], physF = [0, 0, 1], physWorldPos = [0, 1, 0];
+            if (isRag && typeof ragdollPos !== "undefined" && ragdollPos) {
+              physR = R_rot; physN = N_rot; physF = F_rot;
+              physWorldPos = ragdollPos;
+            } else if (typeof getCharacterMatrix === "function") {
+              const cMat = getCharacterMatrix();
+              if (cMat && cMat.length >= 16) {
+                const rL = Math.hypot(cMat[0], cMat[1], cMat[2]) || 1.0;
+                const nL = Math.hypot(cMat[4], cMat[5], cMat[6]) || 1.0;
+                const fL = Math.hypot(cMat[8], cMat[9], cMat[10]) || 1.0;
+                physR = [cMat[0] / rL, cMat[1] / rL, cMat[2] / rL];
+                physN = [cMat[4] / nL, cMat[5] / nL, cMat[6] / nL];
+                physF = [cMat[8] / fL, cMat[9] / fL, cMat[10] / fL];
+                physWorldPos = [cMat[12], cMat[13], cMat[14]];
+              }
+            }
+            const vertVel = (typeof window.playerVerticalVel === "number")
+              ? window.playerVerticalVel
+              : ((typeof playerVerticalVel !== "undefined") ? playerVerticalVel : 0.0);
+            const isGrounded = isRag
+              ? !!(typeof chibiRagdollState !== "undefined" && chibiRagdollState && chibiRagdollState.isGrounded)
+              : ((typeof window.isPlayerGrounded === "boolean") ? window.isPlayerGrounded : ((typeof isPlayerGrounded !== "undefined") ? isPlayerGrounded : true));
+
+            if (typeof updateChibiHoodiePhysics === "function") {
+              updateChibiHoodiePhysics(pMoving, pSprint, phase, pHeading, {
+                R: physR,
+                N: physN,
+                F: physF,
+                worldPos: physWorldPos,
+                torsoTilt: (!isRag && typeof torsoTilt === "number" && !isNaN(torsoTilt)) ? torsoTilt : 0.0,
+                isRagdoll: isRag,
+                vertVel: vertVel,
+                isGrounded: isGrounded,
+                ragdollVel: (isRag && typeof ragdollVel !== "undefined") ? ragdollVel : null
+              });
+            }
+          }
+
+          const legClothCtx = {
+            leftLegPivot,
+            leftKneeRot,
+            leftFootRot,
+            rightLegPivot,
+            rightKneeRot,
+            rightFootRot
+          };
+
+          if (playerEq && playerEq.wearHoodie && typeof buildTravelerHoodieCloakMesh === "function") {
+            const hoodOpenMode = (typeof window.playerHoodClosed !== "undefined") ? !window.playerHoodClosed : true;
+            playerHoodieMesh = buildTravelerHoodieCloakMesh(
+              headP1, headP2,
+              chestP1, chestP2,
+              neckP1, neckP2,
+              leftArmPivot, leftElbowRot, leftHandRot,
+              rightArmPivot, rightElbowRot, rightHandRot,
+              scaleFactor,
+              phase,
+              false,
+              leftFootRot, rightFootRot,
+              hoodOpenMode,
+              legClothCtx
+            );
+            playerLocalHoodieMesh = shiftMeshX(playerHoodieMesh, 10.0);
+          }
+
+          if (playerEq && playerEq.wearSkirt && typeof buildBlackPleatedSkirtMesh === "function") {
+            playerSkirtMesh = buildBlackPleatedSkirtMesh(
+              headP1,
+              chestP1, chestP2,
+              scaleFactor,
+              phase,
+              legClothCtx
+            );
+          }
+
+          if (playerEq && playerEq.wearShirt && typeof buildWhiteShirtCollarMesh === "function") {
+            playerShirtCollarMesh = buildWhiteShirtCollarMesh(
+              headP1,
+              chestP1, chestP2,
+              neckP1, neckP2,
+              scaleFactor
+            );
+          }
+
+          if (playerEq && playerEq.wearBoots && typeof buildTravelerBootsMesh === "function") {
+            playerBootsMesh = buildTravelerBootsMesh(leftFootRot, rightFootRot, scaleFactor, legClothCtx);
+          }
         }
 
-        let meshesToMerge = isClone ? [
+        // Pre-weld clone base body parts once so closed-hood and open-hood variants don't weld skin twice
+        const cloneBaseWelded = isClone ? mergeMeshes([
           chest,
-          pelvis,
-          neck,
           head,
           leftEar,
           rightEar,
@@ -6538,13 +5340,14 @@ window.characterVertexShaderSource = `#version 300 es
           rightLegLower,
           ...leftHandParts,
           ...rightHandParts,
-          ...leftFootParts,
-          ...rightFootParts,
+          ...(cloneBootsMesh ? [cloneBootsMesh] : [...leftFootParts, ...rightFootParts]),
+        ]) : null;
+
+        let meshesToMerge = isClone ? [
+          cloneBaseWelded,
           cloneHoodieMesh,
         ] : [
           chest,
-          pelvis,
-          neck,
           head,
           playerHairMesh,
           leftEar,
@@ -6559,38 +5362,22 @@ window.characterVertexShaderSource = `#version 300 es
           rightLegLower,
           ...leftHandParts,
           ...rightHandParts,
-          ...leftFootParts,
-          ...rightFootParts,
+          ...(playerBootsMesh ? [] : [...leftFootParts, ...rightFootParts]),
+          ...(playerShirtCollarMesh ? [playerShirtCollarMesh] : []),
+          ...(playerSkirtMesh ? [playerSkirtMesh] : []),
+          ...(playerHoodieMesh ? [playerHoodieMesh] : []),
+          ...(playerBootsMesh ? [playerBootsMesh] : []),
         ];
 
         let localMeshesToMerge = isClone ? [
-          localChest,
-          localPelvis,
-          localNeck,
-          localHead,
-          localLeftEar,
-          localRightEar,
-          leftArmUpper,
-          leftArmLower,
-          rightArmUpper,
-          rightArmLower,
-          leftLegUpper,
-          leftLegLower,
-          rightLegUpper,
-          rightLegLower,
-          ...leftHandParts,
-          ...rightHandParts,
-          ...leftFootParts,
-          ...rightFootParts,
+          cloneBaseWelded,
           cloneLocalHoodieMesh,
         ] : [
-          localChest,
-          localPelvis,
-          localNeck,
-          localHead,
+          chest,
+          head,
           playerLocalHairMesh,
-          localLeftEar,
-          localRightEar,
+          leftEar,
+          rightEar,
           leftArmUpper,
           leftArmLower,
           rightArmUpper,
@@ -6601,8 +5388,11 @@ window.characterVertexShaderSource = `#version 300 es
           rightLegLower,
           ...leftHandParts,
           ...rightHandParts,
-          ...leftFootParts,
-          ...rightFootParts,
+          ...(playerBootsMesh ? [] : [...leftFootParts, ...rightFootParts]),
+          ...(playerShirtCollarMesh ? [playerShirtCollarMesh] : []),
+          ...(playerSkirtMesh ? [playerSkirtMesh] : []),
+          ...(playerLocalHoodieMesh ? [playerLocalHoodieMesh] : []),
+          ...(playerBootsMesh ? [playerBootsMesh] : []),
         ];
         
         if (heldItem) {
@@ -6624,13 +5414,13 @@ window.characterVertexShaderSource = `#version 300 es
             };
             const scale = (v, s) => [v[0]*s, v[1]*s, v[2]*s];
 
-            const isRag = (ragdollEnabled && ragdollInitialized);
-            const itemScale = isRag ? playerScale : 1.0;
+            const isRag = false;
+            const itemScale = 1.0;
 
             const addWedge = (pBase, pTip, widthBase, widthTip, thickness, color) => {
                 const dir = sub(pTip, pBase);
                 const f = normalize(dir); // points from base to tip
-                const charX = isRag ? [charMat[0], charMat[1], charMat[2]] : [1, 0, 0];
+                const charX = [1, 0, 0];
                 
                 // let's use charX as thickness direction
                 const right = normalize(charX); 
@@ -6761,21 +5551,16 @@ window.characterVertexShaderSource = `#version 300 es
                         arrowDir[0] /= arrowLen;
                         arrowDir[1] /= arrowLen;
                         arrowDir[2] /= arrowLen;
-                        if (!ragdollEnabled || !ragdollInitialized) {
-                            window.lastBowGripPos = [
-                                charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
-                                charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
-                                charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
-                            ];
-                            window.lastBowAimDir = [
-                                charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
-                                charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
-                                charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
-                            ];
-                        } else {
-                            window.lastBowGripPos = [wGrip[0], wGrip[1], wGrip[2]];
-                            window.lastBowAimDir = [arrowDir[0], arrowDir[1], arrowDir[2]];
-                        }
+                        window.lastBowGripPos = [
+                            charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
+                            charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
+                            charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
+                        ];
+                        window.lastBowAimDir = [
+                            charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
+                            charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
+                            charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
+                        ];
                     }
                     const arrowTipPos = [
                         wGrip[0] + arrowDir[0] * 0.12 * bowScale,
@@ -7025,44 +5810,245 @@ window.characterVertexShaderSource = `#version 300 es
         }
 
         const merged = mergeMeshes(meshesToMerge);
-        const localMerged = mergeMeshes(localMeshesToMerge);
+        const localMerged = mergeMeshes(localMeshesToMerge, true);
         if (isClone) {
-          if (!window.cloneMeshBuffers) window.cloneMeshBuffers = {};
-          const cb = window.cloneMeshBuffers;
-          cb.indicesLength = merged.indices.length;
+          const uploadCloneBufSet = (targetObj, mData, lmData) => {
+            targetObj.indicesLength = mData.indices.length;
 
-          const vertData = merged.vertices instanceof Float32Array ? merged.vertices : new Float32Array(merged.vertices);
-          const localVertData = localMerged.vertices instanceof Float32Array ? localMerged.vertices : new Float32Array(localMerged.vertices);
-          const normData = merged.normals instanceof Float32Array ? merged.normals : new Float32Array(merged.normals);
-          const colData = merged.colors instanceof Float32Array ? merged.colors : new Float32Array(merged.colors);
+            const vertData = mData.vertices instanceof Float32Array ? mData.vertices : new Float32Array(mData.vertices);
+            const localVertData = lmData.vertices instanceof Float32Array ? lmData.vertices : new Float32Array(lmData.vertices);
+            const normData = mData.normals instanceof Float32Array ? mData.normals : new Float32Array(mData.normals);
+            const colData = mData.colors instanceof Float32Array ? mData.colors : new Float32Array(mData.colors);
 
-          if (!cb.vertexBuffer) cb.vertexBuffer = gl.createBuffer();
-          uploadDynamicBuffer(gl, cb.vertexBuffer, gl.ARRAY_BUFFER, vertData);
+            if (!targetObj.vertexBuffer) targetObj.vertexBuffer = gl.createBuffer();
+            uploadDynamicBuffer(gl, targetObj.vertexBuffer, gl.ARRAY_BUFFER, vertData);
 
-          if (!cb.localVertexBuffer) cb.localVertexBuffer = gl.createBuffer();
-          uploadDynamicBuffer(gl, cb.localVertexBuffer, gl.ARRAY_BUFFER, localVertData);
+            if (!targetObj.localVertexBuffer) targetObj.localVertexBuffer = gl.createBuffer();
+            uploadDynamicBuffer(gl, targetObj.localVertexBuffer, gl.ARRAY_BUFFER, localVertData);
 
-          if (!cb.normalBuffer) cb.normalBuffer = gl.createBuffer();
-          uploadDynamicBuffer(gl, cb.normalBuffer, gl.ARRAY_BUFFER, normData);
+            if (!targetObj.normalBuffer) targetObj.normalBuffer = gl.createBuffer();
+            uploadDynamicBuffer(gl, targetObj.normalBuffer, gl.ARRAY_BUFFER, normData);
 
-          if (!cb.colorBuffer) cb.colorBuffer = gl.createBuffer();
-          uploadDynamicBuffer(gl, cb.colorBuffer, gl.ARRAY_BUFFER, colData);
+            if (!targetObj.colorBuffer) targetObj.colorBuffer = gl.createBuffer();
+            uploadDynamicBuffer(gl, targetObj.colorBuffer, gl.ARRAY_BUFFER, colData);
 
-          if (merged.texcoords) {
-            if (!cb.texCoordBuffer) {
-              cb.texCoordBuffer = gl.createBuffer();
+            if (mData.texcoords) {
+              if (!targetObj.texCoordBuffer) {
+                targetObj.texCoordBuffer = gl.createBuffer();
+              }
+              uploadDynamicBuffer(gl, targetObj.texCoordBuffer, gl.ARRAY_BUFFER, mData.texcoords instanceof Float32Array ? mData.texcoords : new Float32Array(mData.texcoords));
             }
-            uploadDynamicBuffer(gl, cb.texCoordBuffer, gl.ARRAY_BUFFER, merged.texcoords instanceof Float32Array ? merged.texcoords : new Float32Array(merged.texcoords));
+
+            if (!targetObj.indexBuffer) targetObj.indexBuffer = gl.createBuffer();
+            if (targetObj.indexBuffer._uploadedCount !== targetObj.indicesLength) {
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, targetObj.indexBuffer);
+              const idxData = (targetObj.indicesLength > 65535)
+                ? (mData.indices instanceof Uint32Array ? mData.indices : new Uint32Array(mData.indices))
+                : (mData.indices instanceof Uint16Array ? mData.indices : new Uint16Array(mData.indices));
+              gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
+              targetObj.indexBuffer._uploadedCount = targetObj.indicesLength;
+            }
+          };
+
+          if (!window.cloneMeshBuffers) window.cloneMeshBuffers = {};
+          uploadCloneBufSet(window.cloneMeshBuffers, merged, localMerged);
+
+          if (cloneOpenHoodieMesh && cloneLocalOpenHoodieMesh) {
+            const openMerged = mergeMeshes([cloneBaseWelded, cloneOpenHoodieMesh]);
+            const openLocalMerged = mergeMeshes([cloneBaseWelded, cloneLocalOpenHoodieMesh], true);
+            if (!window.cloneOpenHoodieMeshBuffers) window.cloneOpenHoodieMeshBuffers = {};
+            uploadCloneBufSet(window.cloneOpenHoodieMeshBuffers, openMerged, openLocalMerged);
           }
 
-          if (!cb.indexBuffer) cb.indexBuffer = gl.createBuffer();
-          if (cb.indexBuffer._uploadedCount !== cb.indicesLength) {
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cb.indexBuffer);
-            const idxData = (cb.indicesLength > 65535)
-              ? (merged.indices instanceof Uint32Array ? merged.indices : new Uint32Array(merged.indices))
-              : (merged.indices instanceof Uint16Array ? merged.indices : new Uint16Array(merged.indices));
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
-            cb.indexBuffer._uploadedCount = cb.indicesLength;
+          if (!window.getCloneHairBuffers) {
+            window._cloneHairBufferCache = new Map();
+            window.getCloneHairBuffers = function(glCtx, styleIdx, colorIdx, isHoodOpen) {
+              if (!glCtx || typeof window.build3DAnimeHair !== "function") return null;
+              const numStyles = window.NUM_HAIR_STYLES || 9;
+              const colors = window.ANIME_HAIR_COLORS || [[0.85, 0.90, 0.96]];
+              const sIdx = (((styleIdx | 0) % numStyles) + numStyles) % numStyles;
+              const cIdx = (((colorIdx | 0) % colors.length) + colors.length) % colors.length;
+              const openFlag = isHoodOpen ? 1 : 0;
+              const key = `v12_chibi_hair_freefall_${sIdx}_${cIdx}_${openFlag}`;
+
+              let entry = window._cloneHairBufferCache.get(key);
+              if (!entry) {
+                const rawV = [], rawC = [], rawI = [], rawF = [];
+                const headFit = 0.192 / 0.240;
+                window.build3DAnimeHair(
+                  sIdx,
+                  colors[cIdx],
+                  1.0,
+                  (lx, ly, lz) => [lx * headFit, ly * headFit, lz * headFit],
+                  0,
+                  rawV,
+                  rawC,
+                  rawI,
+                  rawF
+                );
+
+                let finalV = rawV;
+                let finalC = rawC;
+                let finalI = rawI;
+                let finalF = rawF;
+
+                // When hood is closed ("แบบปิด"), keep front bangs/side-locks inside the hood aperture
+                // and cull/tuck rear/top/wide vertices so zero hair pokes through the closed white hood!
+                if (!isHoodOpen && rawV.length > 0) {
+                  const numVerts = (rawV.length / 3) | 0;
+                  const vKeep = new Uint8Array(numVerts);
+                  const clampedV = new Float32Array(rawV.length);
+                  const clampedF = new Float32Array(numVerts);
+
+                  for (let v = 0; v < numVerts; v++) {
+                    let lx = rawV[v * 3];
+                    let ly = rawV[v * 3 + 1];
+                    let lz = rawV[v * 3 + 2];
+                    const dy = ly - 0.025; // Relative to hood center hy
+                    const ellR = (lx * lx) / (0.235 * 0.235) + (dy * dy) / (0.265 * 0.265);
+
+                    if (lz >= 0.025 && ly <= 0.258 && ly >= -0.125 && ellR <= 1.12) {
+                      vKeep[v] = 1;
+                      if (ellR > 0.92) {
+                        const shrink = 0.92 / Math.sqrt(ellR);
+                        lx *= shrink;
+                        ly = 0.025 + dy * shrink;
+                      }
+                      lz = Math.min(0.258, lz);
+                    }
+                    clampedV[v * 3] = lx;
+                    clampedV[v * 3 + 1] = ly;
+                    clampedV[v * 3 + 2] = lz;
+                    clampedF[v] = (rawF[v] || 0.0) * 0.22;
+                  }
+
+                  const remap = new Int32Array(numVerts);
+                  remap.fill(-1);
+                  const fV = [], fC = [], fI = [], fF = [];
+
+                  for (let k = 0; k < rawI.length; k += 3) {
+                    const i0 = rawI[k], i1 = rawI[k + 1], i2 = rawI[k + 2];
+                    if (vKeep[i0] && vKeep[i1] && vKeep[i2]) {
+                      const tris = [i0, i1, i2];
+                      for (let ti = 0; ti < 3; ti++) {
+                        const oldIdx = tris[ti];
+                        let newIdx = remap[oldIdx];
+                        if (newIdx === -1) {
+                          newIdx = (fV.length / 3) | 0;
+                          remap[oldIdx] = newIdx;
+                          fV.push(clampedV[oldIdx * 3], clampedV[oldIdx * 3 + 1], clampedV[oldIdx * 3 + 2]);
+                          fC.push(rawC[oldIdx * 3], rawC[oldIdx * 3 + 1], rawC[oldIdx * 3 + 2]);
+                          fF.push(clampedF[oldIdx]);
+                        }
+                        fI.push(newIdx);
+                      }
+                    }
+                  }
+                  finalV = fV;
+                  finalC = fC;
+                  finalI = fI;
+                  finalF = fF;
+                }
+
+                const normals = new Float32Array(finalV.length);
+                for (let k = 0; k < finalI.length; k += 3) {
+                  const i0 = finalI[k], i1 = finalI[k + 1], i2 = finalI[k + 2];
+                  if (i0 * 3 + 2 >= finalV.length || i1 * 3 + 2 >= finalV.length || i2 * 3 + 2 >= finalV.length) continue;
+                  const p0x = finalV[i0 * 3], p0y = finalV[i0 * 3 + 1], p0z = finalV[i0 * 3 + 2];
+                  const ux = finalV[i1 * 3] - p0x, uy = finalV[i1 * 3 + 1] - p0y, uz = finalV[i1 * 3 + 2] - p0z;
+                  const wx = finalV[i2 * 3] - p0x, wy = finalV[i2 * 3 + 1] - p0y, wz = finalV[i2 * 3 + 2] - p0z;
+                  const nx = uy * wz - uz * wy;
+                  const ny = uz * wx - ux * wz;
+                  const nz = ux * wy - uy * wx;
+                  normals[i0 * 3] += nx; normals[i0 * 3 + 1] += ny; normals[i0 * 3 + 2] += nz;
+                  normals[i1 * 3] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
+                  normals[i2 * 3] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
+                }
+                for (let k = 0; k < normals.length; k += 3) {
+                  const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+                  if (l > 0.0001) {
+                    normals[k] /= l; normals[k + 1] /= l; normals[k + 2] /= l;
+                  } else {
+                    normals[k + 1] = 1.0;
+                  }
+                }
+
+                const localDummyV = new Float32Array(finalV.length);
+                for (let k = 0; k < finalV.length; k += 3) {
+                  localDummyV[k] = finalV[k];
+                  localDummyV[k + 1] = finalV[k + 1] - 1000.0;
+                  localDummyV[k + 2] = finalV[k + 2];
+                }
+
+                const vertexBuffer = glCtx.createBuffer();
+                const localVertexBuffer = glCtx.createBuffer();
+                const normalBuffer = glCtx.createBuffer();
+                const colorBuffer = glCtx.createBuffer();
+                const indexBuffer = glCtx.createBuffer();
+
+                glCtx.bindBuffer(glCtx.ARRAY_BUFFER, localVertexBuffer);
+                glCtx.bufferData(glCtx.ARRAY_BUFFER, localDummyV, glCtx.STATIC_DRAW);
+
+                glCtx.bindBuffer(glCtx.ARRAY_BUFFER, normalBuffer);
+                glCtx.bufferData(glCtx.ARRAY_BUFFER, normals, glCtx.STATIC_DRAW);
+
+                glCtx.bindBuffer(glCtx.ARRAY_BUFFER, colorBuffer);
+                glCtx.bufferData(glCtx.ARRAY_BUFFER, new Float32Array(finalC), glCtx.STATIC_DRAW);
+
+                const indicesLength = finalI.length;
+                glCtx.bindBuffer(glCtx.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                const idxData = (indicesLength > 65535) ? new Uint32Array(finalI) : new Uint16Array(finalI);
+                glCtx.bufferData(glCtx.ELEMENT_ARRAY_BUFFER, idxData, glCtx.STATIC_DRAW);
+
+                entry = {
+                  localV: new Float32Array(finalV),
+                  flexW: new Float32Array(finalF),
+                  worldV: new Float32Array(finalV.length),
+                  vertexBuffer,
+                  localVertexBuffer,
+                  normalBuffer,
+                  colorBuffer,
+                  indexBuffer,
+                  indicesLength,
+                  lastAnimTick: -1
+                };
+                window._cloneHairBufferCache.set(key, entry);
+              }
+
+              if (entry.indicesLength > 0 && entry.lastAnimTick !== window._cloneAnimTick) {
+                entry.lastAnimTick = window._cloneAnimTick;
+                const hp = window._cloneCurrentHeadP1 || [0, 0.23, 0];
+                const hx = hp[0], hy = hp[1], hz = hp[2];
+                const sc = window._cloneCurrentScale || 1.0;
+                const ph = window._cloneCurrentPhase || 0.0;
+                const walkBlend = window._cloneCurrentWalkBlend || 0.0;
+                const walkX = Math.sin(ph) * 0.006 * walkBlend;
+                const walkZ = Math.cos(ph * 2.0) * 0.005 * walkBlend;
+                const walkY = -Math.abs(Math.sin(ph)) * 0.0035 * walkBlend;
+
+                const lv = entry.localV;
+                const fw = entry.flexW;
+                const wv = entry.worldV;
+                for (let k = 0, v = 0; k < lv.length; k += 3, v++) {
+                  const lx = lv[k], ly = lv[k + 1], lz = lv[k + 2];
+                  const f = fw[v] || 0.0;
+                  if (f <= 0.0001) {
+                    wv[k]     = hx + lx * sc;
+                    wv[k + 1] = hy + ly * sc;
+                    wv[k + 2] = hz + lz * sc;
+                    continue;
+                  }
+                  const flexW = f * f;
+                  const wave = Math.sin(ph * 1.2 + ly * 8.0 + (lx - lz) * 4.0) * 0.002 * flexW;
+                  wv[k]     = hx + (lx + walkX * flexW + wave) * sc;
+                  wv[k + 1] = hy + (ly + walkY * flexW) * sc;
+                  wv[k + 2] = hz + (lz + walkZ * flexW + wave) * sc;
+                }
+                uploadDynamicBuffer(glCtx, entry.vertexBuffer, glCtx.ARRAY_BUFFER, wv);
+              }
+
+              return entry;
+            };
           }
           return;
         }
@@ -7086,6 +6072,7 @@ window.characterVertexShaderSource = `#version 300 es
 
         if (!charColorBuffer) charColorBuffer = gl.createBuffer();
         uploadDynamicBuffer(gl, charColorBuffer, gl.ARRAY_BUFFER, colData);
+        charColorBuffer._sourceType = "classic";
 
         if (merged.texcoords) {
           if (typeof window.charTexCoordBuffer === "undefined" || !window.charTexCoordBuffer) {
@@ -7159,17 +6146,14 @@ window.characterVertexShaderSource = `#version 300 es
             ];
           }
 
-          if (typeof window !== "undefined" && window.characterModel === "chibi") {
-            const rp = (typeof ragdollPos !== "undefined" && ragdollPos && !isNaN(ragdollPos[0])) ? ragdollPos : [0, 0, 0];
-            const scale = (typeof playerScale === "number") ? playerScale : 1.0;
-            return [
-              R_rot[0] * scale, R_rot[1] * scale, R_rot[2] * scale, 0,
-              N_rot[0] * scale, N_rot[1] * scale, N_rot[2] * scale, 0,
-              F_rot[0] * scale, F_rot[1] * scale, F_rot[2] * scale, 0,
-              rp[0], rp[1], rp[2], 1
-            ];
-          }
-          return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+          const rp = (typeof ragdollPos !== "undefined" && ragdollPos && !isNaN(ragdollPos[0])) ? ragdollPos : [0, 0, 0];
+          const scale = (typeof playerScale === "number") ? playerScale : 1.0;
+          return [
+            R_rot[0] * scale, R_rot[1] * scale, R_rot[2] * scale, 0,
+            N_rot[0] * scale, N_rot[1] * scale, N_rot[2] * scale, 0,
+            F_rot[0] * scale, F_rot[1] * scale, F_rot[2] * scale, 0,
+            rp[0], rp[1], rp[2], 1
+          ];
         }
         const sinTheta = Math.sin(charTheta);
         const cosTheta = Math.cos(charTheta);
@@ -7477,7 +6461,7 @@ window.characterVertexShaderSource = `#version 300 es
 
       // Hair style cycle handler
       window.cyclePlayerHair = function() {
-        const numStyles = window.NUM_HAIR_STYLES || 8;
+        const numStyles = window.NUM_HAIR_STYLES || 9;
         if (window.playerHairStyle === undefined) {
           window.playerHairStyle = 0;
         } else {
@@ -7818,6 +6802,8 @@ window.characterVertexShaderSource = `#version 300 es
                 }
                 if (item.isDynamic) {
                   window.pendingDynamicCollectibleRefresh = true;
+                } else if (typeof window !== "undefined" && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(item)) {
+                  // Surgical sub-buffer update completed without full VBO rebuild
                 } else {
                   pendingCollectibleRefresh = true;
                 }

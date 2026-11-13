@@ -173,9 +173,27 @@ function startGameWithSlot(loadedData, devMode = false) {
     for (let i = 0; i < TOTAL_SLOTS; i++) {
       inventory.push(null);
     }
+    window.inventory = inventory;
     actionSlotsItems = new Array(8).fill(null);
     actionSlotsItems[0] = { name: "WOODEN_ARM_CANNON", icon: "🪵🦾", label: "WOODEN_ARM_CANNON", count: 1 };
     actionSlotsItems[1] = { name: "ARROW", icon: "🏹", label: "ARROW", count: 30 };
+    window.actionSlotsItems = actionSlotsItems;
+    if (typeof equipSlotsItems !== "undefined") {
+      equipSlotsItems = (typeof window.createDefaultEquipSlotsItems === "function")
+        ? window.createDefaultEquipSlotsItems()
+        : [
+            { name: "WHITE_SHIRT_SHORT", icon: "👔", label: "WHITE_SHIRT_SHORT", count: 1 },
+            { name: "BLACK_PLEATED_SKIRT", icon: "👗", label: "BLACK_PLEATED_SKIRT", count: 1 },
+            { name: "TRAVELER_BOOTS", icon: "🥾", label: "TRAVELER_BOOTS", count: 1 },
+            { name: "TRAVELER_HOODIE", icon: "🧥", label: "TRAVELER_HOODIE", count: 1 },
+            { name: "BLACK_LEGGINGS", icon: "👖", label: "BLACK_LEGGINGS", count: 1 }
+          ];
+      window.equipSlotsItems = equipSlotsItems;
+    }
+    if (typeof window !== "undefined") {
+      window.characterModel = "classic";
+      if (typeof window.updateDevCharacterModelUI === "function") window.updateDevCharacterModelUI();
+    }
     collectedCount = { rock: 0, branch: 0, big_rock: 0 };
     choppedTrees = [];
     destroyedRocks = [];
@@ -318,6 +336,8 @@ function startGameWithSlot(loadedData, devMode = false) {
 
       renderInventory();
       renderActionSlots();
+      if (typeof renderEquipSlots === "function") renderEquipSlots();
+      if (typeof window.refreshCharacterAppearanceNow === "function") window.refreshCharacterAppearanceNow();
       updateBadge();
       updatePlayerHPUI();
 
@@ -419,6 +439,10 @@ if (settingsMenuBtn) {
     if (mainLayout) mainLayout.style.display = "none";
     const divider = document.getElementById("inventoryVerticalDivider");
     if (divider) divider.style.display = "none";
+    const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
+    if (leftDivider) leftDivider.style.display = "none";
+    const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
+    if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
     
     document.getElementById("tabCooking").classList.remove("active");
     document.getElementById("tabCooking").style.display = "none";

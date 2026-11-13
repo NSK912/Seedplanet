@@ -57,9 +57,18 @@
     // Draw trees and rocks (non-grass nature) with distance culling
     const obstacles = opts.natureObstacles !== undefined ? opts.natureObstacles : global.natureObstacles;
     const eye = opts.eyePos !== undefined ? opts.eyePos : global.eyePos;
+    const shadowDist = typeof global.shadowRenderDistValue === "number"
+      ? global.shadowRenderDistValue
+      : (typeof global.window !== "undefined" && typeof global.window.shadowRenderDistValue === "number"
+        ? global.window.shadowRenderDistValue
+        : 14.0);
     const maxDist = opts.renderDistValue !== undefined 
-      ? opts.renderDistValue 
-      : (typeof global.landmarkRenderDistValue === "number" ? global.landmarkRenderDistValue : (typeof global.window !== "undefined" && typeof global.window.landmarkRenderDistValue === "number" ? global.window.landmarkRenderDistValue : 25.0));
+      ? Math.min(opts.renderDistValue, shadowDist)
+      : shadowDist;
+
+    if (opts.depthMaxShadowDistLoc) {
+      gl.uniform1f(opts.depthMaxShadowDistLoc, maxDist);
+    }
 
     if (obstacles && obstacles.length > 0 && typeof global.getVisibleIndexRanges === "function" && eye) {
       const ranges = global.getVisibleIndexRanges(obstacles, null, maxDist, eye);
@@ -189,7 +198,8 @@
           uShadowMapLoc: gl.getUniformLocation(opts.modelProgram, "uShadowMap"),
           uWaterMaskLoc: gl.getUniformLocation(opts.modelProgram, "uWaterMaskTex"),
           uShadowsEnabledLoc: gl.getUniformLocation(opts.modelProgram, "uShadowsEnabled"),
-          uShadowTexelSizeLoc: gl.getUniformLocation(opts.modelProgram, "uShadowTexelSize")
+          uShadowTexelSizeLoc: gl.getUniformLocation(opts.modelProgram, "uShadowTexelSize"),
+          uShadowDistLoc: gl.getUniformLocation(opts.modelProgram, "uShadowDist")
         };
       }
       const locs = opts.modelProgram._treeLocs;
@@ -201,6 +211,14 @@
       if (locs.uShadowsEnabledLoc) {
         const sVal = (opts.shadowMapEnabled !== false) ? 2.0 : 0.0;
         gl.uniform1f(locs.uShadowsEnabledLoc, sVal);
+      }
+      if (locs.uShadowDistLoc) {
+        const shadowDist = typeof global.shadowRenderDistValue === "number"
+          ? global.shadowRenderDistValue
+          : (typeof global.window !== "undefined" && typeof global.window.shadowRenderDistValue === "number"
+            ? global.window.shadowRenderDistValue
+            : 14.0);
+        gl.uniform1f(locs.uShadowDistLoc, (opts.renderDistEnabled !== false) ? shadowDist : 0.0);
       }
       if (locs.uShadowTexelSizeLoc) {
         const sw = opts.shadowWidth || global.SHADOW_WIDTH || 1024;

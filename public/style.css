@@ -674,7 +674,8 @@
         color: #dfb76c;
       }
 
-      .inventory-action-slots {
+      .inventory-action-slots,
+      .inventory-equip-slots {
         display: none;
         flex-direction: column;
         gap: 8px;
@@ -682,7 +683,8 @@
         pointer-events: auto;
         z-index: 10015;
       }
-      .inventory-overlay.open .inventory-action-slots {
+      .inventory-overlay.open .inventory-action-slots,
+      .inventory-overlay.open .inventory-equip-slots {
         display: flex;
       }
       .inventory-action-slots .action-slot {
@@ -691,7 +693,17 @@
         min-height: 72px !important;
         box-sizing: border-box !important;
       }
-      .inventory-action-slots .action-slot:nth-child(n+5) {
+      .inventory-equip-slots .action-slot {
+        width: 72px !important;
+        height: 56px !important;
+        min-height: 56px !important;
+        box-sizing: border-box !important;
+      }
+      .inventory-action-slots .action-slot:nth-child(n+5),
+      .inventory-equip-slots .action-slot:nth-child(n+6) {
+        display: none !important;
+      }
+      .inventory-equip-slots .action-slot.empty::after {
         display: none !important;
       }
 
@@ -759,9 +771,9 @@
         overflow: hidden !important;
       }
       #inventoryOverlay .inventory-panel {
-        width: 580px !important;
-        min-width: 580px !important;
-        max-width: 580px !important;
+        width: 684px !important;
+        min-width: 684px !important;
+        max-width: 684px !important;
         height: var(--panel-base-h, 520px) !important;
       }
       #warpOverlay .inventory-panel {

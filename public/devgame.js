@@ -798,10 +798,14 @@ window.updateDevCharacterModelUI = function() {
   const chBtn = document.getElementById("devCharModelChibiBtn");
   const animContainer = document.getElementById("devAnimContainer");
   const skeletonContainer = document.getElementById("devSkeletonContainer");
+  const boneOverlay = document.getElementById("devBoneLabelsOverlay");
+  const isChibiGlb = window.characterModel === "chibi";
   if (cBtn && chBtn) {
-    if (window.characterModel === "chibi") {
+    if (isChibiGlb) {
       chBtn.style.border = "2px solid white";
-      cBtn.style.border = "none";
+      chBtn.style.opacity = "1";
+      cBtn.style.border = "1px solid transparent";
+      cBtn.style.opacity = "0.7";
       if (animContainer) animContainer.style.display = "block";
       if (skeletonContainer) skeletonContainer.style.display = "block";
       if (typeof window.updateDevBonesAndParts === "function") {
@@ -809,9 +813,14 @@ window.updateDevCharacterModelUI = function() {
       }
     } else {
       cBtn.style.border = "2px solid white";
-      chBtn.style.border = "none";
+      cBtn.style.opacity = "1";
+      chBtn.style.border = "1px solid transparent";
+      chBtn.style.opacity = "0.7";
       if (animContainer) animContainer.style.display = "none";
       if (skeletonContainer) skeletonContainer.style.display = "none";
+      if (boneOverlay && boneOverlay.style.display !== "none") {
+        boneOverlay.style.display = "none";
+      }
     }
   }
 };
