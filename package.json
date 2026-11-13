@@ -3,7 +3,7 @@
   "description": "SeedPlanet 3D Game",
   "author": "NSK-Natsuki",
   "private": true,
-  "version": "2.0.14",
+  "version": "2.0.15",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
