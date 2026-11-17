@@ -39,6 +39,11 @@
         dynamicCollectibleNormalBuffer,
         dynamicCollectibleIndexBuffer;
       let dynamicCollectibleIndicesLength = 0;
+      let doorWindowVertexBuffer,
+        doorWindowColorBuffer,
+        doorWindowNormalBuffer,
+        doorWindowIndexBuffer;
+      let doorWindowIndicesLength = 0;
 
       let amphibians = [];
       let amphibianVertexBuffer,
@@ -5071,130 +5076,194 @@
       
       
 
-      function updateFireParticles(time) {
-        let allVertices = [];
-        let allColors = [];
-        let allIndices = [];
+      let _fireUnitCubeFlatCache = null;
+      function _getFireUnitCubeFlatTemplates() {
+        if (_fireUnitCubeFlatCache) return _fireUnitCubeFlatCache;
+        const v1 = [], c1 = [], idx1 = [];
+        addBox([0, 0, 0], 1, 1, 1, [1, 1, 1], [1, 0, 0], [0, 1, 0], [0, 0, 1], v1, c1, idx1);
+        const flatPos = makeFlatShadedGeometry(v1, c1, idx1, true);
 
-        let hasFire = false;
-        
-        for (let item of collectibles) {
-          if (item.active && item.type === "campfire" && !item.isPreview) {
-            if (typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && typeof frustumPlanes !== 'undefined' && frustumPlanes && typeof isSphereInFrustum === 'function') {
-              if (!isSphereInFrustum(frustumPlanes, item.position, 1.0)) {
-                continue;
-              }
-            }
-            hasFire = true;
-            const p = item.position;
-            const r = item.R, f = item.F, n = item.normal;
-            const s = item.size || 1.0;
-            const seedVal = item.seed || 123.4;
-            
-            // Generate multiple fire particles based on time and seed
-            for (let i = 0; i < 5; i++) {
-               const pTime = time + i * 2.13 + seedVal;
-               const life = pTime % 1.0; // 0 to 1
-               
-               // Rise up
-               const h = 0.04 + life * 0.15;
-               const offsetR = Math.sin(pTime * 5.0) * 0.05 * (1.0 - life);
-               const offsetF = Math.cos(pTime * 4.3) * 0.05 * (1.0 - life);
-               
-               const firePos = [
-                 p[0] + n[0] * h * s + r[0] * offsetR * s + f[0] * offsetF * s,
-                 p[1] + n[1] * h * s + r[1] * offsetR * s + f[1] * offsetF * s,
-                 p[2] + n[2] * h * s + r[2] * offsetR * s + f[2] * offsetF * s
-               ];
-               
-               const fireSize = (0.05 * (1.0 - life) + 0.02) * s;
-               
-               // Color goes from yellow/white -> orange -> red -> grey
-               let fireCol;
-               if (life < 0.2) {
-                 fireCol = [1.0, 0.9, 0.2];
-               } else if (life < 0.6) {
-                 const t = (life - 0.2) / 0.4;
-                 fireCol = [1.0, 0.9 - t*0.5, 0.2 - t*0.2];
-               } else {
-                 const t = (life - 0.6) / 0.4;
-                 fireCol = [1.0 - t*0.3, 0.4 - t*0.4, 0.0];
-               }
-               
-               addBox(firePos, fireSize, fireSize, fireSize, fireCol, r, n, f, allVertices, allColors, allIndices);
-            }
-          }
+        const v2 = [], c2 = [], idx2 = [];
+        addBox([0, 0, 0], 1, 1, 1, [1, 1, 1], [-1, 0, 0], [0, 1, 0], [0, 0, 1], v2, c2, idx2);
+        const flatNeg = makeFlatShadedGeometry(v2, c2, idx2, true);
+        // Convert flatNeg local X back to standard local X so we can transform with (r, n, f) directly
+        const negV = new Float32Array(flatNeg.vertices);
+        const negN = new Float32Array(flatNeg.normals);
+        for (let i = 0; i < negV.length; i += 3) {
+          negV[i] = -negV[i];
+          negN[i] = -negN[i];
         }
-        
-        if (!hasFire) {
+
+        _fireUnitCubeFlatCache = {
+          pos: {
+            v: new Float32Array(flatPos.vertices),
+            n: new Float32Array(flatPos.normals)
+          },
+          neg: {
+            v: negV,
+            n: negN
+          }
+        };
+        return _fireUnitCubeFlatCache;
+      }
+
+      const _visibleCampfiresScratch = [];
+      const _rotNormalsScratch = new Float32Array(108);
+
+      function updateFireParticles(time) {
+        const campfiresSource = (typeof window !== "undefined" && Array.isArray(window._activeCampfiresList))
+          ? window._activeCampfiresList
+          : collectibles;
+        if (!campfiresSource || campfiresSource.length === 0) {
           fireIndicesLength = 0;
           return;
         }
 
-        if (allIndices.length > 0) {
-          const flatGeom = makeFlatShadedGeometry(
-            allVertices,
-            allColors,
-            allIndices,
-            true
-          );
-          fireIndicesLength = flatGeom.indices.length;
+        const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
+          ? renderDistEnabled
+          : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
+        const curObjectDist = typeof objectRenderDistValue !== "undefined"
+          ? objectRenderDistValue
+          : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
+            ? window.objectRenderDistValue
+            : 5.0);
+        const maxDistSq = (curObjectDist + 1.5) * (curObjectDist + 1.5);
+        const hasEye = typeof eyePos !== "undefined" && eyePos && eyePos.length >= 3;
+        const doFrustum = typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && typeof frustumPlanes !== 'undefined' && frustumPlanes && typeof isSphereInFrustum === 'function';
 
-          if (!fireVertexBuffer) fireVertexBuffer = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, fireVertexBuffer);
-          const vCount = new Float32Array(flatGeom.vertices).length;
-          const vertTyped = getReusableFloat32Array(1, vCount).subarray(0, vCount);
-          vertTyped.set(new Float32Array(flatGeom.vertices));
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            vertTyped,
-            gl.DYNAMIC_DRAW,
-          );
+        _visibleCampfiresScratch.length = 0;
+        for (let idx = 0, len = campfiresSource.length; idx < len; idx++) {
+          const item = campfiresSource[idx];
+          if (!item || !item.active || item.type !== "campfire" || item.isPreview) continue;
+          const p = item.position;
+          if (!p) continue;
+          if (isRenderDistOn && hasEye) {
+            const dx = p[0] - eyePos[0];
+            const dy = p[1] - eyePos[1];
+            const dz = p[2] - eyePos[2];
+            if (dx * dx + dy * dy + dz * dz > maxDistSq) continue;
+          }
+          if (doFrustum && !isSphereInFrustum(frustumPlanes, p, 1.0)) {
+            continue;
+          }
+          _visibleCampfiresScratch.push(item);
+        }
 
-          if (!fireColorBuffer) fireColorBuffer = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, fireColorBuffer);
-          const cCount = new Float32Array(flatGeom.colors).length;
-          const colTyped = getReusableFloat32Array(2, cCount).subarray(0, cCount);
-          colTyped.set(new Float32Array(flatGeom.colors));
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            colTyped,
-            gl.DYNAMIC_DRAW,
-          );
+        const numVisibleCampfires = _visibleCampfiresScratch.length;
+        if (numVisibleCampfires === 0) {
+          fireIndicesLength = 0;
+          return;
+        }
 
-          if (!fireNormalBuffer) fireNormalBuffer = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, fireNormalBuffer);
-          const nCount = new Float32Array(flatGeom.normals).length;
-          const normTyped = getReusableFloat32Array(3, nCount).subarray(0, nCount);
-          normTyped.set(new Float32Array(flatGeom.normals));
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            normTyped,
-            gl.DYNAMIC_DRAW,
-          );
+        // Each campfire has 5 particles, each particle has 36 flat-shaded vertices (108 floats)
+        const totalParticles = numVisibleCampfires * 5;
+        const iCount = totalParticles * 36;
+        const fCount = iCount * 3;
 
-          if (!fireIndexBuffer) fireIndexBuffer = gl.createBuffer();
-          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, fireIndexBuffer);
-          const iCount = flatGeom.indices.length;
-          if (iCount > 65535) {
-            const indTyped = getReusableUint32Array(iCount).subarray(0, iCount);
-            indTyped.set(flatGeom.indices);
-            gl.bufferData(
-              gl.ELEMENT_ARRAY_BUFFER,
-              indTyped,
-              gl.DYNAMIC_DRAW,
-            );
-          } else {
-            const indTyped = getReusableUint16Array(iCount).subarray(0, iCount);
-            indTyped.set(flatGeom.indices);
-            gl.bufferData(
-              gl.ELEMENT_ARRAY_BUFFER,
-              indTyped,
-              gl.DYNAMIC_DRAW,
-            );
+        const vertTyped = getReusableFloat32Array(1, fCount).subarray(0, fCount);
+        const colTyped = getReusableFloat32Array(2, fCount).subarray(0, fCount);
+        const normTyped = getReusableFloat32Array(3, fCount).subarray(0, fCount);
+
+        const cubeTpls = _getFireUnitCubeFlatTemplates();
+        let fOffset = 0;
+
+        for (let cIdx = 0; cIdx < numVisibleCampfires; cIdx++) {
+          const item = _visibleCampfiresScratch[cIdx];
+          const p = item.position;
+          const r = item.R, f = item.F, n = item.normal;
+          const p0 = p[0], p1 = p[1], p2 = p[2];
+          const r0 = r[0], r1 = r[1], r2 = r[2];
+          const n0 = n[0], n1 = n[1], n2 = n[2];
+          const f0 = f[0], f1 = f[1], f2 = f[2];
+          const s = item.size || 1.0;
+          const seedVal = item.seed || 123.4;
+
+          const det = (r1 * n2 - r2 * n1) * f0 + (r2 * n0 - r0 * n2) * f1 + (r0 * n1 - r1 * n0) * f2;
+          const tpl = det < 0 ? cubeTpls.neg : cubeTpls.pos;
+          const tv = tpl.v;
+          const tn = tpl.n;
+
+          // Precompute the 36 rotated face normals once for all 5 particles of this campfire
+          for (let j = 0; j < 108; j += 3) {
+            const lnx = tn[j], lny = tn[j + 1], lnz = tn[j + 2];
+            _rotNormalsScratch[j]     = lnx * r0 + lny * n0 + lnz * f0;
+            _rotNormalsScratch[j + 1] = lnx * r1 + lny * n1 + lnz * f1;
+            _rotNormalsScratch[j + 2] = lnx * r2 + lny * n2 + lnz * f2;
+          }
+
+          for (let i = 0; i < 5; i++) {
+            const pTime = time + i * 2.13 + seedVal;
+            const life = pTime % 1.0;
+
+            const h = (0.04 + life * 0.15) * s;
+            const offsetR = Math.sin(pTime * 5.0) * 0.05 * (1.0 - life) * s;
+            const offsetF = Math.cos(pTime * 4.3) * 0.05 * (1.0 - life) * s;
+
+            const fp0 = p0 + n0 * h + r0 * offsetR + f0 * offsetF;
+            const fp1 = p1 + n1 * h + r1 * offsetR + f1 * offsetF;
+            const fp2 = p2 + n2 * h + r2 * offsetR + f2 * offsetF;
+
+            const fireSize = (0.05 * (1.0 - life) + 0.02) * s;
+
+            let cr, cg, cb;
+            if (life < 0.2) {
+              cr = 1.0; cg = 0.9; cb = 0.2;
+            } else if (life < 0.6) {
+              const t = (life - 0.2) / 0.4;
+              cr = 1.0; cg = 0.9 - t * 0.5; cb = 0.2 - t * 0.2;
+            } else {
+              const t = (life - 0.6) / 0.4;
+              cr = 1.0 - t * 0.3; cg = 0.4 - t * 0.4; cb = 0.0;
             }
-          } else {
-            fireIndicesLength = 0;
+
+            // Scaled basis vectors for this particle cube
+            const sr0 = r0 * fireSize, sr1 = r1 * fireSize, sr2 = r2 * fireSize;
+            const sn0 = n0 * fireSize, sn1 = n1 * fireSize, sn2 = n2 * fireSize;
+            const sf0 = f0 * fireSize, sf1 = f1 * fireSize, sf2 = f2 * fireSize;
+
+            for (let j = 0; j < 108; j += 3) {
+              const lx = tv[j], ly = tv[j + 1], lz = tv[j + 2];
+              const outIdx = fOffset + j;
+              vertTyped[outIdx]     = fp0 + lx * sr0 + ly * sn0 + lz * sf0;
+              vertTyped[outIdx + 1] = fp1 + lx * sr1 + ly * sn1 + lz * sf1;
+              vertTyped[outIdx + 2] = fp2 + lx * sr2 + ly * sn2 + lz * sf2;
+
+              colTyped[outIdx]     = cr;
+              colTyped[outIdx + 1] = cg;
+              colTyped[outIdx + 2] = cb;
+
+              normTyped[outIdx]     = _rotNormalsScratch[j];
+              normTyped[outIdx + 1] = _rotNormalsScratch[j + 1];
+              normTyped[outIdx + 2] = _rotNormalsScratch[j + 2];
+            }
+            fOffset += 108;
+          }
+        }
+
+        fireIndicesLength = iCount;
+
+        if (!fireVertexBuffer) fireVertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, fireVertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertTyped, gl.DYNAMIC_DRAW);
+
+        if (!fireColorBuffer) fireColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, fireColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, colTyped, gl.DYNAMIC_DRAW);
+
+        if (!fireNormalBuffer) fireNormalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, fireNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, normTyped, gl.DYNAMIC_DRAW);
+
+        if (!fireIndexBuffer) fireIndexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, fireIndexBuffer);
+        if (iCount > 65535) {
+          const indTyped = getReusableUint32Array(iCount).subarray(0, iCount);
+          for (let i = 0; i < iCount; i++) indTyped[i] = i;
+          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indTyped, gl.DYNAMIC_DRAW);
+        } else {
+          const indTyped = getReusableUint16Array(iCount).subarray(0, iCount);
+          for (let i = 0; i < iCount; i++) indTyped[i] = i;
+          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indTyped, gl.DYNAMIC_DRAW);
         }
       }
 

@@ -314,6 +314,8 @@
         { name: "WHITE_BODYSUIT_SHORTS", icon: "🩳" },
         { name: "TRAVELER_HOODIE", icon: "🧥" },
         { name: "TRAVELER_BOOTS", icon: "🥾" },
+        { name: "OXFORD_SHOES", icon: "👞" },
+        { name: "DRESS_BOOTS", icon: "🥾" },
         { name: "WHITE_SHIRT_SHORT", icon: "👔" },
         { name: "BLACK_PLEATED_SKIRT", icon: "👗" },
         { name: "BLACK_LEGGINGS", icon: "👖" },
@@ -880,6 +882,14 @@
             if (typeof window.buildTravelerBootsIconMesh === "function") {
               window.buildTravelerBootsIconMesh(rawVertices, rawColors, rawIndices);
             }
+          } else if (name === "OXFORD_SHOES") {
+            if (typeof window.buildOxfordShoesIconMesh === "function") {
+              window.buildOxfordShoesIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "DRESS_BOOTS") {
+            if (typeof window.buildDressBootsIconMesh === "function") {
+              window.buildDressBootsIconMesh(rawVertices, rawColors, rawIndices);
+            }
           } else if (name === "WHITE_SHIRT_SHORT") {
             if (typeof window.buildWhiteShirtIconMesh === "function") {
               window.buildWhiteShirtIconMesh(rawVertices, rawColors, rawIndices);
@@ -955,7 +965,7 @@
             targetSize = 0.88;
           } else if (name === "IRON_BULLET") {
             targetSize = 0.68;
-          } else if (name === "WHITE_BODYSUIT_TOP" || name === "WHITE_BODYSUIT_SHORTS" || name === "TRAVELER_HOODIE" || name === "TRAVELER_BOOTS" || name === "WHITE_SHIRT_SHORT" || name === "BLACK_PLEATED_SKIRT" || name === "BLACK_LEGGINGS" || name === "DOUBLE_BREASTED_SUIT" || name === "BLACK_SLACKS" || name === "OPERA_CAPE") {
+          } else if (name === "WHITE_BODYSUIT_TOP" || name === "WHITE_BODYSUIT_SHORTS" || name === "TRAVELER_HOODIE" || name === "TRAVELER_BOOTS" || name === "OXFORD_SHOES" || name === "DRESS_BOOTS" || name === "WHITE_SHIRT_SHORT" || name === "BLACK_PLEATED_SKIRT" || name === "BLACK_LEGGINGS" || name === "DOUBLE_BREASTED_SUIT" || name === "BLACK_SLACKS" || name === "OPERA_CAPE") {
             targetSize = 0.86;
           }
           
@@ -1664,7 +1674,7 @@
         const slotType = item.equipSlot || (def && def.equipSlot) || "";
         if (raw === "WHITE_BODYSUIT_TOP" || raw === "WHITE_SHIRT_SHORT" || slotType === "shirt") return [0];
         if (raw === "WHITE_BODYSUIT_SHORTS" || raw === "BLACK_PLEATED_SKIRT" || raw === "BLACK_SLACKS" || slotType === "pants") return [1];
-        if (raw === "TRAVELER_BOOTS" || raw === "HOODIE_BOOTS" || slotType === "shoes") return [2];
+        if (raw === "TRAVELER_BOOTS" || raw === "HOODIE_BOOTS" || raw === "OXFORD_SHOES" || raw === "DRESS_BOOTS" || slotType === "shoes") return [2];
         if (raw === "TRAVELER_HOODIE" || raw === "BLACK_LEGGINGS" || raw === "DOUBLE_BREASTED_SUIT" || raw === "OPERA_CAPE" || slotType === "accessory") return [3, 4];
         return [];
       }

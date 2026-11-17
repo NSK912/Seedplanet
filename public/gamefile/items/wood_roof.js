@@ -145,137 +145,154 @@ window.ItemRegistry["wood_roof"] = {
     const effW = w + extLeft + extRight;
     const offR = (extRight - extLeft) * 0.5;
 
-    // Effective length of visible roof slope
-    const effSlopeLen = vMaxEff - vMinEff;
+    const rawSeed = item.seed || (p[0] * 143.7 + p[2] * 71.9);
+    const seedBucket = Math.abs(Math.floor(rawSeed * 10)) % 32;
+    const vMaxQuant = Math.round(vMaxEff * 200) / 200;
 
-    // Midpoint distance along slope for the visible portion
-    const midDistAlong = (vMinEff + vMaxEff) / 2;
-    const centerSlope = [
-      p[0] + roofR[0] * offR + n[0] * (rise / 2) + dirSlope[0] * midDistAlong,
-      p[1] + roofR[1] * offR + n[1] * (rise / 2) + dirSlope[1] * midDistAlong,
-      p[2] + roofR[2] * offR + n[2] * (rise / 2) + dirSlope[2] * midDistAlong
-    ];
+    if (!window._woodRoofTemplateCache) window._woodRoofTemplateCache = {};
+    const tplKey =
+      vMaxQuant.toFixed(4) + '_' +
+      (extLeft > 0 ? 1 : 0) + '_' +
+      (extRight > 0 ? 1 : 0) + '_' +
+      (item.isPreview ? 1 : 0) + '_' +
+      seedBucket;
 
-    // Ridge beam position at the top of the visible slope (vMaxEff)
-    const ridgePos = [
-      p[0] + roofR[0] * offR + n[0] * (rise / 2) + dirSlope[0] * (vMaxEff - 0.012),
-      p[1] + roofR[1] * offR + n[1] * (rise / 2) + dirSlope[1] * (vMaxEff - 0.012),
-      p[2] + roofR[2] * offR + n[2] * (rise / 2) + dirSlope[2] * (vMaxEff - 0.012)
-    ];
+    let tpl = window._woodRoofTemplateCache[tplKey];
+    if (!tpl) {
+      const lv = [], lcMult = [], lidx = [];
+      const localR = [1, 0, 0];
+      const localN = [0, 1, 0];
+      const localF = [0, 0, 1];
+      const localDirSlope = [0, rise / slopeLen, d / slopeLen];
+      const localNormSlope = [0, d / slopeLen, -rise / slopeLen];
 
-    // Eave beam position at the bottom of the visible slope (vMinEff)
-    const eavePos = [
-      p[0] + roofR[0] * offR + n[0] * (rise / 2) + dirSlope[0] * (vMinEff + 0.012),
-      p[1] + roofR[1] * offR + n[1] * (rise / 2) + dirSlope[1] * (vMinEff + 0.012),
-      p[2] + roofR[2] * offR + n[2] * (rise / 2) + dirSlope[2] * (vMinEff + 0.012)
-    ];
+      const effSL = vMaxQuant - vMinEff;
+      const midDist = (vMinEff + vMaxQuant) / 2;
+      const cSlope = [
+        offR,
+        rise / 2 + localDirSlope[1] * midDist,
+        localDirSlope[2] * midDist
+      ];
+      const rPos = [
+        offR,
+        rise / 2 + localDirSlope[1] * (vMaxQuant - 0.012),
+        localDirSlope[2] * (vMaxQuant - 0.012)
+      ];
+      const ePos = [
+        offR,
+        rise / 2 + localDirSlope[1] * (vMinEff + 0.012),
+        localDirSlope[2] * (vMinEff + 0.012)
+      ];
 
-    if (item.isPreview) {
-      const isValid = item.isValidPlacement !== false;
-      const col = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+      if (item.isPreview) {
+        addBox(cSlope, w, 0.024, effSL, [1.0, 1.0, 1.0], localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
+        addBox(rPos, w, 0.024, 0.024, [0.8, 0.8, 0.8], localR, localN, localF, lv, lcMult, lidx);
+        addBox(ePos, w, 0.024, 0.024, [0.8, 0.8, 0.8], localR, localN, localF, lv, lcMult, lidx);
+      } else {
+        const seedVal = seedBucket * 19.37;
+        function pRand(s) {
+          const x = Math.sin(s) * 10000;
+          return x - Math.floor(x);
+        }
 
-      // Sloped wedge preview representation (clipped to exact visible slope)
-      addBox(centerSlope, w, 0.024, effSlopeLen, col, roofR, normSlope, dirSlope, vertices, colors, indices);
+        const rafterW = 0.022;
+        const rafterH = 0.024;
+        const rafterBase = [
+          0.0,
+          rise / 2 + localDirSlope[1] * midDist - localNormSlope[1] * 0.005,
+          localDirSlope[2] * midDist - localNormSlope[2] * 0.005
+        ];
+        const rafterInset = w / 2 - rafterW / 2 - 0.014;
+        const darkMult = [0.72, 0.72, 0.72];
+        const rafterLen = Math.max(0.01, effSL - 0.004);
 
-      // Support ridge beam on preview (at vMaxEff)
-      addBox(ridgePos, w, 0.024, 0.024, [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], roofR, n, roofF, vertices, colors, indices);
+        addBox([-rafterInset, rafterBase[1], rafterBase[2]], rafterW, rafterH, rafterLen, darkMult, localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
+        addBox([rafterInset, rafterBase[1], rafterBase[2]], rafterW, rafterH, rafterLen, darkMult, localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
+        addBox([0.0, rafterBase[1], rafterBase[2]], rafterW * 0.9, rafterH, rafterLen, darkMult, localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
 
-      // Support eave beam on preview (at vMinEff)
-      addBox(eavePos, w, 0.024, 0.024, [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], roofR, n, roofF, vertices, colors, indices);
+        const deckCenter = [
+          cSlope[0],
+          cSlope[1] + localNormSlope[1] * 0.002,
+          cSlope[2] + localNormSlope[2] * 0.002
+        ];
+        addBox(deckCenter, effW, 0.018, effSL, [0.82, 0.82, 0.82], localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
+
+        const numPlanks = Math.max(1, Math.round(5 * (effSL / slopeLen)));
+        const plankLen = effSL / numPlanks;
+        const plankThick = 0.014;
+
+        for (let i = 0; i < numPlanks; i++) {
+          const distAlong = vMinEff + (i + 0.5) * plankLen;
+          const pCenter = [
+            offR,
+            rise / 2 + localDirSlope[1] * distAlong + localNormSlope[1] * 0.014,
+            localDirSlope[2] * distAlong + localNormSlope[2] * 0.014
+          ];
+          const shadeNoise = pRand(seedVal + i * 19.3);
+          const pMult = 0.94 + shadeNoise * 0.12;
+          addBox(pCenter, effW, plankThick, plankLen, [pMult, pMult, pMult], localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
+
+          const grainNoiseX = pRand(seedVal + i * 37.1);
+          const grainOffsetR = (grainNoiseX - 0.5) * (w * 0.5);
+          const gCenter = [
+            pCenter[0] + grainOffsetR,
+            pCenter[1] + localNormSlope[1] * (plankThick * 0.5 + 0.0012),
+            pCenter[2] + localNormSlope[2] * (plankThick * 0.5 + 0.0012)
+          ];
+          addBox(gCenter, 0.008, 0.0024, plankLen * 0.82, [0.6, 0.6, 0.6], localR, localNormSlope, localDirSlope, lv, lcMult, lidx);
+        }
+
+        addBox(rPos, effW, 0.026, 0.028, [0.78, 0.78, 0.78], localR, localN, localF, lv, lcMult, lidx);
+        addBox(ePos, effW, 0.026, 0.028, [0.75, 0.75, 0.75], localR, localN, localF, lv, lcMult, lidx);
+      }
+
+      tpl = {
+        v: new Float32Array(lv),
+        cMult: new Float32Array(lcMult),
+        idx: new Uint16Array(lidx)
+      };
+      window._woodRoofTemplateCache[tplKey] = tpl;
+    }
+
+    const isValid = item.isValidPlacement !== false;
+    const baseColor = item.isPreview
+      ? (isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2])
+      : (item.color || [0.65, 0.45, 0.25]);
+    const rCol = baseColor[0], gCol = baseColor[1], bCol = baseColor[2];
+
+    const baseVertIdx = vertices.length / 3;
+    const tv = tpl.v;
+    const tcMult = tpl.cMult;
+    const tidx = tpl.idx;
+    const p0 = p[0], p1 = p[1], p2 = p[2];
+    const rr0 = roofR[0], rr1 = roofR[1], rr2 = roofR[2];
+    const n0 = n[0], n1 = n[1], n2 = n[2];
+    const rf0 = roofF[0], rf1 = roofF[1], rf2 = roofF[2];
+    const det = (rr1 * n2 - rr2 * n1) * rf0 + (rr2 * n0 - rr0 * n2) * rf1 + (rr0 * n1 - rr1 * n0) * rf2;
+    const isFlipped = det < 0;
+
+    for (let i = 0, len = tv.length; i < len; i += 3) {
+      const lx = tv[i], ly = tv[i + 1], lz = tv[i + 2];
+      vertices.push(
+        p0 + lx * rr0 + ly * n0 + lz * rf0,
+        p1 + lx * rr1 + ly * n1 + lz * rf1,
+        p2 + lx * rr2 + ly * n2 + lz * rf2
+      );
+      colors.push(
+        rCol * tcMult[i],
+        gCol * tcMult[i + 1],
+        bCol * tcMult[i + 2]
+      );
+    }
+    if (isFlipped) {
+      for (let i = 0, len = tidx.length; i < len; i += 3) {
+        indices.push(baseVertIdx + tidx[i], baseVertIdx + tidx[i + 2], baseVertIdx + tidx[i + 1]);
+      }
     } else {
-      // Seed-based stable pseudo-random generator
-      const seedVal = item.seed || (p[0] * 143.7 + p[2] * 71.9);
-      function pRand(s) {
-        const x = Math.sin(s) * 10000;
-        return x - Math.floor(x);
+      for (let i = 0, len = tidx.length; i < len; i++) {
+        indices.push(baseVertIdx + tidx[i]);
       }
-
-      const baseColor = item.color || [0.65, 0.45, 0.25];
-      const rCol = baseColor[0];
-      const gCol = baseColor[1];
-      const bCol = baseColor[2];
-
-      // 1) Side rafter beams (inset 0.014m from tile edge so they sit cleanly inside gable walls without intersecting them)
-      const rafterW = 0.022;
-      const rafterH = 0.024;
-      const unshiftedSlopeCenter = [
-        p[0] + n[0] * (rise / 2) + dirSlope[0] * midDistAlong,
-        p[1] + n[1] * (rise / 2) + dirSlope[1] * midDistAlong,
-        p[2] + n[2] * (rise / 2) + dirSlope[2] * midDistAlong
-      ];
-      const rafterBase = [
-        unshiftedSlopeCenter[0] - normSlope[0] * 0.005,
-        unshiftedSlopeCenter[1] - normSlope[1] * 0.005,
-        unshiftedSlopeCenter[2] - normSlope[2] * 0.005
-      ];
-      const rafterInset = w / 2 - rafterW / 2 - 0.014;
-      const rafterLeftPos = [
-        rafterBase[0] - roofR[0] * rafterInset,
-        rafterBase[1] - roofR[1] * rafterInset,
-        rafterBase[2] - roofR[2] * rafterInset
-      ];
-      const rafterRightPos = [
-        rafterBase[0] + roofR[0] * rafterInset,
-        rafterBase[1] + roofR[1] * rafterInset,
-        rafterBase[2] + roofR[2] * rafterInset
-      ];
-      const rafterCenterPos = [
-        rafterBase[0],
-        rafterBase[1],
-        rafterBase[2]
-      ];
-
-      const darkWood = [rCol * 0.72, gCol * 0.72, bCol * 0.72];
-      addBox(rafterLeftPos, rafterW, rafterH, Math.max(0.01, effSlopeLen - 0.004), darkWood, roofR, normSlope, dirSlope, vertices, colors, indices);
-      addBox(rafterRightPos, rafterW, rafterH, Math.max(0.01, effSlopeLen - 0.004), darkWood, roofR, normSlope, dirSlope, vertices, colors, indices);
-      addBox(rafterCenterPos, rafterW * 0.9, rafterH, Math.max(0.01, effSlopeLen - 0.004), darkWood, roofR, normSlope, dirSlope, vertices, colors, indices);
-
-      // 2) Continuous solid roof deck / ceiling backplane (caps exterior gable walls while keeping interior seams flush)
-      const deckCenter = [
-        centerSlope[0] + normSlope[0] * 0.002,
-        centerSlope[1] + normSlope[1] * 0.002,
-        centerSlope[2] + normSlope[2] * 0.002
-      ];
-      addBox(deckCenter, effW, 0.018, effSlopeLen, [rCol * 0.82, gCol * 0.82, bCol * 0.82], roofR, normSlope, dirSlope, vertices, colors, indices);
-
-      // 3) Wooden roof planks along slope
-      const numPlanks = Math.max(1, Math.round(5 * (effSlopeLen / slopeLen)));
-      const plankLen = effSlopeLen / numPlanks;
-      const plankThick = 0.014;
-
-      for (let i = 0; i < numPlanks; i++) {
-        const distAlong = vMinEff + (i + 0.5) * plankLen;
-        const plankCenter = [
-          p[0] + roofR[0] * offR + n[0] * (rise / 2) + dirSlope[0] * distAlong + normSlope[0] * 0.014,
-          p[1] + roofR[1] * offR + n[1] * (rise / 2) + dirSlope[1] * distAlong + normSlope[1] * 0.014,
-          p[2] + roofR[2] * offR + n[2] * (rise / 2) + dirSlope[2] * distAlong + normSlope[2] * 0.014
-        ];
-
-        const shadeNoise = pRand(seedVal + i * 19.3);
-        const plankColor = [
-          rCol * (0.94 + shadeNoise * 0.12),
-          gCol * (0.94 + shadeNoise * 0.12),
-          bCol * (0.94 + shadeNoise * 0.12)
-        ];
-
-        addBox(plankCenter, effW, plankThick, plankLen, plankColor, roofR, normSlope, dirSlope, vertices, colors, indices);
-
-        // Subtle dark grain lines purely on the exterior surface of the plank
-        const grainNoiseX = pRand(seedVal + i * 37.1);
-        const grainOffsetR = (grainNoiseX - 0.5) * (w * 0.5);
-        const grainCenter = [
-          plankCenter[0] + roofR[0] * grainOffsetR + normSlope[0] * (plankThick * 0.5 + 0.0012),
-          plankCenter[1] + roofR[1] * grainOffsetR + normSlope[1] * (plankThick * 0.5 + 0.0012),
-          plankCenter[2] + roofR[2] * grainOffsetR + normSlope[2] * (plankThick * 0.5 + 0.0012)
-        ];
-        addBox(grainCenter, 0.008, 0.0024, plankLen * 0.82, [rCol * 0.6, gCol * 0.6, bCol * 0.6], roofR, normSlope, dirSlope, vertices, colors, indices);
-      }
-
-      // 4) Peak ridge cap / beam at the top of the visible slope (vMaxEff)
-      addBox(ridgePos, effW, 0.026, 0.028, [rCol * 0.78, gCol * 0.78, bCol * 0.78], roofR, n, roofF, vertices, colors, indices);
-
-      // 5) Bottom eave fascia board at the bottom of the visible slope (vMinEff)
-      addBox(eavePos, effW, 0.026, 0.028, [rCol * 0.75, gCol * 0.75, bCol * 0.75], roofR, n, roofF, vertices, colors, indices);
     }
   }
 };
+

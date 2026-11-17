@@ -48,45 +48,82 @@
     }
   }
 
+  const _woodChestTemplateCache = [null, null, null];
+
+  function _getWoodChestTemplate(mode) {
+    if (_woodChestTemplateCache[mode]) return _woodChestTemplateCache[mode];
+
+    const isPreview = mode !== 0;
+    const previewColor = mode === 1 ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+    const cs = 0.45;
+
+    const baseColor = isPreview ? previewColor : [0.45, 0.3, 0.15];
+    const lidColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
+    const lockColor = isPreview ? previewColor : [0.85, 0.7, 0.25];
+
+    const LR = [1, 0, 0], LU = [0, 1, 0], LF = [0, 0, 1];
+    const tVerts = [], tCols = [], tInds = [];
+
+    // 1) Base Box
+    drawBoxFallback([0, 0.065 * cs, 0], 0.24 * cs, 0.13 * cs, 0.18 * cs, baseColor, LR, LU, LF, tVerts, tCols, tInds);
+    // 2) Lid Box
+    drawBoxFallback([0, 0.16 * cs, 0], 0.25 * cs, 0.06 * cs, 0.19 * cs, lidColor, LR, LU, LF, tVerts, tCols, tInds);
+    // 3) Front Clasp / Lock
+    drawBoxFallback([0, 0.13 * cs, 0.103 * cs], 0.04 * cs, 0.04 * cs, 0.016 * cs, lockColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    const tpl = {
+      verts: new Float32Array(tVerts),
+      cols: new Float32Array(tCols),
+      inds: new Uint16Array(tInds),
+      vertCount: tVerts.length / 3
+    };
+    _woodChestTemplateCache[mode] = tpl;
+    return tpl;
+  }
+
   window.ItemRegistry["wood_chest"] = {
     render: function(item, vertices, colors, indices, targetBuffer) {
-      const boxFunc = (typeof window !== "undefined" && typeof window.addBox === "function" && window.addBox !== drawBoxFallback)
-        ? window.addBox
-        : (typeof addBox === "function" ? addBox : drawBoxFallback);
-
-      const p = item.position;
-      const r = item.R || [1,0,0], f = item.F || [0,0,1], n = item.normal || [0,1,0];
+      const p = item.position || [0, 0, 0];
+      const r = item.R || [1, 0, 0], f = item.F || [0, 0, 1], n = item.normal || [0, 1, 0];
       const isPreview = item.isPreview;
       const isValid = item.isValidPlacement !== false;
-      const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+      const mode = isPreview ? (isValid ? 1 : 2) : 0;
 
-      const cs = 0.45; // chest scale factor
-      // 1) Base Box
-      const basePos = [
-        p[0] + n[0] * (0.065 * cs),
-        p[1] + n[1] * (0.065 * cs),
-        p[2] + n[2] * (0.065 * cs)
-      ];
-      const baseColor = isPreview ? previewColor : [0.45, 0.3, 0.15];
-      boxFunc(basePos, 0.24 * cs, 0.13 * cs, 0.18 * cs, baseColor, r, n, f, vertices, colors, indices);
+      const tpl = _getWoodChestTemplate(mode);
+      const tVerts = tpl.verts;
+      const tCols = tpl.cols;
+      const tInds = tpl.inds;
+      const vCount = tpl.vertCount;
+      const baseIdx = vertices.length / 3;
 
-      // 2) Lid Box
-      const lidPos = [
-        p[0] + n[0] * (0.16 * cs),
-        p[1] + n[1] * (0.16 * cs),
-        p[2] + n[2] * (0.16 * cs)
-      ];
-      const lidColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
-      boxFunc(lidPos, 0.25 * cs, 0.06 * cs, 0.19 * cs, lidColor, r, n, f, vertices, colors, indices);
+      const px = p[0], py = p[1], pz = p[2];
+      const rx = r[0], ry = r[1], rz = r[2];
+      const nx = n[0], ny = n[1], nz = n[2];
+      const fx = f[0], fy = f[1], fz = f[2];
+      const det = (ry * nz - rz * ny) * fx + (rz * nx - rx * nz) * fy + (rx * ny - ry * nx) * fz;
+      const isFlipped = det < 0;
 
-      // 3) Front Clasp / Lock
-      const lockPos = [
-        p[0] + n[0] * (0.13 * cs) + f[0] * (0.103 * cs),
-        p[1] + n[1] * (0.13 * cs) + f[1] * (0.103 * cs),
-        p[2] + n[2] * (0.13 * cs) + f[2] * (0.103 * cs)
-      ];
-      const lockColor = isPreview ? previewColor : [0.85, 0.7, 0.25];
-      boxFunc(lockPos, 0.04 * cs, 0.04 * cs, 0.016 * cs, lockColor, r, n, f, vertices, colors, indices);
+      for (let i = 0; i < vCount; i++) {
+        const vi = i * 3;
+        const lx = tVerts[vi], ly = tVerts[vi + 1], lz = tVerts[vi + 2];
+        vertices.push(
+          px + rx * lx + nx * ly + fx * lz,
+          py + ry * lx + ny * ly + fy * lz,
+          pz + rz * lx + nz * ly + fz * lz
+        );
+        colors.push(tCols[vi], tCols[vi + 1], tCols[vi + 2]);
+      }
+
+      const iLen = tInds.length;
+      if (isFlipped) {
+        for (let i = 0; i < iLen; i += 3) {
+          indices.push(baseIdx + tInds[i], baseIdx + tInds[i + 2], baseIdx + tInds[i + 1]);
+        }
+      } else {
+        for (let i = 0; i < iLen; i++) {
+          indices.push(baseIdx + tInds[i]);
+        }
+      }
     }
   };
 })();

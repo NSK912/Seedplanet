@@ -2,93 +2,68 @@
 
 window.ItemRegistry = window.ItemRegistry || {};
 
-window.buildDragonFruitModel = function(
-  seed,
-  scaleMultiplier,
-  offset,
-  r, n, f,
-  rawVertices, rawColors, rawIndices,
-  colorEncoder
-) {
-  const S = scaleMultiplier || 1.0;
-  const ox = offset[0];
-  const oy = offset[1];
-  const oz = offset[2];
+let _dragonFruitTemplateCache = null;
 
-  const encode = typeof colorEncoder === "function" ? colorEncoder : (c) => c;
+function getDragonFruitTemplate() {
+  if (_dragonFruitTemplateCache) return _dragonFruitTemplateCache;
 
-  // Colors
-  const colStem = encode([0.45, 0.55, 0.20]);
-  const colBodyDark = encode([0.80, 0.10, 0.38]);
-  const colBodyMid = encode([0.92, 0.14, 0.46]);
-  const colBodyBright = encode([0.98, 0.20, 0.52]);
-  const colScaleBase = encode([0.75, 0.45, 0.25]);
-  const colScaleTip = encode([0.32, 0.85, 0.22]);
-  const colCrownTip = encode([0.38, 0.88, 0.25]);
+  const localVertices = [];
+  const localColors = [];
+  const localIndices = [];
 
-  function getPt(lx, ly, lz) {
-    return [
-      ox + (r[0] * lx + n[0] * ly + f[0] * lz) * S,
-      oy + (r[1] * lx + n[1] * ly + f[1] * lz) * S,
-      oz + (r[2] * lx + n[2] * ly + f[2] * lz) * S,
-    ];
-  }
+  const colStem = [0.45, 0.55, 0.20];
+  const colBodyDark = [0.80, 0.10, 0.38];
+  const colBodyMid = [0.92, 0.14, 0.46];
+  const colBodyBright = [0.98, 0.20, 0.52];
+  const colScaleBase = [0.75, 0.45, 0.25];
+  const colScaleTip = [0.32, 0.85, 0.22];
+  const colCrownTip = [0.38, 0.88, 0.25];
 
   function addTri(p0, p1, p2, c0, c1, c2) {
-    const idx = rawVertices.length / 3;
-    rawVertices.push(p0[0], p0[1], p0[2]);
-    rawVertices.push(p1[0], p1[1], p1[2]);
-    rawVertices.push(p2[0], p2[1], p2[2]);
-
-    rawColors.push(c0[0], c0[1], c0[2]);
-    rawColors.push(c1[0], c1[1], c1[2]);
-    rawColors.push(c2[0], c2[1], c2[2]);
-
-    rawIndices.push(idx, idx + 1, idx + 2);
+    const idx = localVertices.length / 3;
+    localVertices.push(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+    localColors.push(c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], c2[0], c2[1], c2[2]);
+    localIndices.push(idx, idx + 1, idx + 2);
   }
 
   function addQuad(p0, p1, p2, p3, c0, c1, c2, c3) {
-    const idx = rawVertices.length / 3;
-    rawVertices.push(p0[0], p0[1], p0[2]);
-    rawVertices.push(p1[0], p1[1], p1[2]);
-    rawVertices.push(p2[0], p2[1], p2[2]);
-    rawVertices.push(p3[0], p3[1], p3[2]);
-
-    rawColors.push(c0[0], c0[1], c0[2]);
-    rawColors.push(c1[0], c1[1], c1[2]);
-    rawColors.push(c2[0], c2[1], c2[2]);
-    rawColors.push(c3[0], c3[1], c3[2]);
-
-    rawIndices.push(idx, idx + 1, idx + 2);
-    rawIndices.push(idx, idx + 2, idx + 3);
+    const idx = localVertices.length / 3;
+    localVertices.push(
+      p0[0], p0[1], p0[2],
+      p1[0], p1[1], p1[2],
+      p2[0], p2[1], p2[2],
+      p3[0], p3[1], p3[2]
+    );
+    localColors.push(
+      c0[0], c0[1], c0[2],
+      c1[0], c1[1], c1[2],
+      c2[0], c2[1], c2[2],
+      c3[0], c3[1], c3[2]
+    );
+    localIndices.push(idx, idx + 1, idx + 2, idx, idx + 2, idx + 3);
   }
 
-  // 1. Faceted low-poly body rings (6-sided)
   const N_SEGS = 6;
   const rings = [
-    { y: -0.16, r: 0.035, col: colStem },       // 0: stem socket
-    { y: -0.09, r: 0.09,  col: colBodyDark },   // 1: lower bottom
-    { y:  0.01, r: 0.145, col: colBodyMid },    // 2: mid body
-    { y:  0.11, r: 0.14,  col: colBodyBright }, // 3: upper mid
-    { y:  0.19, r: 0.085, col: colBodyMid },    // 4: neck
-    { y:  0.25, r: 0.035, col: colScaleBase },  // 5: crown rim
+    { y: -0.16, r: 0.035, col: colStem },
+    { y: -0.09, r: 0.09,  col: colBodyDark },
+    { y:  0.01, r: 0.145, col: colBodyMid },
+    { y:  0.11, r: 0.14,  col: colBodyBright },
+    { y:  0.19, r: 0.085, col: colBodyMid },
+    { y:  0.25, r: 0.035, col: colScaleBase },
   ];
 
-  // Compute ring vertices
   const ringPts = [];
   for (let ri = 0; ri < rings.length; ri++) {
     const ring = rings[ri];
     const pts = [];
     for (let si = 0; si < N_SEGS; si++) {
-      const angle = (si / N_SEGS) * Math.PI * 2 + (ri * 0.15); // subtle twist for organic low-poly feel
-      const lx = Math.cos(angle) * ring.r;
-      const lz = Math.sin(angle) * ring.r;
-      pts.push(getPt(lx, ring.y, lz));
+      const angle = (si / N_SEGS) * Math.PI * 2 + (ri * 0.15);
+      pts.push([Math.cos(angle) * ring.r, ring.y, Math.sin(angle) * ring.r]);
     }
     ringPts.push(pts);
   }
 
-  // Connect rings
   for (let ri = 0; ri < rings.length - 1; ri++) {
     const curR = rings[ri];
     const nextR = rings[ri + 1];
@@ -103,14 +78,12 @@ window.buildDragonFruitModel = function(
     }
   }
 
-  // Bottom stem (cylinder)
-  const pBottomStem = getPt(0, -0.22, 0);
+  const pBottomStem = [0, -0.22, 0];
   for (let si = 0; si < N_SEGS; si++) {
     const nextSi = (si + 1) % N_SEGS;
     addTri(pBottomStem, ringPts[0][nextSi], ringPts[0][si], colStem, colStem, colStem);
   }
 
-  // 2. Dragon Fruit Bracts ("Scales") curving outward and upward
   const scaleTiers = [
     { ringIdx: 1, outDist: 0.07, lift: 0.08, width: 0.05, count: 6, angleOffset: 0.0 },
     { ringIdx: 2, outDist: 0.085, lift: 0.09, width: 0.055, count: 6, angleOffset: Math.PI / 6 },
@@ -124,30 +97,23 @@ window.buildDragonFruitModel = function(
       const angle = (si / tier.count) * Math.PI * 2 + tier.angleOffset;
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
-
-      // Tangent for scale width
       const tanX = -sinA * tier.width * 0.5;
       const tanZ = cosA * tier.width * 0.5;
 
       const basePos = [cosA * baseRing.r, baseRing.y, sinA * baseRing.r];
-      const pLeft = getPt(basePos[0] + tanX, basePos[1], basePos[2] + tanZ);
-      const pRight = getPt(basePos[0] - tanX, basePos[1], basePos[2] - tanZ);
-
-      // Tip curves outwards and upwards
-      const tipPos = [
+      const pLeft = [basePos[0] + tanX, basePos[1], basePos[2] + tanZ];
+      const pRight = [basePos[0] - tanX, basePos[1], basePos[2] - tanZ];
+      const pTip = [
         cosA * (baseRing.r + tier.outDist),
         baseRing.y + tier.lift,
         sinA * (baseRing.r + tier.outDist)
       ];
-      const pTip = getPt(tipPos[0], tipPos[1], tipPos[2]);
 
-      // Both sides of the leafy scale
       addTri(pLeft, pRight, pTip, colScaleBase, colScaleBase, colScaleTip);
       addTri(pRight, pLeft, pTip, colScaleBase, colScaleBase, colScaleTip);
     }
   }
 
-  // 3. Crown leaves at the top (Ring 5 flaring outwards)
   const crownCount = 5;
   for (let ci = 0; ci < crownCount; ci++) {
     const angle = (ci / crownCount) * Math.PI * 2;
@@ -156,12 +122,67 @@ window.buildDragonFruitModel = function(
     const tanX = -sinA * 0.025;
     const tanZ = cosA * 0.025;
 
-    const pBaseL = getPt(cosA * 0.035 + tanX, 0.24, sinA * 0.035 + tanZ);
-    const pBaseR = getPt(cosA * 0.035 - tanX, 0.24, sinA * 0.035 - tanZ);
-    const pCrownTip = getPt(cosA * 0.065, 0.31, sinA * 0.065);
+    const pBaseL = [cosA * 0.035 + tanX, 0.24, sinA * 0.035 + tanZ];
+    const pBaseR = [cosA * 0.035 - tanX, 0.24, sinA * 0.035 - tanZ];
+    const pCrownTip = [cosA * 0.065, 0.31, sinA * 0.065];
 
     addTri(pBaseL, pBaseR, pCrownTip, colScaleBase, colScaleBase, colCrownTip);
     addTri(pBaseR, pBaseL, pCrownTip, colScaleBase, colScaleBase, colCrownTip);
+  }
+
+  _dragonFruitTemplateCache = {
+    vertices: new Float32Array(localVertices),
+    colors: new Float32Array(localColors),
+    indices: new Uint16Array(localIndices)
+  };
+  return _dragonFruitTemplateCache;
+}
+
+window.buildDragonFruitModel = function(
+  seed,
+  scaleMultiplier,
+  offset,
+  r, n, f,
+  rawVertices, rawColors, rawIndices,
+  colorEncoder
+) {
+  const S = scaleMultiplier || 1.0;
+  const ox = offset[0];
+  const oy = offset[1];
+  const oz = offset[2];
+
+  const tpl = getDragonFruitTemplate();
+  const lv = tpl.vertices;
+  const lc = tpl.colors;
+  const li = tpl.indices;
+  const baseIdx = rawVertices.length / 3;
+
+  const r0 = r[0] * S, r1 = r[1] * S, r2 = r[2] * S;
+  const n0 = n[0] * S, n1 = n[1] * S, n2 = n[2] * S;
+  const f0 = f[0] * S, f1 = f[1] * S, f2 = f[2] * S;
+
+  for (let i = 0, len = lv.length; i < len; i += 3) {
+    const lx = lv[i], ly = lv[i + 1], lz = lv[i + 2];
+    rawVertices.push(
+      ox + r0 * lx + n0 * ly + f0 * lz,
+      oy + r1 * lx + n1 * ly + f1 * lz,
+      oz + r2 * lx + n2 * ly + f2 * lz
+    );
+  }
+
+  if (typeof colorEncoder === "function") {
+    for (let i = 0, len = lc.length; i < len; i += 3) {
+      const enc = colorEncoder([lc[i], lc[i + 1], lc[i + 2]]);
+      rawColors.push(enc[0], enc[1], enc[2]);
+    }
+  } else {
+    for (let i = 0, len = lc.length; i < len; i += 3) {
+      rawColors.push(lc[i], lc[i + 1], lc[i + 2]);
+    }
+  }
+
+  for (let i = 0, len = li.length; i < len; i++) {
+    rawIndices.push(baseIdx + li[i]);
   }
 };
 

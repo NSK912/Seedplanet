@@ -44,6 +44,8 @@ window.buildMeganeuraModel = function(
   };
 
   const scale = 0.25 * scaleMultiplier;
+  const lodLevel = (c && typeof c.lodLevel === "number") ? c.lodLevel : 0;
+  const isLod1 = lodLevel >= 1;
 
   // Variant color indexing
   const variantIdx = Math.floor(Math.abs(Math.sin((seed || 0) * 9876.54)) * 100) % 5;
@@ -102,7 +104,7 @@ window.buildMeganeuraModel = function(
   const radiiList = [0.06, 0.08, 0.1, 0.08].map(r => r * scale);
   const colorsList = [headColor, headColor, headColor, headColor];
 
-  const numAbdomenSegments = 10;
+  const numAbdomenSegments = isLod1 ? 5 : 10;
   const abdPoints = [];
   const abdRadii = [];
   for (let i = 0; i <= numAbdomenSegments; i++) {
@@ -122,32 +124,35 @@ window.buildMeganeuraModel = function(
     colorsList.push(segmentColor);
   }
 
-  buildContinuousSpine(pointsList, radiiList, 5, colorsList, vertices, colors, indices, N);
+  buildContinuousSpine(pointsList, radiiList, isLod1 ? 4 : 5, colorsList, vertices, colors, indices, N);
 
   const pTail = abdPoints[numAbdomenSegments];
   const tailCapColor = (numAbdomenSegments % 2 === 0) ? baseBodyColor : stripeColor;
-  buildLowPolySphere(pTail, 0.02 * scale, 4, tailCapColor, 0, 0, vertices, colors, indices);
+  const sphereSegs = isLod1 ? 2 : 4;
+  buildLowPolySphere(pTail, 0.02 * scale, sphereSegs, tailCapColor, 0, 0, vertices, colors, indices);
 
-  buildLowPolySphere(pHead, 0.08 * scale, 4, headColor, 0, 0, vertices, colors, indices);
-  buildLowPolySphere(mp(0.06, 0.05, 0.28, 0.1), 0.05 * scale, 4, eyeColor, 0, 0, vertices, colors, indices);
-  buildLowPolySphere(mp(-0.06, 0.05, 0.28, 0.1), 0.05 * scale, 4, eyeColor, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(pHead, 0.08 * scale, sphereSegs, headColor, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(mp(0.06, 0.05, 0.28, 0.1), 0.05 * scale, sphereSegs, eyeColor, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(mp(-0.06, 0.05, 0.28, 0.1), 0.05 * scale, sphereSegs, eyeColor, 0, 0, vertices, colors, indices);
 
-  // Legs (6 legs, jointed)
-  const addLeg = (bx, bz, tx, ty, tz) => {
-    const base = mp(bx, -0.02, bz, 0.05);
-    const mid = mp(bx + tx * 0.4, 0.02, bz + tz * 0.4, 0.05);
-    const tip = mp(bx + tx, ty, bz + tz, 0.05);
-    const thick = 0.01 * scale;
-    buildTaperedSegment(base, mid, thick, thick * 0.8, 3, legColor, vertices, colors, indices);
-    buildTaperedSegment(mid, tip, thick * 0.8, thick * 0.2, 3, legColor, vertices, colors, indices);
-  };
+  // Legs (6 legs, jointed - skipped in LOD 1+ at >15m distance)
+  if (!isLod1) {
+    const addLeg = (bx, bz, tx, ty, tz) => {
+      const base = mp(bx, -0.02, bz, 0.05);
+      const mid = mp(bx + tx * 0.4, 0.02, bz + tz * 0.4, 0.05);
+      const tip = mp(bx + tx, ty, bz + tz, 0.05);
+      const thick = 0.01 * scale;
+      buildTaperedSegment(base, mid, thick, thick * 0.8, 3, legColor, vertices, colors, indices);
+      buildTaperedSegment(mid, tip, thick * 0.8, thick * 0.2, 3, legColor, vertices, colors, indices);
+    };
 
-  addLeg(0.04, 0.1, 0.15, -0.15, 0.1);   // Front Right
-  addLeg(-0.04, 0.1, -0.15, -0.15, 0.1); // Front Left
-  addLeg(0.05, 0.05, 0.18, -0.15, 0.0);  // Mid Right
-  addLeg(-0.05, 0.05, -0.18, -0.15, 0.0); // Mid Left
-  addLeg(0.04, 0.0, 0.15, -0.15, -0.1);  // Back Right
-  addLeg(-0.04, 0.0, -0.15, -0.15, -0.1); // Back Left
+    addLeg(0.04, 0.1, 0.15, -0.15, 0.1);   // Front Right
+    addLeg(-0.04, 0.1, -0.15, -0.15, 0.1); // Front Left
+    addLeg(0.05, 0.05, 0.18, -0.15, 0.0);  // Mid Right
+    addLeg(-0.05, 0.05, -0.18, -0.15, 0.0); // Mid Left
+    addLeg(0.04, 0.0, 0.15, -0.15, -0.1);  // Back Right
+    addLeg(-0.04, 0.0, -0.15, -0.15, -0.1); // Back Left
+  }
 
   const flapSpeed = isRagdoll ? 0 : 3.5;
   const wingPhase = animPhase * flapSpeed;
@@ -158,25 +163,27 @@ window.buildMeganeuraModel = function(
     pushQuad(baseFront, baseBack, tipBack, tipFront, wingCol);
     const edgeThick = 0.003 * scale;
     buildTaperedSegment(baseFront, tipFront, edgeThick, edgeThick, 3, [0.1, 0.1, 0.1], vertices, colors, indices);
-    buildTaperedSegment(baseBack, tipBack, edgeThick * 0.5, edgeThick * 0.5, 3, [0.15, 0.15, 0.15], vertices, colors, indices);
-    const baseMid = [(baseFront[0] + baseBack[0]) * 0.5, (baseFront[1] + baseBack[1]) * 0.5, (baseFront[2] + baseBack[2]) * 0.5];
-    const tipMid = [(tipFront[0] + tipBack[0]) * 0.5, (tipFront[1] + tipBack[1]) * 0.5, (tipFront[2] + tipBack[2]) * 0.5];
-    buildTaperedSegment(baseMid, tipMid, edgeThick * 0.4, edgeThick * 0.15, 3, [0.12, 0.12, 0.12], vertices, colors, indices);
-    
-    // Cross veins
-    const baseQuarter = [baseFront[0] * 0.75 + baseBack[0] * 0.25, baseFront[1] * 0.75 + baseBack[1] * 0.25, baseFront[2] * 0.75 + baseBack[2] * 0.25];
-    const tipThreeQuarter = [tipFront[0] * 0.25 + tipBack[0] * 0.75, tipFront[1] * 0.25 + tipBack[1] * 0.75, tipFront[2] * 0.25 + tipBack[2] * 0.75];
-    buildTaperedSegment(baseQuarter, tipThreeQuarter, edgeThick * 0.3, edgeThick * 0.1, 3, [0.15, 0.15, 0.15], vertices, colors, indices);
+    if (!isLod1) {
+      buildTaperedSegment(baseBack, tipBack, edgeThick * 0.5, edgeThick * 0.5, 3, [0.15, 0.15, 0.15], vertices, colors, indices);
+      const baseMid = [(baseFront[0] + baseBack[0]) * 0.5, (baseFront[1] + baseBack[1]) * 0.5, (baseFront[2] + baseBack[2]) * 0.5];
+      const tipMid = [(tipFront[0] + tipBack[0]) * 0.5, (tipFront[1] + tipBack[1]) * 0.5, (tipFront[2] + tipBack[2]) * 0.5];
+      buildTaperedSegment(baseMid, tipMid, edgeThick * 0.4, edgeThick * 0.15, 3, [0.12, 0.12, 0.12], vertices, colors, indices);
+      
+      // Cross veins
+      const baseQuarter = [baseFront[0] * 0.75 + baseBack[0] * 0.25, baseFront[1] * 0.75 + baseBack[1] * 0.25, baseFront[2] * 0.75 + baseBack[2] * 0.25];
+      const tipThreeQuarter = [tipFront[0] * 0.25 + tipBack[0] * 0.75, tipFront[1] * 0.25 + tipBack[1] * 0.75, tipFront[2] * 0.25 + tipBack[2] * 0.75];
+      buildTaperedSegment(baseQuarter, tipThreeQuarter, edgeThick * 0.3, edgeThick * 0.1, 3, [0.15, 0.15, 0.15], vertices, colors, indices);
 
-    const stigmaStart = [baseFront[0] * 0.2 + tipFront[0] * 0.8, baseFront[1] * 0.2 + tipFront[1] * 0.8, baseFront[2] * 0.2 + tipFront[2] * 0.8];
-    const stigmaEnd = [baseFront[0] * 0.05 + tipFront[0] * 0.95, baseFront[1] * 0.05 + tipFront[1] * 0.95, baseFront[2] * 0.05 + tipFront[2] * 0.95];
-    const stigmaBackStart = [baseBack[0] * 0.2 + tipBack[0] * 0.8, baseBack[1] * 0.2 + tipBack[1] * 0.8, baseBack[2] * 0.2 + tipBack[2] * 0.8];
-    const stigmaBackEnd = [baseBack[0] * 0.05 + tipBack[0] * 0.95, baseBack[1] * 0.05 + tipBack[1] * 0.95, baseBack[2] * 0.05 + tipBack[2] * 0.95];
-    const s1 = stigmaStart;
-    const s4 = stigmaEnd;
-    const s2 = [stigmaStart[0] * 0.8 + stigmaBackStart[0] * 0.2, stigmaStart[1] * 0.8 + stigmaBackStart[1] * 0.2, stigmaStart[2] * 0.8 + stigmaBackStart[2] * 0.2];
-    const s3 = [stigmaEnd[0] * 0.8 + stigmaBackEnd[0] * 0.2, stigmaEnd[1] * 0.8 + stigmaBackEnd[1] * 0.2, stigmaEnd[2] * 0.8 + stigmaBackEnd[2] * 0.2];
-    pushQuad(s1, s2, s3, s4, stigmaCol);
+      const stigmaStart = [baseFront[0] * 0.2 + tipFront[0] * 0.8, baseFront[1] * 0.2 + tipFront[1] * 0.8, baseFront[2] * 0.2 + tipFront[2] * 0.8];
+      const stigmaEnd = [baseFront[0] * 0.05 + tipFront[0] * 0.95, baseFront[1] * 0.05 + tipFront[1] * 0.95, baseFront[2] * 0.05 + tipFront[2] * 0.95];
+      const stigmaBackStart = [baseBack[0] * 0.2 + tipBack[0] * 0.8, baseBack[1] * 0.2 + tipBack[1] * 0.8, baseBack[2] * 0.2 + tipBack[2] * 0.8];
+      const stigmaBackEnd = [baseBack[0] * 0.05 + tipBack[0] * 0.95, baseBack[1] * 0.05 + tipBack[1] * 0.95, baseBack[2] * 0.05 + tipBack[2] * 0.95];
+      const s1 = stigmaStart;
+      const s4 = stigmaEnd;
+      const s2 = [stigmaStart[0] * 0.8 + stigmaBackStart[0] * 0.2, stigmaStart[1] * 0.8 + stigmaBackStart[1] * 0.2, stigmaStart[2] * 0.8 + stigmaBackStart[2] * 0.2];
+      const s3 = [stigmaEnd[0] * 0.8 + stigmaBackEnd[0] * 0.2, stigmaEnd[1] * 0.8 + stigmaBackEnd[1] * 0.2, stigmaEnd[2] * 0.8 + stigmaBackEnd[2] * 0.2];
+      pushQuad(s1, s2, s3, s4, stigmaCol);
+    }
   };
 
   // Front Right Wing

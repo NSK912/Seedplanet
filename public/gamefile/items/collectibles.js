@@ -1832,6 +1832,7 @@ function buildCollectibles(count, seed) {
         if (targetBuffer === 'all' || targetBuffer === 'place' || targetBuffer === 'demolish') {
           refreshCollectiblesVBO('main');
           refreshCollectiblesVBO('dynamic');
+          refreshCollectiblesVBO('doors');
           return;
         }
 
@@ -1841,6 +1842,7 @@ function buildCollectibles(count, seed) {
 
         let itemsToProcess = [];
         if (targetBuffer === 'main') {
+          window._boatSleepCheckTick = (window._boatSleepCheckTick || 0) + 1;
           for (let item of collectibles) {
             if (!item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window" && item.type !== "wood_planter_box") {
               delete item.meshStart;
@@ -1851,22 +1853,31 @@ function buildCollectibles(count, seed) {
           itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window" && c.type !== "wood_planter_box" && c !== currentActiveBoat);
         } else if (targetBuffer === 'dynamic') {
           for (let item of collectibles) {
-            if (item.isDynamic || item.type === "wood_door" || item.type === "wood_window" || item.type === "wood_planter_box") {
+            if ((item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window") || item.type === "wood_planter_box") {
               delete item.meshStart;
               delete item.meshEnd;
             }
           }
           const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
-          itemsToProcess = collectibles.filter(c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window" || c.type === "wood_planter_box") && c !== currentActiveBoat);
+          itemsToProcess = collectibles.filter(c => ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box") && c !== currentActiveBoat);
+        } else if (targetBuffer === 'doors') {
+          for (let item of collectibles) {
+            if (item.type === "wood_door" || item.type === "wood_window") {
+              delete item.meshStart;
+              delete item.meshEnd;
+            }
+          }
+          itemsToProcess = collectibles.filter(c => c.type === "wood_door" || c.type === "wood_window");
         } else {
           itemsToProcess = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible ? [floorPreviewCollectible] : []);
         }
 
-        // Build spatial acceleration grids for doors, windows, and roofs only when rebuilding 'main'
-        if (targetBuffer === 'main' || !window._spatialDoors) {
+        // Build spatial acceleration grids for doors, windows, roofs, and campfires when rebuilding 'main' or 'doors'
+        if (targetBuffer === 'main' || targetBuffer === 'doors' || !window._spatialDoors) {
           const spatialDoors = new Map();
           const spatialWindows = new Map();
           const spatialRoofs = new Map();
+          const activeCampfires = [];
 
           for (let i = 0; i < collectibles.length; i++) {
             const c = collectibles[i];
@@ -1887,11 +1898,113 @@ function buildCollectibles(count, seed) {
               let arr = spatialRoofs.get(key);
               if (!arr) { arr = []; spatialRoofs.set(key, arr); }
               arr.push(c);
+            } else if (c.type === "campfire" && !c.isPreview) {
+              activeCampfires.push(c);
             }
           }
           window._spatialDoors = spatialDoors;
           window._spatialWindows = spatialWindows;
           window._spatialRoofs = spatialRoofs;
+          window._activeCampfiresList = activeCampfires;
+        }
+
+        const DYNAMIC_TYPED_ARRAYS = window._DYNAMIC_TYPED_ARRAYS || (window._DYNAMIC_TYPED_ARRAYS = {});
+        function getReusableTypedArray(key, Ctor, arr) {
+            let buf = DYNAMIC_TYPED_ARRAYS[key];
+            if (!buf || buf.length < arr.length) {
+                buf = new Ctor(Math.max(arr.length * 1.5, 2048));
+                DYNAMIC_TYPED_ARRAYS[key] = buf;
+            }
+            buf.set(arr);
+            return buf.subarray(0, arr.length);
+        }
+
+        // Dirty-state & Fast Translation check for 'preview' buffer
+        if (targetBuffer === 'preview') {
+          const prevItem = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible && floorPreviewCollectible.active)
+            ? floorPreviewCollectible
+            : null;
+          if (!prevItem) {
+            if (window._lastPreviewFullSig === 'EMPTY' && previewIndicesLength === 0) {
+              return;
+            }
+            window._lastPreviewFullSig = 'EMPTY';
+            window._lastPreviewShapeSig = 'EMPTY';
+            previewIndicesLength = 0;
+            return;
+          }
+
+          const p = prevItem.position || [0, 0, 0];
+          const r = prevItem.R || [1, 0, 0];
+          const f = prevItem.F || [0, 0, 1];
+          const n = prevItem.normal || [0, 1, 0];
+          const validBit = prevItem.isValidPlacement !== false ? 1 : 0;
+          const ang = (prevItem.angle || 0).toFixed(4);
+          const sz = (prevItem.size || 0).toFixed(3);
+          const wVal = (prevItem.width || 0).toFixed(3);
+          const dVal = (prevItem.depth || 0).toFixed(3);
+          const colLen = collectibles.length;
+
+          // Include relative stairTop/stairBottom for stairs & folding_ladder, and position for roof/wall trimming
+          let extraShapeKey = '';
+          if (prevItem.stairTop && prevItem.stairBottom) {
+            extraShapeKey =
+              (prevItem.stairTop[0] - p[0]).toFixed(3) + ',' +
+              (prevItem.stairTop[1] - p[1]).toFixed(3) + ',' +
+              (prevItem.stairTop[2] - p[2]).toFixed(3) + ',' +
+              (prevItem.stairBottom[0] - p[0]).toFixed(3) + ',' +
+              (prevItem.stairBottom[1] - p[1]).toFixed(3) + ',' +
+              (prevItem.stairBottom[2] - p[2]).toFixed(3);
+          } else if (prevItem.type === 'wood_wall' || prevItem.type === 'wood_roof' || prevItem.type === 'thin_wood_floor') {
+            extraShapeKey = p[0].toFixed(3) + ',' + p[1].toFixed(3) + ',' + p[2].toFixed(3) + ',' + colLen;
+          }
+
+          const shapeSig =
+            prevItem.type + '|' + validBit + '|' + ang + '|' + sz + '|' + wVal + '|' + dVal + '|' +
+            r[0].toFixed(4) + ',' + r[1].toFixed(4) + ',' + r[2].toFixed(4) + '|' +
+            f[0].toFixed(4) + ',' + f[1].toFixed(4) + ',' + f[2].toFixed(4) + '|' +
+            n[0].toFixed(4) + ',' + n[1].toFixed(4) + ',' + n[2].toFixed(4) + '|' +
+            extraShapeKey;
+
+          const posSig = p[0].toFixed(4) + ',' + p[1].toFixed(4) + ',' + p[2].toFixed(4);
+          const fullSig = shapeSig + '@' + posSig;
+
+          // 1) Exact match: nothing changed at all -> skip 100% of CPU & GPU work
+          if (window._lastPreviewFullSig === fullSig && previewVertexBuffer && previewIndicesLength > 0) {
+            return;
+          }
+
+          // 2) Shape & orientation identical, only position translated (e.g. preview vertical bobbing):
+          // shift cached flat vertices by (dx, dy, dz) and upload ONLY previewVertexBuffer!
+          if (
+            window._lastPreviewShapeSig === shapeSig &&
+            window._lastPreviewFlatVerts &&
+            window._lastPreviewOrigin &&
+            previewVertexBuffer &&
+            previewIndicesLength > 0
+          ) {
+            const dx = p[0] - window._lastPreviewOrigin[0];
+            const dy = p[1] - window._lastPreviewOrigin[1];
+            const dz = p[2] - window._lastPreviewOrigin[2];
+            const flatV = window._lastPreviewFlatVerts;
+            for (let i = 0, len = flatV.length; i < len; i += 3) {
+              flatV[i] += dx;
+              flatV[i + 1] += dy;
+              flatV[i + 2] += dz;
+            }
+            window._lastPreviewOrigin[0] = p[0];
+            window._lastPreviewOrigin[1] = p[1];
+            window._lastPreviewOrigin[2] = p[2];
+            window._lastPreviewFullSig = fullSig;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, previewVertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, flatV, gl.DYNAMIC_DRAW);
+            return;
+          }
+
+          window._lastPreviewShapeSig = shapeSig;
+          window._lastPreviewFullSig = fullSig;
+          window._lastPreviewOrigin = [p[0], p[1], p[2]];
         }
 
         const activeProcessedItems = [];
@@ -1905,7 +2018,7 @@ function buildCollectibles(count, seed) {
           if (handler && typeof handler.render === "function") {
             handler.render(item, vertices, colors, indices, targetBuffer);
           }
-          if (targetBuffer === 'main' || targetBuffer === 'dynamic') {
+          if (targetBuffer === 'main' || targetBuffer === 'dynamic' || targetBuffer === 'doors') {
             item.meshStart = startIdx;
             item.meshEnd = indices.length;
             if (indices.length > startIdx) {
@@ -1918,6 +2031,8 @@ function buildCollectibles(count, seed) {
           window.staticCollectiblesList = activeProcessedItems;
         } else if (targetBuffer === 'dynamic') {
           window.dynamicCollectiblesList = activeProcessedItems;
+        } else if (targetBuffer === 'doors') {
+          window.doorWindowCollectiblesList = activeProcessedItems;
         }
 
         if (indices.length === 0) {
@@ -1928,21 +2043,16 @@ function buildCollectibles(count, seed) {
           } else if (targetBuffer === 'dynamic') {
             dynamicCollectibleIndicesLength = 0;
             window.dynamicCollectiblesList = [];
+          } else if (targetBuffer === 'doors') {
+            doorWindowIndicesLength = 0;
+            window.doorWindowCollectiblesList = [];
+            window.doorWindowRawVertices = null;
+            window.doorWindowRawNormals = null;
           } else {
             previewIndicesLength = 0;
+            window._lastPreviewFlatVerts = null;
           }
           return;
-        }
-
-        const DYNAMIC_TYPED_ARRAYS = window._DYNAMIC_TYPED_ARRAYS || (window._DYNAMIC_TYPED_ARRAYS = {});
-        function getReusableTypedArray(key, Ctor, arr) {
-            let buf = DYNAMIC_TYPED_ARRAYS[key];
-            if (!buf || buf.length < arr.length) {
-                buf = new Ctor(Math.max(arr.length * 1.5, 2048));
-                DYNAMIC_TYPED_ARRAYS[key] = buf;
-            }
-            buf.set(arr);
-            return buf.subarray(0, arr.length);
         }
 
         const flatGeom = makeFlatShadedGeometry(vertices, colors, indices, true);
@@ -2026,15 +2136,65 @@ function buildCollectibles(count, seed) {
               isUint32 ? getReusableTypedArray('dynInds32', Uint32Array, flatGeom.indices) : getReusableTypedArray('dynInds16', Uint16Array, flatGeom.indices),
               gl.DYNAMIC_DRAW,
             );
+        } else if (targetBuffer === 'doors') {
+            const flatVerts =
+              flatGeom.vertices instanceof Float32Array
+                ? flatGeom.vertices
+                : new Float32Array(flatGeom.vertices);
+            const flatNorms =
+              flatGeom.normals instanceof Float32Array
+                ? flatGeom.normals
+                : new Float32Array(flatGeom.normals);
+            doorWindowIndicesLength = flatGeom.indices.length;
+            window.doorWindowRawVertices = flatVerts;
+            window.doorWindowRawNormals = flatNorms;
+
+            if (!doorWindowVertexBuffer)
+              doorWindowVertexBuffer = gl.createBuffer();
+            window.doorWindowVertexBuffer = doorWindowVertexBuffer;
+            gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowVertexBuffer);
+            gl.bufferData(
+              gl.ARRAY_BUFFER,
+              flatVerts,
+              gl.DYNAMIC_DRAW,
+            );
+
+            if (!doorWindowColorBuffer) doorWindowColorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowColorBuffer);
+            gl.bufferData(
+              gl.ARRAY_BUFFER,
+              flatGeom.colors instanceof Float32Array ? flatGeom.colors : new Float32Array(flatGeom.colors),
+              gl.DYNAMIC_DRAW,
+            );
+
+            if (!doorWindowNormalBuffer)
+              doorWindowNormalBuffer = gl.createBuffer();
+            window.doorWindowNormalBuffer = doorWindowNormalBuffer;
+            gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowNormalBuffer);
+            gl.bufferData(
+              gl.ARRAY_BUFFER,
+              flatNorms,
+              gl.DYNAMIC_DRAW,
+            );
+
+            if (!doorWindowIndexBuffer) doorWindowIndexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, doorWindowIndexBuffer);
+            gl.bufferData(
+              gl.ELEMENT_ARRAY_BUFFER,
+              isUint32 ? (flatGeom.indices instanceof Uint32Array ? flatGeom.indices : new Uint32Array(flatGeom.indices)) : (flatGeom.indices instanceof Uint16Array ? flatGeom.indices : new Uint16Array(flatGeom.indices)),
+              gl.DYNAMIC_DRAW,
+            );
         } else {
             previewIndicesLength = flatGeom.indices.length;
+            const prevVertSlice = getReusableTypedArray('prevVerts', Float32Array, flatGeom.vertices);
+            window._lastPreviewFlatVerts = prevVertSlice;
 
             if (!previewVertexBuffer)
               previewVertexBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, previewVertexBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              new Float32Array(flatGeom.vertices),
+              prevVertSlice,
               gl.DYNAMIC_DRAW,
             );
 
@@ -2042,7 +2202,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ARRAY_BUFFER, previewColorBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              new Float32Array(flatGeom.colors),
+              getReusableTypedArray('prevCols', Float32Array, flatGeom.colors),
               gl.DYNAMIC_DRAW,
             );
 
@@ -2051,7 +2211,7 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ARRAY_BUFFER, previewNormalBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              new Float32Array(flatGeom.normals),
+              getReusableTypedArray('prevNorms', Float32Array, flatGeom.normals),
               gl.DYNAMIC_DRAW,
             );
 
@@ -2059,11 +2219,81 @@ function buildCollectibles(count, seed) {
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, previewIndexBuffer);
             gl.bufferData(
               gl.ELEMENT_ARRAY_BUFFER,
-              isUint32 ? new Uint32Array(flatGeom.indices) : new Uint16Array(flatGeom.indices),
+              isUint32 ? getReusableTypedArray('prevInds32', Uint32Array, flatGeom.indices) : getReusableTypedArray('prevInds16', Uint16Array, flatGeom.indices),
               gl.DYNAMIC_DRAW,
             );
         }
       }
+
+      // Surgical GPU sub-buffer update for actively swinging doors & windows:
+      // Recomputes only the swinging door/window item(s) and updates their slice in doorWindowVertexBuffer
+      // and doorWindowNormalBuffer via gl.bufferSubData without touching any other door, window, or dynamic item!
+      window.updateSwingingDoorsAndWindowsInVBO = function(swingingItems) {
+        if (!swingingItems || swingingItems.length === 0) return;
+        if (
+          !window.doorWindowRawVertices ||
+          !window.doorWindowRawNormals ||
+          !doorWindowVertexBuffer ||
+          !doorWindowNormalBuffer ||
+          typeof gl === "undefined" ||
+          !gl
+        ) {
+          refreshCollectiblesVBO('doors');
+          return;
+        }
+
+        const rawV = window.doorWindowRawVertices;
+        const rawN = window.doorWindowRawNormals;
+
+        for (let i = 0; i < swingingItems.length; i++) {
+          const item = swingingItems[i];
+          if (
+            !item ||
+            !item.active ||
+            item.meshStart === undefined ||
+            item.meshEnd === undefined ||
+            item.meshEnd <= item.meshStart
+          ) {
+            refreshCollectiblesVBO('doors');
+            return;
+          }
+
+          const startF = item.meshStart * 3;
+          const endF = item.meshEnd * 3;
+          const expectedLen = endF - startF;
+          if (endF > rawV.length || endF > rawN.length) {
+            refreshCollectiblesVBO('doors');
+            return;
+          }
+
+          const v = [], c = [], idx = [];
+          const handler = window.ItemRegistry[item.type];
+          if (!handler || typeof handler.render !== "function") continue;
+          handler.render(item, v, c, idx, 'doors');
+
+          const flatGeom = makeFlatShadedGeometry(v, c, idx, true);
+          if (!flatGeom || flatGeom.vertices.length !== expectedLen) {
+            refreshCollectiblesVBO('doors');
+            return;
+          }
+
+          const fv = flatGeom.vertices;
+          const fn = flatGeom.normals;
+          for (let j = 0; j < expectedLen; j++) {
+            rawV[startF + j] = fv[j];
+            rawN[startF + j] = fn[j];
+          }
+
+          const vSlice = rawV.subarray(startF, endF);
+          const nSlice = rawN.subarray(startF, endF);
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowVertexBuffer);
+          gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, vSlice);
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowNormalBuffer);
+          gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, nSlice);
+        }
+      };
 
       // Fast surgical GPU sub-buffer update when picking up a static collectible:
       // zeroes out only the item's vertex range in collectibleVertexBuffer via gl.bufferSubData
@@ -5438,6 +5668,25 @@ function buildCollectibles(count, seed) {
             }
           }
 
+          // Early skip for sleeping parked boats on land until structures change
+          if (c.type === "wood_boat" && c._isSleeping && !c.isInWater && !c.isFlying && !c.isAirborne && !c.isGliding) {
+            const wakeTick = window._boatSleepCheckTick || 0;
+            if (c._sleepWakeTick === wakeTick) {
+              continue;
+            }
+            c._isSleeping = false;
+          }
+
+          // Throttle parked boats gently bobbing on water (~15 Hz instead of every frame)
+          const frameDtSec = (typeof dt === "number" && dt > 0 && dt < 0.25) ? dt : (1 / 60);
+          if (c.type === "wood_boat" && c.isInWater && c._waterSettled && !c.isFlying && !c.isAirborne && !c.isGliding) {
+            c._waterBobTimer = (c._waterBobTimer || 0) + frameDtSec;
+            if (c._waterBobTimer < 0.066) {
+              continue;
+            }
+            c._waterBobTimer = 0;
+          }
+
           const _oldP = c.position ? [c.position[0], c.position[1], c.position[2]] : null;
           const _oldR = c.R ? [c.R[0], c.R[1], c.R[2]] : null;
 
@@ -6245,12 +6494,23 @@ function buildCollectibles(count, seed) {
 
             // Stop moving if very slow
             const speedSq = c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2;
+            if (c.type === "wood_boat") {
+              c.isInWater = isInWater;
+              if (isInWater && Math.abs(collisionRadius - r) < 0.015 && speedSq < 0.0002) {
+                c._waterSettled = true;
+              } else {
+                c._waterSettled = false;
+              }
+            }
+
             if (c.type === "wood_boat" && !isInWater && !isWheeledBoat) {
                 // Non-wheeled boat on land cannot move (completely static and stable)
                 c.vel[0] = 0;
                 c.vel[1] = 0;
                 c.vel[2] = 0;
                 c.spinSpeed = 0;
+                c._isSleeping = true;
+                c._sleepWakeTick = window._boatSleepCheckTick || 0;
             } else if (isWheeledBoat && !isInWater && (!activeRidingBoat || activeRidingBoat !== c)) {
                 if (speedSq < 0.0004 && Math.abs(c.vehicleSpeed || 0) < 0.0005) {
                     c.vel[0] = 0;
@@ -6259,6 +6519,7 @@ function buildCollectibles(count, seed) {
                     c.spinSpeed = 0;
                     c.vehicleSpeed = 0;
                     c._isSleeping = true;
+                    c._sleepWakeTick = window._boatSleepCheckTick || 0;
                 }
             } else if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
                 
@@ -6327,16 +6588,24 @@ function buildCollectibles(count, seed) {
              }
           }
           
-          if (_oldP && (Math.abs(c.position[0]-_oldP[0])>1e-6 || Math.abs(c.position[1]-_oldP[1])>1e-6 || Math.abs(c.position[2]-_oldP[2])>1e-6)) needRefresh = true;
-          if (_oldR && c.R && (Math.abs(c.R[0]-_oldR[0])>1e-6 || Math.abs(c.R[1]-_oldR[1])>1e-6 || Math.abs(c.R[2]-_oldR[2])>1e-6)) needRefresh = true;
+          if (c.type === "wood_boat" && c.isInWater && c._waterSettled) {
+            const refP = c._lastVboPos || _oldP;
+            const refR = c._lastVboR || _oldR;
+            const posMoved = refP && (Math.abs(c.position[0] - refP[0]) > 0.0008 || Math.abs(c.position[1] - refP[1]) > 0.0008 || Math.abs(c.position[2] - refP[2]) > 0.0008);
+            const rotMoved = refR && c.R && (Math.abs(c.R[0] - refR[0]) > 0.002 || Math.abs(c.R[1] - refR[1]) > 0.002 || Math.abs(c.R[2] - refR[2]) > 0.002);
+            if (posMoved || rotMoved) {
+              needRefresh = true;
+              c._lastVboPos = [c.position[0], c.position[1], c.position[2]];
+              if (c.R) c._lastVboR = [c.R[0], c.R[1], c.R[2]];
+            }
+          } else {
+            if (_oldP && (Math.abs(c.position[0]-_oldP[0])>1e-6 || Math.abs(c.position[1]-_oldP[1])>1e-6 || Math.abs(c.position[2]-_oldP[2])>1e-6)) needRefresh = true;
+            if (_oldR && c.R && (Math.abs(c.R[0]-_oldR[0])>1e-6 || Math.abs(c.R[1]-_oldR[1])>1e-6 || Math.abs(c.R[2]-_oldR[2])>1e-6)) needRefresh = true;
+          }
         }
         
-        if (activeRidingBoat) {
-            const bSpeed = Math.abs(activeRidingBoat.vehicleSpeed || 0);
-            if (bSpeed > 0.0001 || activeRidingBoat._moved) {
-                needRefresh = true;
-                activeRidingBoat._moved = false;
-            }
+        if (activeRidingBoat && activeRidingBoat._moved) {
+            activeRidingBoat._moved = false;
         }
 
         if (needMainRefresh) {
@@ -7142,6 +7411,30 @@ function buildCollectibles(count, seed) {
           usage_en: "Dark ankle boots with cream folded cuffs from the traveler outfit. Equips in the character Shoes slot.",
           maxStack: 1
         },
+        "OXFORD_SHOES": {
+          id: "OXFORD_SHOES",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "shoes",
+          name_th: "รองเท้าหนัง Oxford",
+          name_en: "Cap-Toe Oxford Shoes",
+          icon: "👞",
+          actionType: "EQUIP_SHOES",
+          usage_th: "รองเท้าหนังแท้สีดำเงาทรง Cap-Toe Oxford ซับในหนังสีน้ำตาลแทน ส้นไม้ซ้อนชั้นแบบคลาสสิก สวมใส่ในช่องรองเท้าของตัวละคร",
+          usage_en: "Classic polished black cap-toe Oxford dress shoes with warm tan leather lining, closed lacing, and stacked heel. Equips in the character Shoes slot.",
+          maxStack: 1
+        },
+        "DRESS_BOOTS": {
+          id: "DRESS_BOOTS",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "shoes",
+          name_th: "รองเท้าบูทหนัง Dress Boots",
+          name_en: "Cap-Toe Dress Boots",
+          icon: "🥾",
+          actionType: "EQUIP_SHOES",
+          usage_th: "รองเท้าบูทหนังแท้สีดำเงาทรง Cap-Toe Balmoral Dress Boots หุ้มข้อสูงร้อยเชือกแบบปิด 7 ชั้นบนพื้นฐานรองเท้า Oxford พร้อมขอบเย็บและส้นไม้ซ้อนชั้น สวมใส่ในช่องรองเท้าของตัวละคร",
+          usage_en: "High-shaft polished black cap-toe Balmoral dress boots built on the Oxford last, featuring 7-bar closed lacing, stitched quarter piping, tan lining, Goodyear welt, and stacked heel. Equips in the character Shoes slot.",
+          maxStack: 1
+        },
         "WHITE_SHIRT_SHORT": {
           id: "WHITE_SHIRT_SHORT",
           category: ITEM_CATEGORIES.HOLDABLE,
@@ -7378,6 +7671,53 @@ function buildCollectibles(count, seed) {
       };
       window.ItemRegistry["WATER_BUCKET"] = window.ItemRegistry["water_bucket"];
 
+      let _tantoTemplateCache = null;
+      let _shirasayaTemplateCache = null;
+      const _aegisShiftTemplateCache = {};
+
+      function _applyWeaponTemplate(tpl, s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices) {
+        const lv = tpl.vertices;
+        const lc = tpl.colors;
+        const li = isFlipped ? tpl.indicesFlipped : tpl.indices;
+        const baseIdx = vertices.length / 3;
+
+        const px = p[0], py = p[1], pz = p[2];
+        const u0 = uAxis[0] * s, u1 = uAxis[1] * s, u2 = uAxis[2] * s;
+        const v0 = vAxis[0] * s, v1 = vAxis[1] * s, v2 = vAxis[2] * s;
+        const w0 = wAxis[0] * s, w1 = wAxis[1] * s, w2 = wAxis[2] * s;
+
+        for (let i = 0, len = lv.length; i < len; i += 3) {
+          const a = lv[i], u = lv[i + 1], t = lv[i + 2];
+          vertices.push(
+            px + u0 * a + v0 * u + w0 * t,
+            py + u1 * a + v1 * u + w1 * t,
+            pz + u2 * a + v2 * u + w2 * t
+          );
+          colors.push(lc[i], lc[i + 1], lc[i + 2]);
+        }
+
+        for (let i = 0, len = li.length; i < len; i++) {
+          indices.push(baseIdx + li[i]);
+        }
+      }
+
+      function _bakeWeaponTemplate(buildFn) {
+        const tv = [], tc = [], ti = [];
+        buildFn(tv, tc, ti);
+        const tiFlip = new Uint16Array(ti.length);
+        for (let i = 0; i < ti.length; i += 3) {
+          tiFlip[i] = ti[i];
+          tiFlip[i + 1] = ti[i + 2];
+          tiFlip[i + 2] = ti[i + 1];
+        }
+        return {
+          vertices: new Float32Array(tv),
+          colors: new Float32Array(tc),
+          indices: new Uint16Array(ti),
+          indicesFlipped: tiFlip
+        };
+      }
+
       window.buildTantoModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices) {
         const s = scale || 0.35;
         const p = basePos || [0, 0, 0];
@@ -7408,100 +7748,68 @@ function buildCollectibles(count, seed) {
                     (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
         const isFlipped = det < 0;
 
-        const pt = (a, u, t) => [
-          p[0] + (uAxis[0] * a + vAxis[0] * u + wAxis[0] * t) * s,
-          p[1] + (uAxis[1] * a + vAxis[1] * u + wAxis[1] * t) * s,
-          p[2] + (uAxis[2] * a + vAxis[2] * u + wAxis[2] * t) * s
-        ];
+        if (!_tantoTemplateCache) {
+          _tantoTemplateCache = _bakeWeaponTemplate((tv, tc, ti) => {
+            const u0 = [1, 0, 0], v0 = [0, 1, 0], w0 = [0, 0, 1];
+            const pt = (a, u, t) => [a, u, t];
+            const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+              const verts = [
+                [a0, u0Min, -t0], [a1, u1Min, -t1], [a1, u1Min, t1], [a0, u0Min, t0],
+                [a0, u0Max, -t0], [a1, u1Max, -t1], [a1, u1Max, t1], [a0, u0Max, t0]
+              ];
+              const baseIdx = tv.length / 3;
+              for (let i = 0; i < 8; i++) {
+                tv.push(verts[i][0], verts[i][1], verts[i][2]);
+                tc.push(col[0], col[1], col[2]);
+              }
+              const idxPattern = [
+                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+                0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
+                0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
+              ];
+              for (let i = 0; i < idxPattern.length; i++) {
+                ti.push(baseIdx + idxPattern[i]);
+              }
+            };
 
-        // Tapered hexhedron builder matching addBox winding rules
-        const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-          const verts = [
-            pt(a0, u0Min, -t0), // 0: bottom-back-left
-            pt(a1, u1Min, -t1), // 1: bottom-front-left
-            pt(a1, u1Min,  t1), // 2: bottom-front-right
-            pt(a0, u0Min,  t0), // 3: bottom-back-right
-            pt(a0, u0Max, -t0), // 4: top-back-left
-            pt(a1, u1Max, -t1), // 5: top-front-left
-            pt(a1, u1Max,  t1), // 6: top-front-right
-            pt(a0, u0Max,  t0)  // 7: top-back-right
-          ];
-          const baseIdx = vertices.length / 3;
-          for (let i = 0; i < 8; i++) {
-            vertices.push(verts[i][0], verts[i][1], verts[i][2]);
-            colors.push(col[0], col[1], col[2]);
-          }
-          const idxPattern = isFlipped ? [
-            0, 1, 2, 0, 2, 3,
-            4, 6, 5, 4, 7, 6,
-            0, 5, 1, 0, 4, 5,
-            2, 7, 3, 2, 6, 7,
-            0, 3, 7, 0, 7, 4,
-            1, 6, 2, 1, 5, 6
-          ] : [
-            0, 2, 1, 0, 3, 2,
-            4, 5, 6, 4, 6, 7,
-            0, 1, 5, 0, 5, 4,
-            2, 3, 7, 2, 7, 6,
-            0, 7, 3, 0, 4, 7,
-            1, 2, 6, 1, 6, 5
-          ];
-          for (let i = 0; i < idxPattern.length; i++) {
-            indices.push(baseIdx + idxPattern[i]);
-          }
-        };
+            const gripDark = [0.10, 0.11, 0.14];
+            const gripRib = [0.18, 0.20, 0.24];
+            const metalGuard = [0.26, 0.29, 0.34];
+            const habakiSteel = [0.34, 0.38, 0.44];
+            const obsidianBody = [0.11, 0.12, 0.16];
+            const spineSteel = [0.22, 0.25, 0.31];
+            const glowCyan = [0.22, 0.95, 0.88];
+            const glowCore = [0.58, 1.00, 0.96];
 
-        const gripDark = [0.10, 0.11, 0.14];
-        const gripRib = [0.18, 0.20, 0.24];
-        const metalGuard = [0.26, 0.29, 0.34];
-        const habakiSteel = [0.34, 0.38, 0.44];
-        const obsidianBody = [0.11, 0.12, 0.16];
-        const spineSteel = [0.22, 0.25, 0.31];
-        const glowCyan = [0.22, 0.95, 0.88];
-        const glowCore = [0.58, 1.00, 0.96];
+            addBox(pt(-0.24, 0.008, 0), 0.045, 0.068, 0.044, metalGuard, u0, v0, w0, tv, tc, ti);
+            addBox(pt(-0.265, 0.008, 0), 0.014, 0.052, 0.032, spineSteel, u0, v0, w0, tv, tc, ti);
+            addBox(pt(-0.06, 0.008, 0), 0.32, 0.064, 0.040, gripDark, u0, v0, w0, tv, tc, ti);
+            for (let i = 0; i < 6; i++) {
+              const rx = -0.185 + i * 0.046;
+              addBox(pt(rx, 0.008, 0), 0.022, 0.070, 0.044, gripRib, u0, v0, w0, tv, tc, ti);
+            }
+            addBox(pt(0.065, 0.010, 0), 0.028, 0.022, 0.046, glowCyan, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.125, 0.012, 0), 0.040, 0.112, 0.076, metalGuard, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.125, 0.068, 0), 0.026, 0.012, 0.040, glowCyan, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.180, 0.012, 0), 0.070, 0.072, 0.044, habakiSteel, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.180, 0.012, 0), 0.030, 0.078, 0.048, spineSteel, u0, v0, w0, tv, tc, ti);
 
-        // 1. Pommel Butt Cap (gunmetal + dark inset)
-        addBox(pt(-0.24, 0.008, 0), 0.045 * s, 0.068 * s, 0.044 * s, metalGuard, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(-0.265, 0.008, 0), 0.014 * s, 0.052 * s, 0.032 * s, spineSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
+            addTaperedPrism(0.215, -0.024, -0.004, 0.018, 0.595, -0.020, -0.004, 0.014, spineSteel);
+            addTaperedPrism(0.215, -0.004,  0.036, 0.016, 0.595, -0.004,  0.034, 0.012, obsidianBody);
+            addTaperedPrism(0.215,  0.036,  0.049, 0.008, 0.595,  0.034,  0.046, 0.006, glowCyan);
+            addTaperedPrism(0.320,  0.046,  0.053, 0.004, 0.595,  0.044,  0.050, 0.003, glowCore);
 
-        // 2. Tactical Ribbed Grip (Tsuka) centered neatly in hand (-0.22 .. +0.10)
-        addBox(pt(-0.06, 0.008, 0), 0.32 * s, 0.064 * s, 0.040 * s, gripDark, uAxis, vAxis, wAxis, vertices, colors, indices);
-        // Segmented tactical grip ribs
-        for (let i = 0; i < 6; i++) {
-          const rx = -0.185 + i * 0.046;
-          addBox(pt(rx, 0.008, 0), 0.022 * s, 0.070 * s, 0.044 * s, gripRib, uAxis, vAxis, wAxis, vertices, colors, indices);
+            addBox(pt(0.295, 0.004, 0), 0.120, 0.007, 0.036, glowCyan, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.385, 0.020, 0), 0.070, 0.006, 0.034, glowCyan, u0, v0, w0, tv, tc, ti);
+
+            addTaperedPrism(0.595, -0.020, -0.004, 0.014, 0.775, -0.020, -0.011, 0.003, spineSteel);
+            addTaperedPrism(0.595, -0.004,  0.034, 0.012, 0.775, -0.018, -0.009, 0.002, obsidianBody);
+            addTaperedPrism(0.595,  0.034,  0.046, 0.006, 0.775, -0.015, -0.007, 0.002, glowCyan);
+            addTaperedPrism(0.595,  0.044,  0.051, 0.003, 0.775, -0.012, -0.005, 0.0015, glowCore);
+          });
         }
-        // Subtle cyan glowing energy node on upper grip near guard
-        addBox(pt(0.065, 0.010, 0), 0.028 * s, 0.022 * s, 0.046 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
 
-        // 3. Guard (Tsuba) oval-hex flanged collar (+0.105 .. +0.145)
-        addBox(pt(0.125, 0.012, 0), 0.040 * s, 0.112 * s, 0.076 * s, metalGuard, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.125, 0.068, 0), 0.026 * s, 0.012 * s, 0.040 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        // 4. Habaki (carved metallic blade collar) (+0.145 .. +0.215)
-        addBox(pt(0.180, 0.012, 0), 0.070 * s, 0.072 * s, 0.044 * s, habakiSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.180, 0.012, 0), 0.030 * s, 0.078 * s, 0.048 * s, spineSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        // 5. Straight Tanto Blade Spine & Main Obsidian Body (+0.215 .. +0.595)
-        // Upper/back straight spine (-u side)
-        addTaperedPrism(0.215, -0.024, -0.004, 0.018, 0.595, -0.020, -0.004, 0.014, spineSteel);
-        // Dark obsidian blade core
-        addTaperedPrism(0.215, -0.004,  0.036, 0.016, 0.595, -0.004,  0.034, 0.012, obsidianBody);
-        // Sharp glowing cyan-teal bevel cutting edge (+u side)
-        addTaperedPrism(0.215,  0.036,  0.049, 0.008, 0.595,  0.034,  0.046, 0.006, glowCyan);
-        addTaperedPrism(0.320,  0.046,  0.053, 0.004, 0.595,  0.044,  0.050, 0.003, glowCore);
-
-        // Glowing circuit trace lines etched on both blade faces (matching ref)
-        addBox(pt(0.295, 0.004, 0), 0.120 * s, 0.007 * s, 0.036 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.385, 0.020, 0), 0.070 * s, 0.006 * s, 0.034 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        // 6. Angled Tanto Point (Kissaki) (+0.595 .. +0.775)
-        // Straight spine continues to tip (-u), while cutting edge sweeps sharply back to the spine tip
-        addTaperedPrism(0.595, -0.020, -0.004, 0.014, 0.775, -0.020, -0.011, 0.003, spineSteel);
-        addTaperedPrism(0.595, -0.004,  0.034, 0.012, 0.775, -0.018, -0.009, 0.002, obsidianBody);
-        // Glowing cyan diagonal tantō cutting edge bevel sweeping cleanly to the razor tip
-        addTaperedPrism(0.595,  0.034,  0.046, 0.006, 0.775, -0.015, -0.007, 0.002, glowCyan);
-        addTaperedPrism(0.595,  0.044,  0.051, 0.003, 0.775, -0.012, -0.005, 0.0015, glowCore);
+        _applyWeaponTemplate(_tantoTemplateCache, s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices);
       };
 
       window.buildShirasayaModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices) {
@@ -7534,95 +7842,73 @@ function buildCollectibles(count, seed) {
                     (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
         const isFlipped = det < 0;
 
-        const pt = (a, u, t) => [
-          p[0] + (uAxis[0] * a + vAxis[0] * u + wAxis[0] * t) * s,
-          p[1] + (uAxis[1] * a + vAxis[1] * u + wAxis[1] * t) * s,
-          p[2] + (uAxis[2] * a + vAxis[2] * u + wAxis[2] * t) * s
-        ];
+        if (!_shirasayaTemplateCache) {
+          _shirasayaTemplateCache = _bakeWeaponTemplate((tv, tc, ti) => {
+            const u0 = [1, 0, 0], v0 = [0, 1, 0], w0 = [0, 0, 1];
+            const pt = (a, u, t) => [a, u, t];
+            const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+              const verts = [
+                [a0, u0Min, -t0], [a1, u1Min, -t1], [a1, u1Min, t1], [a0, u0Min, t0],
+                [a0, u0Max, -t0], [a1, u1Max, -t1], [a1, u1Max, t1], [a0, u0Max, t0]
+              ];
+              const baseIdx = tv.length / 3;
+              for (let i = 0; i < 8; i++) {
+                tv.push(verts[i][0], verts[i][1], verts[i][2]);
+                tc.push(col[0], col[1], col[2]);
+              }
+              const idxPattern = [
+                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+                0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
+                0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
+              ];
+              for (let i = 0; i < idxPattern.length; i++) {
+                ti.push(baseIdx + idxPattern[i]);
+              }
+            };
 
-        const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-          const verts = [
-            pt(a0, u0Min, -t0),
-            pt(a1, u1Min, -t1),
-            pt(a1, u1Min,  t1),
-            pt(a0, u0Min,  t0),
-            pt(a0, u0Max, -t0),
-            pt(a1, u1Max, -t1),
-            pt(a1, u1Max,  t1),
-            pt(a0, u0Max,  t0)
-          ];
-          const baseIdx = vertices.length / 3;
-          for (let i = 0; i < 8; i++) {
-            vertices.push(verts[i][0], verts[i][1], verts[i][2]);
-            colors.push(col[0], col[1], col[2]);
-          }
-          const idxPattern = isFlipped ? [
-            0, 1, 2, 0, 2, 3,
-            4, 6, 5, 4, 7, 6,
-            0, 5, 1, 0, 4, 5,
-            2, 7, 3, 2, 6, 7,
-            0, 3, 7, 0, 7, 4,
-            1, 6, 2, 1, 5, 6
-          ] : [
-            0, 2, 1, 0, 3, 2,
-            4, 5, 6, 4, 6, 7,
-            0, 1, 5, 0, 5, 4,
-            2, 3, 7, 2, 7, 6,
-            0, 7, 3, 0, 4, 7,
-            1, 2, 6, 1, 6, 5
-          ];
-          for (let i = 0; i < idxPattern.length; i++) {
-            indices.push(baseIdx + idxPattern[i]);
-          }
-        };
+            const gripDark = [0.09, 0.10, 0.13];
+            const gripWrap = [0.16, 0.18, 0.22];
+            const kashiraMetal = [0.28, 0.31, 0.36];
+            const collarSteel = [0.36, 0.40, 0.46];
+            const obsidianBody = [0.10, 0.11, 0.15];
+            const spineSteel = [0.24, 0.28, 0.34];
+            const glowCyan = [0.22, 0.95, 0.88];
+            const glowCore = [0.64, 1.00, 0.97];
 
-        const gripDark = [0.09, 0.10, 0.13];
-        const gripWrap = [0.16, 0.18, 0.22];
-        const kashiraMetal = [0.28, 0.31, 0.36];
-        const collarSteel = [0.36, 0.40, 0.46];
-        const obsidianBody = [0.10, 0.11, 0.15];
-        const spineSteel = [0.24, 0.28, 0.34];
-        const glowCyan = [0.22, 0.95, 0.88];
-        const glowCore = [0.64, 1.00, 0.97];
+            addBox(pt(-0.415, 0.006, 0), 0.032, 0.062, 0.042, kashiraMetal, u0, v0, w0, tv, tc, ti);
+            addBox(pt(-0.12, 0.006, 0), 0.56, 0.058, 0.038, gripDark, u0, v0, w0, tv, tc, ti);
+            for (let i = 0; i < 10; i++) {
+              const rx = -0.365 + i * 0.052;
+              addBox(pt(rx, 0.006, 0), 0.024, 0.064, 0.042, gripWrap, u0, v0, w0, tv, tc, ti);
+            }
 
-        // 1. Long Katana / Shirasaya Tsuka Handle (-0.40 .. +0.16)
-        addBox(pt(-0.415, 0.006, 0), 0.032 * s, 0.062 * s, 0.042 * s, kashiraMetal, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(-0.12, 0.006, 0), 0.56 * s, 0.058 * s, 0.038 * s, gripDark, uAxis, vAxis, wAxis, vertices, colors, indices);
-        for (let i = 0; i < 10; i++) {
-          const rx = -0.365 + i * 0.052;
-          addBox(pt(rx, 0.006, 0), 0.024 * s, 0.064 * s, 0.042 * s, gripWrap, uAxis, vAxis, wAxis, vertices, colors, indices);
+            addBox(pt(0.185, 0.008, 0), 0.050, 0.072, 0.044, collarSteel, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.220, 0.008, 0), 0.022, 0.068, 0.042, glowCyan, u0, v0, w0, tv, tc, ti);
+
+            const segs = [
+              { a0: 0.23, u0:  0.000, t0: 0.016, a1: 0.58, u1: -0.012, t1: 0.014 },
+              { a0: 0.58, u0: -0.012, t0: 0.014, a1: 0.94, u1: -0.034, t1: 0.012 },
+              { a0: 0.94, u0: -0.034, t0: 0.012, a1: 1.28, u1: -0.064, t1: 0.009 }
+            ];
+            for (let i = 0; i < segs.length; i++) {
+              const sg = segs[i];
+              addTaperedPrism(sg.a0, -0.024 + sg.u0, -0.005 + sg.u0, sg.t0, sg.a1, -0.022 + sg.u1, -0.005 + sg.u1, sg.t1, spineSteel);
+              addTaperedPrism(sg.a0, -0.005 + sg.u0,  0.032 + sg.u0, sg.t0 * 0.9, sg.a1, -0.005 + sg.u1,  0.028 + sg.u1, sg.t1 * 0.9, obsidianBody);
+              addTaperedPrism(sg.a0,  0.032 + sg.u0,  0.044 + sg.u0, sg.t0 * 0.5, sg.a1,  0.028 + sg.u1,  0.040 + sg.u1, sg.t1 * 0.5, glowCyan);
+              addTaperedPrism(sg.a0,  0.042 + sg.u0,  0.048 + sg.u0, sg.t0 * 0.25, sg.a1,  0.038 + sg.u1,  0.044 + sg.u1, sg.t1 * 0.25, glowCore);
+            }
+
+            addBox(pt(0.39, 0.002, 0), 0.220, 0.006, 0.032, glowCyan, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.72, -0.018, 0), 0.160, 0.005, 0.026, glowCyan, u0, v0, w0, tv, tc, ti);
+
+            addTaperedPrism(1.28, -0.022 - 0.064, -0.005 - 0.064, 0.009, 1.48, -0.022 - 0.088, -0.014 - 0.088, 0.0025, spineSteel);
+            addTaperedPrism(1.28, -0.005 - 0.064,  0.028 - 0.064, 0.008, 1.48, -0.020 - 0.088, -0.011 - 0.088, 0.002, obsidianBody);
+            addTaperedPrism(1.28,  0.028 - 0.064,  0.040 - 0.064, 0.0045, 1.48, -0.017 - 0.088, -0.008 - 0.088, 0.0015, glowCyan);
+            addTaperedPrism(1.28,  0.038 - 0.064,  0.044 - 0.064, 0.0025, 1.48, -0.014 - 0.088, -0.006 - 0.088, 0.001, glowCore);
+          });
         }
 
-        // 2. Clean Shirasaya Flush Guard / Habaki Collar (+0.16 .. +0.24)
-        addBox(pt(0.185, 0.008, 0), 0.050 * s, 0.072 * s, 0.044 * s, collarSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.220, 0.008, 0), 0.022 * s, 0.068 * s, 0.042 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        // 3. Long Gently Curved Shirasaya Blade (+0.23 .. +1.28) with subtle katana sori curvature (-u arch)
-        const segs = [
-          { a0: 0.23, u0:  0.000, t0: 0.016, a1: 0.58, u1: -0.012, t1: 0.014 },
-          { a0: 0.58, u0: -0.012, t0: 0.014, a1: 0.94, u1: -0.034, t1: 0.012 },
-          { a0: 0.94, u0: -0.034, t0: 0.012, a1: 1.28, u1: -0.064, t1: 0.009 }
-        ];
-        for (let i = 0; i < segs.length; i++) {
-          const sg = segs[i];
-          // Spine (-u side)
-          addTaperedPrism(sg.a0, -0.024 + sg.u0, -0.005 + sg.u0, sg.t0, sg.a1, -0.022 + sg.u1, -0.005 + sg.u1, sg.t1, spineSteel);
-          // Dark obsidian fuller core
-          addTaperedPrism(sg.a0, -0.005 + sg.u0,  0.032 + sg.u0, sg.t0 * 0.9, sg.a1, -0.005 + sg.u1,  0.028 + sg.u1, sg.t1 * 0.9, obsidianBody);
-          // Glowing cyan razor cutting edge (+u side)
-          addTaperedPrism(sg.a0,  0.032 + sg.u0,  0.044 + sg.u0, sg.t0 * 0.5, sg.a1,  0.028 + sg.u1,  0.040 + sg.u1, sg.t1 * 0.5, glowCyan);
-          addTaperedPrism(sg.a0,  0.042 + sg.u0,  0.048 + sg.u0, sg.t0 * 0.25, sg.a1,  0.038 + sg.u1,  0.044 + sg.u1, sg.t1 * 0.25, glowCore);
-        }
-
-        // Etched glowing cyber-lines along lower blade face
-        addBox(pt(0.39, 0.002, 0), 0.220 * s, 0.006 * s, 0.032 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.72, -0.018, 0), 0.160 * s, 0.005 * s, 0.026 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        // 4. Swept Katana Kissaki Tip (+1.28 .. +1.48)
-        addTaperedPrism(1.28, -0.022 - 0.064, -0.005 - 0.064, 0.009, 1.48, -0.022 - 0.088, -0.014 - 0.088, 0.0025, spineSteel);
-        addTaperedPrism(1.28, -0.005 - 0.064,  0.028 - 0.064, 0.008, 1.48, -0.020 - 0.088, -0.011 - 0.088, 0.002, obsidianBody);
-        addTaperedPrism(1.28,  0.028 - 0.064,  0.040 - 0.064, 0.0045, 1.48, -0.017 - 0.088, -0.008 - 0.088, 0.0015, glowCyan);
-        addTaperedPrism(1.28,  0.038 - 0.064,  0.044 - 0.064, 0.0025, 1.48, -0.014 - 0.088, -0.006 - 0.088, 0.001, glowCore);
+        _applyWeaponTemplate(_shirasayaTemplateCache, s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices);
       };
 
       window.ItemRegistry["tanto"] = {
@@ -7676,216 +7962,158 @@ function buildCollectibles(count, seed) {
                     (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
         const isFlipped = det < 0;
 
-        const pt = (a, u, t) => [
-          p[0] + (uAxis[0] * a + vAxis[0] * u + wAxis[0] * t) * s,
-          p[1] + (uAxis[1] * a + vAxis[1] * u + wAxis[1] * t) * s,
-          p[2] + (uAxis[2] * a + vAxis[2] * u + wAxis[2] * t) * s
-        ];
-
-        const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-          const verts = [
-            pt(a0, u0Min, -t0),
-            pt(a1, u1Min, -t1),
-            pt(a1, u1Min,  t1),
-            pt(a0, u0Min,  t0),
-            pt(a0, u0Max, -t0),
-            pt(a1, u1Max, -t1),
-            pt(a1, u1Max,  t1),
-            pt(a0, u0Max,  t0)
-          ];
-          const baseIdx = vertices.length / 3;
-          for (let i = 0; i < 8; i++) {
-            vertices.push(verts[i][0], verts[i][1], verts[i][2]);
-            colors.push(col[0], col[1], col[2]);
-          }
-          const idxPattern = isFlipped ? [
-            0, 1, 2, 0, 2, 3,
-            4, 6, 5, 4, 7, 6,
-            0, 5, 1, 0, 4, 5,
-            2, 7, 3, 2, 6, 7,
-            0, 3, 7, 0, 7, 4,
-            1, 6, 2, 1, 5, 6
-          ] : [
-            0, 2, 1, 0, 3, 2,
-            4, 5, 6, 4, 6, 7,
-            0, 1, 5, 0, 5, 4,
-            2, 3, 7, 2, 7, 6,
-            0, 7, 3, 0, 4, 7,
-            1, 2, 6, 1, 6, 5
-          ];
-          for (let i = 0; i < idxPattern.length; i++) {
-            indices.push(baseIdx + idxPattern[i]);
-          }
-        };
-
-        const gripDark = [0.10, 0.11, 0.14];
-        const gripRib = [0.17, 0.19, 0.23];
-        const gunmetal = [0.22, 0.25, 0.30];
-        const steelSilver = [0.56, 0.60, 0.66];
-        const darkBlade = [0.14, 0.16, 0.21];
-        const glowCyan = [0.20, 0.94, 0.92];
-        const glowCore = [0.68, 1.00, 0.98];
-
-        // 1. Handle Power Buffer Pommel & Carbon-Fiber Ribbed Grip (-0.27 .. +0.16)
-        addBox(pt(-0.245, 0, 0), 0.042 * s, 0.068 * s, 0.056 * s, gunmetal, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(-0.270, 0, 0), 0.020 * s, 0.054 * s, 0.044 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(-0.252, 0, 0), 0.036 * s, 0.014 * s, 0.060 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        addBox(pt(-0.025, 0, 0), 0.39 * s, 0.054 * s, 0.044 * s, gripDark, uAxis, vAxis, wAxis, vertices, colors, indices);
-        for (let i = 0; i < 7; i++) {
-          const rx = -0.18 + i * 0.052;
-          addBox(pt(rx, 0, 0), 0.024 * s, 0.060 * s, 0.048 * s, gripRib, uAxis, vAxis, wAxis, vertices, colors, indices);
-        }
-
-        // 2. Stepped Neck Collar & Vertical Energy Channel (+0.16 .. +0.35)
-        addBox(pt(0.180, 0, 0), 0.044 * s, 0.094 * s, 0.064 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.265, 0, 0), 0.145 * s, 0.082 * s, 0.054 * s, gunmetal, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.250, 0, 0), 0.165 * s, 0.018 * s, 0.062 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        // 3. Central Magnetic Latching Hub (a = 0.37)
-        addBox(pt(0.370, 0, 0), 0.132 * s, 0.132 * s, 0.066 * s, gunmetal, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.370, 0, 0), 0.104 * s, 0.104 * s, 0.072 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.370, 0, 0), 0.076 * s, 0.076 * s, 0.078 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-        addBox(pt(0.370, 0, 0), 0.044 * s, 0.044 * s, 0.084 * s, glowCore, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-        const drawCurvedPickArm = (signU) => {
-          // Seg 1: Shoulder root near hub
-          const u1a = signU * 0.055, u1b = signU * 0.215;
-          addTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
-                          0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
-          addTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
-                          0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
-          // Seg 2: Arched dark armored arm + cyan rune inlay
-          const u2a = signU * 0.205, u2b = signU * 0.385;
-          addTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
-                          0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
-          addBox(pt(0.365, signU * 0.255, 0), 0.014 * s, 0.088 * s, 0.042 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-          // Seg 3: Curved tapered pick point arching downward
-          addTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
-                          0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
-          addTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
-                          0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
-        };
-
-        if (mode === "greatsword") {
-          // 4A. Greatsword Mode: Twin arms swept outward/upward-winged as crossguard + magnetic latch clamps + massive blade
-          for (let si = -1; si <= 1; si += 2) {
-            // Winged crossguard module arching from hub outward/upward
-            addTaperedPrism(0.325, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.022,
-                            0.380, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.014, gunmetal);
-            addTaperedPrism(0.345, Math.min(si * 0.21, si * 0.38), Math.max(si * 0.21, si * 0.38), 0.016,
-                            0.425, Math.min(si * 0.23, si * 0.42), Math.max(si * 0.23, si * 0.42), 0.009, darkBlade);
-            addTaperedPrism(0.390, Math.min(si * 0.36, si * 0.46), Math.max(si * 0.36, si * 0.46), 0.010,
-                            0.475, Math.min(si * 0.46, si * 0.48), Math.max(si * 0.46, si * 0.48), 0.002, steelSilver);
-            addBox(pt(0.375, si * 0.245, 0), 0.015 * s, 0.075 * s, 0.036 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-
-            // Precision magnetic latching hub clamps flanking the blade root
-            addBox(pt(0.475, si * 0.095, 0), 0.115 * s, 0.056 * s, 0.068 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
-            addBox(pt(0.475, si * 0.078, 0), 0.090 * s, 0.018 * s, 0.074 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
-          }
-
-          // Massive Broad Greatsword Blade (+0.41 .. +1.46)
-          // Inner gunmetal fuller body
-          addTaperedPrism(0.410, -0.066, 0.066, 0.022, 1.440, -0.056, 0.056, 0.017, gunmetal);
-          // Outer bright silver-steel beveled cutting edges (+u and -u)
-          addTaperedPrism(0.410,  0.066, 0.145, 0.014, 1.440,  0.056, 0.128, 0.007, steelSilver);
-          addTaperedPrism(0.410, -0.145,-0.066, 0.014, 1.440, -0.128,-0.056, 0.007, steelSilver);
-          // Razor glowing edge rim highlight
-          addTaperedPrism(0.430,  0.138, 0.152, 0.004, 1.440,  0.122, 0.135, 0.003, glowCore);
-          addTaperedPrism(0.430, -0.152,-0.138, 0.004, 1.440, -0.135,-0.122, 0.003, glowCore);
-          // Primary Cyan Energy Channel running straight up the center of the blade
-          addTaperedPrism(0.425, -0.018, 0.018, 0.025, 1.430, -0.013, 0.013, 0.020, glowCyan);
-          addTaperedPrism(0.435, -0.008, 0.008, 0.027, 1.410, -0.006, 0.006, 0.022, glowCore);
-
-          // Broad Spear-Point Greatsword Tip (+1.44 .. +1.73)
-          addTaperedPrism(1.440, -0.056, 0.056, 0.017, 1.725, -0.006, 0.006, 0.003, gunmetal);
-          addTaperedPrism(1.440,  0.056, 0.128, 0.007, 1.730,  0.000, 0.008, 0.002, steelSilver);
-          addTaperedPrism(1.440, -0.128,-0.056, 0.007, 1.730, -0.008, 0.000, 0.002, steelSilver);
-          addTaperedPrism(1.430, -0.013, 0.013, 0.020, 1.560, -0.004, 0.004, 0.008, glowCyan);
-        } else if (mode === "axe") {
-          // 4B. Axe Mode: Exact same pickaxe arms folded downward on both sides without altering model shape
-          const drawFoldedPickArm = (signU) => {
-            const pivotA = 0.355, pivotU = signU * 0.055;
-            const foldAngle = 1.18 * signU;
-            const cosF = Math.cos(foldAngle), sinF = Math.sin(foldAngle);
-            const rotPt = (a, u, t) => {
-              const da = a - pivotA;
-              const du = u - pivotU;
-              const aRot = pivotA + da * cosF - du * sinF;
-              const uRot = pivotU + du * cosF + da * sinF;
-              return pt(aRot, uRot, t);
-            };
-            const rotUAxis = [
-              uAxis[0] * cosF + vAxis[0] * sinF,
-              uAxis[1] * cosF + vAxis[1] * sinF,
-              uAxis[2] * cosF + vAxis[2] * sinF
-            ];
-            const rotVAxis = [
-              -uAxis[0] * sinF + vAxis[0] * cosF,
-              -uAxis[1] * sinF + vAxis[1] * cosF,
-              -uAxis[2] * sinF + vAxis[2] * cosF
-            ];
-            const addRotTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+        const cacheKey = mode || "pickaxe";
+        if (!_aegisShiftTemplateCache[cacheKey]) {
+          _aegisShiftTemplateCache[cacheKey] = _bakeWeaponTemplate((tv, tc, ti) => {
+            const u0 = [1, 0, 0], v0 = [0, 1, 0], w0 = [0, 0, 1];
+            const pt = (a, u, t) => [a, u, t];
+            const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
               const verts = [
-                rotPt(a0, u0Min, -t0),
-                rotPt(a1, u1Min, -t1),
-                rotPt(a1, u1Min,  t1),
-                rotPt(a0, u0Min,  t0),
-                rotPt(a0, u0Max, -t0),
-                rotPt(a1, u1Max, -t1),
-                rotPt(a1, u1Max,  t1),
-                rotPt(a0, u0Max,  t0)
+                [a0, u0Min, -t0], [a1, u1Min, -t1], [a1, u1Min, t1], [a0, u0Min, t0],
+                [a0, u0Max, -t0], [a1, u1Max, -t1], [a1, u1Max, t1], [a0, u0Max, t0]
               ];
-              const baseIdx = vertices.length / 3;
+              const baseIdx = tv.length / 3;
               for (let i = 0; i < 8; i++) {
-                vertices.push(verts[i][0], verts[i][1], verts[i][2]);
-                colors.push(col[0], col[1], col[2]);
+                tv.push(verts[i][0], verts[i][1], verts[i][2]);
+                tc.push(col[0], col[1], col[2]);
               }
-              const idxPattern = isFlipped ? [
-                0, 1, 2, 0, 2, 3,
-                4, 6, 5, 4, 7, 6,
-                0, 5, 1, 0, 4, 5,
-                2, 7, 3, 2, 6, 7,
-                0, 3, 7, 0, 7, 4,
-                1, 6, 2, 1, 5, 6
-              ] : [
-                0, 2, 1, 0, 3, 2,
-                4, 5, 6, 4, 6, 7,
-                0, 1, 5, 0, 5, 4,
-                2, 3, 7, 2, 7, 6,
-                0, 7, 3, 0, 4, 7,
-                1, 2, 6, 1, 6, 5
+              const idxPattern = [
+                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+                0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
+                0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
               ];
               for (let i = 0; i < idxPattern.length; i++) {
-                indices.push(baseIdx + idxPattern[i]);
+                ti.push(baseIdx + idxPattern[i]);
               }
             };
 
-            // Exact same Seg 1, Seg 2, Seg 3 as drawCurvedPickArm
-            const u1a = signU * 0.055, u1b = signU * 0.215;
-            addRotTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
-                               0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
-            addRotTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
-                               0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
-            const u2a = signU * 0.205, u2b = signU * 0.385;
-            addRotTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
-                               0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
-            addBox(rotPt(0.365, signU * 0.255, 0), 0.014 * s, 0.088 * s, 0.042 * s, glowCyan, rotUAxis, rotVAxis, wAxis, vertices, colors, indices);
-            addRotTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
-                               0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
-            addRotTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
-                               0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
-          };
-          drawFoldedPickArm(1);
-          drawFoldedPickArm(-1);
-          addBox(pt(0.435, 0, 0), 0.032 * s, 0.125 * s, 0.048 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
-        } else {
-          // 4C. Pickaxe Mode (default): Symmetrical twin curved pickaxe blades
-          drawCurvedPickArm(1);
-          drawCurvedPickArm(-1);
-          // Top central ridge cap above hub
-          addBox(pt(0.435, 0, 0), 0.032 * s, 0.125 * s, 0.048 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+            const gripDark = [0.10, 0.11, 0.14];
+            const gripRib = [0.17, 0.19, 0.23];
+            const gunmetal = [0.22, 0.25, 0.30];
+            const steelSilver = [0.56, 0.60, 0.66];
+            const darkBlade = [0.14, 0.16, 0.21];
+            const glowCyan = [0.20, 0.94, 0.92];
+            const glowCore = [0.68, 1.00, 0.98];
+
+            addBox(pt(-0.245, 0, 0), 0.042, 0.068, 0.056, gunmetal, u0, v0, w0, tv, tc, ti);
+            addBox(pt(-0.270, 0, 0), 0.020, 0.054, 0.044, steelSilver, u0, v0, w0, tv, tc, ti);
+            addBox(pt(-0.252, 0, 0), 0.036, 0.014, 0.060, glowCyan, u0, v0, w0, tv, tc, ti);
+
+            addBox(pt(-0.025, 0, 0), 0.39, 0.054, 0.044, gripDark, u0, v0, w0, tv, tc, ti);
+            for (let i = 0; i < 7; i++) {
+              const rx = -0.18 + i * 0.052;
+              addBox(pt(rx, 0, 0), 0.024, 0.060, 0.048, gripRib, u0, v0, w0, tv, tc, ti);
+            }
+
+            addBox(pt(0.180, 0, 0), 0.044, 0.094, 0.064, steelSilver, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.265, 0, 0), 0.145, 0.082, 0.054, gunmetal, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.250, 0, 0), 0.165, 0.018, 0.062, glowCyan, u0, v0, w0, tv, tc, ti);
+
+            addBox(pt(0.370, 0, 0), 0.132, 0.132, 0.066, gunmetal, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.370, 0, 0), 0.104, 0.104, 0.072, steelSilver, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.370, 0, 0), 0.076, 0.076, 0.078, glowCyan, u0, v0, w0, tv, tc, ti);
+            addBox(pt(0.370, 0, 0), 0.044, 0.044, 0.084, glowCore, u0, v0, w0, tv, tc, ti);
+
+            const drawCurvedPickArm = (signU) => {
+              const u1a = signU * 0.055, u1b = signU * 0.215;
+              addTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
+                              0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
+              addTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
+                              0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
+              const u2a = signU * 0.205, u2b = signU * 0.385;
+              addTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
+                              0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
+              addBox(pt(0.365, signU * 0.255, 0), 0.014, 0.088, 0.042, glowCyan, u0, v0, w0, tv, tc, ti);
+              addTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
+                              0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
+              addTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
+                              0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
+            };
+
+            if (cacheKey === "greatsword") {
+              for (let si = -1; si <= 1; si += 2) {
+                addTaperedPrism(0.325, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.022,
+                                0.380, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.014, gunmetal);
+                addTaperedPrism(0.345, Math.min(si * 0.21, si * 0.38), Math.max(si * 0.21, si * 0.38), 0.016,
+                                0.425, Math.min(si * 0.23, si * 0.42), Math.max(si * 0.23, si * 0.42), 0.009, darkBlade);
+                addTaperedPrism(0.390, Math.min(si * 0.36, si * 0.46), Math.max(si * 0.36, si * 0.46), 0.010,
+                                0.475, Math.min(si * 0.46, si * 0.48), Math.max(si * 0.46, si * 0.48), 0.002, steelSilver);
+                addBox(pt(0.375, si * 0.245, 0), 0.015, 0.075, 0.036, glowCyan, u0, v0, w0, tv, tc, ti);
+
+                addBox(pt(0.475, si * 0.095, 0), 0.115, 0.056, 0.068, steelSilver, u0, v0, w0, tv, tc, ti);
+                addBox(pt(0.475, si * 0.078, 0), 0.090, 0.018, 0.074, glowCyan, u0, v0, w0, tv, tc, ti);
+              }
+
+              addTaperedPrism(0.410, -0.066, 0.066, 0.022, 1.440, -0.056, 0.056, 0.017, gunmetal);
+              addTaperedPrism(0.410,  0.066, 0.145, 0.014, 1.440,  0.056, 0.128, 0.007, steelSilver);
+              addTaperedPrism(0.410, -0.145,-0.066, 0.014, 1.440, -0.128,-0.056, 0.007, steelSilver);
+              addTaperedPrism(0.430,  0.138, 0.152, 0.004, 1.440,  0.122, 0.135, 0.003, glowCore);
+              addTaperedPrism(0.430, -0.152,-0.138, 0.004, 1.440, -0.135,-0.122, 0.003, glowCore);
+              addTaperedPrism(0.425, -0.018, 0.018, 0.025, 1.430, -0.013, 0.013, 0.020, glowCyan);
+              addTaperedPrism(0.435, -0.008, 0.008, 0.027, 1.410, -0.006, 0.006, 0.022, glowCore);
+
+              addTaperedPrism(1.440, -0.056, 0.056, 0.017, 1.725, -0.006, 0.006, 0.003, gunmetal);
+              addTaperedPrism(1.440,  0.056, 0.128, 0.007, 1.730,  0.000, 0.008, 0.002, steelSilver);
+              addTaperedPrism(1.440, -0.128,-0.056, 0.007, 1.730, -0.008, 0.000, 0.002, steelSilver);
+              addTaperedPrism(1.430, -0.013, 0.013, 0.020, 1.560, -0.004, 0.004, 0.008, glowCyan);
+            } else if (cacheKey === "axe") {
+              const drawFoldedPickArm = (signU) => {
+                const pivotA = 0.355, pivotU = signU * 0.055;
+                const foldAngle = 1.18 * signU;
+                const cosF = Math.cos(foldAngle), sinF = Math.sin(foldAngle);
+                const rotPt = (a, u, t) => {
+                  const da = a - pivotA;
+                  const du = u - pivotU;
+                  return [pivotA + da * cosF - du * sinF, pivotU + du * cosF + da * sinF, t];
+                };
+                const rotUAxis = [cosF, sinF, 0];
+                const rotVAxis = [-sinF, cosF, 0];
+                const addRotTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+                  const verts = [
+                    rotPt(a0, u0Min, -t0), rotPt(a1, u1Min, -t1), rotPt(a1, u1Min, t1), rotPt(a0, u0Min, t0),
+                    rotPt(a0, u0Max, -t0), rotPt(a1, u1Max, -t1), rotPt(a1, u1Max, t1), rotPt(a0, u0Max, t0)
+                  ];
+                  const baseIdx = tv.length / 3;
+                  for (let i = 0; i < 8; i++) {
+                    tv.push(verts[i][0], verts[i][1], verts[i][2]);
+                    tc.push(col[0], col[1], col[2]);
+                  }
+                  const idxPattern = [
+                    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
+                    0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
+                    0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
+                  ];
+                  for (let i = 0; i < idxPattern.length; i++) {
+                    ti.push(baseIdx + idxPattern[i]);
+                  }
+                };
+
+                const u1a = signU * 0.055, u1b = signU * 0.215;
+                addRotTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
+                                   0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
+                addRotTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
+                                   0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
+                const u2a = signU * 0.205, u2b = signU * 0.385;
+                addRotTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
+                                   0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
+                addBox(rotPt(0.365, signU * 0.255, 0), 0.014, 0.088, 0.042, glowCyan, rotUAxis, rotVAxis, w0, tv, tc, ti);
+                addRotTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
+                                   0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
+                addRotTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
+                                   0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
+              };
+              drawFoldedPickArm(1);
+              drawFoldedPickArm(-1);
+              addBox(pt(0.435, 0, 0), 0.032, 0.125, 0.048, steelSilver, u0, v0, w0, tv, tc, ti);
+            } else {
+              drawCurvedPickArm(1);
+              drawCurvedPickArm(-1);
+              addBox(pt(0.435, 0, 0), 0.032, 0.125, 0.048, steelSilver, u0, v0, w0, tv, tc, ti);
+            }
+          });
         }
+
+        _applyWeaponTemplate(_aegisShiftTemplateCache[cacheKey], s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices);
       };
 
       window.ItemRegistry["aegis_shift"] = {

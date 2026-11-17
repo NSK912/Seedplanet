@@ -50,94 +50,109 @@
     }
   }
 
+  const _woodBedTemplateCache = [null, null, null];
+
+  function _getWoodBedTemplate(mode) {
+    if (_woodBedTemplateCache[mode]) return _woodBedTemplateCache[mode];
+
+    const isPreview = mode !== 0;
+    const previewColor = mode === 1 ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+    const s = 0.46;
+
+    const woodColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
+    const woodDarkColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
+    const woodHeadColor = isPreview ? previewColor : [0.50, 0.34, 0.18];
+    const mattressColor = isPreview ? previewColor : [0.91, 0.89, 0.85];
+    const pillowColor = isPreview ? previewColor : [0.94, 0.93, 0.90];
+    const blanketColor = isPreview ? previewColor : [0.44, 0.56, 0.68];
+
+    const LR = [1, 0, 0], LU = [0, 1, 0], LF = [0, 0, 1];
+    const tVerts = [], tCols = [], tInds = [];
+
+    // 1) 4 Wooden Legs
+    const legPositions = [
+      [-0.13 * s, 0.04 * s, -0.23 * s],
+      [ 0.13 * s, 0.04 * s, -0.23 * s],
+      [-0.13 * s, 0.04 * s,  0.23 * s],
+      [ 0.13 * s, 0.04 * s,  0.23 * s]
+    ];
+    for (let i = 0; i < 4; i++) {
+      drawBoxFallback(legPositions[i], 0.038 * s, 0.08 * s, 0.038 * s, woodDarkColor, LR, LU, LF, tVerts, tCols, tInds);
+    }
+
+    // 2) Bedframe Base Platform
+    drawBoxFallback([0, 0.08 * s, 0], 0.30 * s, 0.04 * s, 0.52 * s, woodColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 3) Headboard
+    drawBoxFallback([0, 0.17 * s, -0.245 * s], 0.32 * s, 0.20 * s, 0.032 * s, woodHeadColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 4) Footboard
+    drawBoxFallback([0, 0.12 * s, 0.245 * s], 0.32 * s, 0.10 * s, 0.032 * s, woodHeadColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 5) Soft Cotton Mattress
+    drawBoxFallback([0, 0.13 * s, 0], 0.27 * s, 0.075 * s, 0.46 * s, mattressColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 6) Soft Cotton Pillow
+    drawBoxFallback([0, 0.185 * s, -0.16 * s], 0.21 * s, 0.04 * s, 0.11 * s, pillowColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 7) Cotton Quilt / Blanket
+    drawBoxFallback([0, 0.17 * s, 0.05 * s], 0.276 * s, 0.02 * s, 0.32 * s, blanketColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    const tpl = {
+      verts: new Float32Array(tVerts),
+      cols: new Float32Array(tCols),
+      inds: new Uint16Array(tInds),
+      vertCount: tVerts.length / 3
+    };
+    _woodBedTemplateCache[mode] = tpl;
+    return tpl;
+  }
+
   window.ItemRegistry["wood_bed"] = {
     render: function(item, vertices, colors, indices, targetBuffer) {
-      const boxFunc = (typeof window !== "undefined" && typeof window.addBox === "function" && window.addBox !== drawBoxFallback)
-        ? window.addBox
-        : (typeof addBox === "function" ? addBox : drawBoxFallback);
-
       const p = item.position || [0, 0, 0];
       const r = item.R || [1, 0, 0];
       const f = item.F || [0, 0, 1];
       const n = item.normal || [0, 1, 0];
       const isPreview = item.isPreview;
       const isValid = item.isValidPlacement !== false;
-      const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+      const mode = isPreview ? (isValid ? 1 : 2) : 0;
 
-      const s = 0.46; // Scale factor sized so bed fits cleanly inside 0.30 wood_floor rooms without wall clipping
+      const tpl = _getWoodBedTemplate(mode);
+      const tVerts = tpl.verts;
+      const tCols = tpl.cols;
+      const tInds = tpl.inds;
+      const vCount = tpl.vertCount;
+      const baseIdx = vertices.length / 3;
 
-      // Colors
-      const woodColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
-      const woodDarkColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
-      const woodHeadColor = isPreview ? previewColor : [0.50, 0.34, 0.18];
-      const mattressColor = isPreview ? previewColor : [0.91, 0.89, 0.85];
-      const pillowColor = isPreview ? previewColor : [0.94, 0.93, 0.90];
-      const blanketColor = isPreview ? previewColor : [0.44, 0.56, 0.68];
+      const px = p[0], py = p[1], pz = p[2];
+      const rx = r[0], ry = r[1], rz = r[2];
+      const nx = n[0], ny = n[1], nz = n[2];
+      const fx = f[0], fy = f[1], fz = f[2];
+      const det = (ry * nz - rz * ny) * fx + (rz * nx - rx * nz) * fy + (rx * ny - ry * nx) * fz;
+      const isFlipped = det < 0;
 
-      // 1) 4 Wooden Legs (ขาเตียงไม้ทั้ง 4 มุม)
-      const legPositions = [
-        [-0.13 * s, 0.04 * s, -0.23 * s],
-        [ 0.13 * s, 0.04 * s, -0.23 * s],
-        [-0.13 * s, 0.04 * s,  0.23 * s],
-        [ 0.13 * s, 0.04 * s,  0.23 * s]
-      ];
-      for (let i = 0; i < 4; i++) {
-        const lp = legPositions[i];
-        const legCenter = [
-          p[0] + r[0] * lp[0] + n[0] * lp[1] + f[0] * lp[2],
-          p[1] + r[1] * lp[0] + n[1] * lp[1] + f[1] * lp[2],
-          p[2] + r[2] * lp[0] + n[2] * lp[1] + f[2] * lp[2]
-        ];
-        boxFunc(legCenter, 0.038 * s, 0.08 * s, 0.038 * s, woodDarkColor, r, n, f, vertices, colors, indices);
+      for (let i = 0; i < vCount; i++) {
+        const vi = i * 3;
+        const lx = tVerts[vi], ly = tVerts[vi + 1], lz = tVerts[vi + 2];
+        vertices.push(
+          px + rx * lx + nx * ly + fx * lz,
+          py + ry * lx + ny * ly + fy * lz,
+          pz + rz * lx + nz * ly + fz * lz
+        );
+        colors.push(tCols[vi], tCols[vi + 1], tCols[vi + 2]);
       }
 
-      // 2) Bedframe Base Platform (ฐานโครงเตียงไม้)
-      const basePos = [
-        p[0] + n[0] * (0.08 * s),
-        p[1] + n[1] * (0.08 * s),
-        p[2] + n[2] * (0.08 * s)
-      ];
-      boxFunc(basePos, 0.30 * s, 0.04 * s, 0.52 * s, woodColor, r, n, f, vertices, colors, indices);
-
-      // 3) Headboard (หัวเตียงไม้บานสูง)
-      const headPos = [
-        p[0] + n[0] * (0.17 * s) - f[0] * (0.245 * s),
-        p[1] + n[1] * (0.17 * s) - f[1] * (0.245 * s),
-        p[2] + n[2] * (0.17 * s) - f[2] * (0.245 * s)
-      ];
-      boxFunc(headPos, 0.32 * s, 0.20 * s, 0.032 * s, woodHeadColor, r, n, f, vertices, colors, indices);
-
-      // 4) Footboard (ปลายเตียงไม้บานเตี้ย)
-      const footPos = [
-        p[0] + n[0] * (0.12 * s) + f[0] * (0.245 * s),
-        p[1] + n[1] * (0.12 * s) + f[1] * (0.245 * s),
-        p[2] + n[2] * (0.12 * s) + f[2] * (0.245 * s)
-      ];
-      boxFunc(footPos, 0.32 * s, 0.10 * s, 0.032 * s, woodHeadColor, r, n, f, vertices, colors, indices);
-
-      // 5) Soft Cotton Mattress (ฟูกที่นอนหนานุ่มจากฝ้ายแท้)
-      const mattressPos = [
-        p[0] + n[0] * (0.13 * s),
-        p[1] + n[1] * (0.13 * s),
-        p[2] + n[2] * (0.13 * s)
-      ];
-      boxFunc(mattressPos, 0.27 * s, 0.075 * s, 0.46 * s, mattressColor, r, n, f, vertices, colors, indices);
-
-      // 6) Soft Cotton Pillow (หมอนหนุนฝ้ายขาวนุ่ม)
-      const pillowPos = [
-        p[0] + n[0] * (0.185 * s) - f[0] * (0.16 * s),
-        p[1] + n[1] * (0.185 * s) - f[1] * (0.16 * s),
-        p[2] + n[2] * (0.185 * s) - f[2] * (0.16 * s)
-      ];
-      boxFunc(pillowPos, 0.21 * s, 0.04 * s, 0.11 * s, pillowColor, r, n, f, vertices, colors, indices);
-
-      // 7) Cotton Quilt / Blanket (ผ้าห่มฝ้ายคลุมปลายเตียง)
-      const blanketPos = [
-        p[0] + n[0] * (0.17 * s) + f[0] * (0.05 * s),
-        p[1] + n[1] * (0.17 * s) + f[1] * (0.05 * s),
-        p[2] + n[2] * (0.17 * s) + f[2] * (0.05 * s)
-      ];
-      boxFunc(blanketPos, 0.276 * s, 0.02 * s, 0.32 * s, blanketColor, r, n, f, vertices, colors, indices);
+      const iLen = tInds.length;
+      if (isFlipped) {
+        for (let i = 0; i < iLen; i += 3) {
+          indices.push(baseIdx + tInds[i], baseIdx + tInds[i + 2], baseIdx + tInds[i + 1]);
+        }
+      } else {
+        for (let i = 0; i < iLen; i++) {
+          indices.push(baseIdx + tInds[i]);
+        }
+      }
     }
   };
 

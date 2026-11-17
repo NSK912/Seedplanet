@@ -929,7 +929,9 @@
             { slot: 4, item: { name: "BLACK_LEGGINGS", icon: "👖", label: "BLACK_LEGGINGS", count: 1 } },
             { slot: -1, item: { name: "DOUBLE_BREASTED_SUIT", icon: "🧥", label: "DOUBLE_BREASTED_SUIT", count: 1 } },
             { slot: -1, item: { name: "BLACK_SLACKS", icon: "👖", label: "BLACK_SLACKS", count: 1 } },
-            { slot: -1, item: { name: "OPERA_CAPE", icon: "🧛", label: "OPERA_CAPE", count: 1 } }
+            { slot: -1, item: { name: "OPERA_CAPE", icon: "🧛", label: "OPERA_CAPE", count: 1 } },
+            { slot: -1, item: { name: "OXFORD_SHOES", icon: "👞", label: "OXFORD_SHOES", count: 1 } },
+            { slot: -1, item: { name: "DRESS_BOOTS", icon: "🥾", label: "DRESS_BOOTS", count: 1 } }
           ];
           const hasItemAnywhere = (itemName) => {
             const checkArr = (arr) => Array.isArray(arr) && arr.some(it => it && (it.name === itemName || it.label === itemName));

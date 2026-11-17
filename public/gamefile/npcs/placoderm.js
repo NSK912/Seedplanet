@@ -51,6 +51,8 @@ window.buildPlacodermModel = function(
   };
 
   const scale = 1.10 * (scaleMultiplier || 1.0);
+  const lodLevel = (c && typeof c.lodLevel === "number") ? c.lodLevel : 0;
+  const isLod1 = lodLevel >= 1;
 
   // Placoderm color scheme:
   // - Slate & stone grey armored head and thoracic shields
@@ -176,8 +178,8 @@ window.buildPlacodermModel = function(
     indices.push(idx, idx + 2, idx + 1); // Double-sided rendering
   };
 
-  // Jaw articulation: placoderms have a dynamic hinge between the head shield and lower jaw
-  const jawChomp = isRagdoll ? 0.05 : (Math.sin((animPhase || 0) * 0.8) > 0.65 ? 0.03 : 0.01);
+  // Jaw articulation: placoderms have a dynamic hinge between the head shield and lower jaw (period-aligned 8*PI)
+  const jawChomp = isRagdoll ? 0.05 : (Math.sin((animPhase || 0) * 0.75) > 0.65 ? 0.03 : 0.01);
 
   // =========================================================================
   // 1. FULL-LENGTH CONTINUOUS MUSCULAR & FLESHY BODY CORE (100% GAP-FREE)
@@ -236,7 +238,7 @@ window.buildPlacodermModel = function(
   buildContinuousSpine(
     corePoints,
     coreRadii,
-    8,
+    isLod1 ? 5 : 8,
     coreColors,
     vertices,
     colors,
@@ -245,8 +247,9 @@ window.buildPlacodermModel = function(
   );
 
   // Cap both extremities of the spine to ensure 100% watertight ends
-  buildLowPolySphere(pTailTip, 0.018 * scale, 2, skinBelly, 0, 0, vertices, colors, indices);
-  buildLowPolySphere(pSnoutCore, 0.045 * scale, 2, armorPlateDark, 0, 0, vertices, colors, indices);
+  const endCapSegs = isLod1 ? 1 : 2;
+  buildLowPolySphere(pTailTip, 0.018 * scale, endCapSegs, skinBelly, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(pSnoutCore, 0.045 * scale, endCapSegs, armorPlateDark, 0, 0, vertices, colors, indices);
 
   // =========================================================================
   // 2. ARMORED HEAD & THORACIC SHIELDS (SEAMLESS WATERTIGHT CRANIAL PLATES)
@@ -380,16 +383,19 @@ window.buildPlacodermModel = function(
   const pEyeR = p(-0.125, 0.035, eyeOffsetZ, 0.02);
 
   // Sclerotic bone rings (raised circular eye shield)
-  buildLowPolySphere(pEyeL, eyeRadius * 1.35, 3, eyeScleroticRing, 0, 0, vertices, colors, indices);
-  buildLowPolySphere(pEyeR, eyeRadius * 1.35, 3, eyeScleroticRing, 0, 0, vertices, colors, indices);
-  // Dark predatory pupils
-  buildLowPolySphere(p(0.138, 0.035, eyeOffsetZ, 0.02), eyeRadius * 0.85, 3, eyePupil, 0, 0, vertices, colors, indices);
-  buildLowPolySphere(p(-0.138, 0.035, eyeOffsetZ, 0.02), eyeRadius * 0.85, 3, eyePupil, 0, 0, vertices, colors, indices);
+  const eyeSegs = isLod1 ? 2 : 3;
+  buildLowPolySphere(pEyeL, eyeRadius * 1.35, eyeSegs, eyeScleroticRing, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(pEyeR, eyeRadius * 1.35, eyeSegs, eyeScleroticRing, 0, 0, vertices, colors, indices);
+  if (!isLod1) {
+    // Dark predatory pupils
+    buildLowPolySphere(p(0.138, 0.035, eyeOffsetZ, 0.02), eyeRadius * 0.85, 3, eyePupil, 0, 0, vertices, colors, indices);
+    buildLowPolySphere(p(-0.138, 0.035, eyeOffsetZ, 0.02), eyeRadius * 0.85, 3, eyePupil, 0, 0, vertices, colors, indices);
+  }
 
   // =========================================================================
   // 5. LATERAL ARMORED SCUTE RIDGES (ROW OF SHARP SCUTES ALONG BODY SIDES)
   // =========================================================================
-  const numScutes = 7;
+  const numScutes = isLod1 ? 4 : 7;
   for (let s = 0; s < numScutes; s++) {
     const st = s / (numScutes - 1);
     const sz = (-0.08) * (1 - st) + (-0.68) * st;
@@ -413,10 +419,10 @@ window.buildPlacodermModel = function(
 
   // =========================================================================
   // 6. LARGE PAIRED PECTORAL FINS (WIDE WINGS WITH ORANGE FRINGES)
-  // Smooth, slow, majestic fin strokes
+  // Smooth, slow, majestic fin strokes (period-aligned 8*PI)
   // =========================================================================
-  const finStroke = isRagdoll ? 0 : Math.sin((animPhase || 0) * 1.2) * 0.13;
-  const finRoll   = isRagdoll ? 0 : Math.cos((animPhase || 0) * 1.2) * 0.08;
+  const finStroke = isRagdoll ? 0 : Math.sin((animPhase || 0) * 1.25) * 0.13;
+  const finRoll   = isRagdoll ? 0 : Math.cos((animPhase || 0) * 1.25) * 0.08;
 
   // Left Pectoral Fin Vertices
   const vPectRootFrontL = p(0.145, -0.03, 0.06, 0.04);
@@ -468,13 +474,15 @@ window.buildPlacodermModel = function(
   pushQuad(vDorsalBaseMid, vDorsalApex, vDorsalCrestMid, vDorsalBaseRear, finOrange);
   pushTri(vDorsalBaseRear, vDorsalCrestMid, vDorsalCrestRear, finOrange);
 
-  // Dorsal fin ray rib highlights
-  const numDorsalRays = 5;
-  for (let r = 1; r < numDorsalRays; r++) {
-    const rt = r / numDorsalRays;
-    const rBase = p(0.0, 0.12 * (1 - rt) + 0.08 * rt, dorsalZLead * (1 - rt) + dorsalZTrail * rt, 0.18);
-    const rTip  = p(0.0, 0.28 * (1 - rt * 0.5), dorsalZApex * (1 - rt) + dorsalZTrail * rt, 0.20);
-    buildTaperedSegment(rBase, rTip, 0.006 * scale, 0.002 * scale, 3, armorPlateHighlight, vertices, colors, indices);
+  // Dorsal fin ray rib highlights (LOD 0 only)
+  if (!isLod1) {
+    const numDorsalRays = 5;
+    for (let r = 1; r < numDorsalRays; r++) {
+      const rt = r / numDorsalRays;
+      const rBase = p(0.0, 0.12 * (1 - rt) + 0.08 * rt, dorsalZLead * (1 - rt) + dorsalZTrail * rt, 0.18);
+      const rTip  = p(0.0, 0.28 * (1 - rt * 0.5), dorsalZApex * (1 - rt) + dorsalZTrail * rt, 0.20);
+      buildTaperedSegment(rBase, rTip, 0.006 * scale, 0.002 * scale, 3, armorPlateHighlight, vertices, colors, indices);
+    }
   }
 
   // =========================================================================
@@ -528,7 +536,7 @@ window.buildPlacodermModel = function(
 
   // Caudal fin ray ribs
   const pTailCap = p(0.0, 0.0, zTailBase - 0.02, 0.45);
-  buildLowPolySphere(pTailCap, 0.018 * scale, 3, skinBelly, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(pTailCap, 0.018 * scale, isLod1 ? 2 : 3, skinBelly, 0, 0, vertices, colors, indices);
 
   // Set colliders for collision and damage
   if (f !== null && c !== null) {

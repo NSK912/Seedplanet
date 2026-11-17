@@ -13,18 +13,83 @@ window.getFloorThickness = function(item) {
   return size * 0.08;
 };
 
+// Pre-baked Local Template Cache for wood_floor & thin_wood_floor (1 core + 4 planks + 8 wood grain lines = 13 boxes)
+const _woodFloorTemplateCache = {};
+
+function _getWoodFloorTemplate(effW, effH, effD, numPlanks, seedBucket) {
+  const key = effW.toFixed(4) + '_' + effH.toFixed(4) + '_' + effD.toFixed(4) + '_' + numPlanks + '_' + seedBucket;
+  if (_woodFloorTemplateCache[key]) return _woodFloorTemplateCache[key];
+
+  const v = [], cMult = [], idx = [];
+  const localR = [1, 0, 0];
+  const localN = [0, 1, 0];
+  const localF = [0, 0, 1];
+
+  const pw = effW / numPlanks;
+  const plankW = pw;
+  const plankD = effD;
+  const seedVal = seedBucket * 19.37;
+
+  function pRand(s) {
+    const x = Math.sin(s) * 10000;
+    return x - Math.floor(x);
+  }
+
+  // Internal recessed sub-floor core
+  const coreH = Math.max(0.008, effH * 0.65);
+  const coreCenter = [0.0, -effH * 0.1, 0.0];
+  addBox(coreCenter, Math.max(0.01, effW - 0.004), coreH, Math.max(0.01, effD - 0.004), [0.7, 0.7, 0.7], localR, localN, localF, v, cMult, idx);
+
+  for (let i = 0; i < numPlanks; i++) {
+    const t = -effW / 2 + pw / 2 + i * pw;
+    const plankCenter = [t, 0.0, 0.0];
+
+    const shadeNoise = pRand(seedVal + i * 17.3);
+    const mult = 0.94 + shadeNoise * 0.12;
+    addBox(plankCenter, plankW, effH, plankD, [mult, mult, mult], localR, localN, localF, v, cMult, idx);
+
+    const numGrainLines = 2;
+    const grainMult = mult * 0.65;
+    for (let j = 0; j < numGrainLines; j++) {
+      const grainNoiseX = pRand(seedVal + i * 31.4 + j * 45.1);
+      const grainNoiseL = pRand(seedVal + i * 19.8 + j * 73.2);
+      const grainW = 0.005;
+      const grainH = 0.0024;
+      const grainD = effD * (0.3 + grainNoiseL * 0.6);
+
+      const grainT = (grainNoiseX - 0.5) * (plankW * 0.65);
+      const grainOffsetF = (pRand(seedVal + j * 91.3) - 0.5) * (effD - grainD);
+
+      const grainCenter = [
+        t + grainT,
+        effH * 0.5 + 0.0012,
+        grainOffsetF
+      ];
+      addBox(grainCenter, grainW, grainH, grainD, [grainMult, grainMult, grainMult], localR, localN, localF, v, cMult, idx);
+    }
+  }
+
+  const tpl = {
+    v: new Float32Array(v),
+    cMult: new Float32Array(cMult),
+    idx: new Uint16Array(idx)
+  };
+  _woodFloorTemplateCache[key] = tpl;
+  return tpl;
+}
+
 window.ItemRegistry["wood_floor"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     const p = item.position;
     const r = item.R,
       f = item.F,
       n = item.normal;
-        
+
     // "พื้นไม้" - A flat square platform/floor panel
-    const w = item.width !== undefined ? item.width : item.size * 1.2; 
-    const h = window.getFloorThickness(item); 
+    const w = item.width !== undefined ? item.width : item.size * 1.2;
+    const h = window.getFloorThickness(item);
     const d = item.depth !== undefined ? item.depth : item.size * 1.2;
-        
+
     if (item.isPreview) {
       const isValid = item.isValidPlacement !== false;
       const col = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
@@ -87,70 +152,45 @@ window.ItemRegistry["wood_floor"] = {
         ];
       }
 
-      // Placed wood floor - render individual planks with wood grain shades
       const numPlanks = Math.max(1, Math.round((w / (item.size * 1.2)) * 4));
-      const pw = effW / numPlanks;
-      const plankW = pw;
-      const plankD = effD;
-            
-      // Seed-based stable pseudo-random generator
-      const seedVal = item.seed || (item.position[0] * 123.4 + item.position[2] * 56.7);
-      function pRand(s) {
-        const x = Math.sin(s) * 10000;
-        return x - Math.floor(x);
-      }
-            
-      const baseColor = item.color || [0.65, 0.45, 0.25];
+      const rawSeed = item.seed || (p[0] * 123.4 + p[2] * 56.7);
+      const seedBucket = Math.abs(Math.floor(rawSeed * 10)) % 32;
+      const tpl = _getWoodFloorTemplate(effW, effH, effD, numPlanks, seedBucket);
 
-      // Internal recessed sub-floor core (seals plank seams against light leaks without touching outer surfaces)
-      const coreH = Math.max(0.008, effH * 0.65);
-      const coreCenter = [
-        baseP[0] - n[0] * (effH * 0.1),
-        baseP[1] - n[1] * (effH * 0.1),
-        baseP[2] - n[2] * (effH * 0.1)
-      ];
-      const coreColor = [baseColor[0] * 0.7, baseColor[1] * 0.7, baseColor[2] * 0.7];
-      addBox(coreCenter, Math.max(0.01, effW - 0.004), coreH, Math.max(0.01, effD - 0.004), coreColor, r, n, f, vertices, colors, indices);
-            
-      for (let i = 0; i < numPlanks; i++) {
-        const t = -effW / 2 + pw / 2 + i * pw;
-        const plankCenter = [
-          baseP[0] + r[0] * t,
-          baseP[1] + r[1] * t,
-          baseP[2] + r[2] * t
-        ];
-                
-        const shadeNoise = pRand(seedVal + i * 17.3);
-        // Vary base wooden color slightly to give authentic plank variation
-        const rCol = baseColor[0] * (0.94 + shadeNoise * 0.12);
-        const gCol = baseColor[1] * (0.94 + shadeNoise * 0.12);
-        const bCol = baseColor[2] * (0.94 + shadeNoise * 0.12);
-        const plankColor = [rCol, gCol, bCol];
-                
-        // Draw individual plank board (exact non-overlapping width & depth prevents Z-fighting shimmer)
-        addBox(plankCenter, plankW, effH, plankD, plankColor, r, n, f, vertices, colors, indices);
-                
-        // Add dark wood grain lines on top of the plank
-        const numGrainLines = 2;
-        for (let j = 0; j < numGrainLines; j++) {
-          const grainNoiseX = pRand(seedVal + i * 31.4 + j * 45.1);
-          const grainNoiseL = pRand(seedVal + i * 19.8 + j * 73.2);
-          const grainW = 0.005; 
-          const grainH = 0.0024; 
-          const grainD = effD * (0.3 + grainNoiseL * 0.6); 
-                    
-          const grainT = (grainNoiseX - 0.5) * (plankW * 0.65);
-          const grainOffsetF = (pRand(seedVal + j * 91.3) - 0.5) * (effD - grainD);
-                    
-          const grainCenter = [
-            plankCenter[0] + r[0] * grainT + f[0] * grainOffsetF + n[0] * (effH * 0.5 + 0.0012),
-            plankCenter[1] + r[1] * grainT + f[1] * grainOffsetF + n[1] * (effH * 0.5 + 0.0012),
-            plankCenter[2] + r[2] * grainT + f[2] * grainOffsetF + n[2] * (effH * 0.5 + 0.0012)
-          ];
-                    
-          // Dark brown color for the grain lines
-          const grainColor = [rCol * 0.65, gCol * 0.65, bCol * 0.65];
-          addBox(grainCenter, grainW, grainH, grainD, grainColor, r, n, f, vertices, colors, indices);
+      const baseColor = item.color || [0.65, 0.45, 0.25];
+      const rCol = baseColor[0], gCol = baseColor[1], bCol = baseColor[2];
+
+      const baseVertIdx = vertices.length / 3;
+      const tv = tpl.v;
+      const tcMult = tpl.cMult;
+      const tidx = tpl.idx;
+      const bp0 = baseP[0], bp1 = baseP[1], bp2 = baseP[2];
+      const r0 = r[0], r1 = r[1], r2 = r[2];
+      const n0 = n[0], n1 = n[1], n2 = n[2];
+      const f0 = f[0], f1 = f[1], f2 = f[2];
+      const det = (r1 * n2 - r2 * n1) * f0 + (r2 * n0 - r0 * n2) * f1 + (r0 * n1 - r1 * n0) * f2;
+      const isFlipped = det < 0;
+
+      for (let i = 0, len = tv.length; i < len; i += 3) {
+        const lx = tv[i], ly = tv[i + 1], lz = tv[i + 2];
+        vertices.push(
+          bp0 + lx * r0 + ly * n0 + lz * f0,
+          bp1 + lx * r1 + ly * n1 + lz * f1,
+          bp2 + lx * r2 + ly * n2 + lz * f2
+        );
+        colors.push(
+          rCol * tcMult[i],
+          gCol * tcMult[i + 1],
+          bCol * tcMult[i + 2]
+        );
+      }
+      if (isFlipped) {
+        for (let i = 0, len = tidx.length; i < len; i += 3) {
+          indices.push(baseVertIdx + tidx[i], baseVertIdx + tidx[i + 2], baseVertIdx + tidx[i + 1]);
+        }
+      } else {
+        for (let i = 0, len = tidx.length; i < len; i++) {
+          indices.push(baseVertIdx + tidx[i]);
         }
       }
     }
@@ -159,3 +199,4 @@ window.ItemRegistry["wood_floor"] = {
 
 window.ItemRegistry["plank"] = window.ItemRegistry["wood_floor"];
 window.ItemRegistry["thin_wood_floor"] = window.ItemRegistry["wood_floor"];
+

@@ -32,11 +32,13 @@ window.buildIsopodModel = function(
 
   // 30 inches (~0.76m) in world scale
   const scale = 0.32 * (scaleMultiplier || 1.0);
+  const lodLevel = (c && typeof c.lodLevel === "number") ? c.lodLevel : 0;
+  const isLod1 = lodLevel >= 1;
 
-  // Crawling undulation
+  // Crawling undulation (aligned with 4*PI periodic cache)
   const getCrawlWiggle = (z) => {
     if (isRagdoll) return 0;
-    const phase = animPhase * 2.8 - z * 3.5;
+    const phase = animPhase * 3.0 - z * 3.5;
     return Math.sin(phase) * 0.012;
   };
 
@@ -160,17 +162,17 @@ window.buildIsopodModel = function(
   const eyeBackR  = p( hWidth * 0.85, 0.04,           zHeadApex - 0.01, 0.05);
   pushTri(eyeTopR, eyeBackR, eyeFrontR, eyeColor);
 
-  // Antennae (Two long sensory whips projecting from under the head shield)
-  const antTwitch = isRagdoll ? 0 : Math.sin(animPhase * 3.5) * 0.04;
-  const antBaseL = p(-0.06, 0.02, zHeadFront - 0.01, 0.05);
-  const antMidL  = p(-0.20 + antTwitch, 0.04, zHeadFront + 0.18, 0.06);
-  const antTipL  = p(-0.35 + antTwitch * 1.8, 0.02, zHeadFront + 0.38, 0.08);
+  // Antennae (Two long sensory whips projecting from under the head shield - LOD 0 only)
+  if (!isLod1 && typeof buildContinuousSpine === 'function') {
+    const antTwitch = isRagdoll ? 0 : Math.sin(animPhase * 3.5) * 0.04;
+    const antBaseL = p(-0.06, 0.02, zHeadFront - 0.01, 0.05);
+    const antMidL  = p(-0.20 + antTwitch, 0.04, zHeadFront + 0.18, 0.06);
+    const antTipL  = p(-0.35 + antTwitch * 1.8, 0.02, zHeadFront + 0.38, 0.08);
 
-  const antBaseR = p( 0.06, 0.02, zHeadFront - 0.01, 0.05);
-  const antMidR  = p( 0.20 - antTwitch, 0.04, zHeadFront + 0.18, 0.06);
-  const antTipR  = p( 0.35 - antTwitch * 1.8, 0.02, zHeadFront + 0.38, 0.08);
+    const antBaseR = p( 0.06, 0.02, zHeadFront - 0.01, 0.05);
+    const antMidR  = p( 0.20 - antTwitch, 0.04, zHeadFront + 0.18, 0.06);
+    const antTipR  = p( 0.35 - antTwitch * 1.8, 0.02, zHeadFront + 0.38, 0.08);
 
-  if (typeof buildContinuousSpine === 'function') {
     const antRad = [0.012, 0.007, 0.002].map(r => r * scale);
     buildContinuousSpine([antBaseL, antMidL, antTipL], antRad, 3, shellLight, vertices, colors, indices, N);
     buildContinuousSpine([antBaseR, antMidR, antTipR], antRad, 3, shellLight, vertices, colors, indices, N);
@@ -258,8 +260,8 @@ window.buildIsopodModel = function(
     const bellyR = p( w * 0.50, 0.02, s.z, sag);
     pushQuad(fSideL, bellyL, bellyR, fSideR, underColor);
 
-    // --- 7 Pairs of Tucked Walking Legs (Attached under the belly, peaking below side skirt) ---
-    if (i < 7) {
+    // --- 7 Pairs of Tucked Walking Legs (LOD 0 only; skipped at >15m) ---
+    if (!isLod1 && i < 7) {
       const legPhase = isRagdoll ? 0 : animPhase * 4.5 + i * 0.85;
       const legStep  = Math.sin(legPhase) * 0.025;
       const legLift  = Math.max(0, Math.cos(legPhase)) * 0.018;

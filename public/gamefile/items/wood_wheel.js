@@ -1,26 +1,21 @@
 // === SEEDPLANET MODULE: JS/ITEMS/WOOD_WHEEL.JS ===
 
-window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, spinAngle, woodColor, darkWoodColor, metalColor, vertices, colors, indices, isPreview, previewColor, steerAngle) {
-  const cRim = isPreview ? previewColor : (woodColor || [0.55, 0.38, 0.22]);
-  const cSpoke = isPreview ? previewColor : (darkWoodColor || [0.4, 0.26, 0.14]);
-  const cHub = isPreview ? previewColor : (metalColor || [0.35, 0.35, 0.35]);
-  const cIronBand = isPreview ? previewColor : [0.22, 0.22, 0.25];
+const _wheelTemplateCache = new Map();
+const MAX_WHEEL_TEMPLATES = 24;
 
-  let wheelR = R;
-  let wheelF = F;
-  if (steerAngle && Math.abs(steerAngle) > 0.001) {
-    const cosS = Math.cos(steerAngle), sinS = Math.sin(steerAngle);
-    wheelF = [
-      F[0] * cosS + R[0] * sinS,
-      F[1] * cosS + R[1] * sinS,
-      F[2] * cosS + R[2] * sinS
-    ];
-    wheelR = [
-      R[0] * cosS - F[0] * sinS,
-      R[1] * cosS - F[1] * sinS,
-      R[2] * cosS - F[2] * sinS
-    ];
+function getOrCreateRawWoodenWheelTemplate(radius, thickness, isPreview) {
+  const rKey = Math.round(radius * 10000);
+  const tKey = Math.round(thickness * 10000);
+  const key = rKey + "_" + tKey + "_" + (isPreview ? 1 : 0);
+  let cached = _wheelTemplateCache.get(key);
+  if (cached) {
+    return cached;
   }
+
+  const tempVerts = [];
+  const tempIndices = [];
+  const tempSlots = []; // 0: cRim, 1: cHub, 2: cSpoke, 3: cIronBand
+  const tempShades = [];
 
   const segs = 12;
   const rimWidth = radius * 0.24;
@@ -28,165 +23,240 @@ window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, sp
   const rInner = radius - rimWidth;
   const halfThick = thickness * 0.5;
 
-  const ringBaseIdx = vertices.length / 3;
-
+  // Rim (slot 0)
   for (let i = 0; i <= segs; i++) {
-    const angle = (i / segs) * Math.PI * 2 + (spinAngle || 0);
+    const angle = (i / segs) * Math.PI * 2;
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
 
-    const radX = N[0] * cosA + wheelF[0] * sinA;
-    const radY = N[1] * cosA + wheelF[1] * sinA;
-    const radZ = N[2] * cosA + wheelF[2] * sinA;
+    const pOutY = cosA * rOuter;
+    const pOutZ = sinA * rOuter;
+    const pInY = cosA * rInner;
+    const pInZ = sinA * rInner;
 
-    const pOutX = center[0] + radX * rOuter;
-    const pOutY = center[1] + radY * rOuter;
-    const pOutZ = center[2] + radZ * rOuter;
-
-    const pInX = center[0] + radX * rInner;
-    const pInY = center[1] + radY * rInner;
-    const pInZ = center[2] + radZ * rInner;
-
-    vertices.push(pOutX + wheelR[0] * halfThick, pOutY + wheelR[1] * halfThick, pOutZ + wheelR[2] * halfThick);
-    vertices.push(pOutX - wheelR[0] * halfThick, pOutY - wheelR[1] * halfThick, pOutZ - wheelR[2] * halfThick);
-    vertices.push(pInX - wheelR[0] * halfThick, pInY - wheelR[1] * halfThick, pInZ - wheelR[2] * halfThick);
-    vertices.push(pInX + wheelR[0] * halfThick, pInY + wheelR[1] * halfThick, pInZ + wheelR[2] * halfThick);
+    tempVerts.push(halfThick, pOutY, pOutZ);
+    tempVerts.push(-halfThick, pOutY, pOutZ);
+    tempVerts.push(-halfThick, pInY, pInZ);
+    tempVerts.push(halfThick, pInY, pInZ);
 
     const woodGrain = isPreview ? 1.0 : (0.92 + 0.16 * Math.sin(i * 1.5));
     for (let c = 0; c < 4; c++) {
-      colors.push(cRim[0] * woodGrain, cRim[1] * woodGrain, cRim[2] * woodGrain);
+      tempSlots.push(0);
+      tempShades.push(woodGrain);
     }
   }
 
   for (let i = 0; i < segs; i++) {
-    const curr = ringBaseIdx + i * 4;
-    const next = ringBaseIdx + (i + 1) * 4;
+    const curr = i * 4;
+    const next = (i + 1) * 4;
 
-    indices.push(curr + 0, next + 0, next + 1); indices.push(curr + 0, next + 1, next + 0);
-    indices.push(curr + 0, next + 1, curr + 1); indices.push(curr + 0, curr + 1, next + 1);
+    tempIndices.push(curr + 0, next + 0, next + 1, curr + 0, next + 1, next + 0);
+    tempIndices.push(curr + 0, next + 1, curr + 1, curr + 0, curr + 1, next + 1);
 
-    indices.push(curr + 2, curr + 3, next + 3); indices.push(curr + 2, next + 3, curr + 3);
-    indices.push(curr + 2, next + 3, next + 2); indices.push(curr + 2, next + 2, next + 3);
+    tempIndices.push(curr + 2, curr + 3, next + 3, curr + 2, next + 3, curr + 3);
+    tempIndices.push(curr + 2, next + 3, next + 2, curr + 2, next + 2, next + 3);
 
-    indices.push(curr + 3, curr + 0, next + 0); indices.push(curr + 3, next + 0, curr + 0);
-    indices.push(curr + 3, next + 0, next + 3); indices.push(curr + 3, next + 3, next + 0);
+    tempIndices.push(curr + 3, curr + 0, next + 0, curr + 3, next + 0, curr + 0);
+    tempIndices.push(curr + 3, next + 0, next + 3, curr + 3, next + 3, next + 0);
 
-    indices.push(curr + 1, curr + 2, next + 2); indices.push(curr + 1, next + 2, curr + 2);
-    indices.push(curr + 1, next + 2, next + 1); indices.push(curr + 1, next + 1, next + 2);
+    tempIndices.push(curr + 1, curr + 2, next + 2, curr + 1, next + 2, curr + 2);
+    tempIndices.push(curr + 1, next + 2, next + 1, curr + 1, next + 1, next + 2);
   }
 
-  // Hub
+  // Hub (slot 1)
   const hubRadius = radius * 0.28;
   const hubThick = thickness * 1.4;
   const hubSegs = 8;
   const hubHalfThick = hubThick * 0.5;
-  const hubBaseIdx = vertices.length / 3;
+  const hubBaseIdx = tempVerts.length / 3;
 
   for (let i = 0; i <= hubSegs; i++) {
-    const angle = (i / hubSegs) * Math.PI * 2 + (spinAngle || 0);
+    const angle = (i / hubSegs) * Math.PI * 2;
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
 
-    const radX = N[0] * cosA + wheelF[0] * sinA;
-    const radY = N[1] * cosA + wheelF[1] * sinA;
-    const radZ = N[2] * cosA + wheelF[2] * sinA;
+    const hY = cosA * hubRadius;
+    const hZ = sinA * hubRadius;
 
-    const hX = center[0] + radX * hubRadius;
-    const hY = center[1] + radY * hubRadius;
-    const hZ = center[2] + radZ * hubRadius;
+    tempVerts.push(hubHalfThick, hY, hZ);
+    tempVerts.push(-hubHalfThick, hY, hZ);
 
-    vertices.push(hX + wheelR[0] * hubHalfThick, hY + wheelR[1] * hubHalfThick, hZ + wheelR[2] * hubHalfThick);
-    vertices.push(hX - wheelR[0] * hubHalfThick, hY - wheelR[1] * hubHalfThick, hZ - wheelR[2] * hubHalfThick);
-
-    colors.push(cHub[0], cHub[1], cHub[2]);
-    colors.push(cHub[0], cHub[1], cHub[2]);
+    tempSlots.push(1, 1);
+    tempShades.push(1.0, 1.0);
   }
 
   for (let i = 0; i < hubSegs; i++) {
     const curr = hubBaseIdx + i * 2;
     const next = hubBaseIdx + (i + 1) * 2;
 
-    indices.push(curr + 0, curr + 1, next + 1); indices.push(curr + 0, next + 1, curr + 1);
-    indices.push(curr + 0, next + 1, next + 0); indices.push(curr + 0, next + 0, next + 1);
+    tempIndices.push(curr + 0, curr + 1, next + 1, curr + 0, next + 1, curr + 1);
+    tempIndices.push(curr + 0, next + 1, next + 0, curr + 0, next + 0, next + 1);
   }
 
-  const capRightIdx = vertices.length / 3;
-  vertices.push(center[0] + wheelR[0] * hubHalfThick, center[1] + wheelR[1] * hubHalfThick, center[2] + wheelR[2] * hubHalfThick);
-  colors.push(cHub[0] * 1.15, cHub[1] * 1.15, cHub[2] * 1.15);
+  const capRightIdx = tempVerts.length / 3;
+  tempVerts.push(hubHalfThick, 0, 0);
+  tempSlots.push(1);
+  tempShades.push(1.15);
 
-  const capLeftIdx = vertices.length / 3;
-  vertices.push(center[0] - wheelR[0] * hubHalfThick, center[1] - wheelR[1] * hubHalfThick, center[2] - wheelR[2] * hubHalfThick);
-  colors.push(cHub[0] * 1.15, cHub[1] * 1.15, cHub[2] * 1.15);
+  const capLeftIdx = tempVerts.length / 3;
+  tempVerts.push(-hubHalfThick, 0, 0);
+  tempSlots.push(1);
+  tempShades.push(1.15);
 
   for (let i = 0; i < hubSegs; i++) {
     const curr = hubBaseIdx + i * 2;
     const next = hubBaseIdx + (i + 1) * 2;
 
-    indices.push(capRightIdx, curr + 0, next + 0); indices.push(capRightIdx, next + 0, curr + 0);
-    indices.push(capLeftIdx, next + 1, curr + 1); indices.push(capLeftIdx, curr + 1, next + 1);
+    tempIndices.push(capRightIdx, curr + 0, next + 0, capRightIdx, next + 0, curr + 0);
+    tempIndices.push(capLeftIdx, next + 1, curr + 1, capLeftIdx, curr + 1, next + 1);
   }
 
-  // Spokes
-  const spokeCount = 6;
-  const spokeThick = thickness * 0.42;
-  for (let s = 0; s < spokeCount; s++) {
-    const angle = (s / spokeCount) * Math.PI * 2 + (spinAngle || 0);
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
+  // Spokes (slot 2)
+  const hasSpokesBuilder = typeof buildTaperedSegment === "function";
+  if (hasSpokesBuilder) {
+    const spokeCount = 6;
+    const spokeThick = thickness * 0.42;
+    const dummyCol = [1, 1, 1];
+    const spokeColors = [];
+    const vBeforeSpokes = tempVerts.length / 3;
 
-    const dirX = N[0] * cosA + wheelF[0] * sinA;
-    const dirY = N[1] * cosA + wheelF[1] * sinA;
-    const dirZ = N[2] * cosA + wheelF[2] * sinA;
+    for (let s = 0; s < spokeCount; s++) {
+      const angle = (s / spokeCount) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
 
-    const pStart = [
-      center[0] + dirX * (hubRadius * 0.85),
-      center[1] + dirY * (hubRadius * 0.85),
-      center[2] + dirZ * (hubRadius * 0.85)
-    ];
-    const pEnd = [
-      center[0] + dirX * (rInner * 1.02),
-      center[1] + dirY * (rInner * 1.02),
-      center[2] + dirZ * (rInner * 1.02)
-    ];
+      const pStart = [0, cosA * (hubRadius * 0.85), sinA * (hubRadius * 0.85)];
+      const pEnd = [0, cosA * (rInner * 1.02), sinA * (rInner * 1.02)];
 
-    if (typeof buildTaperedSegment === "function") {
-      buildTaperedSegment(pStart, pEnd, spokeThick, spokeThick * 0.8, 4, cSpoke, vertices, colors, indices, false);
+      buildTaperedSegment(pStart, pEnd, spokeThick, spokeThick * 0.8, 4, dummyCol, tempVerts, spokeColors, tempIndices, false);
+    }
+
+    const vAfterSpokes = tempVerts.length / 3;
+    for (let v = vBeforeSpokes; v < vAfterSpokes; v++) {
+      tempSlots.push(2);
+      tempShades.push(1.0);
     }
   }
 
-  // Iron outer band
+  // Iron outer band (slot 3)
   if (!isPreview) {
     const ironSegs = 12;
     const ironOuter = rOuter + 0.003;
     const ironThick = halfThick * 0.92;
-    const ironBaseIdx = vertices.length / 3;
+    const ironBaseIdx = tempVerts.length / 3;
 
     for (let i = 0; i <= ironSegs; i++) {
-      const angle = (i / ironSegs) * Math.PI * 2 + (spinAngle || 0);
+      const angle = (i / ironSegs) * Math.PI * 2;
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
 
-      const radX = N[0] * cosA + wheelF[0] * sinA;
-      const radY = N[1] * cosA + wheelF[1] * sinA;
-      const radZ = N[2] * cosA + wheelF[2] * sinA;
+      const pY = cosA * ironOuter;
+      const pZ = sinA * ironOuter;
 
-      const pX = center[0] + radX * ironOuter;
-      const pY = center[1] + radY * ironOuter;
-      const pZ = center[2] + radZ * ironOuter;
+      tempVerts.push(ironThick, pY, pZ);
+      tempVerts.push(-ironThick, pY, pZ);
 
-      vertices.push(pX + wheelR[0] * ironThick, pY + wheelR[1] * ironThick, pZ + wheelR[2] * ironThick);
-      vertices.push(pX - wheelR[0] * ironThick, pY - wheelR[1] * ironThick, pZ - wheelR[2] * ironThick);
-
-      colors.push(cIronBand[0], cIronBand[1], cIronBand[2]);
-      colors.push(cIronBand[0], cIronBand[1], cIronBand[2]);
+      tempSlots.push(3, 3);
+      tempShades.push(1.0, 1.0);
     }
 
     for (let i = 0; i < ironSegs; i++) {
       const curr = ironBaseIdx + i * 2;
       const next = ironBaseIdx + (i + 1) * 2;
 
-      indices.push(curr + 0, next + 0, next + 1); indices.push(curr + 0, next + 1, next + 0);
-      indices.push(curr + 0, next + 1, curr + 1); indices.push(curr + 0, curr + 1, next + 1);
+      tempIndices.push(curr + 0, next + 0, next + 1, curr + 0, next + 1, next + 0);
+      tempIndices.push(curr + 0, next + 1, curr + 1, curr + 0, curr + 1, next + 1);
+    }
+  }
+
+  const tpl = {
+    verts: new Float32Array(tempVerts),
+    slots: new Uint8Array(tempSlots),
+    shades: new Float32Array(tempShades),
+    indices: new Uint16Array(tempIndices),
+    vertCount: tempVerts.length / 3
+  };
+
+  if (hasSpokesBuilder) {
+    if (_wheelTemplateCache.size >= MAX_WHEEL_TEMPLATES) {
+      const firstKey = _wheelTemplateCache.keys().next().value;
+      _wheelTemplateCache.delete(firstKey);
+    }
+    _wheelTemplateCache.set(key, tpl);
+  }
+  return tpl;
+}
+
+window.drawDetailedWoodenWheel = function(center, radius, thickness, R, N, F, spinAngle, woodColor, darkWoodColor, metalColor, vertices, colors, indices, isPreview, previewColor, steerAngle) {
+  const cRim = isPreview ? previewColor : (woodColor || [0.55, 0.38, 0.22]);
+  const cSpoke = isPreview ? previewColor : (darkWoodColor || [0.4, 0.26, 0.14]);
+  const cHub = isPreview ? previewColor : (metalColor || [0.35, 0.35, 0.35]);
+  const cIronBand = isPreview ? previewColor : [0.22, 0.22, 0.25];
+
+  let r0 = R[0], r1 = R[1], r2 = R[2];
+  let f0 = F[0], f1 = F[1], f2 = F[2];
+  if (steerAngle && Math.abs(steerAngle) > 0.001) {
+    const cosS = Math.cos(steerAngle), sinS = Math.sin(steerAngle);
+    const nf0 = f0 * cosS + r0 * sinS;
+    const nf1 = f1 * cosS + r1 * sinS;
+    const nf2 = f2 * cosS + r2 * sinS;
+    const nr0 = r0 * cosS - f0 * sinS;
+    const nr1 = r1 * cosS - f1 * sinS;
+    const nr2 = r2 * cosS - f2 * sinS;
+    f0 = nf0; f1 = nf1; f2 = nf2;
+    r0 = nr0; r1 = nr1; r2 = nr2;
+  }
+
+  let n0 = N[0], n1 = N[1], n2 = N[2];
+  if (spinAngle && Math.abs(spinAngle) > 1e-6) {
+    const cosSpin = Math.cos(spinAngle), sinSpin = Math.sin(spinAngle);
+    const sn0 = n0 * cosSpin + f0 * sinSpin;
+    const sn1 = n1 * cosSpin + f1 * sinSpin;
+    const sn2 = n2 * cosSpin + f2 * sinSpin;
+    const sf0 = f0 * cosSpin - n0 * sinSpin;
+    const sf1 = f1 * cosSpin - n1 * sinSpin;
+    const sf2 = f2 * cosSpin - n2 * sinSpin;
+    n0 = sn0; n1 = sn1; n2 = sn2;
+    f0 = sf0; f1 = sf1; f2 = sf2;
+  }
+
+  const tpl = getOrCreateRawWoodenWheelTemplate(radius, thickness, !!isPreview);
+  const tVerts = tpl.verts;
+  const tSlots = tpl.slots;
+  const tShades = tpl.shades;
+  const tIndices = tpl.indices;
+  const vCount = tpl.vertCount;
+  const cx = center[0], cy = center[1], cz = center[2];
+  const baseIdx = vertices.length / 3;
+
+  const palette = [cRim, cHub, cSpoke, cIronBand];
+
+  for (let i = 0; i < vCount; i++) {
+    const i3 = i * 3;
+    const lx = tVerts[i3];
+    const ly = tVerts[i3 + 1];
+    const lz = tVerts[i3 + 2];
+
+    vertices.push(
+      cx + r0 * lx + n0 * ly + f0 * lz,
+      cy + r1 * lx + n1 * ly + f1 * lz,
+      cz + r2 * lx + n2 * ly + f2 * lz
+    );
+
+    const col = palette[tSlots[i]];
+    const sh = tShades[i];
+    colors.push(col[0] * sh, col[1] * sh, col[2] * sh);
+  }
+
+  const det = (r1 * n2 - r2 * n1) * f0 + (r2 * n0 - r0 * n2) * f1 + (r0 * n1 - r1 * n0) * f2;
+  const idxLen = tIndices.length;
+  if (det < 0) {
+    for (let i = 0; i < idxLen; i += 3) {
+      indices.push(baseIdx + tIndices[i], baseIdx + tIndices[i + 2], baseIdx + tIndices[i + 1]);
+    }
+  } else {
+    for (let i = 0; i < idxLen; i++) {
+      indices.push(baseIdx + tIndices[i]);
     }
   }
 };

@@ -50,80 +50,103 @@
     }
   }
 
+  const _woodTableTemplateCache = [null, null, null];
+
+  function _getWoodTableTemplate(mode) {
+    if (_woodTableTemplateCache[mode]) return _woodTableTemplateCache[mode];
+
+    const isPreview = mode !== 0;
+    const previewColor = mode === 1 ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+    const s = 0.46;
+
+    const woodTopColor = isPreview ? previewColor : [0.56, 0.38, 0.21];
+    const woodPlankLight = isPreview ? previewColor : [0.61, 0.42, 0.24];
+    const woodFrameColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
+    const woodLegColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
+
+    const LR = [1, 0, 0], LU = [0, 1, 0], LF = [0, 0, 1];
+    const tVerts = [], tCols = [], tInds = [];
+
+    // 1) 4 Wooden Table Legs
+    const legOffsets = [
+      [-0.105 * s, 0.062 * s, -0.075 * s],
+      [ 0.105 * s, 0.062 * s, -0.075 * s],
+      [-0.105 * s, 0.062 * s,  0.075 * s],
+      [ 0.105 * s, 0.062 * s,  0.075 * s]
+    ];
+    for (let i = 0; i < 4; i++) {
+      drawBoxFallback(legOffsets[i], 0.028 * s, 0.124 * s, 0.028 * s, woodLegColor, LR, LU, LF, tVerts, tCols, tInds);
+    }
+
+    // 2) Under-table Support Apron / Frame
+    drawBoxFallback([0, 0.114 * s, 0], 0.23 * s, 0.022 * s, 0.17 * s, woodFrameColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 3) Side Stretcher Bars between legs
+    drawBoxFallback([-0.105 * s, 0.036 * s, 0], 0.020 * s, 0.018 * s, 0.13 * s, woodFrameColor, LR, LU, LF, tVerts, tCols, tInds);
+    drawBoxFallback([ 0.105 * s, 0.036 * s, 0], 0.020 * s, 0.018 * s, 0.13 * s, woodFrameColor, LR, LU, LF, tVerts, tCols, tInds);
+
+    // 4) Low-Poly Planked Tabletop (3 planks)
+    const plankDepth = 0.064 * s;
+    const plankOffsetsZ = [-0.068 * s, 0.0, 0.068 * s];
+    const plankColors = [woodTopColor, woodPlankLight, woodTopColor];
+    for (let i = 0; i < 3; i++) {
+      drawBoxFallback([0, 0.134 * s, plankOffsetsZ[i]], 0.26 * s, 0.022 * s, plankDepth, plankColors[i], LR, LU, LF, tVerts, tCols, tInds);
+    }
+
+    const tpl = {
+      verts: new Float32Array(tVerts),
+      cols: new Float32Array(tCols),
+      inds: new Uint16Array(tInds),
+      vertCount: tVerts.length / 3
+    };
+    _woodTableTemplateCache[mode] = tpl;
+    return tpl;
+  }
+
   window.ItemRegistry["wood_table"] = {
     render: function(item, vertices, colors, indices, targetBuffer) {
-      const boxFunc = (typeof window !== "undefined" && typeof window.addBox === "function" && window.addBox !== drawBoxFallback)
-        ? window.addBox
-        : (typeof addBox === "function" ? addBox : drawBoxFallback);
-
       const p = item.position || [0, 0, 0];
       const r = item.R || [1, 0, 0];
       const f = item.F || [0, 0, 1];
       const n = item.normal || [0, 1, 0];
       const isPreview = item.isPreview;
       const isValid = item.isValidPlacement !== false;
-      const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
+      const mode = isPreview ? (isValid ? 1 : 2) : 0;
 
-      const s = 0.46; // Consistent furniture scale factor matching wood_bed / wood_chest
+      const tpl = _getWoodTableTemplate(mode);
+      const tVerts = tpl.verts;
+      const tCols = tpl.cols;
+      const tInds = tpl.inds;
+      const vCount = tpl.vertCount;
+      const baseIdx = vertices.length / 3;
 
-      // Low-poly warm wood palette
-      const woodTopColor = isPreview ? previewColor : [0.56, 0.38, 0.21];
-      const woodPlankLight = isPreview ? previewColor : [0.61, 0.42, 0.24];
-      const woodFrameColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
-      const woodLegColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
+      const px = p[0], py = p[1], pz = p[2];
+      const rx = r[0], ry = r[1], rz = r[2];
+      const nx = n[0], ny = n[1], nz = n[2];
+      const fx = f[0], fy = f[1], fz = f[2];
+      const det = (ry * nz - rz * ny) * fx + (rz * nx - rx * nz) * fy + (rx * ny - ry * nx) * fz;
+      const isFlipped = det < 0;
 
-      // 1) 4 Wooden Table Legs (ขาโต๊ะไม้ทั้ง 4 มุม)
-      const legOffsets = [
-        [-0.105 * s, 0.062 * s, -0.075 * s],
-        [ 0.105 * s, 0.062 * s, -0.075 * s],
-        [-0.105 * s, 0.062 * s,  0.075 * s],
-        [ 0.105 * s, 0.062 * s,  0.075 * s]
-      ];
-      for (let i = 0; i < 4; i++) {
-        const lo = legOffsets[i];
-        const legCenter = [
-          p[0] + r[0] * lo[0] + n[0] * lo[1] + f[0] * lo[2],
-          p[1] + r[1] * lo[0] + n[1] * lo[1] + f[1] * lo[2],
-          p[2] + r[2] * lo[0] + n[2] * lo[1] + f[2] * lo[2]
-        ];
-        boxFunc(legCenter, 0.028 * s, 0.124 * s, 0.028 * s, woodLegColor, r, n, f, vertices, colors, indices);
+      for (let i = 0; i < vCount; i++) {
+        const vi = i * 3;
+        const lx = tVerts[vi], ly = tVerts[vi + 1], lz = tVerts[vi + 2];
+        vertices.push(
+          px + rx * lx + nx * ly + fx * lz,
+          py + ry * lx + ny * ly + fy * lz,
+          pz + rz * lx + nz * ly + fz * lz
+        );
+        colors.push(tCols[vi], tCols[vi + 1], tCols[vi + 2]);
       }
 
-      // 2) Under-table Support Apron / Frame (คานรับใต้หน้าโต๊ะ)
-      const apronPos = [
-        p[0] + n[0] * (0.114 * s),
-        p[1] + n[1] * (0.114 * s),
-        p[2] + n[2] * (0.114 * s)
-      ];
-      boxFunc(apronPos, 0.23 * s, 0.022 * s, 0.17 * s, woodFrameColor, r, n, f, vertices, colors, indices);
-
-      // 3) Side Stretcher Bars between legs (คานยึดขาโต๊ะซ้าย-ขวา)
-      const leftBarPos = [
-        p[0] - r[0] * (0.105 * s) + n[0] * (0.036 * s),
-        p[1] - r[1] * (0.105 * s) + n[1] * (0.036 * s),
-        p[2] - r[2] * (0.105 * s) + n[2] * (0.036 * s)
-      ];
-      boxFunc(leftBarPos, 0.020 * s, 0.018 * s, 0.13 * s, woodFrameColor, r, n, f, vertices, colors, indices);
-
-      const rightBarPos = [
-        p[0] + r[0] * (0.105 * s) + n[0] * (0.036 * s),
-        p[1] + r[1] * (0.105 * s) + n[1] * (0.036 * s),
-        p[2] + r[2] * (0.105 * s) + n[2] * (0.036 * s)
-      ];
-      boxFunc(rightBarPos, 0.020 * s, 0.018 * s, 0.13 * s, woodFrameColor, r, n, f, vertices, colors, indices);
-
-      // 4) Low-Poly Planked Tabletop (แผ่นหน้าโต๊ะไม้ 3 แผ่นเรียงกัน)
-      const plankDepth = 0.064 * s;
-      const plankOffsetsZ = [-0.068 * s, 0.0, 0.068 * s];
-      const plankColors = [woodTopColor, woodPlankLight, woodTopColor];
-      for (let i = 0; i < 3; i++) {
-        const pz = plankOffsetsZ[i];
-        const plankPos = [
-          p[0] + n[0] * (0.134 * s) + f[0] * pz,
-          p[1] + n[1] * (0.134 * s) + f[1] * pz,
-          p[2] + n[2] * (0.134 * s) + f[2] * pz
-        ];
-        boxFunc(plankPos, 0.26 * s, 0.022 * s, plankDepth, plankColors[i], r, n, f, vertices, colors, indices);
+      const iLen = tInds.length;
+      if (isFlipped) {
+        for (let i = 0; i < iLen; i += 3) {
+          indices.push(baseIdx + tInds[i], baseIdx + tInds[i + 2], baseIdx + tInds[i + 1]);
+        }
+      } else {
+        for (let i = 0; i < iLen; i++) {
+          indices.push(baseIdx + tInds[i]);
+        }
       }
     }
   };

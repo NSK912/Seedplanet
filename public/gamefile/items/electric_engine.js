@@ -1,71 +1,113 @@
 // === SEEDPLANET MODULE: JS/ITEMS/ELECTRIC_ENGINE.JS ===
 
-window.drawElectricEngine = function(center, engWid, engHei, engLen, r, n, f, cMain, cDark, cAccent, gearColor, vertices, colors, indices) {
-  if (typeof addBox !== "function") return;
-  
-  // Calculate relative scale multiplier based on standard length
-  const s = engLen / 0.45; 
+const _electricEngineTemplateCache = new Map();
+const MAX_ENGINE_TEMPLATES = 24;
 
-  // Main metal casing
-  addBox(center, engWid, engHei, engLen, cMain, r, n, f, vertices, colors, indices);
-  
-  // Black side panels
-  const sideCenter1 = [
-    center[0] + r[0] * (engWid/2 + 0.01 * s),
-    center[1] + r[1] * (engWid/2 + 0.01 * s),
-    center[2] + r[2] * (engWid/2 + 0.01 * s)
-  ];
-  addBox(sideCenter1, 0.01 * s, engHei * 0.7, engLen * 0.8, cDark, r, n, f, vertices, colors, indices);
-  
-  const sideCenter2 = [
-    center[0] - r[0] * (engWid/2 + 0.01 * s),
-    center[1] - r[1] * (engWid/2 + 0.01 * s),
-    center[2] - r[2] * (engWid/2 + 0.01 * s)
-  ];
-  addBox(sideCenter2, 0.01 * s, engHei * 0.7, engLen * 0.8, cDark, r, n, f, vertices, colors, indices);
-  
-  // Top battery/capacitor ridges
-  for(let i = -2; i <= 2; i++) {
-    const ridgeCenter = [
-      center[0] + n[0] * (engHei/2 + 0.02 * s) + f[0] * (i * engLen * 0.15),
-      center[1] + n[1] * (engHei/2 + 0.02 * s) + f[1] * (i * engLen * 0.15),
-      center[2] + n[2] * (engHei/2 + 0.02 * s) + f[2] * (i * engLen * 0.15)
-    ];
-    addBox(ridgeCenter, engWid * 0.9, 0.04 * s, engLen * 0.05, cAccent, r, n, f, vertices, colors, indices);
+function getOrCreateRawElectricEngineTemplate(engWid, engHei, engLen) {
+  const key = Math.round(engWid * 10000) + "_" + Math.round(engHei * 10000) + "_" + Math.round(engLen * 10000);
+  let cached = _electricEngineTemplateCache.get(key);
+  if (cached) return cached;
+
+  const s = engLen / 0.45;
+  const tempVerts = [];
+  const tempColors = [];
+  const tempIndices = [];
+  const tempSlots = [];
+  const lr = [1, 0, 0];
+  const ln = [0, 1, 0];
+  const lf = [0, 0, 1];
+  const dummyCol = [1, 1, 1];
+
+  const pushBox = (c, w, h, d, slot, br, bn, bf) => {
+    const startV = tempVerts.length / 3;
+    addBox(c, w, h, d, dummyCol, br, bn, bf, tempVerts, tempColors, tempIndices);
+    const endV = tempVerts.length / 3;
+    for (let v = startV; v < endV; v++) tempSlots.push(slot);
+  };
+
+  // 0: Main metal casing
+  pushBox([0, 0, 0], engWid, engHei, engLen, 0, lr, ln, lf);
+
+  // 1: Black side panels
+  pushBox([engWid / 2 + 0.01 * s, 0, 0], 0.01 * s, engHei * 0.7, engLen * 0.8, 1, lr, ln, lf);
+  pushBox([-(engWid / 2 + 0.01 * s), 0, 0], 0.01 * s, engHei * 0.7, engLen * 0.8, 1, lr, ln, lf);
+
+  // 2: Top battery/capacitor ridges
+  for (let i = -2; i <= 2; i++) {
+    pushBox([0, engHei / 2 + 0.02 * s, i * engLen * 0.15], engWid * 0.9, 0.04 * s, engLen * 0.05, 2, lr, ln, lf);
   }
-  
-  // Front connector interface
-  const frontCenter = [
-    center[0] + f[0] * (engLen/2 + 0.02 * s),
-    center[1] + f[1] * (engLen/2 + 0.02 * s),
-    center[2] + f[2] * (engLen/2 + 0.02 * s)
-  ];
-  addBox(frontCenter, engWid * 0.5, engHei * 0.5, 0.04 * s, cDark, r, n, f, vertices, colors, indices);
-  
-  // Side gear/wheel made of intersecting boxes
-  const gearCenter = [
-    center[0] + r[0] * (engWid/2 + 0.06 * s),
-    center[1] + r[1] * (engWid/2 + 0.06 * s),
-    center[2] + r[2] * (engWid/2 + 0.06 * s)
-  ];
+
+  // 1: Front connector interface
+  pushBox([0, 0, engLen / 2 + 0.02 * s], engWid * 0.5, engHei * 0.5, 0.04 * s, 1, lr, ln, lf);
+
+  // 3: Side gear/wheel made of intersecting boxes
+  const gx = engWid / 2 + 0.06 * s;
   const gearRadius = engHei * 0.6;
   const gearThick = 0.06 * s;
-  
-  // Cross pieces to make an 8-sided star/gear
-  addBox(gearCenter, gearThick, gearRadius, gearRadius, gearColor, r, n, f, vertices, colors, indices);
-  
-  const diagR = [r[0], r[1], r[2]];
-  const diagN = [
-    n[0] * 0.707 - f[0] * 0.707,
-    n[1] * 0.707 - f[1] * 0.707,
-    n[2] * 0.707 - f[2] * 0.707
-  ];
-  const diagF = [
-    n[0] * 0.707 + f[0] * 0.707,
-    n[1] * 0.707 + f[1] * 0.707,
-    n[2] * 0.707 + f[2] * 0.707
-  ];
-  addBox(gearCenter, gearThick, gearRadius, gearRadius, gearColor, diagR, diagN, diagF, vertices, colors, indices);
+  pushBox([gx, 0, 0], gearThick, gearRadius, gearRadius, 3, lr, ln, lf);
+
+  const diagN = [0, 0.707, -0.707];
+  const diagF = [0, 0.707, 0.707];
+  pushBox([gx, 0, 0], gearThick, gearRadius, gearRadius, 3, lr, diagN, diagF);
+
+  const tpl = {
+    verts: new Float32Array(tempVerts),
+    slots: new Uint8Array(tempSlots),
+    indices: new Uint16Array(tempIndices),
+    vertCount: tempVerts.length / 3
+  };
+
+  if (_electricEngineTemplateCache.size >= MAX_ENGINE_TEMPLATES) {
+    const firstKey = _electricEngineTemplateCache.keys().next().value;
+    _electricEngineTemplateCache.delete(firstKey);
+  }
+  _electricEngineTemplateCache.set(key, tpl);
+  return tpl;
+}
+
+window.drawElectricEngine = function(center, engWid, engHei, engLen, r, n, f, cMain, cDark, cAccent, gearColor, vertices, colors, indices) {
+  if (typeof addBox !== "function") return;
+
+  const tpl = getOrCreateRawElectricEngineTemplate(engWid, engHei, engLen);
+  const tVerts = tpl.verts;
+  const tSlots = tpl.slots;
+  const tIndices = tpl.indices;
+  const vCount = tpl.vertCount;
+  const baseIdx = vertices.length / 3;
+
+  const cx = center[0], cy = center[1], cz = center[2];
+  const r0 = r[0], r1 = r[1], r2 = r[2];
+  const n0 = n[0], n1 = n[1], n2 = n[2];
+  const f0 = f[0], f1 = f[1], f2 = f[2];
+  const palette = [cMain, cDark, cAccent, gearColor];
+
+  for (let i = 0; i < vCount; i++) {
+    const i3 = i * 3;
+    const lx = tVerts[i3];
+    const ly = tVerts[i3 + 1];
+    const lz = tVerts[i3 + 2];
+
+    vertices.push(
+      cx + r0 * lx + n0 * ly + f0 * lz,
+      cy + r1 * lx + n1 * ly + f1 * lz,
+      cz + r2 * lx + n2 * ly + f2 * lz
+    );
+
+    const col = palette[tSlots[i]];
+    colors.push(col[0], col[1], col[2]);
+  }
+
+  const det = (r1 * n2 - r2 * n1) * f0 + (r2 * n0 - r0 * n2) * f1 + (r0 * n1 - r1 * n0) * f2;
+  const idxLen = tIndices.length;
+  if (det < 0) {
+    for (let i = 0; i < idxLen; i += 3) {
+      indices.push(baseIdx + tIndices[i], baseIdx + tIndices[i + 2], baseIdx + tIndices[i + 1]);
+    }
+  } else {
+    for (let i = 0; i < idxLen; i++) {
+      indices.push(baseIdx + tIndices[i]);
+    }
+  }
 };
 
 window.ItemRegistry["electric_engine"] = {

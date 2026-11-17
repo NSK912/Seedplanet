@@ -44,6 +44,8 @@ window.buildGeorgiacetusModel = function(
   };
 
   const scale = 0.5 * scaleMultiplier;
+  const lodLevel = (c && typeof c.lodLevel === "number") ? c.lodLevel : 0;
+  const isLod1 = lodLevel >= 1;
   const darkGrey = [0.25, 0.28, 0.32];
   const lightGrey = [0.65, 0.68, 0.72];
   const bellyColor = [0.75, 0.78, 0.82];
@@ -98,10 +100,15 @@ window.buildGeorgiacetusModel = function(
   const spineRadii = [
     0.01, 0.03, 0.05, 0.08, 0.12, 0.14, 0.11, 0.07, 0.04, 0.02,
   ].map((r) => r * scale);
+  const spineSegs = isLod1 ? 5 : 8;
+  const limbSegs = isLod1 ? 3 : 5;
+  const capSegs = isLod1 ? 1 : 2;
+  const eyeSegs = isLod1 ? 2 : 3;
+
   buildContinuousSpine(
     spinePoints,
     spineRadii,
-    8,
+    spineSegs,
     darkGrey,
     vertices,
     colors,
@@ -110,13 +117,13 @@ window.buildGeorgiacetusModel = function(
   );
 
   // Cap the ends
-  buildLowPolySphere(pTailTip, 0.02 * scale, 2, darkGrey, 0, 0, vertices, colors, indices);
-  buildLowPolySphere(pUpperJawTip, 0.01 * scale, 2, darkGrey, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(pTailTip, 0.02 * scale, capSegs, darkGrey, 0, 0, vertices, colors, indices);
+  buildLowPolySphere(pUpperJawTip, 0.01 * scale, capSegs, darkGrey, 0, 0, vertices, colors, indices);
 
   buildContinuousSpine(
     [pSnoutBase, pLowerJawTip],
     [0.02 * scale, 0.005 * scale],
-    4,
+    isLod1 ? 3 : 4,
     bellyColor,
     vertices,
     colors,
@@ -126,34 +133,36 @@ window.buildGeorgiacetusModel = function(
   
   buildLowPolySphere(pLowerJawTip, 0.005 * scale, 1, bellyColor, 0, 0, vertices, colors, indices);
 
-  // Teeth (simple cones along the jaw)
-  const whiteColor = [0.9, 0.9, 0.9];
-  const pTooth1L = p(0.01, -0.005, 0.45, 0.4, 0.2);
-  const pTooth1TipL = p(0.01, -0.03, 0.45, 0.4, 0.2);
-  const pTooth1R = p(-0.01, -0.005, 0.45, 0.4, 0.2);
-  const pTooth1TipR = p(-0.01, -0.03, 0.45, 0.4, 0.2);
-  buildTaperedSegment(
-    pTooth1L,
-    pTooth1TipL,
-    0.005 * scale,
-    0.001 * scale,
-    3,
-    whiteColor,
-    vertices,
-    colors,
-    indices,
-  );
-  buildTaperedSegment(
-    pTooth1R,
-    pTooth1TipR,
-    0.005 * scale,
-    0.001 * scale,
-    3,
-    whiteColor,
-    vertices,
-    colors,
-    indices,
-  );
+  // Teeth (LOD 0 only)
+  if (!isLod1) {
+    const whiteColor = [0.9, 0.9, 0.9];
+    const pTooth1L = p(0.01, -0.005, 0.45, 0.4, 0.2);
+    const pTooth1TipL = p(0.01, -0.03, 0.45, 0.4, 0.2);
+    const pTooth1R = p(-0.01, -0.005, 0.45, 0.4, 0.2);
+    const pTooth1TipR = p(-0.01, -0.03, 0.45, 0.4, 0.2);
+    buildTaperedSegment(
+      pTooth1L,
+      pTooth1TipL,
+      0.005 * scale,
+      0.001 * scale,
+      3,
+      whiteColor,
+      vertices,
+      colors,
+      indices,
+    );
+    buildTaperedSegment(
+      pTooth1R,
+      pTooth1TipR,
+      0.005 * scale,
+      0.001 * scale,
+      3,
+      whiteColor,
+      vertices,
+      colors,
+      indices,
+    );
+  }
 
   // Eyes
   const blackColor = [0.1, 0.1, 0.1];
@@ -162,7 +171,7 @@ window.buildGeorgiacetusModel = function(
   buildLowPolySphere(
     pEyeL,
     0.01 * scale,
-    3,
+    eyeSegs,
     blackColor,
     0,
     0,
@@ -173,7 +182,7 @@ window.buildGeorgiacetusModel = function(
   buildLowPolySphere(
     pEyeR,
     0.01 * scale,
-    3,
+    eyeSegs,
     blackColor,
     0,
     0,
@@ -187,7 +196,7 @@ window.buildGeorgiacetusModel = function(
   buildContinuousSpine(
     [pTailTip, pFlukeL],
     [0.02 * scale, 0.005 * scale],
-    4,
+    isLod1 ? 3 : 4,
     darkGrey,
     vertices,
     colors,
@@ -197,7 +206,7 @@ window.buildGeorgiacetusModel = function(
   buildContinuousSpine(
     [pTailTip, pFlukeR],
     [0.02 * scale, 0.005 * scale],
-    4,
+    isLod1 ? 3 : 4,
     darkGrey,
     vertices,
     colors,
@@ -237,7 +246,7 @@ window.buildGeorgiacetusModel = function(
       0.025 * scale,
       0.015 * scale,
     ],
-    5,
+    limbSegs,
     lightGrey,
     vertices,
     colors,
@@ -272,7 +281,7 @@ window.buildGeorgiacetusModel = function(
       0.025 * scale,
       0.015 * scale,
     ],
-    5,
+    limbSegs,
     lightGrey,
     vertices,
     colors,
@@ -310,7 +319,7 @@ window.buildGeorgiacetusModel = function(
       0.025 * scale,
       0.015 * scale,
     ],
-    5,
+    limbSegs,
     lightGrey,
     vertices,
     colors,
@@ -345,7 +354,7 @@ window.buildGeorgiacetusModel = function(
       0.025 * scale,
       0.015 * scale,
     ],
-    5,
+    limbSegs,
     lightGrey,
     vertices,
     colors,

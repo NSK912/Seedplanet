@@ -216,6 +216,191 @@ window.NpcRegistry = window.NpcRegistry || {};
 const _allNpcVertices = [];
 const _allNpcColors = [];
 const _allNpcIndices = [];
+const _shadowRenderList = [];
+const _farRenderList = [];
+const _tmpPoseVerts = [];
+const _tmpPoseColors = [];
+const _tmpPoseIndices = [];
+
+// =========================================================================
+// Shared NPC Local-Space Geometry & Quantized Pose Cache (LRU)
+// Reuses local meshes across NPCs of the same species/variant/state/LOD
+// =========================================================================
+const NpcMeshCache = (function() {
+  const MAX_ENTRIES = 220;
+  const _poseMap = new Map();
+  const _dummyCollidersTarget = {
+    seed: 0,
+    animPhase: 0,
+    ragdollEnabled: false,
+    isSwimming: false,
+    lodLevel: 0,
+    colliders: null
+  };
+  const _localN = [0, 1, 0];
+  const _localR = [1, 0, 0];
+  const _localF = [0, 0, 1];
+  const _localPos = [0, 0, 0];
+  const _localFVec = [0, 0, 0];
+
+  function getSpeciesCacheConfig(type, lodLevel, cSeed) {
+    const isLod1 = lodLevel >= 1;
+    if (type === "meganeura") {
+      const variant = Math.floor(Math.abs(Math.sin((cSeed || 0) * 9876.54)) * 100) % 5;
+      return { variant, period: Math.PI * 4.0, bins: isLod1 ? 20 : 48 };
+    }
+    if (type === "isopod") {
+      const variant = Math.floor(Math.abs(Math.sin((cSeed || 0) * 8371.19)) * 100) % 3;
+      return { variant, period: Math.PI * 4.0, bins: isLod1 ? 14 : 32 };
+    }
+    if (type === "placoderm") {
+      const variant = Math.floor(Math.abs(Math.sin((cSeed || 0) * 7654.32)) * 100) % 3;
+      return { variant, period: Math.PI * 8.0, bins: isLod1 ? 20 : 48 };
+    }
+    if (type === "georgiacetus") {
+      return { variant: 0, period: Math.PI * 2.0, bins: isLod1 ? 12 : 24 };
+    }
+    return null;
+  }
+
+  function getOrBuildPose(c, npcReg, seed) {
+    const lodLevel = c.lodLevel >= 1 ? 1 : 0;
+    const cSeed = c.seed !== undefined ? c.seed : seed;
+    const cfg = getSpeciesCacheConfig(c.type, lodLevel, cSeed);
+    if (!cfg) return null;
+
+    let ph = (c.animPhase || 0) % cfg.period;
+    if (ph < 0) ph += cfg.period;
+    const bin = Math.floor((ph / cfg.period) * cfg.bins) % cfg.bins;
+    const swimFlag = c.isSwimming ? 1 : 0;
+    const key = `${c.type}|${cfg.variant}|${swimFlag}|${lodLevel}|${bin}`;
+
+    let entry = _poseMap.get(key);
+    if (entry) {
+      // Refresh LRU position
+      _poseMap.delete(key);
+      _poseMap.set(key, entry);
+      return entry;
+    }
+
+    const quantPhase = (bin + 0.5) * (cfg.period / cfg.bins);
+    _tmpPoseVerts.length = 0;
+    _tmpPoseColors.length = 0;
+    _tmpPoseIndices.length = 0;
+
+    _dummyCollidersTarget.seed = cSeed;
+    _dummyCollidersTarget.animPhase = quantPhase;
+    _dummyCollidersTarget.ragdollEnabled = false;
+    _dummyCollidersTarget.isSwimming = !!c.isSwimming;
+    _dummyCollidersTarget.lodLevel = lodLevel;
+    _dummyCollidersTarget.colliders = null;
+
+    npcReg.render(
+      _dummyCollidersTarget,
+      _tmpPoseVerts,
+      _tmpPoseColors,
+      _tmpPoseIndices,
+      0.5,
+      _localN,
+      _localR,
+      _localF,
+      _localPos,
+      _localFVec,
+      null,
+      cSeed
+    );
+
+    const localColliders = (_dummyCollidersTarget.colliders || []).map(col => ({
+      ox: col.offset[0],
+      oy: col.offset[1],
+      oz: col.offset[2],
+      radius: col.radius
+    }));
+
+    entry = {
+      vertices: new Float32Array(_tmpPoseVerts),
+      colors: new Float32Array(_tmpPoseColors),
+      indices: new Uint16Array(_tmpPoseIndices),
+      colliders: localColliders
+    };
+
+    if (_poseMap.size >= MAX_ENTRIES) {
+      const oldestKey = _poseMap.keys().next().value;
+      if (oldestKey !== undefined) _poseMap.delete(oldestKey);
+    }
+    _poseMap.set(key, entry);
+    return entry;
+  }
+
+  function emitLocalPose(entry, c, pos, R, N, F) {
+    const baseIdx = _allNpcVertices.length / 3;
+    const lv = entry.vertices;
+    const lc = entry.colors;
+    const li = entry.indices;
+
+    const px = pos[0], py = pos[1], pz = pos[2];
+    const r0 = R[0], r1 = R[1], r2 = R[2];
+    const n0 = N[0], n1 = N[1], n2 = N[2];
+    const f0 = F[0], f1 = F[1], f2 = F[2];
+
+    for (let i = 0; i < lv.length; i += 3) {
+      const lx = lv[i], ly = lv[i + 1], lz = lv[i + 2];
+      _allNpcVertices.push(
+        px + lx * r0 + ly * n0 + lz * f0,
+        py + lx * r1 + ly * n1 + lz * f1,
+        pz + lx * r2 + ly * n2 + lz * f2
+      );
+      _allNpcColors.push(lc[i], lc[i + 1], lc[i + 2]);
+    }
+    for (let i = 0; i < li.length; i++) {
+      _allNpcIndices.push(baseIdx + li[i]);
+    }
+
+    if (entry.colliders && entry.colliders.length > 0) {
+      if (!c.colliders || c.colliders.length !== entry.colliders.length) {
+        c.colliders = new Array(entry.colliders.length);
+        for (let k = 0; k < entry.colliders.length; k++) {
+          c.colliders[k] = { offset: [0, 0, 0], radius: entry.colliders[k].radius };
+        }
+      }
+      for (let k = 0; k < entry.colliders.length; k++) {
+        const col = entry.colliders[k];
+        const dst = c.colliders[k];
+        dst.offset[0] = col.ox * r0 + col.oy * n0 + col.oz * f0;
+        dst.offset[1] = col.ox * r1 + col.oy * n1 + col.oz * f1;
+        dst.offset[2] = col.ox * r2 + col.oy * n2 + col.oz * f2;
+        dst.radius = col.radius;
+      }
+    }
+  }
+
+  function emitFrozenWorldMesh(frozen) {
+    const baseIdx = _allNpcVertices.length / 3;
+    const fv = frozen.vertices;
+    const fc = frozen.colors;
+    const fi = frozen.indices;
+    for (let i = 0; i < fv.length; i++) {
+      _allNpcVertices.push(fv[i]);
+      _allNpcColors.push(fc[i]);
+    }
+    for (let i = 0; i < fi.length; i++) {
+      _allNpcIndices.push(baseIdx + fi[i]);
+    }
+  }
+
+  function clear() {
+    _poseMap.clear();
+  }
+
+  return {
+    getOrBuildPose,
+    emitLocalPose,
+    emitFrozenWorldMesh,
+    clear,
+    get size() { return _poseMap.size; }
+  };
+})();
+window.NpcMeshCache = NpcMeshCache;
 
 function calculatePlanetNpcCount(radius) {
   const r = typeof radius === 'number' ? radius : (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
@@ -234,6 +419,7 @@ window.calculatePlanetNpcCount = calculatePlanetNpcCount;
 
 function initAmphibians(count, seed) { 
   amphibians = []; 
+  NpcMeshCache.clear();
   if (window.DISABLE_NPCS) return;
 
   // Initialize the 5-planet living background ecosystem
@@ -744,24 +930,42 @@ function updateAmphibians(deltaTime, seed) {
       : (typeof renderDistValue !== "undefined" ? renderDistValue : 5.0));
   const refPos = (typeof eyePos !== "undefined" && eyePos && eyePos.length >= 3) ? eyePos : player_pos;
   const maxNpcDistSq = (curObjectDist + 0.6) * (curObjectDist + 0.6);
+  const curShadowDist = typeof shadowRenderDistValue !== "undefined"
+    ? shadowRenderDistValue
+    : (typeof window !== "undefined" && typeof window.shadowRenderDistValue !== "undefined"
+      ? window.shadowRenderDistValue
+      : 14.0);
+  const shadowCutoff = curShadowDist + 2.0;
+  const maxShadowNpcDistSq = shadowCutoff * shadowCutoff;
+  const curRadiusFallback = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
 
   // Clear reusable persistent arrays without creating new objects
   _allNpcVertices.length = 0;
   _allNpcColors.length = 0;
   _allNpcIndices.length = 0;
+  _shadowRenderList.length = 0;
+  _farRenderList.length = 0;
 
   for (let c of amphibians) {
-    // Synchronize NPC 3D orientation basis every frame
-    const tf = window.getNPCTransform(c);
-    if (tf) {
-      c.position = tf.pos;
-      c.N = tf.N;
-      c.F = tf.F;
-      c.R = tf.R;
+    // Lightweight world position only (defer full N/F/R basis to visible NPCs)
+    let effPos;
+    if (c.ragdollEnabled && c.ragdollPos && c.ragdollPos.length >= 3) {
+      effPos = c.ragdollPos;
+      if (!c.position) c.position = [effPos[0], effPos[1], effPos[2]];
+      else { c.position[0] = effPos[0]; c.position[1] = effPos[1]; c.position[2] = effPos[2]; }
+    } else {
+      const sinT0 = Math.sin(c.theta || 0);
+      const cosT0 = Math.cos(c.theta || 0);
+      const sinP0 = Math.sin(c.phi || 0);
+      const cosP0 = Math.cos(c.phi || 0);
+      const r0 = c.r || curRadiusFallback;
+      if (!c.position) c.position = [0, 0, 0];
+      c.position[0] = r0 * sinT0 * cosP0;
+      c.position[1] = r0 * cosT0;
+      c.position[2] = r0 * sinT0 * sinP0;
+      effPos = c.position;
     }
-    const npc_pos = c.position;
-
-    const effPos = (c.ragdollEnabled && c.ragdollPos) ? c.ragdollPos : npc_pos;
+    const npc_pos = effPos;
 
     // Distance check to player/camera against object render distance
     const distNpcDx = refPos[0] - effPos[0];
@@ -773,11 +977,11 @@ function updateAmphibians(deltaTime, seed) {
     let shouldAnimate = true;
     let lodLevel = 0;
 
-    // AI Life-Cycle LOD Tiers:
+    // AI Life-Cycle & Mesh LOD Tiers:
     // LOD 0 (< 15m): Full skeletal animation, breathing sway, full audio attenuation, full 3D mesh
-    // LOD 1 (15m - 35m): Normal skeletal animation, full 3D mesh, sound effects muted
+    // LOD 1 (15m - 35m): Simplified Mesh LOD, coarser quantized animation, sound effects muted
     // LOD 2 (> 35m or outside render distance or frustum culled): 0 3D vertices, 0 mesh calculations,
-    //                        simulation runs in lightweight numeric mode (energy, hunger, schedule, drift)
+    //                        throttled numeric simulation
     if (distNpcSq < 225.0) { // 15m * 15m
       lodLevel = 0;
     } else if (distNpcSq < 1225.0 && (!isRenderDistOn || distNpcSq <= maxNpcDistSq)) { // 35m * 35m
@@ -795,7 +999,8 @@ function updateAmphibians(deltaTime, seed) {
     }
 
     if (shouldRender && typeof frustumCullingEnabled !== 'undefined' && frustumCullingEnabled && typeof frustumPlanes !== 'undefined' && frustumPlanes && typeof isSphereInFrustum === 'function') {
-      if (!isSphereInFrustum(frustumPlanes, effPos, 2.0)) {
+      const frustumRadius = c.type === 'meganeura' ? 0.5 : (c.type === 'isopod' ? 0.6 : (c.type === 'obsidian_cube' ? 1.0 : (c.type === 'placoderm' ? 1.4 : 1.2)));
+      if (!isSphereInFrustum(frustumPlanes, effPos, frustumRadius)) {
         shouldRender = false;
         lodLevel = 2;
       }
@@ -803,6 +1008,9 @@ function updateAmphibians(deltaTime, seed) {
     c.lodLevel = lodLevel;
 
     if (c.ragdollEnabled) {
+      if (!c.ragdollAsleep) {
+        c._ragdollFrozenMesh = null;
+      }
       if (c.ragdollPos) {
         const dx = player_pos[0] - c.ragdollPos[0];
         const dy = player_pos[1] - c.ragdollPos[1];
@@ -912,6 +1120,9 @@ function updateAmphibians(deltaTime, seed) {
           c.animPhase = Math.random() * Math.PI * 2;
           c.ragdollEnabled = false;
           c.ragdollInitialized = false;
+          c.ragdollAsleep = false;
+          c.ragdollSleepFrames = 0;
+          c._ragdollFrozenMesh = null;
           c.ragdollPos = null;
           c.ragdollVel = null;
           c.hp = maxHp;
@@ -1313,11 +1524,21 @@ function updateAmphibians(deltaTime, seed) {
         damagePlayer(1);
       }
 
-      // Update living NPC life-cycle state machine (Energy, Hunger, Daily Activities)
-      updateNpcLifeCycle(c, deltaTime, seed);
-
       if (c.lodLevel === 2) {
-        // Fast numeric off-screen drift - updates position AND enforces ocean bounds so aquatic NPCs never drift onto land!
+        // Throttled off-screen drift (runs once every 0.35s with jittered phase to slash CPU/noise load)
+        if (c.lod2Accumulator === undefined) {
+          c.lod2Accumulator = Math.random() * 0.35;
+        }
+        c.lod2Accumulator += deltaTime;
+        if (c.lod2Accumulator < 0.35) {
+          continue;
+        }
+        const stepDt = c.lod2Accumulator;
+        c.lod2Accumulator = 0;
+
+        // Update life-cycle state machine at throttled cadence
+        updateNpcLifeCycle(c, stepDt, seed);
+
         const curRad = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
         const curHS = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(curRad / 8.0, 0.70));
         const wR = curRad + (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (curHS * 0.25);
@@ -1328,7 +1549,6 @@ function updateAmphibians(deltaTime, seed) {
           const curH = sampleH(c.theta, c.phi, seed);
           const curGR = curRad + curH * curHS;
           if (curGR > wR - 0.04) {
-            // Relocate off-screen stranded placoderm back to deep water
             for (let t = 0; t < 30; t++) {
               const testT = Math.random() * Math.PI;
               const testP = Math.random() * Math.PI * 2;
@@ -1345,8 +1565,8 @@ function updateAmphibians(deltaTime, seed) {
         }
 
         if (!c.isIdle && c.lifeSchedule !== 'RESTING' && c.lifeSchedule !== 'SLEEPING') {
-          const moveSpeed = (c.isSwimming ? 0.22 : 0.04) * deltaTime;
-          c.heading += (Math.random() - 0.5) * 0.4 * deltaTime;
+          const moveSpeed = (c.isSwimming ? 0.22 : 0.04) * stepDt;
+          c.heading += (Math.random() - 0.5) * 0.4 * stepDt;
           const dTheta = -Math.cos(c.heading) * (moveSpeed / (c.r || curRad));
           const dPhi = Math.sin(c.heading) * (moveSpeed / ((c.r || curRad) * Math.max(0.1, Math.sin(c.theta))));
           const nextTheta = Math.max(0.05, Math.min(Math.PI - 0.05, c.theta + dTheta));
@@ -1360,7 +1580,6 @@ function updateAmphibians(deltaTime, seed) {
               c.phi = nextPhi;
               c.r = Math.max(nextGR + 0.04, Math.min(wR - 0.03, c.r || (wR - 0.05)));
             } else {
-              // Turn away from shore instead of drifting onto land while off-screen!
               c.heading = (c.heading + Math.PI + (Math.random() - 0.5) * 0.6) % (Math.PI * 2);
             }
           } else {
@@ -1378,16 +1597,21 @@ function updateAmphibians(deltaTime, seed) {
           }
         }
 
-        // Always keep c.position synced in LOD 2 so teleporting to NPC uses fresh coordinates
         const sinT2 = Math.sin(c.theta);
         const cosT2 = Math.cos(c.theta);
         const sinP2 = Math.sin(c.phi);
         const cosP2 = Math.cos(c.phi);
         const r2 = c.r || curRad;
-        c.position = [r2 * sinT2 * cosP2, r2 * cosT2, r2 * sinT2 * sinP2];
+        if (!c.position) c.position = [0, 0, 0];
+        c.position[0] = r2 * sinT2 * cosP2;
+        c.position[1] = r2 * cosT2;
+        c.position[2] = r2 * sinT2 * sinP2;
         continue; // Skip all heavy 3D mesh transformations, trigonometry, and audio raycasts!
       }
 
+      // Update living NPC life-cycle state machine for nearby/visible NPCs
+      updateNpcLifeCycle(c, deltaTime, seed);
+      c._ragdollFrozenMesh = null;
       c.ragdollInitialized = false;
       const npcRegConfig = window.NpcRegistry && window.NpcRegistry[c.type];
       const animSpeed = npcRegConfig && npcRegConfig.animSpeed !== undefined ? npcRegConfig.animSpeed : 4.0;
@@ -1504,12 +1728,13 @@ function updateAmphibians(deltaTime, seed) {
       const npc_r_est = c.r || (RADIUS + getHeightOnSphere(c.theta, c.phi, seed) * HEIGHT_SCALE);
       
       // Throttled terrain/cave and water lookup to keep the frame rate at solid 120fps!
+      const caveInterval = (c.type === 'placoderm') ? 0.08 : 0.15;
       if (c.caveCheckAccumulator === undefined) {
-        c.caveCheckAccumulator = Math.random() * 0.15; // Jitter the initial timers to spread the load across frames
+        c.caveCheckAccumulator = Math.random() * caveInterval; // Jitter the initial timers to spread the load across frames
       }
       c.caveCheckAccumulator += deltaTime;
 
-      if (!c.cachedCaveData || c.caveCheckAccumulator >= 0.15 || c.type === 'placoderm') {
+      if (!c.cachedCaveData || c.caveCheckAccumulator >= caveInterval) {
         c.caveCheckAccumulator = 0;
         c.cachedCaveData = typeof getTerrainSurfaceAndCeiling === "function"
           ? getTerrainSurfaceAndCeiling(npc_nx, npc_ny, npc_nz, npc_r_est)
@@ -1598,114 +1823,122 @@ function updateAmphibians(deltaTime, seed) {
     }
 
     if (shouldRender) {
-      const sinTheta = Math.sin(c.theta);
-      const cosTheta = Math.cos(c.theta);
-      const sinPhi = Math.sin(c.phi);
-      const cosPhi = Math.cos(c.phi);
-      let N = [sinTheta * cosPhi, cosTheta, sinTheta * sinPhi];
-
-      c.position = [N[0] * c.r, N[1] * c.r, N[2] * c.r];
-      c.radius = 0.15;
-
-      // Heading local frame
-      let h_rad = c.heading;
-      const sinH = Math.sin(h_rad);
-      const cosH = Math.cos(h_rad);
-
-      let North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
-      let East = [-sinPhi, 0, cosPhi];
-
-      let F = [
-        North[0] * cosH + East[0] * sinH,
-        North[1] * cosH + East[1] * sinH,
-        North[2] * cosH + East[2] * sinH,
-      ];
-      let R = [
-        -North[0] * sinH + East[0] * cosH,
-        -North[1] * sinH + East[1] * cosH,
-        -North[2] * sinH + East[2] * cosH,
-      ];
-
-      if (c.ragdollEnabled && c.ragdollAxis && Array.isArray(c.ragdollAxis) && c.ragdollAxis.length >= 3) {
-        const q = c.ragdollAngle || 0;
-        const cosQ = Math.cos(q);
-        const sinQ = Math.sin(q);
-        const ax = c.ragdollAxis[0];
-        const ay = c.ragdollAxis[1];
-        const az = c.ragdollAxis[2];
-
-        const rotateVector = (v) => {
-          const dot = v[0] * ax + v[1] * ay + v[2] * az;
-          const cross = [
-            ay * v[2] - az * v[1],
-            az * v[0] - ax * v[2],
-            ax * v[1] - ay * v[0],
-          ];
-          return [
-            v[0] * cosQ + cross[0] * sinQ + ax * dot * (1.0 - cosQ),
-            v[1] * cosQ + cross[1] * sinQ + ay * dot * (1.0 - cosQ),
-            v[2] * cosQ + cross[2] * sinQ + az * dot * (1.0 - cosQ),
-          ];
-        };
-
-        N = rotateVector(N);
-        F = rotateVector(F);
-        R = rotateVector(R);
+      if (distNpcSq <= maxShadowNpcDistSq) {
+        _shadowRenderList.push(c);
+      } else {
+        _farRenderList.push(c);
       }
+    }
+  }
 
-      c.N = N;
-      c.F = F;
-      c.R = R;
+  // Helper to emit geometry for one visible NPC (uses shared quantized pose cache or sleeping ragdoll cache)
+  const emitNpcGeometry = (c) => {
+    const npcReg = window.NpcRegistry[c.type];
+    if (!npcReg || !npcReg.render) return;
 
-      const pos = (c.ragdollEnabled && c.ragdollPos && Array.isArray(c.ragdollPos) && c.ragdollPos.length >= 3)
-        ? c.ragdollPos
-        : (c.position || npc_pos || [0, 0, 0]);
+    // Fast path 1: Sleeping ragdoll world-space cache (already terrain-clamped & settled)
+    if (c.ragdollEnabled && c.ragdollAsleep && c._ragdollFrozenMesh) {
+      NpcMeshCache.emitFrozenWorldMesh(c._ragdollFrozenMesh);
+      return;
+    }
 
-      let f = [0, 0, 0];
-      if (c.ragdollEnabled && c.ragdollVel && Array.isArray(c.ragdollVel) && c.ragdollVel.length >= 3) {
-        const localVel = [
-          c.ragdollVel[0] * R[0] + c.ragdollVel[1] * R[1] + c.ragdollVel[2] * R[2],
-          c.ragdollVel[0] * N[0] + c.ragdollVel[1] * N[1] + c.ragdollVel[2] * N[2],
-          c.ragdollVel[0] * F[0] + c.ragdollVel[1] * F[1] + c.ragdollVel[2] * F[2],
+    const sinTheta = Math.sin(c.theta);
+    const cosTheta = Math.cos(c.theta);
+    const sinPhi = Math.sin(c.phi);
+    const cosPhi = Math.cos(c.phi);
+    let N = [sinTheta * cosPhi, cosTheta, sinTheta * sinPhi];
+
+    c.position = [N[0] * c.r, N[1] * c.r, N[2] * c.r];
+    c.radius = 0.15;
+
+    let h_rad = c.heading;
+    const sinH = Math.sin(h_rad);
+    const cosH = Math.cos(h_rad);
+
+    const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+    const East = [-sinPhi, 0, cosPhi];
+
+    let F = [
+      North[0] * cosH + East[0] * sinH,
+      North[1] * cosH + East[1] * sinH,
+      North[2] * cosH + East[2] * sinH,
+    ];
+    let R = [
+      -North[0] * sinH + East[0] * cosH,
+      -North[1] * sinH + East[1] * cosH,
+      -North[2] * sinH + East[2] * cosH,
+    ];
+
+    if (c.ragdollEnabled && c.ragdollAxis && Array.isArray(c.ragdollAxis) && c.ragdollAxis.length >= 3) {
+      const q = c.ragdollAngle || 0;
+      const cosQ = Math.cos(q);
+      const sinQ = Math.sin(q);
+      const ax = c.ragdollAxis[0];
+      const ay = c.ragdollAxis[1];
+      const az = c.ragdollAxis[2];
+
+      const rotateVector = (v) => {
+        const dot = v[0] * ax + v[1] * ay + v[2] * az;
+        const cross = [
+          ay * v[2] - az * v[1],
+          az * v[0] - ax * v[2],
+          ax * v[1] - ay * v[0],
         ];
-        const g = [
-          -N[0] * R[0] - N[1] * R[1] - N[2] * R[2],
-          -N[0] * N[0] - N[1] * N[1] - N[2] * N[2],
-          -N[0] * F[0] - N[1] * F[1] - N[2] * F[2],
+        return [
+          v[0] * cosQ + cross[0] * sinQ + ax * dot * (1.0 - cosQ),
+          v[1] * cosQ + cross[1] * sinQ + ay * dot * (1.0 - cosQ),
+          v[2] * cosQ + cross[2] * sinQ + az * dot * (1.0 - cosQ),
         ];
-        f[0] = g[0] * 1.5 - localVel[0] * 12.0;
-        f[1] = g[1] * 1.5 - localVel[1] * 12.0;
-        f[2] = g[2] * 1.5 - localVel[2] * 12.0;
+      };
+
+      N = rotateVector(N);
+      F = rotateVector(F);
+      R = rotateVector(R);
+    }
+
+    c.N = N;
+    c.F = F;
+    c.R = R;
+
+    const pos = (c.ragdollEnabled && c.ragdollPos && Array.isArray(c.ragdollPos) && c.ragdollPos.length >= 3)
+      ? c.ragdollPos
+      : (c.position || [0, 0, 0]);
+
+    // Fast path 2: Shared Quantized Local-Space Pose Cache for living animated NPCs
+    if (!c.ragdollEnabled) {
+      const cachedPose = NpcMeshCache.getOrBuildPose(c, npcReg, seed);
+      if (cachedPose) {
+        NpcMeshCache.emitLocalPose(cachedPose, c, pos, R, N, F);
+        return;
       }
+    }
 
-      const transformPoint = (px, py, pz) => {
-        const basePos = (pos && Array.isArray(pos) && pos.length >= 3) ? pos : (c.position || npc_pos || [0, 0, 0]);
-        let worldPos = [
-          basePos[0] + (px * R[0] + py * N[0] + pz * F[0]),
-          basePos[1] + (px * R[1] + py * N[1] + pz * F[1]),
-          basePos[2] + (px * R[2] + py * N[2] + pz * F[2]),
-        ];
-        if (c.ragdollEnabled) {
-          if (c.type === 'human') {
-            // Human model: maintain rigid anatomical integrity, only clamp vertices above ground
-            const dist = Math.sqrt(
-              worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
-            );
-            if (dist > 0.001) {
-              const ux = worldPos[0] / dist;
-              const uy = worldPos[1] / dist;
-              const uz = worldPos[2] / dist;
+    let f = [0, 0, 0];
+    if (c.ragdollEnabled && c.ragdollVel && Array.isArray(c.ragdollVel) && c.ragdollVel.length >= 3) {
+      const localVel = [
+        c.ragdollVel[0] * R[0] + c.ragdollVel[1] * R[1] + c.ragdollVel[2] * R[2],
+        c.ragdollVel[0] * N[0] + c.ragdollVel[1] * N[1] + c.ragdollVel[2] * N[2],
+        c.ragdollVel[0] * F[0] + c.ragdollVel[1] * F[1] + c.ragdollVel[2] * F[2],
+      ];
+      const g = [
+        -N[0] * R[0] - N[1] * R[1] - N[2] * R[2],
+        -N[0] * N[0] - N[1] * N[1] - N[2] * N[2],
+        -N[0] * F[0] - N[1] * F[1] - N[2] * F[2],
+      ];
+      f[0] = g[0] * 1.5 - localVel[0] * 12.0;
+      f[1] = g[1] * 1.5 - localVel[1] * 12.0;
+      f[2] = g[2] * 1.5 - localVel[2] * 12.0;
+    }
 
-              const caveData = c.ragdollCaveData || { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, uy))), Math.atan2(uz, ux), seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
-              const surfaceRadius = caveData.ground;
-              const minRad = surfaceRadius + 0.005;
-              if (dist < minRad && dist > surfaceRadius - 0.5) {
-                worldPos = [ux * minRad, uy * minRad, uz * minRad];
-              }
-            }
-            return worldPos;
-          }
-
+    const transformPoint = (px, py, pz) => {
+      const basePos = (pos && Array.isArray(pos) && pos.length >= 3) ? pos : (c.position || [0, 0, 0]);
+      let worldPos = [
+        basePos[0] + (px * R[0] + py * N[0] + pz * F[0]),
+        basePos[1] + (px * R[1] + py * N[1] + pz * F[1]),
+        basePos[2] + (px * R[2] + py * N[2] + pz * F[2]),
+      ];
+      if (c.ragdollEnabled) {
+        if (c.type === 'human') {
           const dist = Math.sqrt(
             worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
           );
@@ -1716,65 +1949,103 @@ function updateAmphibians(deltaTime, seed) {
 
             const caveData = c.ragdollCaveData || { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, uy))), Math.atan2(uz, ux), seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
             const surfaceRadius = caveData.ground;
-
-            // Determine thickness envelope based on local coordinate
-            const scale = 0.5; // matching base scale
-            const localPx = px / scale;
-            const localPz = pz / scale;
-            let thickness = 0.06;
-            if (Math.abs(localPx) > 0.05) {
-              thickness = 0.015;
-            } else {
-              if (localPz > 0.2) thickness = 0.03;
-              else if (localPz > -0.3 && localPz <= 0.2) thickness = 0.12;
-              else if (localPz > -0.6 && localPz <= -0.3) thickness = 0.09;
-              else if (localPz <= -0.6) thickness = 0.04;
+            const minRad = surfaceRadius + 0.005;
+            if (dist < minRad && dist > surfaceRadius - 0.5) {
+              worldPos = [ux * minRad, uy * minRad, uz * minRad];
             }
+          }
+          return worldPos;
+        }
 
-            if (caveData.insideTunnel) {
-               const minRad = caveData.ground + thickness * scale;
-               const maxRad = caveData.ceiling !== Infinity ? caveData.ceiling - thickness * scale : Infinity;
-               if (dist < minRad) {
-                 worldPos = [ux * minRad, uy * minRad, uz * minRad];
-               } else if (dist > maxRad && maxRad !== Infinity) {
-                 worldPos = [ux * maxRad, uy * maxRad, uz * maxRad];
-               }
-            } else {
-               const minRad = surfaceRadius + thickness * scale;
-               if (dist < minRad && dist > surfaceRadius - 0.5) {
-                 worldPos = [ux * minRad, uy * minRad, uz * minRad];
-               }
+        const dist = Math.sqrt(
+          worldPos[0] ** 2 + worldPos[1] ** 2 + worldPos[2] ** 2,
+        );
+        if (dist > 0.001) {
+          const ux = worldPos[0] / dist;
+          const uy = worldPos[1] / dist;
+          const uz = worldPos[2] / dist;
+
+          const caveData = c.ragdollCaveData || { ground: RADIUS + (typeof getHeightOnSphere === "function" ? getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, uy))), Math.atan2(uz, ux), seed) : 0) * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
+          const surfaceRadius = caveData.ground;
+
+          const scale = 0.5;
+          const localPx = px / scale;
+          const localPz = pz / scale;
+          let thickness = 0.06;
+          if (Math.abs(localPx) > 0.05) {
+            thickness = 0.015;
+          } else {
+            if (localPz > 0.2) thickness = 0.03;
+            else if (localPz > -0.3 && localPz <= 0.2) thickness = 0.12;
+            else if (localPz > -0.6 && localPz <= -0.3) thickness = 0.09;
+            else if (localPz <= -0.6) thickness = 0.04;
+          }
+
+          if (caveData.insideTunnel) {
+            const minRad = caveData.ground + thickness * scale;
+            const maxRad = caveData.ceiling !== Infinity ? caveData.ceiling - thickness * scale : Infinity;
+            if (dist < minRad) {
+              worldPos = [ux * minRad, uy * minRad, uz * minRad];
+            } else if (dist > maxRad && maxRad !== Infinity) {
+              worldPos = [ux * maxRad, uy * maxRad, uz * maxRad];
+            }
+          } else {
+            const minRad = surfaceRadius + thickness * scale;
+            if (dist < minRad && dist > surfaceRadius - 0.5) {
+              worldPos = [ux * minRad, uy * minRad, uz * minRad];
             }
           }
         }
-        return worldPos;
-      };
-
-      const scale = c.type === 'meganeura' ? 0.25 : (c.type === 'isopod' ? 0.38 : (c.type === 'obsidian_cube' ? 0.45 : 0.5));
-
-      // Render using the registered NPC implementation
-      const npcReg = window.NpcRegistry[c.type];
-      if (npcReg && npcReg.render) {
-        npcReg.render(
-          c,
-          _allNpcVertices,
-          _allNpcColors,
-          _allNpcIndices,
-          scale,
-          N,
-          R,
-          F,
-          pos,
-          f,
-          transformPoint,
-          seed
-        );
       }
+      return worldPos;
+    };
+
+    const scale = c.type === 'meganeura' ? 0.25 : (c.type === 'isopod' ? 0.38 : (c.type === 'obsidian_cube' ? 0.45 : 0.5));
+
+    if (c.ragdollEnabled && c.ragdollAsleep) {
+      // Build once into temp arrays, freeze on c._ragdollFrozenMesh, then emit
+      _tmpPoseVerts.length = 0;
+      _tmpPoseColors.length = 0;
+      _tmpPoseIndices.length = 0;
+      npcReg.render(c, _tmpPoseVerts, _tmpPoseColors, _tmpPoseIndices, scale, N, R, F, pos, f, transformPoint, seed);
+      c._ragdollFrozenMesh = {
+        vertices: new Float32Array(_tmpPoseVerts),
+        colors: new Float32Array(_tmpPoseColors),
+        indices: new Uint16Array(_tmpPoseIndices)
+      };
+      NpcMeshCache.emitFrozenWorldMesh(c._ragdollFrozenMesh);
+      return;
     }
+
+    npcReg.render(
+      c,
+      _allNpcVertices,
+      _allNpcColors,
+      _allNpcIndices,
+      scale,
+      N,
+      R,
+      F,
+      pos,
+      f,
+      c.ragdollEnabled ? transformPoint : null,
+      seed
+    );
+  };
+
+  // Emit shadow-range NPCs first so Shadow & Reflection passes can draw only the leading slice
+  for (let i = 0; i < _shadowRenderList.length; i++) {
+    emitNpcGeometry(_shadowRenderList[i]);
+  }
+  const shadowIndicesBoundary = _allNpcIndices.length;
+
+  for (let i = 0; i < _farRenderList.length; i++) {
+    emitNpcGeometry(_farRenderList[i]);
   }
 
   if (_allNpcIndices.length === 0) {
     amphibianIndicesLength = 0;
+    window.amphibianShadowIndicesLength = 0;
     return;
   }
 
@@ -1785,6 +2056,7 @@ function updateAmphibians(deltaTime, seed) {
     true
   );
   amphibianIndicesLength = flatGeom.indices.length;
+  window.amphibianShadowIndicesLength = shadowIndicesBoundary;
 
   if (!amphibianVertexBuffer) amphibianVertexBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, amphibianVertexBuffer);
@@ -1823,6 +2095,9 @@ function clearActiveNPCs() {
   if (typeof amphibians !== "undefined" && Array.isArray(amphibians)) {
     amphibians.length = 0;
   }
+  amphibianIndicesLength = 0;
+  window.amphibianShadowIndicesLength = 0;
+  NpcMeshCache.clear();
 }
 window.clearActiveNPCs = clearActiveNPCs;
 window.initAmphibians = initAmphibians;

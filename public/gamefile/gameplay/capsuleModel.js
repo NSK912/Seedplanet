@@ -1026,19 +1026,23 @@
         wearShorts: true,
         wearHoodie: true,
         wearBoots: true,
+        wearOxfords: false,
+        wearDressBoots: false,
         wearShirt: false,
         wearSkirt: false,
         wearLeggings: false,
         wearSuit: false,
         wearSlacks: false,
         wearOperaCape: false,
-        key: "1_1_1_1_0_0_0_0_0_0"
+        key: "1_1_1_1_0_0_0_0_0_0_0_0"
       };
     }
     let wearTop = false;
     let wearShorts = false;
     let wearHoodie = false;
     let wearBoots = false;
+    let wearOxfords = false;
+    let wearDressBoots = false;
     let wearShirt = false;
     let wearSkirt = false;
     let wearLeggings = false;
@@ -1055,6 +1059,8 @@
         else if (nm === "WHITE_BODYSUIT_SHORTS") wearShorts = true;
         else if (nm === "TRAVELER_HOODIE" || nm === "HOODIE_CLOAK") wearHoodie = true;
         else if (nm === "TRAVELER_BOOTS" || nm === "HOODIE_BOOTS") wearBoots = true;
+        else if (nm === "OXFORD_SHOES" || nm === "OXFORD_DRESS_SHOES") wearOxfords = true;
+        else if (nm === "DRESS_BOOTS" || nm === "OXFORD_DRESS_BOOTS") wearDressBoots = true;
         else if (nm === "WHITE_SHIRT_SHORT") wearShirt = true;
         else if (nm === "BLACK_PLEATED_SKIRT") wearSkirt = true;
         else if (nm === "BLACK_LEGGINGS") wearLeggings = true;
@@ -1076,13 +1082,15 @@
       wearShorts: effectiveWearShorts,
       wearHoodie,
       wearBoots,
+      wearOxfords,
+      wearDressBoots,
       wearShirt,
       wearSkirt,
       wearLeggings,
       wearSuit,
       wearSlacks,
       wearOperaCape,
-      key: `${effectiveWearTop ? 1 : 0}_${effectiveWearShorts ? 1 : 0}_${wearHoodie ? 1 : 0}_${wearBoots ? 1 : 0}_${wearShirt ? 1 : 0}_${wearSkirt ? 1 : 0}_${wearLeggings ? 1 : 0}_${wearSuit ? 1 : 0}_${wearSlacks ? 1 : 0}_${wearOperaCape ? 1 : 0}`
+      key: `${effectiveWearTop ? 1 : 0}_${effectiveWearShorts ? 1 : 0}_${wearHoodie ? 1 : 0}_${wearBoots ? 1 : 0}_${wearOxfords ? 1 : 0}_${wearDressBoots ? 1 : 0}_${wearShirt ? 1 : 0}_${wearSkirt ? 1 : 0}_${wearLeggings ? 1 : 0}_${wearSuit ? 1 : 0}_${wearSlacks ? 1 : 0}_${wearOperaCape ? 1 : 0}`
     };
   }
 
@@ -2520,8 +2528,10 @@
     };
   }
 
+  const _sculptedFootTemplateCache = Object.create(null);
+
   function buildFootAnkleToes(pKnee, pFoot, isLeft, scaleFactor, legRig = null) {
-    const sf = scaleFactor;
+    const sf = scaleFactor || 1.0;
     const sfKey = Math.round(sf * 1000);
     const rig = legRig || computeLegRigFrame(null, pKnee, pFoot, isLeft);
     const fb = rig.footBoneBasis;
@@ -2529,65 +2539,292 @@
     const fUp = fb.upAxis;
     const fFwd = fb.fwdAxis;
 
-    const toFootPt = (rx, uy, fz) => [
-      pFoot[0] + (fRight[0] * rx + fUp[0] * uy + fFwd[0] * fz) * sf,
-      pFoot[1] + (fRight[1] * rx + fUp[1] * uy + fFwd[1] * fz) * sf,
-      pFoot[2] + (fRight[2] * rx + fUp[2] * uy + fFwd[2] * fz) * sf,
-    ];
+    const sideKey = (isLeft ? "L" : "R") + "_" + sfKey;
+    let tpl = _sculptedFootTemplateCache[sideKey];
 
-    // 1. Sculpted Ankle & Heel Bridge (matches Calf end radius rAnkle = 0.0355 * sf seamlessly!)
-    const heelBase = toFootPt(0.0, -0.012, -0.004);
-    const ankle = generateSculptedCapsule(pFoot, heelBase, 14, 10, (u, angle, sinA, cosA, lat, ant, L) => {
-      const loft = loftSeamlessJointShaft(u, L, 0.0355 * sf, 0.033 * sf);
-      const r = (0.0355 - 0.0020 * loft.h) * sf * loft.capEnv;
-      return { zPos: loft.zPos, rx: r * 1.02, ry: r * 1.00, shade: 0.962 };
-    }, 9, "ankle_" + sfKey, fb.ankleBoneBasis);
+    if (!tpl) {
+      const medialSign = isLeft ? 1.0 : -1.0;
+      const skinRGB = (shade) => {
+        const aoDepth = Math.max(0.0, 0.97 - shade);
+        return [
+          Math.min(1.0, shade * 1.025 + aoDepth * 0.12),
+          Math.min(1.0, shade * 0.910 - aoDepth * 0.08),
+          Math.min(1.0, shade * 0.845 - aoDepth * 0.14),
+        ];
+      };
 
-    // 2. Sculpted Arched Chibi Foot Body (Heel -> Instep Bridge -> Widened Forefoot with Flat Sole)
-    const footStart = toFootPt(0.0, -0.011, -0.006);
-    const footTip = toFootPt(isLeft ? -0.002 : 0.002, -0.015, 0.042);
-    const footBody = generateSculptedCapsule(footStart, footTip, 14, 10, (u, angle, sinA, cosA, lat, ant, L) => {
-      const loft = loftSeamlessJointShaft(u, L, 0.029 * sf, 0.031 * sf);
-      const h = loft.h;
-      const rx = (0.028 + 0.007 * Math.pow(h, 0.8)) * sf * loft.capEnv;
-      const ry = (0.024 - 0.005 * Math.pow(h, 0.9)) * sf * loft.capEnv;
-      return { zPos: loft.zPos, rx, ry, shade: 0.962 };
-    }, 9, "foot_" + sfKey, fb.footShaftBasis);
+      const computeTemplateNormals = (verts, inds) => {
+        const norms = new Float32Array(verts.length);
+        for (let k = 0; k < inds.length; k += 3) {
+          const i0 = inds[k] * 3;
+          const i1 = inds[k + 1] * 3;
+          const i2 = inds[k + 2] * 3;
+          const ux = verts[i1] - verts[i0], uy = verts[i1 + 1] - verts[i0 + 1], uz = verts[i1 + 2] - verts[i0 + 2];
+          const vx = verts[i2] - verts[i0], vy = verts[i2 + 1] - verts[i0 + 1], vz = verts[i2 + 2] - verts[i0 + 2];
+          const nx = uy * vz - uz * vy;
+          const ny = uz * vx - ux * vz;
+          const nz = ux * vy - uy * vx;
+          norms[i0] += nx; norms[i0 + 1] += ny; norms[i0 + 2] += nz;
+          norms[i1] += nx; norms[i1 + 1] += ny; norms[i1 + 2] += nz;
+          norms[i2] += nx; norms[i2 + 1] += ny; norms[i2 + 2] += nz;
+        }
+        for (let k = 0; k < norms.length; k += 3) {
+          const l = Math.hypot(norms[k], norms[k + 1], norms[k + 2]);
+          if (l > 1e-8) {
+            norms[k] /= l; norms[k + 1] /= l; norms[k + 2] /= l;
+          } else {
+            norms[k + 1] = 1.0;
+          }
+        }
+        return norms;
+      };
 
-    const parts = [ankle, footBody];
+      // -----------------------------------------------------------------------
+      // 1. Unified Sculpted Chibi Ankle + Rounded Heel + Sloped Instep + Flat Sole
+      //    Matches generateChibiCalf end radius (rAnkle = 0.0355 * sf) 1:1 at y = 0
+      //    with monotonic vertical slices down to a flush flat sole (zero heel notch!).
+      // -----------------------------------------------------------------------
+      const R_FOOT = 24;
+      const footSlices = [
+        // { yBase, zBack, zFront, wHeel, wBall, frontAng, arch, dome, pLat }
+        { yBase:  0.0030, zBack: -0.0342, zFront: 0.0342, wHeel: 0.0356, wBall: 0.0356, frontAng: 0.00, arch: 0.00, dome: 0.00, pLat: 0.98 }, // 0: Ankle seam inside calf
+        { yBase: -0.0030, zBack: -0.0340, zFront: 0.0365, wHeel: 0.0348, wBall: 0.0352, frontAng: 0.15, arch: 0.20, dome: 0.25, pLat: 0.96 }, // 1: Lower ankle cuff
+        { yBase: -0.0100, zBack: -0.0338, zFront: 0.0415, wHeel: 0.0330, wBall: 0.0348, frontAng: 0.45, arch: 0.50, dome: 0.70, pLat: 0.93 }, // 2: Achilles curve & upper instep
+        { yBase: -0.0170, zBack: -0.0352, zFront: 0.0478, wHeel: 0.0316, wBall: 0.0354, frontAng: 0.75, arch: 0.85, dome: 0.85, pLat: 0.90 }, // 3: Mid instep slope & heel curve
+        { yBase: -0.0235, zBack: -0.0372, zFront: 0.0522, wHeel: 0.0306, wBall: 0.0365, frontAng: 1.00, arch: 1.00, dome: 0.65, pLat: 0.87 }, // 4: Heel apex & toe knuckle bridge
+        { yBase: -0.0305, zBack: -0.0375, zFront: 0.0536, wHeel: 0.0300, wBall: 0.0372, frontAng: 1.00, arch: 1.00, dome: 0.30, pLat: 0.86 }, // 5: Full forefoot & heel body
+        { yBase: -0.0362, zBack: -0.0355, zFront: 0.0528, wHeel: 0.0280, wBall: 0.0352, frontAng: 1.00, arch: 0.90, dome: 0.00, pLat: 0.88 }, // 6: Lower side bevel
+        { yBase: -0.0392, zBack: -0.0318, zFront: 0.0502, wHeel: 0.0218, wBall: 0.0262, frontAng: 1.00, arch: 0.75, dome: 0.00, pLat: 0.92 }, // 7: Sole edge bevel
+        { yBase: -0.0410, zBack: -0.0255, zFront: 0.0455, wHeel: 0.0155, wBall: 0.0195, frontAng: 0.90, arch: 0.50, dome: 0.00, pLat: 0.95 }, // 8: Flat plantar sole rim
+      ];
 
-    // 3. 5 Plump Rounded Chibi Toes along a natural forefoot arc (Big Toe on inner side -> Little Toe on outer side)
-    const toeXOffsets = isLeft
-      ? [0.014, 0.0065, -0.0005, -0.0072, -0.0132]
-      : [-0.014, -0.0065, 0.0005, 0.0072, 0.0132];
-    const toeZArc = [0.001, 0.003, 0.002, -0.0005, -0.0035];
-    const toeLengths = [0.0145, 0.0130, 0.0118, 0.0102, 0.0085];
-    const toeRadii = [0.0086, 0.0072, 0.0068, 0.0062, 0.0054];
+      const fV = [];
+      const fC = [];
+      const fI = [];
+      const addFV = (lx, ly, lz, shade) => {
+        const idx = (fV.length / 3) | 0;
+        fV.push(lx * sf, ly * sf, lz * sf);
+        const col = skinRGB(shade);
+        fC.push(col[0], col[1], col[2]);
+        return idx;
+      };
 
-    for (let t = 0; t < 5; t++) {
-      const tx = toeXOffsets[t];
-      const tz = toeZArc[t];
-      const tlen = toeLengths[t];
-      const trad = toeRadii[t] * sf;
+      const vTopCap = addFV(0.0, 0.0040, 0.0, 0.962);
+      const footRings = [];
+      for (let k = 0; k < footSlices.length; k++) {
+        const sl = footSlices[k];
+        const ring = [];
+        for (let j = 0; j < R_FOOT; j++) {
+          const ang = (j / R_FOOT) * Math.PI * 2.0;
+          const cosA = Math.cos(ang); // +1 = +fRight, -1 = -fRight
+          const sinA = Math.sin(ang); // +1 = +fFwd (toes), -1 = -fFwd (heel)
 
-      const tipRx = (isLeft ? -0.002 : 0.002) + tx;
-      const tipUy = -0.016;
-      const tipFz = 0.042 + tz;
-      const tBase = toFootPt(tipRx, tipUy, tipFz);
-      const tTip = toFootPt(tipRx + tx * 0.08, tipUy - 0.0025, tipFz + tlen);
-      parts.push(
-        generateSculptedCapsule(tBase, tTip, 8, 6, (u, angle, sinA, cosA, lat, ant, L) => {
-          const r = trad * (0.94 + 0.10 * Math.sin(u * Math.PI));
-          const zPos = sinA < 0 ? sinA * r * 0.75 : L + sinA * r * 0.85;
-          const baseCrease = u < 0.35 ? (1.0 - u / 0.35) * 0.08 : 0.0;
-          return {
-            zPos,
-            rx: r * cosA,
-            ry: r * cosA * 0.88,
-            shade: 0.96 - baseCrease,
-          };
-        }, 0, "toe_" + t + "_" + sfKey, fb.footShaftBasis)
-      );
+          const lat = cosA * medialSign; // +1 = medial (big toe), -1 = lateral (pinky)
+          const tFwd = (sinA + 1.0) * 0.5; // 0 = heel back, 1 = forefoot front
+
+          // Asymmetric front toe-box taper (big-toe side reaches slightly further than pinky side)
+          const zFrontEff = sl.zFront * (1.0 + lat * 0.072 * sl.frontAng);
+          const zBackEff = sl.zBack;
+          const zMid = (zFrontEff + zBackEff) * 0.5;
+          const zHalf = (zFrontEff - zBackEff) * 0.5;
+          const zPos = zMid + sinA * zHalf;
+
+          // Subtle Chibi midfoot waist + inner medial arch sculpt
+          const wEnv = Math.pow(Math.max(0.0, tFwd), 0.88);
+          const waistBell = Math.sin(Math.max(0.0, Math.min(1.0, (tFwd - 0.15) / 0.55)) * Math.PI);
+          const medialBias = Math.max(0.0, lat);
+          const waistCut = waistBell * sl.arch * (0.0018 + 0.0016 * medialBias);
+          const rx = sl.wHeel * (1.0 - wEnv) + sl.wBall * wEnv - waistCut;
+
+          const cosSign = cosA >= 0.0 ? 1.0 : -1.0;
+          const xFlare = (isLeft ? -0.0010 : 0.0010) * Math.pow(Math.max(0.0, tFwd), 1.4) * sl.frontAng;
+          const xPos = xFlare + cosSign * Math.pow(Math.abs(cosA), sl.pLat) * rx;
+
+          // Gently rounded dorsal instep crown on midfoot/forefoot (strictly monotonic with yBase)
+          const fwdWeight = Math.max(0.0, (tFwd - 0.25) / 0.75);
+          const edgeDrop = sl.dome * 0.0026 * (cosA * cosA) * fwdWeight;
+          const yPos = sl.yBase - edgeDrop;
+
+          // Seamless calf shading at ankle + subtle inner/sole crease shading
+          const innerLeg = Math.max(0.0, lat);
+          const soleShade = k >= 7 ? -0.016 : (k === 6 ? -0.006 : 0.0);
+          const shade = 0.962 - innerLeg * 0.012 + soleShade;
+          ring.push(addFV(xPos, yPos, zPos, shade));
+        }
+        footRings.push(ring);
+      }
+      const vBotCap = addFV(0.0, -0.0416, 0.0095, 0.942);
+
+      // Top manifold cap (hidden inside calf)
+      for (let j = 0; j < R_FOOT; j++) {
+        const nextJ = (j + 1) % R_FOOT;
+        fI.push(vTopCap, footRings[0][nextJ], footRings[0][j]);
+      }
+      // Foot outer side wall quads
+      for (let k = 0; k < footRings.length - 1; k++) {
+        const r0 = footRings[k];
+        const r1 = footRings[k + 1];
+        for (let j = 0; j < R_FOOT; j++) {
+          const nextJ = (j + 1) % R_FOOT;
+          fI.push(r0[j], r0[nextJ], r1[nextJ]);
+          fI.push(r0[j], r1[nextJ], r1[j]);
+        }
+      }
+      // Flat bottom sole cap
+      const lastFootRing = footRings[footRings.length - 1];
+      for (let j = 0; j < R_FOOT; j++) {
+        const nextJ = (j + 1) % R_FOOT;
+        fI.push(vBotCap, lastFootRing[j], lastFootRing[nextJ]);
+      }
+
+      const footVerts = new Float32Array(fV);
+      const footColors = new Float32Array(fC);
+      const footIndices = new Uint16Array(fI);
+      const footNormals = computeTemplateNormals(footVerts, footIndices);
+      const footPartTpl = {
+        localCoords: footVerts,
+        localNormals: footNormals,
+        colors: footColors,
+        indices: footIndices,
+        skinGroup: 9,
+      };
+
+      // -----------------------------------------------------------------------
+      // 2. Five Grounded Sculpted Chibi Toes (Big Toe -> Pinky Toe)
+      //    Full forefoot width coverage, flat-padded bottom flush at y ≈ -0.041 * sf,
+      //    smooth arched top & dome cap, zero floating claw look.
+      // -----------------------------------------------------------------------
+      const toeSpecs = [
+        // { cx0, cx1, cy0, cy1, zRoot, zMid, zTip, rBase, rTip } (x multiplied by medialSign)
+        { cx0:  0.0188, cx1:  0.0172, cy0: -0.0315, cy1: -0.0328, zRoot: 0.043, zMid: 0.0525, zTip: 0.0598, rBase: 0.0094, rTip: 0.0080 }, // 0: Big toe
+        { cx0:  0.0046, cx1:  0.0040, cy0: -0.0332, cy1: -0.0346, zRoot: 0.043, zMid: 0.0520, zTip: 0.0592, rBase: 0.0070, rTip: 0.0061 }, // 1: 2nd toe
+        { cx0: -0.0072, cx1: -0.0076, cy0: -0.0338, cy1: -0.0352, zRoot: 0.042, zMid: 0.0502, zTip: 0.0566, rBase: 0.0065, rTip: 0.0057 }, // 2: 3rd toe
+        { cx0: -0.0176, cx1: -0.0180, cy0: -0.0344, cy1: -0.0358, zRoot: 0.040, zMid: 0.0472, zTip: 0.0530, rBase: 0.0060, rTip: 0.0052 }, // 3: 4th toe
+        { cx0: -0.0266, cx1: -0.0254, cy0: -0.0350, cy1: -0.0364, zRoot: 0.037, zMid: 0.0432, zTip: 0.0484, rBase: 0.0053, rTip: 0.0046 }, // 4: Little toe
+      ];
+
+      const toePartTpls = [];
+      const R_TOE = 12;
+      for (let t = 0; t < toeSpecs.length; t++) {
+        const sp = toeSpecs[t];
+        const toeCrossXOffset = isLeft ? -0.0010 : 0.0010;
+        const cRootX = sp.cx0 * medialSign + toeCrossXOffset;
+        const cMidX  = ((sp.cx0 + sp.cx1) * 0.5) * medialSign + toeCrossXOffset;
+        const cTipX  = sp.cx1 * medialSign + toeCrossXOffset;
+
+        // Spine stations along toe (+3 smooth rounded tip dome rings)
+        const stations = [
+          { cx: cRootX, cy: sp.cy0,                       cz: sp.zRoot,                 r: sp.rBase * 0.96, vFlat: 0.86, env: 1.00, shade: 0.938 },
+          { cx: cMidX,  cy: (sp.cy0 + sp.cy1) * 0.50,     cz: sp.zMid,                  r: sp.rBase,        vFlat: 0.84, env: 1.00, shade: 0.958 },
+          { cx: cTipX,  cy: sp.cy1,                       cz: sp.zTip,                  r: sp.rTip,         vFlat: 0.82, env: 1.00, shade: 0.963 },
+          { cx: cTipX,  cy: sp.cy1 - sp.rTip * 0.04,      cz: sp.zTip + sp.rTip * 0.38, r: sp.rTip,         vFlat: 0.82, env: 0.90, shade: 0.964 },
+          { cx: cTipX,  cy: sp.cy1 - sp.rTip * 0.08,      cz: sp.zTip + sp.rTip * 0.72, r: sp.rTip,         vFlat: 0.82, env: 0.62, shade: 0.964 },
+          { cx: cTipX,  cy: sp.cy1 - sp.rTip * 0.12,      cz: sp.zTip + sp.rTip * 0.92, r: sp.rTip,         vFlat: 0.82, env: 0.25, shade: 0.964 },
+        ];
+
+        const tV = [];
+        const tC = [];
+        const tI = [];
+        const addTV = (lx, ly, lz, shade) => {
+          const idx = (tV.length / 3) | 0;
+          tV.push(lx * sf, ly * sf, lz * sf);
+          const col = skinRGB(shade);
+          tC.push(col[0], col[1], col[2]);
+          return idx;
+        };
+
+        const vRootCap = addTV(cRootX, sp.cy0, sp.zRoot - 0.001, 0.935);
+        const toeRings = [];
+        for (let sIdx = 0; sIdx < stations.length; sIdx++) {
+          const st = stations[sIdx];
+          const ring = [];
+          const rxToe = st.r * st.env;
+          for (let j = 0; j < R_TOE; j++) {
+            const ang = (j / R_TOE) * Math.PI * 2.0;
+            const cosA = Math.cos(ang); // +1 = +fRight, -1 = -fRight
+            const sinA = Math.sin(ang); // +1 = top (+fUp), -1 = bottom (-fUp)
+            const ryToe = st.r * (sinA < 0 ? st.vFlat * 0.88 : st.vFlat) * st.env;
+            const px = st.cx + cosA * rxToe;
+            const py = Math.max(-0.0414, st.cy + sinA * ryToe);
+            const pz = st.cz;
+            const bottomAO = sinA < -0.3 ? -0.012 * (-sinA - 0.3) : 0.0;
+            ring.push(addTV(px, py, pz, st.shade + bottomAO));
+          }
+          toeRings.push(ring);
+        }
+        const vTipCap = addTV(cTipX, Math.max(-0.0410, sp.cy1 - sp.rTip * 0.14), sp.zTip + sp.rTip * 0.98, 0.964);
+
+        // Root cap (back toward -fFwd)
+        for (let j = 0; j < R_TOE; j++) {
+          const nextJ = (j + 1) % R_TOE;
+          tI.push(vRootCap, toeRings[0][nextJ], toeRings[0][j]);
+        }
+        // Toe tube quads (outward CCW along +fFwd)
+        for (let sIdx = 0; sIdx < toeRings.length - 1; sIdx++) {
+          const r0 = toeRings[sIdx];
+          const r1 = toeRings[sIdx + 1];
+          for (let j = 0; j < R_TOE; j++) {
+            const nextJ = (j + 1) % R_TOE;
+            tI.push(r0[j], r0[nextJ], r1[nextJ]);
+            tI.push(r0[j], r1[nextJ], r1[j]);
+          }
+        }
+        // Tip dome cap (front toward +fFwd)
+        const lastToeRing = toeRings[toeRings.length - 1];
+        for (let j = 0; j < R_TOE; j++) {
+          const nextJ = (j + 1) % R_TOE;
+          tI.push(vTipCap, lastToeRing[j], lastToeRing[nextJ]);
+        }
+
+        const toeVerts = new Float32Array(tV);
+        const toeColors = new Float32Array(tC);
+        const toeIndices = new Uint16Array(tI);
+        const toeNormals = computeTemplateNormals(toeVerts, toeIndices);
+        toePartTpls.push({
+          localCoords: toeVerts,
+          localNormals: toeNormals,
+          colors: toeColors,
+          indices: toeIndices,
+          skinGroup: 9,
+        });
+      }
+
+      tpl = [footPartTpl, ...toePartTpls];
+      _sculptedFootTemplateCache[sideKey] = tpl;
+    }
+
+    // Fast template transform into current legRig footBoneBasis world/character pose
+    const pfx = pFoot[0], pfy = pFoot[1], pfz = pFoot[2];
+    const rx = fRight[0], ry = fRight[1], rz = fRight[2];
+    const ux = fUp[0],    uy = fUp[1],    uz = fUp[2];
+    const zx = fFwd[0],   zy = fFwd[1],   zz = fFwd[2];
+
+    const parts = new Array(tpl.length);
+    for (let p = 0; p < tpl.length; p++) {
+      const partTpl = tpl[p];
+      const lC = partTpl.localCoords;
+      const lN = partTpl.localNormals;
+      const len = lC.length;
+      const vertices = new Float32Array(len);
+      const normals = new Float32Array(len);
+      for (let k = 0; k < len; k += 3) {
+        const lx = lC[k], ly = lC[k + 1], lz = lC[k + 2];
+        vertices[k]     = pfx + rx * lx + ux * ly + zx * lz;
+        vertices[k + 1] = pfy + ry * lx + uy * ly + zy * lz;
+        vertices[k + 2] = pfz + rz * lx + uz * ly + zz * lz;
+
+        const nx = lN[k], ny = lN[k + 1], nz = lN[k + 2];
+        normals[k]     = rx * nx + ux * ny + zx * nz;
+        normals[k + 1] = ry * nx + uy * ny + zy * nz;
+        normals[k + 2] = rz * nx + uz * ny + zz * nz;
+      }
+      parts[p] = {
+        vertices,
+        normals,
+        colors: partTpl.colors,
+        indices: partTpl.indices,
+        skinGroup: partTpl.skinGroup,
+      };
     }
     return parts;
   }
@@ -5510,16 +5747,165 @@
     chibiHoodiePhysics.vty -= 0.18;
   }
 
+  // =========================================================================
+  // --- 9A. Clothing & Hair LOD Controller + Shared Clothing Item Cache ---
+  // =========================================================================
+  const _LOD_TIER_0 = Object.freeze({
+    lod: 0,
+    phaseBuckets: 0,
+    walkBuckets: 0,
+    updateStride: 1,
+    enableSpringPhysics: true,
+    enableBodyCollider: true,
+    enableHairSway: true,
+    enableHairBodyCollider: true
+  });
+  const _LOD_TIER_1 = Object.freeze({
+    lod: 1,
+    phaseBuckets: 16,
+    walkBuckets: 4,
+    updateStride: 2,
+    enableSpringPhysics: false,
+    enableBodyCollider: false,
+    enableHairSway: true,
+    enableHairBodyCollider: false
+  });
+  const _LOD_TIER_2 = Object.freeze({
+    lod: 2,
+    phaseBuckets: 8,
+    walkBuckets: 2,
+    updateStride: 6,
+    enableSpringPhysics: false,
+    enableBodyCollider: false,
+    enableHairSway: false,
+    enableHairBodyCollider: false
+  });
+
+  function computeClothHairLOD(distSq, charScale = 0.1, isClone = true) {
+    if (!isClone) return _LOD_TIER_0;
+    const s = Math.max(0.05, charScale || 0.1);
+    const dSq = (typeof distSq === "number" && distSq >= 0) ? distSq : 0.0;
+    const nearThres = 12.0 * s;
+    if (dSq <= nearThres * nearThres) return _LOD_TIER_0;
+    const midThres = 32.0 * s;
+    if (dSq <= midThres * midThres) return _LOD_TIER_1;
+    return _LOD_TIER_2;
+  }
+
+  function _wrapPhase2Pi(phase) {
+    const p = (typeof phase === "number" && isFinite(phase)) ? phase : 0.0;
+    const tau = Math.PI * 2.0;
+    let w = p % tau;
+    if (w < 0.0) w += tau;
+    return w;
+  }
+
+  function quantizePhaseForLOD(phase, lodInfo) {
+    const w = _wrapPhase2Pi(phase);
+    const buckets = (lodInfo && lodInfo.phaseBuckets > 0) ? lodInfo.phaseBuckets : 0;
+    if (!buckets) return w;
+    const step = (Math.PI * 2.0) / buckets;
+    return (Math.round(w / step) % buckets) * step;
+  }
+
+  function quantizeBlendForLOD(val, buckets) {
+    const v = Math.max(0.0, Math.min(1.0, (typeof val === "number" && isFinite(val)) ? val : 0.0));
+    if (!buckets || buckets <= 0) return v;
+    return Math.round(v * buckets) / buckets;
+  }
+
+  const _clothItemMeshCache = new Map();
+  const _CLOTH_CACHE_MAX_ENTRIES = 400;
+  const _clothCacheStats = { hits: 0, misses: 0 };
+
+  function _qNum(v, prec = 2000) {
+    return Math.round(((typeof v === "number" && isFinite(v)) ? v : 0.0) * prec);
+  }
+
+  function _qVec3(v, prec = 2000) {
+    if (!v) return "_";
+    return _qNum(v[0], prec) + "," + _qNum(v[1], prec) + "," + _qNum(v[2], prec);
+  }
+
+  function _getClothPhysKey(clothContext, lodLevel) {
+    if (lodLevel >= 1) return "settled";
+    const isCl = !!(clothContext && clothContext.isClone);
+    const hPhys = (clothContext && clothContext.hoodiePhysics)
+      ? clothContext.hoodiePhysics
+      : (isCl ? chibiCloneHoodiePhysics : ((typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : null));
+    if (!hPhys || !hPhys.enabled) return "settled";
+    const mag = Math.abs(hPhys.pitch || 0) + Math.abs(hPhys.yaw || 0) + Math.abs(hPhys.roll || 0)
+      + Math.abs(hPhys.yawLag || 0)
+      + Math.abs(hPhys.gx || 0) + Math.abs(hPhys.gy || 0) + Math.abs(hPhys.gz || 0)
+      + Math.abs(hPhys.tx || 0) + Math.abs(hPhys.ty || 0) + Math.abs(hPhys.tz || 0)
+      + Math.abs(hPhys.airX || 0) + Math.abs(hPhys.airY || 0) + Math.abs(hPhys.airZ || 0)
+      + Math.abs(hPhys.airFlare || 0) + Math.abs(hPhys.windTurb || 0);
+    const gDev = Math.abs(hPhys.gravLocalX || 0) + Math.abs((hPhys.gravLocalY !== undefined ? hPhys.gravLocalY : -1) + 1) + Math.abs(hPhys.gravLocalZ || 0);
+    if (mag < 0.0004 && gDev < 0.004) return "settled";
+    return [
+      _qNum(hPhys.pitch, 400), _qNum(hPhys.yaw, 400), _qNum(hPhys.roll, 400), _qNum(hPhys.yawLag, 400),
+      _qNum(hPhys.gx, 500), _qNum(hPhys.gy, 500), _qNum(hPhys.gz, 500),
+      _qNum(hPhys.tx, 400), _qNum(hPhys.ty, 400), _qNum(hPhys.tz, 400),
+      _qNum(hPhys.airX, 400), _qNum(hPhys.airY, 400), _qNum(hPhys.airZ, 400),
+      _qNum(hPhys.airFlare, 400), _qNum(hPhys.windTurb, 200),
+      _qNum(hPhys.gravLocalX, 200), _qNum(hPhys.gravLocalY, 200), _qNum(hPhys.gravLocalZ, 200)
+    ].join(",");
+  }
+
+  function _cachedClothBuild(cacheKey, clothContext, buildFn) {
+    const hit = _clothItemMeshCache.get(cacheKey);
+    if (hit) {
+      _clothItemMeshCache.delete(cacheKey);
+      _clothItemMeshCache.set(cacheKey, hit);
+      if (clothContext && hit.skirtEnvelope) {
+        clothContext._cachedSkirtEnvelope = hit.skirtEnvelope;
+      }
+      _clothCacheStats.hits++;
+      return hit.mesh;
+    }
+    _clothCacheStats.misses++;
+    const mesh = buildFn();
+    const entry = {
+      mesh,
+      skirtEnvelope: (clothContext && clothContext._cachedSkirtEnvelope) ? clothContext._cachedSkirtEnvelope : null
+    };
+    if (_clothItemMeshCache.size >= _CLOTH_CACHE_MAX_ENTRIES) {
+      const oldestKey = _clothItemMeshCache.keys().next().value;
+      if (oldestKey !== undefined) _clothItemMeshCache.delete(oldestKey);
+    }
+    _clothItemMeshCache.set(cacheKey, entry);
+    return mesh;
+  }
+
+  function getClothCacheStats() {
+    return {
+      size: _clothItemMeshCache.size,
+      maxSize: _CLOTH_CACHE_MAX_ENTRIES,
+      hits: _clothCacheStats.hits,
+      misses: _clothCacheStats.misses
+    };
+  }
+
+  function clearClothCache() {
+    _clothItemMeshCache.clear();
+    _clothCacheStats.hits = 0;
+    _clothCacheStats.misses = 0;
+  }
+
   function updateChibiHoodiePhysics(isMovingActive, isSprintingActive, phase, currentHeading, physContext = null) {
     const isCloneEntity = !!(physContext && physContext.isClone);
     const hoodiePhys = (physContext && physContext.hoodiePhysics)
       ? physContext.hoodiePhysics
       : (isCloneEntity ? chibiCloneHoodiePhysics : chibiHoodiePhysics);
-    if (!hoodiePhys.enabled) {
+    const lodLevel = (physContext && typeof physContext.lod === "number") ? physContext.lod : 0;
+    if (!hoodiePhys.enabled || lodLevel >= 1) {
       hoodiePhys.pitch = 0.0; hoodiePhys.yaw = 0.0; hoodiePhys.roll = 0.0;
+      hoodiePhys.pitchVel = 0.0; hoodiePhys.yawVel = 0.0; hoodiePhys.rollVel = 0.0;
       hoodiePhys.yawLag = 0.0; hoodiePhys.vYaw = 0.0;
       hoodiePhys.gx = 0.0; hoodiePhys.gy = 0.0; hoodiePhys.gz = 0.0;
+      hoodiePhys.vx = 0.0; hoodiePhys.vy = 0.0; hoodiePhys.vz = 0.0;
       hoodiePhys.tx = 0.0; hoodiePhys.ty = 0.0; hoodiePhys.tz = 0.0;
+      hoodiePhys.vtx = 0.0; hoodiePhys.vty = 0.0; hoodiePhys.vtz = 0.0;
       hoodiePhys.airX = 0.0; hoodiePhys.airY = 0.0; hoodiePhys.airZ = 0.0;
       hoodiePhys.airFlare = 0.0; hoodiePhys.windTurb = 0.0;
       hoodiePhys.gravLocalX = 0.0; hoodiePhys.gravLocalY = -1.0; hoodiePhys.gravLocalZ = 0.0;
@@ -5805,8 +6191,10 @@
   // =========================================================================
   // --- 11. Traveler Hoodie & Cloak 3D Mesh Generator (Tailored Fit & Connected Long Sleeves) ---
   // =========================================================================
-  function _getBlackPleatedSkirtRingsDef(s, torsoRatio = 1.0, wearHoodieOverSkirt = false) {
-    const pleatDepthScale = wearHoodieOverSkirt ? 0.62 : 1.0;
+  function _getBlackPleatedSkirtRingsDef(s, torsoRatio = 1.0, outerCoatMode = false) {
+    const isSuit = outerCoatMode === "suit";
+    const isHoodie = outerCoatMode === true || outerCoatMode === "hoodie";
+    const pleatDepthScale = isHoodie ? 0.62 : 1.0;
     const baseDefs = [
       { dy:  0.002 * s * torsoRatio, rx: 0.0770 * s, rzF: 0.0665 * s, rzB: 0.0585 * s, cy: -0.001 * s, pleatDepth: 0.0000 * s, t: 0.00, clr: 0.0012, isYoke: true },
       { dy: -0.028 * s * torsoRatio, rx: 0.0950 * s, rzF: 0.0705 * s, rzB: 0.0785 * s, cy: -0.002 * s, pleatDepth: 0.0010 * s, t: 0.08, clr: 0.0040, isYoke: true },
@@ -5815,7 +6203,32 @@
       { dy: -0.134 * s * torsoRatio, rx: 0.1410 * s, rzF: 0.1040 * s, rzB: 0.1090 * s, cy: -0.004 * s, pleatDepth: 0.0110 * s, t: 0.76, clr: 0.0105, isYoke: false },
       { dy: -0.172 * s * torsoRatio, rx: 0.1520 * s, rzF: 0.1140 * s, rzB: 0.1190 * s, cy: -0.004 * s, pleatDepth: 0.0125 * s, t: 1.00, clr: 0.0125, isYoke: false }
     ];
-    if (!wearHoodieOverSkirt) return baseDefs;
+    if (!isHoodie && !isSuit) return baseDefs;
+    if (isSuit) {
+      // Compress waist/hip pleats tucked under tailored blazer (t = 0..0.50), then smoothly open pleats below jacket hem (t = 0.76..1.00)
+      const suitProfile = [
+        { rxS: 1.00, rzS: 1.00, pdS: 1.00 }, // 0: waist band
+        { rxS: 0.96, rzS: 0.96, pdS: 0.50 }, // 1: upper hip under suit
+        { rxS: 0.90, rzS: 0.91, pdS: 0.45 }, // 2: mid-hip under suit pocket/flap
+        { rxS: 0.89, rzS: 0.90, pdS: 0.45 }, // 3: right above/at suit jacket hem
+        { rxS: 0.96, rzS: 0.96, pdS: 0.82 }, // 4: emerging smoothly below suit hem
+        { rxS: 1.00, rzS: 1.00, pdS: 1.00 }  // 5: full flared pleated skirt hem
+      ];
+      return baseDefs.map((lvl, idx) => {
+        const sp = suitProfile[idx] || suitProfile[suitProfile.length - 1];
+        return {
+          dy: lvl.dy,
+          rx: lvl.rx * sp.rxS,
+          rzF: lvl.rzF * sp.rzS,
+          rzB: lvl.rzB * sp.rzS,
+          cy: lvl.cy,
+          pleatDepth: lvl.pleatDepth * sp.pdS,
+          t: lvl.t,
+          clr: lvl.clr,
+          isYoke: lvl.isYoke
+        };
+      });
+    }
     return baseDefs.map((lvl) => {
       const rxScale = 1.0 - 0.10 * lvl.t;
       const rzScale = 1.0 - 0.09 * lvl.t;
@@ -5965,6 +6378,42 @@
   }
 
   function buildTravelerHoodieCloakMesh(
+    headP1, headP2,
+    chestP1, chestP2,
+    neckP1, neckP2,
+    leftArmPivot, leftElbowRot, leftHandRot,
+    rightArmPivot, rightElbowRot, rightHandRot,
+    scale,
+    phase,
+    isLocal,
+    leftFootRot, rightFootRot,
+    isHoodOpen = false,
+    clothContext = null
+  ) {
+    const lod = (clothContext && typeof clothContext.lod === "number") ? clothContext.lod : 0;
+    const isCl = !!(clothContext && clothContext.isClone);
+    const eqSt = (!isLocal && !isCl && typeof getCharacterEquippedClothingState === "function") ? getCharacterEquippedClothingState(false) : null;
+    const wearSkirtUnder = !isLocal && !isCl && !!(
+      (clothContext && clothContext.wearSkirt !== undefined) ? clothContext.wearSkirt : (eqSt && eqSt.wearSkirt)
+    );
+    const key = "hoodie|" + (isHoodOpen ? 1 : 0) + "|" + (isLocal ? 1 : 0) + "|" + lod + "|" + (wearSkirtUnder ? 1 : 0)
+      + "|" + _qNum(scale, 1000) + "|" + _qNum(_wrapPhase2Pi(phase), 500)
+      + "|" + _qVec3(headP1) + "|" + _qVec3(headP2)
+      + "|" + _qVec3(chestP1) + "|" + _qVec3(chestP2)
+      + "|" + _qVec3(neckP1) + "|" + _qVec3(neckP2)
+      + "|" + _qVec3(leftArmPivot) + "|" + _qVec3(leftElbowRot) + "|" + _qVec3(leftHandRot)
+      + "|" + _qVec3(rightArmPivot) + "|" + _qVec3(rightElbowRot) + "|" + _qVec3(rightHandRot)
+      + "|" + _qVec3(leftFootRot) + "|" + _qVec3(rightFootRot)
+      + "|" + _getClothPhysKey(clothContext, lod);
+    return _cachedClothBuild(key, clothContext, () => _buildTravelerHoodieCloakMeshRaw(
+      headP1, headP2, chestP1, chestP2, neckP1, neckP2,
+      leftArmPivot, leftElbowRot, leftHandRot,
+      rightArmPivot, rightElbowRot, rightHandRot,
+      scale, phase, isLocal, leftFootRot, rightFootRot, isHoodOpen, clothContext
+    ));
+  }
+
+  function _buildTravelerHoodieCloakMeshRaw(
     headP1, headP2,
     chestP1, chestP2,
     neckP1, neckP2,
@@ -6881,6 +7330,12 @@
   // --- 11A. Traveler Ankle Boots Standalone Mesh Builder (TRAVELER_BOOTS) ---
   // =========================================================================
   function buildTravelerBootsMesh(leftFootRot, rightFootRot, scale = 1.0, clothContext = null) {
+    const key = "boots|" + _qNum(scale, 1000) + "|" + _qVec3(leftFootRot) + "|" + _qVec3(rightFootRot)
+      + "|" + (clothContext ? (_qVec3(clothContext.leftKneeRot) + "|" + _qVec3(clothContext.rightKneeRot) + "|" + _qVec3(clothContext.leftLegPivot) + "|" + _qVec3(clothContext.rightLegPivot)) : "n");
+    return _cachedClothBuild(key, clothContext, () => _buildTravelerBootsMeshRaw(leftFootRot, rightFootRot, scale, clothContext));
+  }
+
+  function _buildTravelerBootsMeshRaw(leftFootRot, rightFootRot, scale = 1.0, clothContext = null) {
     const outV = [];
     const outC = [];
     const outI = [];
@@ -6888,7 +7343,8 @@
     const s = scale || 1.0;
 
     const colUpper = [0.125, 0.130, 0.155];
-    const colTrim = [0.165, 0.172, 0.200];
+    const colUpperCrease = [0.105, 0.110, 0.132];
+    const colTrim = [0.168, 0.175, 0.205];
     const colSole = [0.062, 0.065, 0.080];
     const colInner = [0.045, 0.048, 0.060];
 
@@ -6915,6 +7371,7 @@
       const fx = pFoot[0];
       const fy = pFoot[1];
       const fz = pFoot[2];
+      const medialSign = isLeft ? 1.0 : -1.0;
 
       const activeLegRig = legRig || computeLegRigFrame(pHip, pKnee, pFoot, isLeft);
       const footBasis = activeLegRig.footBoneBasis;
@@ -6945,7 +7402,7 @@
       const fxY = rxZ * ux - rxX * uz;
       const fxZ = rxX * uy - rxY * ux;
 
-      const SHAFT_SIDES = 16;
+      const SHAFT_SIDES = 20;
       const midRxX = (rxX + fRight[0]) * 0.5, midRxY = (rxY + fRight[1]) * 0.5, midRxZ = (rxZ + fRight[2]) * 0.5;
       const midRxL = Math.hypot(midRxX, midRxY, midRxZ) || 1.0;
       const mrxX = midRxX / midRxL, mrxY = midRxY / midRxL, mrxZ = midRxZ / midRxL;
@@ -6960,12 +7417,26 @@
         fz + fRight[2] * dx + fUp[2] * dy + fFwd[2] * dz,
       ];
 
-      const anchorPt = footPt(0, -0.013 * s, 0.002 * s);
+      // Tailored Chibi ankle shaft: wraps leggings/calf cleanly above the cuff (no skin gap!)
+      // while aligning the rear shaft with the calf backward curve and pulling the heel flush.
+      const anchorPt = footPt(0, -0.015 * s, 0.0005 * s);
+      const shaftPt = (hUp, zBackOff) => [
+        fx + ux * hUp * s + fxX * zBackOff * s,
+        fy + uy * hUp * s + fxY * zBackOff * s,
+        fz + uz * hUp * s + fxZ * zBackOff * s,
+      ];
+      const sh0 = shaftPt(0.034, -0.0012);
+      const sh1 = shaftPt(0.042, -0.0018);
+      const sh2 = shaftPt(0.036, -0.0018);
+      const sh3 = shaftPt(0.028, -0.0014);
+      const sh4 = shaftPt(0.014, -0.0006);
       const shaftRingsDef = [
-        { cx: fx + ux * 0.034 * s, cy: fy + uy * 0.034 * s, cz: fz + uz * 0.034 * s, rx: 0.0335 * s, rz: 0.0335 * s, rAx: [rxX, rxY, rxZ], fAx: [fxX, fxY, fxZ], col: colInner }, // 0: Inner cuff tucked cleanly inside calf/leggings
-        { cx: fx + ux * 0.039 * s, cy: fy + uy * 0.039 * s, cz: fz + uz * 0.039 * s, rx: 0.0415 * s, rz: 0.0420 * s, rAx: [rxX, rxY, rxZ], fAx: [fxX, fxY, fxZ], col: colTrim  }, // 1: Smooth rolled top collar rim
-        { cx: fx + ux * 0.015 * s, cy: fy + uy * 0.015 * s, cz: fz + uz * 0.015 * s, rx: 0.0420 * s, rz: 0.0430 * s, rAx: [mrxX, mrxY, mrxZ], fAx: [mfxX, mfxY, mfxZ], col: colUpper }, // 2: Elastic ankle bridge following stride
-        { cx: anchorPt[0],         cy: anchorPt[1],         cz: anchorPt[2],         rx: 0.0425 * s, rz: 0.0440 * s, rAx: fRight,            fAx: fFwd,            col: colUpper }  // 3: Anchored deep inside solid shoe vamp (zero gap!)
+        { cx: sh0[0],      cy: sh0[1],      cz: sh0[2],      rx: 0.0345 * s, rz: 0.0345 * s, rAx: [rxX, rxY, rxZ],   fAx: [fxX, fxY, fxZ],   col: colInner       }, // 0: Inner cuff lining tucked cleanly in calf
+        { cx: sh1[0],      cy: sh1[1],      cz: sh1[2],      rx: 0.0428 * s, rz: 0.0426 * s, rAx: [rxX, rxY, rxZ],   fAx: [fxX, fxY, fxZ],   col: colTrim        }, // 1: Smooth rounded top collar crest (clears leggings!)
+        { cx: sh2[0],      cy: sh2[1],      cz: sh2[2],      rx: 0.0440 * s, rz: 0.0436 * s, rAx: [rxX, rxY, rxZ],   fAx: [fxX, fxY, fxZ],   col: colTrim        }, // 2: Rolled outer collar cuff
+        { cx: sh3[0],      cy: sh3[1],      cz: sh3[2],      rx: 0.0420 * s, rz: 0.0418 * s, rAx: [mrxX, mrxY, mrxZ], fAx: [mfxX, mfxY, mfxZ], col: colUpperCrease }, // 3: Subtle collar tuck crease
+        { cx: sh4[0],      cy: sh4[1],      cz: sh4[2],      rx: 0.0412 * s, rz: 0.0416 * s, rAx: [mrxX, mrxY, mrxZ], fAx: [mfxX, mfxY, mfxZ], col: colUpper       }, // 4: Fitted ankle bridge
+        { cx: anchorPt[0], cy: anchorPt[1], cz: anchorPt[2], rx: 0.0398 * s, rz: 0.0412 * s, rAx: fRight,             fAx: fFwd,             col: colUpper       }  // 5: Anchored cleanly inside shoe throat
       ];
 
       const shaftRings = [];
@@ -6995,49 +7466,61 @@
         }
       }
       const botShaft = shaftRings[shaftRings.length - 1];
-      const baseCPt = footPt(0, -0.015 * s, 0.002 * s);
+      const baseCPt = footPt(0, -0.017 * s, 0.0005 * s);
       const vBaseC = addV(baseCPt[0], baseCPt[1], baseCPt[2], colUpper);
       for (let i = 0; i < SHAFT_SIDES; i++) {
         const nextI = (i + 1) % SHAFT_SIDES;
         addTri(vBaseC, botShaft[nextI], botShaft[i]);
       }
 
-      // 2. Sculpted Superellipse Shoe Vamp, Toe Box & Flat Sole oriented along footBoneBasis
-      const xBias = (isLeft ? -0.001 : 0.001) * s;
+      // 2. Tailored Chibi Shoe Vamp, Asymmetric Left/Right Toe Box & Defined Sole Arch
+      //    Heel counter pulled forward to sit flush behind the ankle/heel (zero rear spur),
+      //    closely contoured around the new Chibi foot (-0.038..+0.067, w = 0.071).
+      const xBias = (isLeft ? -0.0010 : 0.0010) * s;
       const shoeSlicesDef = [
-        { z: -0.048 * s, rx: 0.034 * s, hTop: 0.017 * s, hBot: 0.016 * s, yMid: -0.020 * s }, // 0: Heel back bevel
-        { z: -0.030 * s, rx: 0.044 * s, hTop: 0.028 * s, hBot: 0.022 * s, yMid: -0.020 * s }, // 1: Full heel counter
-        { z:  0.000 * s, rx: 0.045 * s, hTop: 0.031 * s, hBot: 0.022 * s, yMid: -0.020 * s }, // 2: Ankle throat / midfoot arch
-        { z:  0.032 * s, rx: 0.046 * s, hTop: 0.028 * s, hBot: 0.022 * s, yMid: -0.020 * s }, // 3: Instep / forefoot ball
-        { z:  0.056 * s, rx: 0.043 * s, hTop: 0.022 * s, hBot: 0.021 * s, yMid: -0.021 * s }, // 4: Rounded toe box
-        { z:  0.075 * s, rx: 0.024 * s, hTop: 0.012 * s, hBot: 0.014 * s, yMid: -0.023 * s }  // 5: Toe front bevel
+        // { z, zLatBias, rxMed, rxLat, yWelt, hTop, hBot, pLat }
+        { z: -0.0398 * s, zLatBias: 0.000 * s, rxMed: 0.0315 * s, rxLat: 0.0315 * s, yWelt: -0.0312 * s, hTop: 0.0260 * s, hBot: 0.0108 * s, pLat: 0.85 }, // 0: Flush heel back bevel
+        { z: -0.0250 * s, zLatBias: 0.000 * s, rxMed: 0.0382 * s, rxLat: 0.0382 * s, yWelt: -0.0322 * s, hTop: 0.0380 * s, hBot: 0.0113 * s, pLat: 0.80 }, // 1: Sculpted heel counter
+        { z: -0.0020 * s, zLatBias: 0.001 * s, rxMed: 0.0398 * s, rxLat: 0.0404 * s, yWelt: -0.0308 * s, hTop: 0.0422 * s, hBot: 0.0104 * s, pLat: 0.76 }, // 2: Ankle throat & subtle sole arch
+        { z:  0.0280 * s, zLatBias: 0.002 * s, rxMed: 0.0410 * s, rxLat: 0.0418 * s, yWelt: -0.0320 * s, hTop: 0.0325 * s, hBot: 0.0112 * s, pLat: 0.76 }, // 3: Instep slope -> ball waist
+        { z:  0.0500 * s, zLatBias: 0.003 * s, rxMed: 0.0418 * s, rxLat: 0.0418 * s, yWelt: -0.0324 * s, hTop: 0.0235 * s, hBot: 0.0112 * s, pLat: 0.77 }, // 4: Forefoot ball & toe bridge
+        { z:  0.0640 * s, zLatBias: 0.004 * s, rxMed: 0.0355 * s, rxLat: 0.0335 * s, yWelt: -0.0320 * s, hTop: 0.0175 * s, hBot: 0.0108 * s, pLat: 0.80 }, // 5: Asymmetric Chibi toe box
+        { z:  0.0725 * s, zLatBias: 0.003 * s, rxMed: 0.0225 * s, rxLat: 0.0205 * s, yWelt: -0.0310 * s, hTop: 0.0108 * s, hBot: 0.0092 * s, pLat: 0.85 }  // 6: Rounded toe bevel tip
       ];
 
-      const SHOE_SIDES = 16;
+      const SHOE_SIDES = 20;
       const shoeRings = [];
       for (let r = 0; r < shoeSlicesDef.length; r++) {
         const sl = shoeSlicesDef[r];
         const ring = [];
-        const dxCenter = xBias * ((r / (shoeSlicesDef.length - 1)) * 1.5);
+        const tFwd = r / (shoeSlicesDef.length - 1);
+        const dxCenter = xBias * Math.pow(tFwd, 1.3);
         for (let i = 0; i < SHOE_SIDES; i++) {
           const ang = (i / SHOE_SIDES) * Math.PI * 2.0;
-          const sinA = Math.sin(ang);
-          const cosA = Math.cos(ang);
-          // Superellipse cross-section gives full side-corner clearance so toes/ankle never poke out
+          const sinA = Math.sin(ang); // +1/-1 horizontal side
+          const cosA = Math.cos(ang); // +1 = top crest, -1 = sole bottom
+
+          const lat = sinA * medialSign; // +1 = medial (big-toe side), -1 = lateral (pinky side)
+          const rxSide = lat >= 0.0 ? sl.rxMed : sl.rxLat;
           const sSign = sinA >= 0 ? 1.0 : -1.0;
-          const cSign = cosA >= 0 ? 1.0 : -1.0;
-          const vxOff = sSign * Math.pow(Math.abs(sinA), 0.78) * sl.rx;
-          const vyOff = (cSign > 0)
-            ? (Math.pow(cosA, 0.80) * sl.hTop)
-            : (-Math.pow(-cosA, 0.55) * sl.hBot);
-          const isSolePart = cosA < -0.30;
-          const pt = footPt(dxCenter + vxOff, sl.yMid + vyOff, sl.z);
-          ring.push(addV(
-            pt[0],
-            pt[1],
-            pt[2],
-            isSolePart ? colSole : colUpper
-          ));
+
+          // Upper is rounded & streamlined; outsole keeps crisp boxy-round tread shoulders
+          const pHoriz = cosA >= 0.0 ? (sl.pLat + 0.08 * cosA) : (sl.pLat * 0.90);
+          const vxOff = sSign * Math.pow(Math.abs(sinA), pHoriz) * rxSide;
+          const vyOff = (cosA >= 0.0)
+            ? (Math.pow(cosA, 0.84) * sl.hTop)
+            : (-Math.pow(-cosA, 0.48) * sl.hBot);
+
+          // Asymmetric front/toe slant (medial big-toe side slightly longer)
+          const zShift = lat * sl.zLatBias;
+
+          // Constant-row crisp horizontal outsole seam: rows with cosA < -0.15 are sole!
+          const isSole = cosA < -0.15;
+          const isWelt = !isSole && cosA < 0.16;
+          const col = isSole ? colSole : (isWelt ? colUpperCrease : colUpper);
+
+          const pt = footPt(dxCenter + vxOff, sl.yWelt + vyOff, sl.z + zShift);
+          ring.push(addV(pt[0], pt[1], pt[2], col));
         }
         shoeRings.push(ring);
       }
@@ -7052,7 +7535,7 @@
       }
 
       const heelRing = shoeRings[0];
-      const heelCapPt = footPt(0, -0.020 * s, -0.051 * s);
+      const heelCapPt = footPt(0, -0.029 * s, -0.0422 * s);
       const vHeelCap = addV(heelCapPt[0], heelCapPt[1], heelCapPt[2], colUpper);
       for (let i = 0; i < SHOE_SIDES; i++) {
         const nextI = (i + 1) % SHOE_SIDES;
@@ -7060,7 +7543,7 @@
       }
 
       const toeRing = shoeRings[shoeRings.length - 1];
-      const toeCapPt = footPt(xBias * 1.5, -0.023 * s, 0.079 * s);
+      const toeCapPt = footPt(xBias + medialSign * 0.002 * s, -0.030 * s, 0.0755 * s);
       const vToeCap = addV(toeCapPt[0], toeCapPt[1], toeCapPt[2], colUpper);
       for (let i = 0; i < SHOE_SIDES; i++) {
         const nextI = (i + 1) % SHOE_SIDES;
@@ -7117,9 +7600,1250 @@
   }
 
   // =========================================================================
+  // --- 11A-1. Polished Black Cap-Toe Oxford Dress Shoes (OXFORD_SHOES) ---
+  //     Features: Low curved topline collar, warm tan leather interior &
+  //     footbed insole, closed-lacing quarters with 5 horizontal dress laces,
+  //     distinct cap-toe seam ridge, quarter wing stitch curve, protruding
+  //     welt edge, recessed waist, and separate stacked dress heel block.
+  // =========================================================================
+  function buildOxfordShoesMesh(leftFootRot, rightFootRot, scale = 1.0, clothContext = null) {
+    const key = "oxfords|" + _qNum(scale, 1000) + "|" + _qVec3(leftFootRot) + "|" + _qVec3(rightFootRot)
+      + "|" + (clothContext ? (_qVec3(clothContext.leftKneeRot) + "|" + _qVec3(clothContext.rightKneeRot) + "|" + _qVec3(clothContext.leftLegPivot) + "|" + _qVec3(clothContext.rightLegPivot)) : "n");
+    return _cachedClothBuild(key, clothContext, () => _buildOxfordShoesMeshRaw(leftFootRot, rightFootRot, scale, clothContext));
+  }
+
+  function _buildOxfordShoesMeshRaw(leftFootRot, rightFootRot, scale = 1.0, clothContext = null) {
+    const outV = [];
+    const outC = [];
+    const outI = [];
+    const outT = [];
+    const s = scale || 1.0;
+
+    // Color bands carefully separated so both in-world shading & 3D icon lifting read crisply
+    const colUpper     = [0.068, 0.072, 0.086]; // Polished black calfskin upper
+    const colSheen     = [0.128, 0.135, 0.160]; // Glossy leather bevel & vamp highlight
+    const colSeamHi    = [0.162, 0.170, 0.198]; // Stitched cap-toe ridge & quarter piping
+    const colFacing    = [0.082, 0.087, 0.104]; // Raised closed-lacing quarter panels
+    const colLaceBar   = [0.145, 0.152, 0.176]; // Waxed parallel bar laces
+    const colSlitDark  = [0.030, 0.032, 0.040]; // Deep closed-lacing throat channel
+    const colWelt      = [0.052, 0.055, 0.068]; // Protruding Goodyear leather welt rim
+    const colSole      = [0.036, 0.038, 0.048]; // Stacked dress heel & sole bottom
+    const colHeelTier  = [0.058, 0.061, 0.075]; // Subtle stacked leather heel lift highlight
+    const colTanWall   = [0.560, 0.390, 0.200]; // Warm tan leather inner collar lining
+    const colTanInsole = [0.740, 0.540, 0.290]; // Warm tan calfskin footbed insole
+
+    const addV = (px, py, pz, color) => {
+      const idx = (outV.length / 3) | 0;
+      outV.push(px, py, pz);
+      outC.push(color[0], color[1], color[2]);
+      outT.push(-9.0, -9.0);
+      return idx;
+    };
+    const addTri = (v0, v1, v2) => {
+      outI.push(v0, v1, v2);
+    };
+    const addQuad = (v0, v1, v2, v3) => {
+      outI.push(v0, v1, v2);
+      outI.push(v0, v2, v3);
+    };
+
+    const addOxfordShoe = (pFoot, pKnee, isLeft, pHip = null, legRig = null) => {
+      if (!pFoot) return;
+      const fx = pFoot[0];
+      const fy = pFoot[1];
+      const fz = pFoot[2];
+      const medialSign = isLeft ? 1.0 : -1.0;
+
+      const activeLegRig = legRig || computeLegRigFrame(pHip, pKnee, pFoot, isLeft);
+      const footBasis = activeLegRig.footBoneBasis;
+      const fRight = footBasis.rightAxis;
+      const fUp    = footBasis.upAxis;
+      const fFwd   = footBasis.fwdAxis;
+
+      const footPt = (dx, dy, dz) => [
+        fx + fRight[0] * dx + fUp[0] * dy + fFwd[0] * dz,
+        fy + fRight[1] * dx + fUp[1] * dy + fFwd[1] * dz,
+        fz + fRight[2] * dx + fUp[2] * dy + fFwd[2] * dz
+      ];
+
+      const xBias = (isLeft ? -0.0010 : 0.0010) * s;
+
+      // Helper for tapered Oxford footprint width at longitudinal coordinate zLocal
+      const footShapeAtZ = (zVal) => {
+        if (zVal < -0.015) {
+          const u = Math.max(0.0, Math.min(1.0, (zVal + 0.0410) / 0.0260));
+          const rx = (0.0308 + 0.0082 * Math.sin(u * Math.PI * 0.5)) * s;
+          return { rxMed: rx, rxLat: rx, dxC: 0.0 };
+        }
+        if (zVal < 0.024) {
+          const u = (zVal + 0.015) / 0.039;
+          return {
+            rxMed: (0.0390 + 0.0016 * u) * s,
+            rxLat: (0.0392 + 0.0020 * u) * s,
+            dxC: xBias * u * 0.35
+          };
+        }
+        if (zVal < 0.050) {
+          const u = (zVal - 0.024) / 0.026;
+          return {
+            rxMed: (0.0406 - 0.0004 * u) * s,
+            rxLat: (0.0412 - 0.0014 * u) * s,
+            dxC: xBias * (0.35 + 0.45 * u)
+          };
+        }
+        const u = Math.max(0.0, Math.min(1.0, (zVal - 0.050) / 0.0295));
+        // Sleek tapered almond dress-shoe toe profile
+        const taper = Math.pow(1.0 - Math.pow(u, 1.38), 0.72);
+        return {
+          rxMed: Math.max(0.0115 * s, 0.0402 * s * taper),
+          rxLat: Math.max(0.0102 * s, 0.0398 * s * taper * (1.0 - 0.08 * u)),
+          dxC: xBias * (0.80 + 0.25 * u) + medialSign * 0.0016 * u * s
+        };
+      };
+
+      // =======================================================================
+      // 1. FOREFOOT VAMP, CAP-TOE, INSTEP & CLOSED THROAT SHELL (z = +0.021..+0.0795)
+      //    Watertight closed manifold front body; clears lower ankle shin
+      //    and blends cleanly into the U-collar quarter walls behind z = +0.024.
+      // =======================================================================
+      const frontSlices = [
+        // { z, zLatBias, rxMed, rxLat, yBase, hTop, hBot, pLat, crestCol }
+        { z: 0.0215 * s, zLatBias: 0.0005 * s, rxMed: 0.0406 * s, rxLat: 0.0412 * s, yBase: -0.0285 * s, hTop: 0.0450 * s, hBot: 0.0038 * s, pLat: 0.76, crestCol: colSheen  }, // 0: Throat base (yTop=+0.0165)
+        { z: 0.0320 * s, zLatBias: 0.0012 * s, rxMed: 0.0410 * s, rxLat: 0.0416 * s, yBase: -0.0288 * s, hTop: 0.0415 * s, hBot: 0.0038 * s, pLat: 0.77, crestCol: colSheen  }, // 1: Lacing instep top
+        { z: 0.0415 * s, zLatBias: 0.0020 * s, rxMed: 0.0410 * s, rxLat: 0.0414 * s, yBase: -0.0294 * s, hTop: 0.0342 * s, hBot: 0.0038 * s, pLat: 0.78, crestCol: colUpper  }, // 2: Vamp waist behind cap seam
+        { z: 0.0462 * s, zLatBias: 0.0024 * s, rxMed: 0.0410 * s, rxLat: 0.0412 * s, yBase: -0.0296 * s, hTop: 0.0292 * s, hBot: 0.0038 * s, pLat: 0.79, crestCol: colUpper  }, // 3: Vamp base at cap-toe seam
+        { z: 0.0476 * s, zLatBias: 0.0024 * s, rxMed: 0.0414 * s, rxLat: 0.0416 * s, yBase: -0.0296 * s, hTop: 0.0290 * s, hBot: 0.0038 * s, pLat: 0.79, crestCol: colSeamHi }, // 4: Cap-toe 3D stitched crest ridge!
+        { z: 0.0500 * s, zLatBias: 0.0026 * s, rxMed: 0.0406 * s, rxLat: 0.0404 * s, yBase: -0.0298 * s, hTop: 0.0265 * s, hBot: 0.0038 * s, pLat: 0.80, crestCol: colSheen  }, // 5: Cap-toe specular dome shoulder
+        { z: 0.0610 * s, zLatBias: 0.0030 * s, rxMed: 0.0352 * s, rxLat: 0.0334 * s, yBase: -0.0300 * s, hTop: 0.0205 * s, hBot: 0.0036 * s, pLat: 0.82, crestCol: colSheen  }, // 6: Tapered almond cap-toe mid
+        { z: 0.0715 * s, zLatBias: 0.0025 * s, rxMed: 0.0252 * s, rxLat: 0.0228 * s, yBase: -0.0300 * s, hTop: 0.0138 * s, hBot: 0.0034 * s, pLat: 0.85, crestCol: colSheen  }, // 7: Almond toe taper front
+        { z: 0.0785 * s, zLatBias: 0.0018 * s, rxMed: 0.0145 * s, rxLat: 0.0130 * s, yBase: -0.0296 * s, hTop: 0.0076 * s, hBot: 0.0030 * s, pLat: 0.88, crestCol: colUpper  }  // 8: Polished almond tip rim
+      ];
+
+      const FRONT_SIDES = 24;
+      const frontRings = [];
+      for (let r = 0; r < frontSlices.length; r++) {
+        const sl = frontSlices[r];
+        const ring = [];
+        const tFwd = r / (frontSlices.length - 1);
+        const dxC = xBias * (0.35 + 0.65 * Math.pow(tFwd, 1.1));
+        for (let i = 0; i < FRONT_SIDES; i++) {
+          const ang = (i / FRONT_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang);
+          const cosA = Math.cos(ang); // +1 = dorsal crest, -1 = bottom base
+          const lat = sinA * medialSign;
+          const rxSide = lat >= 0.0 ? sl.rxMed : sl.rxLat;
+          const sSign = sinA >= 0.0 ? 1.0 : -1.0;
+
+          const pHoriz = cosA >= 0.0 ? (sl.pLat + 0.09 * cosA) : (sl.pLat * 0.92);
+          const vxOff = sSign * Math.pow(Math.abs(sinA), pHoriz) * rxSide;
+          const vyOff = cosA >= 0.0
+            ? (Math.pow(cosA, 0.86) * sl.hTop)
+            : (-Math.pow(-cosA, 0.55) * sl.hBot);
+          const zShift = lat * sl.zLatBias;
+
+          const col = (cosA > 0.55) ? sl.crestCol : colUpper;
+          const pt = footPt(dxC + vxOff, sl.yBase + vyOff, sl.z + zShift);
+          ring.push(addV(pt[0], pt[1], pt[2], col));
+        }
+        frontRings.push(ring);
+      }
+      for (let r = 0; r < frontRings.length - 1; r++) {
+        const r0 = frontRings[r];
+        const r1 = frontRings[r + 1];
+        for (let i = 0; i < FRONT_SIDES; i++) {
+          const nextI = (i + 1) % FRONT_SIDES;
+          addQuad(r0[i], r1[i], r1[nextI], r0[nextI]);
+        }
+      }
+      // Close rear face of forefoot (faces -fFwd into cavity -> tan inner tongue lining!)
+      const throatCapRing = frontRings[0];
+      const throatBackPt = footPt(xBias * 0.35, -0.008 * s, 0.0210 * s);
+      const vThroatBack = addV(throatBackPt[0], throatBackPt[1], throatBackPt[2], colTanWall);
+      for (let i = 0; i < FRONT_SIDES; i++) {
+        const nextI = (i + 1) % FRONT_SIDES;
+        addTri(vThroatBack, throatCapRing[i], throatCapRing[nextI]);
+      }
+      // Close almond toe tip (+fFwd)
+      const toeCapRing = frontRings[frontRings.length - 1];
+      const toeTipPt = footPt(xBias + medialSign * 0.0018 * s, -0.0272 * s, 0.0812 * s);
+      const vToeTip = addV(toeTipPt[0], toeTipPt[1], toeTipPt[2], colSheen);
+      for (let i = 0; i < FRONT_SIDES; i++) {
+        const nextI = (i + 1) % FRONT_SIDES;
+        addTri(vToeTip, toeCapRing[nextI], toeCapRing[i]);
+      }
+
+      // =======================================================================
+      // 2. U-SHAPED QUARTER & LOW-CUT TOPLINE COLLAR + TAN INNER LINING
+      //    Sweeps continuously around the heel & sides from left throat corner
+      //    (theta = -thetaMax) -> heel back (0) -> right throat corner (+thetaMax).
+      //    Outer shell is polished black; topline rolls cleanly into warm tan
+      //    leather interior lining down to the footbed!
+      // =======================================================================
+      const U_STEPS = 22;
+      const thetaMax = Math.PI * 0.61; // Terminates around z = +0.025 tucked smoothly at throat
+      const zColCenter = 0.0040 * s;   // Oval collar focal center
+      const zBackRxOut = 0.0442 * s;   // Outer heel back reach -> z = -0.0402 * s
+      const zBackRxIn  = 0.0405 * s;   // Inner heel lining -> z = -0.0365 * s (clears ankle!)
+      const zFwdRxOut  = 0.0560 * s;
+      const zFwdRxIn   = 0.0495 * s;
+
+      const collarSweeps = [];
+      for (let uIdx = 0; uIdx <= U_STEPS; uIdx++) {
+        const uNorm = uIdx / U_STEPS; // 0..1
+        const theta = -thetaMax + uNorm * (thetaMax * 2.0);
+        const sT = Math.sin(theta);
+        const cT = Math.cos(theta); // +1 at heel back, negative toward front throat
+
+        // Outer & inner elliptical radii in XZ
+        const rxOut = (0.0422 - 0.0028 * Math.max(0, cT)) * s;
+        const rxIn  = 0.0384 * s; // Strictly wider than calf rAnkle = 0.0362 * s!
+        const rzOut = cT >= 0.0 ? zBackRxOut : zFwdRxOut;
+        const rzIn  = cT >= 0.0 ? zBackRxIn  : zFwdRxIn;
+
+        const outX = sT * rxOut;
+        const outZ = zColCenter - cT * rzOut;
+        const inX  = sT * rxIn;
+        const inZ  = zColCenter - cT * rzIn;
+
+        // Low-cut Oxford topline curve matching reference side profile:
+        // Rises at back heel tab (cT=+1 -> y=+0.0115), dips cleanly under ankle (cT=0 -> y=+0.0010),
+        // rises smoothly up into closed lacing throat (cT<0 -> y=+0.0160)
+        const heelBump = Math.pow(Math.max(0.0, cT), 1.45) * 0.0105 * s;
+        const throatClimb = Math.pow(Math.max(0.0, -cT) / 0.34, 1.25) * 0.0155 * s;
+        const yTopline = 0.0010 * s + heelBump + throatClimb;
+
+        // Subtle sculpted quarter belly curve outward around the heel counter
+        const bellyFlare = 1.0 + 0.035 * Math.pow(Math.max(0.0, cT), 0.7);
+        const midX = outX * bellyFlare;
+        const midZ = zColCenter - cT * (rzOut * (1.0 + 0.025 * Math.max(0.0, cT)));
+        const yMid = (-0.0185 * s + yTopline) * 0.52;
+
+        // 8-point closed cross-section loop: outer bottom -> outer welt -> outer belly ->
+        // outer topline -> rolled crest -> tan inner lip -> tan wall -> tan footbed edge
+        const botX = outX * 0.92;
+        const botZ = zColCenter - cT * (rzOut * 0.92);
+        const wallDefs = [
+          { x: outX * 0.48 + inX * 0.45, y: -0.0315 * s,       z: outZ * 0.48 + inZ * 0.45, col: colUpper     }, // 0: Hidden sole anchor bottom
+          { x: botX,                      y: -0.0298 * s,       z: botZ,                      col: colUpper     }, // 1: Lower quarter heel base
+          { x: midX,                      y: yMid,              z: midZ,                      col: colUpper     }, // 2: Sculpted heel counter belly
+          { x: outX,                      y: yTopline - 0.0018 * s, z: outZ,                  col: colSheen     }, // 3: Outer topline highlight bevel
+          { x: outX * 0.55 + inX * 0.45,  y: yTopline,          z: outZ * 0.55 + inZ * 0.45,  col: colSheen     }, // 4: Rolled black leather collar crest
+          { x: inX,                       y: yTopline - 0.0014 * s, z: inZ,                   col: colTanWall   }, // 5: Tan leather inner collar lip
+          { x: inX * 0.96,                y: -0.0150 * s,       z: inZ * 0.96,                col: colTanWall   }, // 6: Tan calfskin quarter lining
+          { x: inX * 0.91,                y: -0.0282 * s,       z: inZ * 0.91,                col: colTanInsole }  // 7: Tan footbed insole junction
+        ];
+
+        const sec = [];
+        for (let k = 0; k < wallDefs.length; k++) {
+          const wd = wallDefs[k];
+          const p = footPt(wd.x, wd.y, wd.z);
+          sec.push({ idx: addV(p[0], p[1], p[2], wd.col), x: wd.x, y: wd.y, z: wd.z });
+        }
+        collarSweeps.push(sec);
+      }
+
+      const W_LEN = collarSweeps[0].length;
+      for (let uIdx = 0; uIdx < U_STEPS; uIdx++) {
+        const s0 = collarSweeps[uIdx];
+        const s1 = collarSweeps[uIdx + 1];
+        for (let k = 0; k < W_LEN; k++) {
+          const nextK = (k + 1) % W_LEN;
+          addQuad(s0[k].idx, s0[nextK].idx, s1[nextK].idx, s1[k].idx);
+        }
+      }
+      // Close left & right throat ends cleanly where they tuck into vamp
+      const capWallEnd = (sec, isStart) => {
+        let cx = 0, cy = 0, cz = 0;
+        for (let k = 0; k < W_LEN; k++) { cx += sec[k].x; cy += sec[k].y; cz += sec[k].z; }
+        cx /= W_LEN; cy /= W_LEN; cz /= W_LEN;
+        const cp = footPt(cx, cy, cz);
+        const vC = addV(cp[0], cp[1], cp[2], colUpper);
+        for (let k = 0; k < W_LEN; k++) {
+          const nextK = (k + 1) % W_LEN;
+          if (isStart) addTri(vC, sec[nextK].idx, sec[k].idx);
+          else addTri(vC, sec[k].idx, sec[nextK].idx);
+        }
+      };
+      capWallEnd(collarSweeps[0], true);
+      capWallEnd(collarSweeps[U_STEPS], false);
+
+      // =======================================================================
+      // 3. WARM TAN LEATHER FOOTBED INSOLE FLOOR & INNER THROAT WALL
+      //    Completely seals the bottom & front interior cavity so looking down
+      //    reveals the iconic bright tan leather interior from reference!
+      // =======================================================================
+      const INSOLE_SIDES = 20;
+      const insTop = [], insBot = [];
+      for (let i = 0; i < INSOLE_SIDES; i++) {
+        const ang = (i / INSOLE_SIDES) * Math.PI * 2.0;
+        const sinA = Math.sin(ang);
+        const cosA = Math.cos(ang); // +1 = forward throat, -1 = rear heel
+        const zP = cosA >= 0 ? (0.002 + cosA * 0.0230) * s : (0.002 + cosA * 0.0365) * s;
+        const xP = sinA * 0.0360 * s;
+        const ptT = footPt(xP, -0.0282 * s, zP);
+        const ptB = footPt(xP, -0.0315 * s, zP);
+        insTop.push(addV(ptT[0], ptT[1], ptT[2], colTanInsole));
+        insBot.push(addV(ptB[0], ptB[1], ptB[2], colUpper));
+      }
+      const pInsTopC = footPt(0, -0.0282 * s, -0.004 * s);
+      const pInsBotC = footPt(0, -0.0315 * s, -0.004 * s);
+      const vInsTopC = addV(pInsTopC[0], pInsTopC[1], pInsTopC[2], colTanInsole);
+      const vInsBotC = addV(pInsBotC[0], pInsBotC[1], pInsBotC[2], colUpper);
+      for (let i = 0; i < INSOLE_SIDES; i++) {
+        const nextI = (i + 1) % INSOLE_SIDES;
+        addTri(vInsTopC, insTop[i], insTop[nextI]);     // Upward normal +fUp
+        addTri(vInsBotC, insBot[nextI], insBot[i]);     // Downward normal -fUp
+        addQuad(insBot[i], insBot[nextI], insTop[nextI], insTop[i]);
+      }
+
+      // Inner Throat Tan Lining Curtain (bridges inner opening across front throat edge z = +0.0225)
+      const TONGUE_COLS = 8;
+      const tLeft = -0.0295 * s, tRight = 0.0295 * s;
+      const throatWallFront = [], throatWallBack = [];
+      for (let ci = 0; ci <= TONGUE_COLS; ci++) {
+        const u = ci / TONGUE_COLS;
+        const x = tLeft + (tRight - tLeft) * u;
+        const yTop = (0.0155 - Math.pow((u - 0.5) * 2.0, 2) * 0.0025) * s;
+        const zCurve = (0.0228 - Math.pow((u - 0.5) * 2.0, 2) * 0.0045) * s;
+        const rowF = [];
+        const rowB = [];
+        const ys = [-0.0290 * s, -0.0080 * s, yTop];
+        for (let yi = 0; yi < ys.length; yi++) {
+          const pF = footPt(x, ys[yi], zCurve);
+          const pB = footPt(x, ys[yi], zCurve + 0.0035 * s);
+          const col = (yi === 2) ? colSheen : colTanWall;
+          rowF.push(addV(pF[0], pF[1], pF[2], col));
+          rowB.push(addV(pB[0], pB[1], pB[2], colUpper));
+        }
+        throatWallFront.push(rowF);
+        throatWallBack.push(rowB);
+      }
+      for (let ci = 0; ci < TONGUE_COLS; ci++) {
+        for (let yi = 0; yi < 2; yi++) {
+          // Cavity-facing tan surface (-fFwd normal)
+          addQuad(throatWallFront[ci][yi], throatWallFront[ci][yi + 1], throatWallFront[ci + 1][yi + 1], throatWallFront[ci + 1][yi]);
+          // Back side inside forefoot (+fFwd normal)
+          addQuad(throatWallBack[ci][yi], throatWallBack[ci + 1][yi], throatWallBack[ci + 1][yi + 1], throatWallBack[ci][yi + 1]);
+        }
+        // Top collar lip of tongue throat (+fUp)
+        addQuad(throatWallFront[ci][2], throatWallBack[ci][2], throatWallBack[ci + 1][2], throatWallFront[ci + 1][2]);
+      }
+
+      // =======================================================================
+      // 4. CLOSED OXFORD QUARTERS, VAMP THROAT PIPING, CAP-TOE SEAM RIB &
+      //    5 HORIZONTAL BAR LACES + CURVED QUARTER SIDE WING STITCHES
+      // =======================================================================
+      const addClosedBoxRibbon = (ptsFn, uSteps, vSteps, colTop, colSide, flipTopWinding = false) => {
+        // Builds a 3D raised applique ribbon with closed outer walls (top surface lifted along normal, base tucked flush)
+        const topGrid = [];
+        const botGrid = [];
+        for (let ui = 0; ui <= uSteps; ui++) {
+          const u = ui / uSteps;
+          const tRow = [], bRow = [];
+          for (let vi = 0; vi <= vSteps; vi++) {
+            const v = vi / vSteps;
+            const res = ptsFn(u, v);
+            const pT = footPt(res.top[0], res.top[1], res.top[2]);
+            const pB = footPt(res.bot[0], res.bot[1], res.bot[2]);
+            tRow.push(addV(pT[0], pT[1], pT[2], res.col || colTop));
+            bRow.push(addV(pB[0], pB[1], pB[2], colSide || colTop));
+          }
+          topGrid.push(tRow);
+          botGrid.push(bRow);
+        }
+        for (let ui = 0; ui < uSteps; ui++) {
+          for (let vi = 0; vi < vSteps; vi++) {
+            if (!flipTopWinding) {
+              addQuad(topGrid[ui][vi], topGrid[ui + 1][vi], topGrid[ui + 1][vi + 1], topGrid[ui][vi + 1]);
+              addQuad(botGrid[ui][vi], botGrid[ui][vi + 1], botGrid[ui + 1][vi + 1], botGrid[ui + 1][vi]);
+            } else {
+              addQuad(topGrid[ui][vi], topGrid[ui][vi + 1], topGrid[ui + 1][vi + 1], topGrid[ui + 1][vi]);
+              addQuad(botGrid[ui][vi], botGrid[ui + 1][vi], botGrid[ui + 1][vi + 1], botGrid[ui][vi + 1]);
+            }
+          }
+        }
+        // Closed perimeter walls
+        for (let ui = 0; ui < uSteps; ui++) {
+          if (!flipTopWinding) {
+            addQuad(botGrid[ui][0], topGrid[ui][0], topGrid[ui + 1][0], botGrid[ui + 1][0]);
+            addQuad(botGrid[ui + 1][vSteps], topGrid[ui + 1][vSteps], topGrid[ui][vSteps], botGrid[ui][vSteps]);
+          } else {
+            addQuad(botGrid[ui][0], botGrid[ui + 1][0], topGrid[ui + 1][0], topGrid[ui][0]);
+            addQuad(botGrid[ui + 1][vSteps], botGrid[ui][vSteps], topGrid[ui][vSteps], topGrid[ui + 1][vSteps]);
+          }
+        }
+        for (let vi = 0; vi < vSteps; vi++) {
+          if (!flipTopWinding) {
+            addQuad(botGrid[0][vi + 1], topGrid[0][vi + 1], topGrid[0][vi], botGrid[0][vi]);
+            addQuad(botGrid[uSteps][vi], topGrid[uSteps][vi], topGrid[uSteps][vi + 1], botGrid[uSteps][vi + 1]);
+          } else {
+            addQuad(botGrid[0][vi + 1], botGrid[0][vi], topGrid[0][vi], topGrid[0][vi + 1]);
+            addQuad(botGrid[uSteps][vi], botGrid[uSteps][vi + 1], topGrid[uSteps][vi + 1], topGrid[uSteps][vi]);
+          }
+        }
+      };
+
+      // Instep dorsal surface helper aligned directly to frontSlices top profile
+      const instepY = (zLoc, xLoc) => {
+        const yCenter = zLoc <= 0.032 * s
+          ? (0.0165 * s - ((zLoc - 0.0215 * s) / (0.0105 * s)) * 0.0038 * s)
+          : (0.0127 * s - ((zLoc - 0.0320 * s) / (0.0156 * s)) * 0.0133 * s);
+        const rx = 0.0410 * s;
+        const drop = Math.min(1.0, Math.pow(xLoc / rx, 2)) * 0.0145 * s;
+        return yCenter - drop;
+      };
+
+      // A. Left & Right Closed-Lacing Quarter Facing Panels (z = +0.0225..+0.0405)
+      for (const side of [-1.0, 1.0]) {
+        addClosedBoxRibbon((u, v) => {
+          // u: forward 0.0225 -> 0.0405; v: center slit -> outer curve
+          const zLoc = (0.0225 + u * 0.0180) * s;
+          const xIn = side * (0.0014 + 0.0004 * u) * s;
+          const xOut = side * (0.0155 + 0.0055 * Math.sin(u * Math.PI * 0.7)) * s;
+          const xLoc = xIn + (xOut - xIn) * v;
+          const yBase = instepY(zLoc, xLoc);
+          return {
+            top: [xLoc + 0.0005 * s * u, yBase + 0.0020 * s, zLoc],
+            bot: [xLoc + 0.0005 * s * u, yBase - 0.0004 * s, zLoc],
+            col: (v < 0.18 || u > 0.85) ? colSeamHi : colFacing
+          };
+        }, 5, 4, colFacing, colUpper, side < 0.0);
+      }
+
+      // Dark Throat Facing Slit Underlay (gives crisp dark line between closed facing flaps)
+      addClosedBoxRibbon((u, v) => {
+        const zLoc = (0.0225 + u * 0.0178) * s;
+        const xLoc = (-0.0018 + v * 0.0036) * s;
+        const yBase = instepY(zLoc, xLoc);
+        return {
+          top: [xLoc, yBase + 0.0012 * s, zLoc],
+          bot: [xLoc, yBase - 0.0006 * s, zLoc],
+          col: colSlitDark
+        };
+      }, 4, 2, colSlitDark, colSlitDark, false);
+
+      // B. 5 Crisp 3D Parallel Bar Laces across Closed Throat (z = 0.0245..0.0385)
+      const laceZs = [0.0245, 0.0280, 0.0315, 0.0350, 0.0385];
+      for (let li = 0; li < laceZs.length; li++) {
+        const lz = laceZs[li] * s;
+        const N_LACE_RAD = 6;
+        const N_LACE_LEN = 4;
+        const lRings = [];
+        for (let xi = 0; xi <= N_LACE_LEN; xi++) {
+          const tX = xi / N_LACE_LEN;
+          const x = (-0.0078 + tX * 0.0156) * s;
+          const yC = instepY(lz, x) + 0.0023 * s;
+          const rTube = 0.00105 * s;
+          const ring = [];
+          for (let ri = 0; ri < N_LACE_RAD; ri++) {
+            const ang = (ri / N_LACE_RAD) * Math.PI * 2.0;
+            const py = yC + Math.cos(ang) * rTube * 0.80;
+            const pz = lz + Math.sin(ang) * rTube;
+            const p = footPt(x + xBias * 0.4, py, pz);
+            ring.push(addV(p[0], p[1], p[2], Math.cos(ang) > 0 ? colLaceBar : colWelt));
+          }
+          lRings.push(ring);
+        }
+        for (let xi = 0; xi < N_LACE_LEN; xi++) {
+          for (let ri = 0; ri < N_LACE_RAD; ri++) {
+            const nextRi = (ri + 1) % N_LACE_RAD;
+            addQuad(lRings[xi][ri], lRings[xi][nextRi], lRings[xi + 1][nextRi], lRings[xi + 1][ri]);
+          }
+        }
+        const yC0 = instepY(lz, -0.0078 * s) + 0.0023 * s;
+        const yC1 = instepY(lz,  0.0078 * s) + 0.0023 * s;
+        const cap0 = footPt(-0.0082 * s + xBias * 0.4, yC0, lz);
+        const cap1 = footPt( 0.0082 * s + xBias * 0.4, yC1, lz);
+        const vc0 = addV(cap0[0], cap0[1], cap0[2], colLaceBar);
+        const vc1 = addV(cap1[0], cap1[1], cap1[2], colLaceBar);
+        for (let ri = 0; ri < N_LACE_RAD; ri++) {
+          const nextRi = (ri + 1) % N_LACE_RAD;
+          addTri(vc0, lRings[0][nextRi], lRings[0][ri]);
+          addTri(vc1, lRings[N_LACE_LEN][ri], lRings[N_LACE_LEN][nextRi]);
+        }
+      }
+
+      // C. Side Curved Quarter Wing Stitch Piping (Left & Right, matching heel side reference image!)
+      for (const side of [-1.0, 1.0]) {
+        const WING_STEPS = 10;
+        const wRings = [];
+        for (let wi = 0; wi <= WING_STEPS; wi++) {
+          const t = wi / WING_STEPS; // 0 = throat lower waist -> 1 = curved up toward heel tab
+          // Sweep from (z = +0.022, y = -0.027) -> belly mid (z = -0.006, y = -0.015) -> heel counter back (z = -0.036, y = +0.001)
+          const z = (0.022 - t * 0.058) * s;
+          const y = (-0.027 + Math.sin(t * Math.PI * 0.52) * 0.0275) * s;
+          const fs = footShapeAtZ(z / s);
+          const x = side * ((side * medialSign > 0 ? fs.rxMed : fs.rxLat) + 0.0011 * s);
+          const rPipe = 0.0011 * s;
+          const ring = [];
+          for (let ri = 0; ri < 6; ri++) {
+            const ang = (ri / 6) * Math.PI * 2.0;
+            const px = x + side * Math.cos(ang) * rPipe * 0.75;
+            const py = y + Math.sin(ang) * rPipe;
+            const p = footPt(px, py, z);
+            ring.push(addV(p[0], p[1], p[2], Math.cos(ang) > 0 ? colSeamHi : colUpper));
+          }
+          wRings.push(ring);
+        }
+        for (let wi = 0; wi < WING_STEPS; wi++) {
+          for (let ri = 0; ri < 6; ri++) {
+            const nextRi = (ri + 1) % 6;
+            if (side > 0) addQuad(wRings[wi][ri], wRings[wi + 1][ri], wRings[wi + 1][nextRi], wRings[wi][nextRi]);
+            else addQuad(wRings[wi][ri], wRings[wi][nextRi], wRings[wi + 1][nextRi], wRings[wi + 1][ri]);
+          }
+        }
+        // Tuck ends cleanly with closed caps aligned to ring centroid
+        const endCap = (ring, isFront) => {
+          let cx = 0, cy = 0, cz = 0;
+          for (let ri = 0; ri < 6; ri++) {
+            cx += outV[ring[ri] * 3];
+            cy += outV[ring[ri] * 3 + 1];
+            cz += outV[ring[ri] * 3 + 2];
+          }
+          cx /= 6; cy /= 6; cz /= 6;
+          const pushFwd = (isFront ? 0.0005 : -0.0005) * s;
+          const vc = addV(cx + fFwd[0] * pushFwd, cy + fFwd[1] * pushFwd, cz + fFwd[2] * pushFwd, colUpper);
+          for (let ri = 0; ri < 6; ri++) {
+            const nextRi = (ri + 1) % 6;
+            if ((side > 0) === isFront) addTri(vc, ring[ri], ring[nextRi]);
+            else addTri(vc, ring[nextRi], ring[ri]);
+          }
+        };
+        endCap(wRings[0], true);
+        endCap(wRings[WING_STEPS], false);
+      }
+
+      // =======================================================================
+      // 5. GOODYEAR PROTRUDING WELT, RECESSED WAIST ARCH & FOREFOOT OUTSOLE
+      //    Plus Separate Stacked Dress Heel Block with crisp straight front
+      //    heel breast (matching reference side profile)!
+      // =======================================================================
+
+      // Build clean closed 3D Footbed Outsole (z = -0.0410..+0.0808) with raised waist arch:
+      const outsoleSlices = [
+        { z: -0.0405 * s, rxMed: 0.0328 * s, rxLat: 0.0328 * s, yTop: -0.0298 * s, yBot: -0.0358 * s, cT: colWelt, cB: colSole }, // 0: Heel cup welt edge
+        { z: -0.0250 * s, rxMed: 0.0398 * s, rxLat: 0.0398 * s, yTop: -0.0302 * s, yBot: -0.0362 * s, cT: colWelt, cB: colSole }, // 1: Heel waist
+        { z: -0.0080 * s, rxMed: 0.0406 * s, rxLat: 0.0410 * s, yTop: -0.0300 * s, yBot: -0.0362 * s, cT: colWelt, cB: colSole }, // 2: Recessed waist arch (tucked high!)
+        { z:  0.0140 * s, rxMed: 0.0414 * s, rxLat: 0.0422 * s, yTop: -0.0306 * s, yBot: -0.0378 * s, cT: colWelt, cB: colSole }, // 3: Arch-to-ball transition
+        { z:  0.0260 * s, rxMed: 0.0426 * s, rxLat: 0.0432 * s, yTop: -0.0312 * s, yBot: -0.0432 * s, cT: colWelt, cB: colSole }, // 4: Full ball forefoot outsole
+        { z:  0.0490 * s, rxMed: 0.0428 * s, rxLat: 0.0428 * s, yTop: -0.0318 * s, yBot: -0.0434 * s, cT: colWelt, cB: colSole }, // 5: Cap-toe sole line
+        { z:  0.0680 * s, rxMed: 0.0315 * s, rxLat: 0.0294 * s, yTop: -0.0316 * s, yBot: -0.0430 * s, cT: colWelt, cB: colSole }, // 6: Forefoot welt taper
+        { z:  0.0795 * s, rxMed: 0.0165 * s, rxLat: 0.0150 * s, yTop: -0.0308 * s, yBot: -0.0412 * s, cT: colWelt, cB: colSole }  // 7: Almond toe welt tip
+      ];
+      const SOLE_SIDES = 20;
+      const soleRings = [];
+      for (let r = 0; r < outsoleSlices.length; r++) {
+        const sl = outsoleSlices[r];
+        const ring = [];
+        const tFwd = r / (outsoleSlices.length - 1);
+        const dxC = xBias * Math.pow(tFwd, 1.15);
+        for (let i = 0; i < SOLE_SIDES; i++) {
+          const ang = (i / SOLE_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang);
+          const cosA = Math.cos(ang); // +1 = welt top ledge, -1 = outsole floor
+          const lat = sinA * medialSign;
+          const rx = lat >= 0.0 ? sl.rxMed : sl.rxLat;
+          const sSign = sinA >= 0.0 ? 1.0 : -1.0;
+          const vx = dxC + sSign * Math.pow(Math.abs(sinA), 0.78) * rx;
+          const vy = cosA >= 0.0
+            ? (sl.yTop + cosA * 0.0018 * s)
+            : (sl.yTop + (-Math.pow(-cosA, 0.42)) * (sl.yTop - sl.yBot));
+          const col = cosA >= -0.10 ? sl.cT : sl.cB;
+          const p = footPt(vx, vy, sl.z + lat * 0.0018 * s * Math.min(1.0, tFwd * 1.4));
+          ring.push(addV(p[0], p[1], p[2], col));
+        }
+        soleRings.push(ring);
+      }
+      for (let r = 0; r < soleRings.length - 1; r++) {
+        for (let i = 0; i < SOLE_SIDES; i++) {
+          const nextI = (i + 1) % SOLE_SIDES;
+          addQuad(soleRings[r][i], soleRings[r + 1][i], soleRings[r + 1][nextI], soleRings[r][nextI]);
+        }
+      }
+      const pSH = footPt(0, -0.0330 * s, -0.0420 * s);
+      const vSH = addV(pSH[0], pSH[1], pSH[2], colSole);
+      for (let i = 0; i < SOLE_SIDES; i++) addTri(vSH, soleRings[0][i], soleRings[0][(i + 1) % SOLE_SIDES]);
+      const pST = footPt(xBias + medialSign * 0.0018 * s, -0.0360 * s, 0.0825 * s);
+      const vST = addV(pST[0], pST[1], pST[2], colWelt);
+      for (let i = 0; i < SOLE_SIDES; i++) addTri(vST, soleRings[soleRings.length - 1][(i + 1) % SOLE_SIDES], soleRings[soleRings.length - 1][i]);
+
+      // Separate Crisp Stacked Dress Heel Block (z = -0.0412 .. -0.0110) with straight front heel breast!
+      const heelBlockSlices = [
+        { z: -0.0410 * s, rx: 0.0320 * s, yTop: -0.0325 * s, yBot: -0.0438 * s },
+        { z: -0.0300 * s, rx: 0.0382 * s, yTop: -0.0330 * s, yBot: -0.0438 * s },
+        { z: -0.0185 * s, rx: 0.0388 * s, yTop: -0.0330 * s, yBot: -0.0438 * s },
+        { z: -0.0112 * s, rx: 0.0386 * s, yTop: -0.0330 * s, yBot: -0.0438 * s } // Straight sharp heel breast!
+      ];
+      const HB_SIDES = 18;
+      const hbRings = [];
+      for (let r = 0; r < heelBlockSlices.length; r++) {
+        const sl = heelBlockSlices[r];
+        const ring = [];
+        for (let i = 0; i < HB_SIDES; i++) {
+          const ang = (i / HB_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang);
+          const cosA = Math.cos(ang);
+          const sSign = sinA >= 0.0 ? 1.0 : -1.0;
+          const vx = sSign * Math.pow(Math.abs(sinA), 0.72) * sl.rx;
+          const vy = cosA >= 0.0 ? sl.yTop : (sl.yTop - Math.pow(-cosA, 0.45) * (sl.yTop - sl.yBot));
+          const col = (Math.abs(cosA) < 0.35) ? colHeelTier : colSole;
+          const p = footPt(vx, vy, sl.z);
+          ring.push(addV(p[0], p[1], p[2], col));
+        }
+        hbRings.push(ring);
+      }
+      for (let r = 0; r < hbRings.length - 1; r++) {
+        for (let i = 0; i < HB_SIDES; i++) {
+          const nextI = (i + 1) % HB_SIDES;
+          addQuad(hbRings[r][i], hbRings[r + 1][i], hbRings[r + 1][nextI], hbRings[r][nextI]);
+        }
+      }
+      const pHBB = footPt(0, -0.0382 * s, -0.0422 * s);
+      const pHBF = footPt(0, -0.0384 * s, -0.0112 * s);
+      const vHBB = addV(pHBB[0], pHBB[1], pHBB[2], colSole);
+      const vHBF = addV(pHBF[0], pHBF[1], pHBF[2], colSole);
+      for (let i = 0; i < HB_SIDES; i++) {
+        const nextI = (i + 1) % HB_SIDES;
+        addTri(vHBB, hbRings[0][i], hbRings[0][nextI]);
+        addTri(vHBF, hbRings[hbRings.length - 1][nextI], hbRings[hbRings.length - 1][i]);
+      }
+    };
+
+    const lHip    = clothContext ? clothContext.leftLegPivot : null;
+    const rHip    = clothContext ? clothContext.rightLegPivot : null;
+    const lKnee   = clothContext ? clothContext.leftKneeRot : null;
+    const rKnee   = clothContext ? clothContext.rightKneeRot : null;
+    const lLegRig = clothContext ? clothContext.leftLegRig : null;
+    const rLegRig = clothContext ? clothContext.rightLegRig : null;
+    if (leftFootRot) addOxfordShoe(leftFootRot, lKnee, true, lHip, lLegRig);
+    if (rightFootRot) addOxfordShoe(rightFootRot, rKnee, false, rHip, rLegRig);
+
+    const normals = new Float32Array(outV.length);
+    for (let k = 0; k < outI.length; k += 3) {
+      const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
+      const p0x = outV[i0 * 3], p0y = outV[i0 * 3 + 1], p0z = outV[i0 * 3 + 2];
+      const p1x = outV[i1 * 3], p1y = outV[i1 * 3 + 1], p1z = outV[i1 * 3 + 2];
+      const p2x = outV[i2 * 3], p2y = outV[i2 * 3 + 1], p2z = outV[i2 * 3 + 2];
+      const uX = p1x - p0x, uY = p1y - p0y, uZ = p1z - p0z;
+      const vX = p2x - p0x, vY = p2y - p0y, vZ = p2z - p0z;
+      const nX = uY * vZ - uZ * vY;
+      const nY = uZ * vX - uX * vZ;
+      const nZ = uX * vY - uY * vX;
+      normals[i0 * 3] += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
+      normals[i1 * 3] += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
+      normals[i2 * 3] += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
+    }
+    for (let k = 0; k < normals.length; k += 3) {
+      const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+      if (l > 1e-8) {
+        normals[k] /= l;
+        normals[k + 1] /= l;
+        normals[k + 2] /= l;
+      } else {
+        normals[k + 1] = 1.0;
+      }
+    }
+
+    return {
+      vertices: outV,
+      normals: normals,
+      colors: outC,
+      texcoords: outT,
+      indices: outI
+    };
+  }
+
+  // =========================================================================
+  // --- 11A-1B. High-Shaft Cap-Toe Balmoral Dress Boots (DRESS_BOOTS) ---
+  //     Built directly on the OXFORD_SHOES cap-toe last, Goodyear welt,
+  //     recessed waist & stacked heel block, extended into a tailored high
+  //     ankle shaft with horizontal cuff piping, tan leather inner lining,
+  //     closed-lacing quarter flaps with 7 parallel bar laces, and curved
+  //     Oxford galosh + heel counter side stitch piping.
+  // =========================================================================
+  function buildDressBootsMesh(leftFootRot, rightFootRot, scale = 1.0, clothContext = null) {
+    const isIconFlag = (clothContext && clothContext.isIcon) ? 1 : 0;
+    const eqB = isIconFlag ? null : getCharacterEquippedClothingState(false);
+    const underSlacks = (eqB && eqB.wearSlacks) ? 1 : 0;
+    const key = "dressBoots|" + isIconFlag + "|" + underSlacks + "|" + _qNum(scale, 1000)
+      + "|" + _qVec3(leftFootRot) + "|" + _qVec3(rightFootRot)
+      + "|" + (clothContext ? (_qVec3(clothContext.leftKneeRot) + "|" + _qVec3(clothContext.rightKneeRot) + "|" + _qVec3(clothContext.leftLegPivot) + "|" + _qVec3(clothContext.rightLegPivot)) : "n");
+    return _cachedClothBuild(key, clothContext, () => _buildDressBootsMeshRaw(leftFootRot, rightFootRot, scale, clothContext));
+  }
+
+  function _buildDressBootsMeshRaw(leftFootRot, rightFootRot, scale = 1.0, clothContext = null) {
+    const outV = [];
+    const outC = [];
+    const outI = [];
+    const outT = [];
+    const s = scale || 1.0;
+
+    const colUpper     = [0.068, 0.072, 0.086]; // Polished black calfskin upper
+    const colSheen     = [0.128, 0.135, 0.160]; // Glossy leather bevel & vamp highlight
+    const colSeamHi    = [0.162, 0.170, 0.198]; // Stitched cap-toe, collar & quarter piping
+    const colFacing    = [0.082, 0.087, 0.104]; // Raised closed-lacing quarter flaps
+    const colLaceBar   = [0.145, 0.152, 0.176]; // Waxed 7-bar dress laces
+    const colSlitDark  = [0.030, 0.032, 0.040]; // Deep closed-lacing throat & tongue channel
+    const colWelt      = [0.052, 0.055, 0.068]; // Protruding Goodyear leather welt rim
+    const colSole      = [0.036, 0.038, 0.048]; // Stacked dress heel & sole bottom
+    const colHeelTier  = [0.058, 0.061, 0.075]; // Stacked heel lift highlight
+    const colTanWall   = [0.560, 0.390, 0.200]; // Warm tan leather inner lining rim
+
+    const addV = (px, py, pz, color) => {
+      const idx = (outV.length / 3) | 0;
+      outV.push(px, py, pz);
+      outC.push(color[0], color[1], color[2]);
+      outT.push(-9.0, -9.0);
+      return idx;
+    };
+    const addTri = (v0, v1, v2) => {
+      outI.push(v0, v1, v2);
+    };
+    const addQuad = (v0, v1, v2, v3) => {
+      outI.push(v0, v1, v2);
+      outI.push(v0, v2, v3);
+    };
+
+    const addDressBoot = (pFoot, pKnee, isLeft, pHip = null, legRig = null) => {
+      if (!pFoot) return;
+      const fx = pFoot[0];
+      const fy = pFoot[1];
+      const fz = pFoot[2];
+      const medialSign = isLeft ? 1.0 : -1.0;
+
+      const activeLegRig = legRig || computeLegRigFrame(pHip, pKnee, pFoot, isLeft);
+      const footBasis = activeLegRig.footBoneBasis;
+      const fRight = footBasis.rightAxis;
+      const fUp    = footBasis.upAxis;
+      const fFwd   = footBasis.fwdAxis;
+
+      // Align ankle shaft cleanly to actual shin bone vector (pKnee - pFoot) so stride poses never tear/clip
+      let ux = fUp[0], uy = fUp[1], uz = fUp[2];
+      if (pKnee) {
+        const vx = pKnee[0] - fx, vy = pKnee[1] - fy, vz = pKnee[2] - fz;
+        const vLen = Math.hypot(vx, vy, vz);
+        if (vLen > 1e-4) { ux = vx / vLen; uy = vy / vLen; uz = vz / vLen; }
+      }
+      let rxX = uy * fFwd[2] - uz * fFwd[1];
+      let rxY = uz * fFwd[0] - ux * fFwd[2];
+      let rxZ = ux * fFwd[1] - uy * fFwd[0];
+      const rxL = Math.hypot(rxX, rxY, rxZ) || 1.0;
+      rxX /= rxL; rxY /= rxL; rxZ /= rxL;
+      const fxX = rxY * uz - rxZ * uy;
+      const fxY = rxZ * ux - rxX * uz;
+      const fxZ = rxX * uy - rxY * ux;
+      const shRight = [rxX, rxY, rxZ];
+      const shUp    = [ux, uy, uz];
+      const shFwd   = [fxX, fxY, fxZ];
+
+      const footPt = (dx, dy, dz) => [
+        fx + fRight[0] * dx + fUp[0] * dy + fFwd[0] * dz,
+        fy + fRight[1] * dx + fUp[1] * dy + fFwd[1] * dz,
+        fz + fRight[2] * dx + fUp[2] * dy + fFwd[2] * dz
+      ];
+
+      // Blended foot->shin transform for the dress boot shaft & high lacing column
+      const normAxis = (a, b, t) => {
+        const vx = a[0] * (1.0 - t) + b[0] * t;
+        const vy = a[1] * (1.0 - t) + b[1] * t;
+        const vz = a[2] * (1.0 - t) + b[2] * t;
+        const l = Math.hypot(vx, vy, vz) || 1.0;
+        return [vx / l, vy / l, vz / l];
+      };
+      const eqBoots = (clothContext && clothContext.isIcon) ? null : getCharacterEquippedClothingState(false);
+      const underSlacks = !!(eqBoots && eqBoots.wearSlacks);
+      const shaftBlendStart = -0.010 * s;
+      const shaftBlendSpan  =  0.022 * s;
+      const bootShaftPt = (dx, dy, dz) => {
+        const w = Math.max(0.0, Math.min(1.0, (dy - shaftBlendStart) / shaftBlendSpan));
+        const rAx = normAxis(fRight, shRight, w);
+        const uAx = normAxis(fUp, shUp, w);
+        const fAx = normAxis(fFwd, shFwd, w);
+        const zBack = -0.0014 * s * w;
+        return [
+          fx + rAx[0] * dx + uAx[0] * dy + fAx[0] * (dz + zBack),
+          fy + rAx[1] * dx + uAx[1] * dy + fAx[1] * (dz + zBack),
+          fz + rAx[2] * dx + uAx[2] * dy + fAx[2] * (dz + zBack)
+        ];
+      };
+
+      const xBias = (isLeft ? -0.0010 : 0.0010) * s;
+
+      const footShapeAtZ = (zVal) => {
+        if (zVal < -0.015) {
+          const u = Math.max(0.0, Math.min(1.0, (zVal + 0.0410) / 0.0260));
+          const rx = (0.0308 + 0.0082 * Math.sin(u * Math.PI * 0.5)) * s;
+          return { rxMed: rx, rxLat: rx, dxC: 0.0 };
+        }
+        if (zVal < 0.024) {
+          const u = (zVal + 0.015) / 0.039;
+          return { rxMed: (0.0390 + 0.0016 * u) * s, rxLat: (0.0392 + 0.0020 * u) * s, dxC: xBias * u * 0.35 };
+        }
+        if (zVal < 0.050) {
+          const u = (zVal - 0.024) / 0.026;
+          return { rxMed: (0.0406 - 0.0004 * u) * s, rxLat: (0.0412 - 0.0014 * u) * s, dxC: xBias * (0.35 + 0.45 * u) };
+        }
+        const u = Math.max(0.0, Math.min(1.0, (zVal - 0.050) / 0.0295));
+        const taper = Math.pow(1.0 - Math.pow(u, 1.38), 0.72);
+        return {
+          rxMed: Math.max(0.0115 * s, 0.0402 * s * taper),
+          rxLat: Math.max(0.0102 * s, 0.0398 * s * taper * (1.0 - 0.08 * u)),
+          dxC: xBias * (0.80 + 0.25 * u) + medialSign * 0.0016 * u * s
+        };
+      };
+
+      // =======================================================================
+      // 1. FOREFOOT VAMP, CAP-TOE & BASE THROAT SHELL (OXFORD_SHOES base last)
+      // =======================================================================
+      const frontSlices = [
+        { z: 0.0215 * s, zLatBias: 0.0005 * s, rxMed: 0.0406 * s, rxLat: 0.0412 * s, yBase: -0.0285 * s, hTop: 0.0435 * s, hBot: 0.0038 * s, pLat: 0.76, crestCol: colSheen  }, // 0: Lower instep throat
+        { z: 0.0320 * s, zLatBias: 0.0012 * s, rxMed: 0.0410 * s, rxLat: 0.0416 * s, yBase: -0.0288 * s, hTop: 0.0405 * s, hBot: 0.0038 * s, pLat: 0.77, crestCol: colSheen  }, // 1: Vamp instep curve
+        { z: 0.0415 * s, zLatBias: 0.0020 * s, rxMed: 0.0410 * s, rxLat: 0.0414 * s, yBase: -0.0294 * s, hTop: 0.0338 * s, hBot: 0.0038 * s, pLat: 0.78, crestCol: colUpper  }, // 2: Vamp waist behind cap seam
+        { z: 0.0462 * s, zLatBias: 0.0024 * s, rxMed: 0.0410 * s, rxLat: 0.0412 * s, yBase: -0.0296 * s, hTop: 0.0292 * s, hBot: 0.0038 * s, pLat: 0.79, crestCol: colUpper  }, // 3: Vamp base at cap-toe seam
+        { z: 0.0476 * s, zLatBias: 0.0024 * s, rxMed: 0.0414 * s, rxLat: 0.0416 * s, yBase: -0.0296 * s, hTop: 0.0290 * s, hBot: 0.0038 * s, pLat: 0.79, crestCol: colSeamHi }, // 4: Cap-toe 3D stitched crest ridge!
+        { z: 0.0500 * s, zLatBias: 0.0026 * s, rxMed: 0.0406 * s, rxLat: 0.0404 * s, yBase: -0.0298 * s, hTop: 0.0265 * s, hBot: 0.0038 * s, pLat: 0.80, crestCol: colSheen  }, // 5: Cap-toe specular dome shoulder
+        { z: 0.0610 * s, zLatBias: 0.0030 * s, rxMed: 0.0352 * s, rxLat: 0.0334 * s, yBase: -0.0300 * s, hTop: 0.0205 * s, hBot: 0.0036 * s, pLat: 0.82, crestCol: colSheen  }, // 6: Tapered almond cap-toe mid
+        { z: 0.0715 * s, zLatBias: 0.0025 * s, rxMed: 0.0252 * s, rxLat: 0.0228 * s, yBase: -0.0300 * s, hTop: 0.0138 * s, hBot: 0.0034 * s, pLat: 0.85, crestCol: colSheen  }, // 7: Almond toe taper front
+        { z: 0.0785 * s, zLatBias: 0.0018 * s, rxMed: 0.0145 * s, rxLat: 0.0130 * s, yBase: -0.0296 * s, hTop: 0.0076 * s, hBot: 0.0030 * s, pLat: 0.88, crestCol: colUpper  }  // 8: Polished almond tip rim
+      ];
+      const FRONT_SIDES = 24;
+      const frontRings = [];
+      for (let r = 0; r < frontSlices.length; r++) {
+        const sl = frontSlices[r];
+        const ring = [];
+        const tFwd = r / (frontSlices.length - 1);
+        const dxC = xBias * (0.35 + 0.65 * Math.pow(tFwd, 1.1));
+        for (let i = 0; i < FRONT_SIDES; i++) {
+          const ang = (i / FRONT_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang);
+          const cosA = Math.cos(ang);
+          const lat = sinA * medialSign;
+          const rxSide = lat >= 0.0 ? sl.rxMed : sl.rxLat;
+          const sSign = sinA >= 0.0 ? 1.0 : -1.0;
+          const pHoriz = cosA >= 0.0 ? (sl.pLat + 0.09 * cosA) : (sl.pLat * 0.92);
+          const vxOff = sSign * Math.pow(Math.abs(sinA), pHoriz) * rxSide;
+          const vyOff = cosA >= 0.0 ? (Math.pow(cosA, 0.86) * sl.hTop) : (-Math.pow(-cosA, 0.55) * sl.hBot);
+          const zShift = lat * sl.zLatBias;
+          const col = (cosA > 0.55) ? sl.crestCol : colUpper;
+          const pt = footPt(dxC + vxOff, sl.yBase + vyOff, sl.z + zShift);
+          ring.push(addV(pt[0], pt[1], pt[2], col));
+        }
+        frontRings.push(ring);
+      }
+      for (let r = 0; r < frontRings.length - 1; r++) {
+        const r0 = frontRings[r], r1 = frontRings[r + 1];
+        for (let i = 0; i < FRONT_SIDES; i++) {
+          const nextI = (i + 1) % FRONT_SIDES;
+          addQuad(r0[i], r1[i], r1[nextI], r0[nextI]);
+        }
+      }
+      const throatCapRing = frontRings[0];
+      const throatBackPt = footPt(xBias * 0.35, -0.008 * s, 0.0210 * s);
+      const vThroatBack = addV(throatBackPt[0], throatBackPt[1], throatBackPt[2], colUpper);
+      for (let i = 0; i < FRONT_SIDES; i++) {
+        addTri(vThroatBack, throatCapRing[i], throatCapRing[(i + 1) % FRONT_SIDES]);
+      }
+      const toeCapRing = frontRings[frontRings.length - 1];
+      const toeTipPt = footPt(xBias + medialSign * 0.0018 * s, -0.0272 * s, 0.0812 * s);
+      const vToeTip = addV(toeTipPt[0], toeTipPt[1], toeTipPt[2], colSheen);
+      for (let i = 0; i < FRONT_SIDES; i++) {
+        addTri(vToeTip, toeCapRing[(i + 1) % FRONT_SIDES], toeCapRing[i]);
+      }
+
+      // =======================================================================
+      // 2. LOWER HEEL COUNTER SHELL + FITTED BALMORAL DRESS BOOT ANKLE SHAFT
+      //    Watertight closed manifold profile sweeping from inner tan lining
+      //    sleeve -> top black leather cuff -> cuff piping ridge -> straight
+      //    tailored upper shaft -> lower sculpted heel belly -> sole anchor.
+      // =======================================================================
+      // Profile loop at every circumference angle (outer -> bottom -> up -> crest -> inner tan sleeve):
+      // Using closed ring stations stacked from top inner sleeve up over cuff and down outside!
+      const SHAFT_SIDES = 24;
+      const slTrim = underSlacks ? 0.0024 * s : 0.0;
+      const slTrimZ = underSlacks ? 0.0052 * s : 0.0;
+      const shaftWallProfiles = [
+        // { y, rx, rzF, rzB, zOff, col, useShin }
+        { y:  0.0340 * s, rx: 0.0365 * s,                  rzF: 0.0295 * s,           rzB: 0.0340 * s,                  zOff: -0.0012 * s, col: colTanWall, useShin: true  }, // 0: Inner tan lining bottom (tucked inside leg on char)
+        { y:  0.0532 * s, rx: 0.0434 * s - slTrim,         rzF: 0.0408 * s - slTrimZ, rzB: 0.0402 * s - slTrim,         zOff: -0.0012 * s, col: colTanWall, useShin: true  }, // 1: Warm tan leather inner collar lining
+        { y:  0.0566 * s, rx: 0.0442 * s - slTrim,         rzF: 0.0416 * s - slTrimZ, rzB: 0.0410 * s - slTrim,         zOff: -0.0013 * s, col: colSheen,   useShin: true  }, // 2: Top black cuff inner crest
+        { y:  0.0572 * s, rx: 0.0452 * s - slTrim,         rzF: 0.0422 * s - slTrimZ, rzB: 0.0416 * s - slTrim,         zOff: -0.0013 * s, col: colSheen,   useShin: true  }, // 3: Top cuff outer bevel
+        { y:  0.0546 * s, rx: 0.0456 * s - slTrim,         rzF: 0.0426 * s - slTrimZ, rzB: 0.0418 * s - slTrim,         zOff: -0.0013 * s, col: colSeamHi,  useShin: true  }, // 4: Stitched top collar piping ridge!
+        { y:  0.0522 * s, rx: 0.0450 * s - slTrim,         rzF: 0.0422 * s - slTrimZ, rzB: 0.0414 * s - slTrim,         zOff: -0.0012 * s, col: colUpper,   useShin: true  }, // 5: Upper quarter transition
+        { y:  0.0340 * s, rx: 0.0436 * s - slTrim * 0.75,  rzF: 0.0418 * s - slTrimZ, rzB: 0.0408 * s - slTrim * 0.75,  zOff: -0.0010 * s, col: colUpper,   useShin: true  }, // 6: Tailored slim mid-ankle shaft
+        { y:  0.0130 * s, rx: 0.0422 * s - slTrim * 0.35,  rzF: 0.0404 * s - slTrimZ * 0.5, rzB: 0.0404 * s - slTrim * 0.35, zOff: -0.0006 * s, col: colUpper, useShin: true  }, // 7: Ankle throat & Achilles curve (shin-locked!)
+        { y: -0.0110 * s, rx: 0.0420 * s,                  rzF: 0.0365 * s,           rzB: 0.0412 * s,                  zOff:  0.0000 * s, col: colUpper,   useShin: false }, // 8: Sculpted lower heel counter belly
+        { y: -0.0295 * s, rx: 0.0392 * s,                  rzF: 0.0320 * s,           rzB: 0.0395 * s,                  zOff:  0.0000 * s, col: colUpper,   useShin: false }  // 9: Lower welt base anchor
+      ];
+
+      const shaftRings = [];
+      for (let r = 0; r < shaftWallProfiles.length; r++) {
+        const pf = shaftWallProfiles[r];
+        const ring = [];
+        for (let i = 0; i < SHAFT_SIDES; i++) {
+          const ang = (i / SHAFT_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang); // +1/-1 width X
+          const cosA = Math.cos(ang); // +1 = front +Z, -1 = heel back -Z
+          const rzSide = cosA >= 0.0 ? pf.rzF : pf.rzB;
+          const px = sinA * pf.rx;
+          const pz = pf.zOff + cosA * rzSide;
+          const pt = pf.useShin ? bootShaftPt(px, pf.y, pz) : footPt(px, pf.y, pz);
+          ring.push(addV(pt[0], pt[1], pt[2], pf.col));
+        }
+        shaftRings.push(ring);
+      }
+      for (let r = 0; r < shaftRings.length - 1; r++) {
+        const r0 = shaftRings[r], r1 = shaftRings[r + 1];
+        for (let i = 0; i < SHAFT_SIDES; i++) {
+          const nextI = (i + 1) % SHAFT_SIDES;
+          addQuad(r0[i], r1[i], r1[nextI], r0[nextI]);
+        }
+      }
+      // Close top tan sleeve bottom inside calf (-fUp) and heel base bottom (-fUp)
+      const pShaftInnerCap = bootShaftPt(0, 0.0315 * s, -0.002 * s);
+      const vShaftInnerCap = addV(pShaftInnerCap[0], pShaftInnerCap[1], pShaftInnerCap[2], colTanWall);
+      for (let i = 0; i < SHAFT_SIDES; i++) {
+        addTri(vShaftInnerCap, shaftRings[0][(i + 1) % SHAFT_SIDES], shaftRings[0][i]);
+      }
+      const pShaftBotCap = footPt(0, -0.0305 * s, -0.002 * s);
+      const vShaftBotCap = addV(pShaftBotCap[0], pShaftBotCap[1], pShaftBotCap[2], colUpper);
+      for (let i = 0; i < SHAFT_SIDES; i++) {
+        addTri(vShaftBotCap, shaftRings[shaftRings.length - 1][i], shaftRings[shaftRings.length - 1][(i + 1) % SHAFT_SIDES]);
+      }
+
+      // =======================================================================
+      // 3. BALMORAL CLOSED-LACING FRONT COLUMN + 7 HORIZONTAL BAR LACES +
+      //    CURVED OXFORD GALOSH & HEEL COUNTER SIDE STITCH PIPING
+      // =======================================================================
+      // Helper: Front facing center profile along the sloped shin/instep line
+      // y ranges from 0.009 * s (vamp throat) up to 0.056 * s (top boot collar!)
+      const frontColumnYZ = (u) => {
+        const y = (0.009 + u * 0.047) * s;
+        const z = (0.0428 - Math.pow(u, 0.85) * 0.0040 - (underSlacks ? 0.0045 : 0.0)) * s;
+        return { y, z };
+      };
+
+      const addClosedBoxRibbon = (ptsFn, uSteps, vSteps, colTop, colSide, flipTopWinding = false) => {
+        const topGrid = [];
+        const botGrid = [];
+        for (let ui = 0; ui <= uSteps; ui++) {
+          const u = ui / uSteps;
+          const tRow = [], bRow = [];
+          for (let vi = 0; vi <= vSteps; vi++) {
+            const v = vi / vSteps;
+            const res = ptsFn(u, v);
+            const pT = res.shin ? bootShaftPt(res.top[0], res.top[1], res.top[2]) : footPt(res.top[0], res.top[1], res.top[2]);
+            const pB = res.shin ? bootShaftPt(res.bot[0], res.bot[1], res.bot[2]) : footPt(res.bot[0], res.bot[1], res.bot[2]);
+            tRow.push(addV(pT[0], pT[1], pT[2], res.col || colTop));
+            bRow.push(addV(pB[0], pB[1], pB[2], colSide || colTop));
+          }
+          topGrid.push(tRow);
+          botGrid.push(bRow);
+        }
+        for (let ui = 0; ui < uSteps; ui++) {
+          for (let vi = 0; vi < vSteps; vi++) {
+            if (!flipTopWinding) {
+              addQuad(topGrid[ui][vi], topGrid[ui + 1][vi], topGrid[ui + 1][vi + 1], topGrid[ui][vi + 1]);
+              addQuad(botGrid[ui][vi], botGrid[ui][vi + 1], botGrid[ui + 1][vi + 1], botGrid[ui + 1][vi]);
+            } else {
+              addQuad(topGrid[ui][vi], topGrid[ui][vi + 1], topGrid[ui + 1][vi + 1], topGrid[ui + 1][vi]);
+              addQuad(botGrid[ui][vi], botGrid[ui + 1][vi], botGrid[ui + 1][vi + 1], botGrid[ui][vi + 1]);
+            }
+          }
+        }
+        for (let ui = 0; ui < uSteps; ui++) {
+          if (!flipTopWinding) {
+            addQuad(botGrid[ui][0], topGrid[ui][0], topGrid[ui + 1][0], botGrid[ui + 1][0]);
+            addQuad(botGrid[ui + 1][vSteps], topGrid[ui + 1][vSteps], topGrid[ui][vSteps], botGrid[ui][vSteps]);
+          } else {
+            addQuad(botGrid[ui][0], botGrid[ui + 1][0], topGrid[ui + 1][0], topGrid[ui][0]);
+            addQuad(botGrid[ui + 1][vSteps], botGrid[ui][vSteps], topGrid[ui][vSteps], topGrid[ui + 1][vSteps]);
+          }
+        }
+        for (let vi = 0; vi < vSteps; vi++) {
+          if (!flipTopWinding) {
+            addQuad(botGrid[0][vi + 1], topGrid[0][vi + 1], topGrid[0][vi], botGrid[0][vi]);
+            addQuad(botGrid[uSteps][vi], topGrid[uSteps][vi], topGrid[uSteps][vi + 1], botGrid[uSteps][vi + 1]);
+          } else {
+            addQuad(botGrid[0][vi + 1], botGrid[0][vi], topGrid[0][vi], topGrid[0][vi + 1]);
+            addQuad(botGrid[uSteps][vi], botGrid[uSteps][vi + 1], topGrid[uSteps][vi + 1], topGrid[uSteps][vi]);
+          }
+        }
+      };
+
+      // A. Full-Height Recessed Black Leather Tongue Strip behind the 7 laces
+      addClosedBoxRibbon((u, v) => {
+        const yz = frontColumnYZ(u);
+        const x = (-0.0040 + v * 0.0080) * s;
+        return {
+          shin: true,
+          top: [x, yz.y + 0.0005 * s, yz.z + 0.0012 * s],
+          bot: [x, yz.y - 0.0012 * s, yz.z - 0.0020 * s],
+          col: colSlitDark
+        };
+      }, 6, 2, colSlitDark, colSlitDark, false);
+
+      // B. Left & Right Tall Quarter Facing Panels + Stitched Vertical Piping Trim
+      for (const side of [-1.0, 1.0]) {
+        addClosedBoxRibbon((u, v) => {
+          const yz = frontColumnYZ(u);
+          const xIn  = side * (0.0018 + 0.0005 * (1.0 - u)) * s;
+          const xOut = side * (0.0175 + 0.0035 * Math.sin((1.0 - u) * Math.PI * 0.5)) * s;
+          const x = xIn + (xOut - xIn) * v;
+          const wrapBack = Math.pow(Math.abs(x) / (0.044 * s), 2) * 0.0045 * s;
+          return {
+            shin: true,
+            top: [x, yz.y + 0.0008 * s, yz.z + 0.0030 * s - wrapBack],
+            bot: [x, yz.y - 0.0008 * s, yz.z - 0.0006 * s - wrapBack],
+            col: (v < 0.20 || v > 0.86 || u < 0.09) ? colSeamHi : colFacing
+          };
+        }, 7, 4, colFacing, colUpper, side < 0.0);
+      }
+
+      // C. 7 Crisp 3D Parallel Waxed Bar Laces climbing from Vamp Throat to Top Boot Collar!
+      const NUM_LACES = 7;
+      for (let li = 0; li < NUM_LACES; li++) {
+        const u = 0.09 + (li / (NUM_LACES - 1)) * 0.83;
+        const yz = frontColumnYZ(u);
+        const N_LACE_RAD = 6;
+        const N_LACE_LEN = 4;
+        const lRings = [];
+        for (let xi = 0; xi <= N_LACE_LEN; xi++) {
+          const tX = xi / N_LACE_LEN;
+          const x = (-0.0086 + tX * 0.0172) * s;
+          const archFwd = (1.0 - Math.pow((tX - 0.5) * 2.0, 2)) * 0.0008 * s;
+          const rTube = 0.00105 * s;
+          const ring = [];
+          for (let ri = 0; ri < N_LACE_RAD; ri++) {
+            const ang = (ri / N_LACE_RAD) * Math.PI * 2.0;
+            const py = yz.y + Math.sin(ang) * rTube * 0.85;
+            const pz = yz.z + 0.0034 * s + archFwd + Math.cos(ang) * rTube;
+            const p = bootShaftPt(x, py, pz);
+            ring.push(addV(p[0], p[1], p[2], Math.cos(ang) > 0 ? colLaceBar : colWelt));
+          }
+          lRings.push(ring);
+        }
+        for (let xi = 0; xi < N_LACE_LEN; xi++) {
+          for (let ri = 0; ri < N_LACE_RAD; ri++) {
+            const nextRi = (ri + 1) % N_LACE_RAD;
+            addQuad(lRings[xi][ri], lRings[xi + 1][ri], lRings[xi + 1][nextRi], lRings[xi][nextRi]);
+          }
+        }
+        const cap0 = bootShaftPt(-0.0090 * s, yz.y, yz.z + 0.0032 * s);
+        const cap1 = bootShaftPt( 0.0090 * s, yz.y, yz.z + 0.0032 * s);
+        const vc0 = addV(cap0[0], cap0[1], cap0[2], colLaceBar);
+        const vc1 = addV(cap1[0], cap1[1], cap1[2], colLaceBar);
+        for (let ri = 0; ri < N_LACE_RAD; ri++) {
+          const nextRi = (ri + 1) % N_LACE_RAD;
+          addTri(vc0, lRings[0][nextRi], lRings[0][ri]);
+          addTri(vc1, lRings[N_LACE_LEN][ri], lRings[N_LACE_LEN][nextRi]);
+        }
+      }
+
+      // D. Side Oxford Galosh Seam & Heel Counter Curved Piping (matching dress boots reference!)
+      const addSidePipingTube = (sampleFn, steps, side) => {
+        const wRings = [];
+        for (let wi = 0; wi <= steps; wi++) {
+          const t = wi / steps;
+          const pt = sampleFn(t);
+          const fs = footShapeAtZ(pt.z / s);
+          const x = side * ((side * medialSign > 0 ? fs.rxMed : fs.rxLat) + (pt.xExtra || 0.0014 * s));
+          const rPipe = 0.0011 * s;
+          const ring = [];
+          for (let ri = 0; ri < 6; ri++) {
+            const ang = (ri / 6) * Math.PI * 2.0;
+            const px = x + side * Math.cos(ang) * rPipe * 0.78;
+            const py = pt.y + Math.sin(ang) * rPipe;
+            const p = footPt(px, py, pt.z);
+            ring.push(addV(p[0], p[1], p[2], Math.cos(ang) > 0 ? colSeamHi : colUpper));
+          }
+          wRings.push(ring);
+        }
+        for (let wi = 0; wi < steps; wi++) {
+          for (let ri = 0; ri < 6; ri++) {
+            const nextRi = (ri + 1) % 6;
+            if (side > 0) addQuad(wRings[wi][ri], wRings[wi + 1][ri], wRings[wi + 1][nextRi], wRings[wi][nextRi]);
+            else addQuad(wRings[wi][ri], wRings[wi][nextRi], wRings[wi + 1][nextRi], wRings[wi + 1][ri]);
+          }
+        }
+        const capEnd = (ring, isStart) => {
+          let cx = 0, cy = 0, cz = 0;
+          for (let ri = 0; ri < 6; ri++) { cx += outV[ring[ri] * 3]; cy += outV[ring[ri] * 3 + 1]; cz += outV[ring[ri] * 3 + 2]; }
+          cx /= 6; cy /= 6; cz /= 6;
+          const pushF = (isStart ? 0.0004 : -0.0004) * s;
+          const vc = addV(cx + fFwd[0] * pushF, cy + fFwd[1] * pushF, cz + fFwd[2] * pushF, colUpper);
+          for (let ri = 0; ri < 6; ri++) {
+            const nextRi = (ri + 1) % 6;
+            if ((side > 0) === isStart) addTri(vc, ring[ri], ring[nextRi]);
+            else addTri(vc, ring[nextRi], ring[ri]);
+          }
+        };
+        capEnd(wRings[0], true);
+        capEnd(wRings[steps], false);
+      };
+
+      for (const side of [-1.0, 1.0]) {
+        // 1. Oxford galosh side curve sweeping cleanly from front lacing base toward waist & heel
+        addSidePipingTube((t) => ({
+          z: (0.0335 - t * 0.0695) * s,
+          y: (0.0045 - Math.sin(t * Math.PI * 0.82) * 0.0235 - t * 0.0155) * s,
+          xExtra: 0.0006 * s
+        }), 10, side);
+        // 2. Curved Heel Counter piping arching cleanly around rear heel counter
+        addSidePipingTube((t) => ({
+          z: (-0.0040 - t * 0.0360) * s,
+          y: (-0.0285 + Math.sin(t * Math.PI * 0.55) * 0.0250) * s,
+          xExtra: 0.0010 * s
+        }), 8, side);
+      }
+
+      // =======================================================================
+      // 4. GOODYEAR PROTRUDING WELT, RECESSED WAIST, FOREFOOT OUTSOLE &
+      //    SEPARATE STACKED DRESS HEEL BLOCK (Identical to OXFORD_SHOES!)
+      // =======================================================================
+      const outsoleSlices = [
+        { z: -0.0405 * s, rxMed: 0.0328 * s, rxLat: 0.0328 * s, yTop: -0.0298 * s, yBot: -0.0358 * s, cT: colWelt, cB: colSole },
+        { z: -0.0250 * s, rxMed: 0.0398 * s, rxLat: 0.0398 * s, yTop: -0.0302 * s, yBot: -0.0362 * s, cT: colWelt, cB: colSole },
+        { z: -0.0080 * s, rxMed: 0.0406 * s, rxLat: 0.0410 * s, yTop: -0.0300 * s, yBot: -0.0362 * s, cT: colWelt, cB: colSole },
+        { z:  0.0140 * s, rxMed: 0.0414 * s, rxLat: 0.0422 * s, yTop: -0.0306 * s, yBot: -0.0378 * s, cT: colWelt, cB: colSole },
+        { z:  0.0260 * s, rxMed: 0.0426 * s, rxLat: 0.0432 * s, yTop: -0.0312 * s, yBot: -0.0432 * s, cT: colWelt, cB: colSole },
+        { z:  0.0490 * s, rxMed: 0.0428 * s, rxLat: 0.0428 * s, yTop: -0.0318 * s, yBot: -0.0434 * s, cT: colWelt, cB: colSole },
+        { z:  0.0680 * s, rxMed: 0.0315 * s, rxLat: 0.0294 * s, yTop: -0.0316 * s, yBot: -0.0430 * s, cT: colWelt, cB: colSole },
+        { z:  0.0795 * s, rxMed: 0.0165 * s, rxLat: 0.0150 * s, yTop: -0.0308 * s, yBot: -0.0412 * s, cT: colWelt, cB: colSole }
+      ];
+      const SOLE_SIDES = 20;
+      const soleRings = [];
+      for (let r = 0; r < outsoleSlices.length; r++) {
+        const sl = outsoleSlices[r];
+        const ring = [];
+        const tFwd = r / (outsoleSlices.length - 1);
+        const dxC = xBias * Math.pow(tFwd, 1.15);
+        for (let i = 0; i < SOLE_SIDES; i++) {
+          const ang = (i / SOLE_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang);
+          const cosA = Math.cos(ang);
+          const lat = sinA * medialSign;
+          const rx = lat >= 0.0 ? sl.rxMed : sl.rxLat;
+          const sSign = sinA >= 0.0 ? 1.0 : -1.0;
+          const vx = dxC + sSign * Math.pow(Math.abs(sinA), 0.78) * rx;
+          const vy = cosA >= 0.0
+            ? (sl.yTop + cosA * 0.0018 * s)
+            : (sl.yTop + (-Math.pow(-cosA, 0.42)) * (sl.yTop - sl.yBot));
+          const col = cosA >= -0.10 ? sl.cT : sl.cB;
+          const p = footPt(vx, vy, sl.z + lat * 0.0018 * s * Math.min(1.0, tFwd * 1.4));
+          ring.push(addV(p[0], p[1], p[2], col));
+        }
+        soleRings.push(ring);
+      }
+      for (let r = 0; r < soleRings.length - 1; r++) {
+        for (let i = 0; i < SOLE_SIDES; i++) {
+          const nextI = (i + 1) % SOLE_SIDES;
+          addQuad(soleRings[r][i], soleRings[r + 1][i], soleRings[r + 1][nextI], soleRings[r][nextI]);
+        }
+      }
+      const pSH = footPt(0, -0.0330 * s, -0.0420 * s);
+      const vSH = addV(pSH[0], pSH[1], pSH[2], colSole);
+      for (let i = 0; i < SOLE_SIDES; i++) addTri(vSH, soleRings[0][i], soleRings[0][(i + 1) % SOLE_SIDES]);
+      const pST = footPt(xBias + medialSign * 0.0018 * s, -0.0360 * s, 0.0825 * s);
+      const vST = addV(pST[0], pST[1], pST[2], colWelt);
+      for (let i = 0; i < SOLE_SIDES; i++) addTri(vST, soleRings[soleRings.length - 1][(i + 1) % SOLE_SIDES], soleRings[soleRings.length - 1][i]);
+
+      const heelBlockSlices = [
+        { z: -0.0410 * s, rx: 0.0320 * s, yTop: -0.0325 * s, yBot: -0.0438 * s },
+        { z: -0.0300 * s, rx: 0.0382 * s, yTop: -0.0330 * s, yBot: -0.0438 * s },
+        { z: -0.0185 * s, rx: 0.0388 * s, yTop: -0.0330 * s, yBot: -0.0438 * s },
+        { z: -0.0112 * s, rx: 0.0386 * s, yTop: -0.0330 * s, yBot: -0.0438 * s }
+      ];
+      const HB_SIDES = 18;
+      const hbRings = [];
+      for (let r = 0; r < heelBlockSlices.length; r++) {
+        const sl = heelBlockSlices[r];
+        const ring = [];
+        for (let i = 0; i < HB_SIDES; i++) {
+          const ang = (i / HB_SIDES) * Math.PI * 2.0;
+          const sinA = Math.sin(ang);
+          const cosA = Math.cos(ang);
+          const sSign = sinA >= 0.0 ? 1.0 : -1.0;
+          const vx = sSign * Math.pow(Math.abs(sinA), 0.72) * sl.rx;
+          const vy = cosA >= 0.0 ? sl.yTop : (sl.yTop - Math.pow(-cosA, 0.45) * (sl.yTop - sl.yBot));
+          const col = (Math.abs(cosA) < 0.35) ? colHeelTier : colSole;
+          const p = footPt(vx, vy, sl.z);
+          ring.push(addV(p[0], p[1], p[2], col));
+        }
+        hbRings.push(ring);
+      }
+      for (let r = 0; r < hbRings.length - 1; r++) {
+        for (let i = 0; i < HB_SIDES; i++) {
+          const nextI = (i + 1) % HB_SIDES;
+          addQuad(hbRings[r][i], hbRings[r + 1][i], hbRings[r + 1][nextI], hbRings[r][nextI]);
+        }
+      }
+      const pHBB = footPt(0, -0.0382 * s, -0.0422 * s);
+      const pHBF = footPt(0, -0.0384 * s, -0.0112 * s);
+      const vHBB = addV(pHBB[0], pHBB[1], pHBB[2], colSole);
+      const vHBF = addV(pHBF[0], pHBF[1], pHBF[2], colSole);
+      for (let i = 0; i < HB_SIDES; i++) {
+        const nextI = (i + 1) % HB_SIDES;
+        addTri(vHBB, hbRings[0][i], hbRings[0][nextI]);
+        addTri(vHBF, hbRings[hbRings.length - 1][nextI], hbRings[hbRings.length - 1][i]);
+      }
+    };
+
+    const lHip    = clothContext ? clothContext.leftLegPivot : null;
+    const rHip    = clothContext ? clothContext.rightLegPivot : null;
+    const lKnee   = clothContext ? clothContext.leftKneeRot : null;
+    const rKnee   = clothContext ? clothContext.rightKneeRot : null;
+    const lLegRig = clothContext ? clothContext.leftLegRig : null;
+    const rLegRig = clothContext ? clothContext.rightLegRig : null;
+    if (leftFootRot) addDressBoot(leftFootRot, lKnee, true, lHip, lLegRig);
+    if (rightFootRot) addDressBoot(rightFootRot, rKnee, false, rHip, rLegRig);
+
+    const normals = new Float32Array(outV.length);
+    for (let k = 0; k < outI.length; k += 3) {
+      const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
+      const p0x = outV[i0 * 3], p0y = outV[i0 * 3 + 1], p0z = outV[i0 * 3 + 2];
+      const p1x = outV[i1 * 3], p1y = outV[i1 * 3 + 1], p1z = outV[i1 * 3 + 2];
+      const p2x = outV[i2 * 3], p2y = outV[i2 * 3 + 1], p2z = outV[i2 * 3 + 2];
+      const uX = p1x - p0x, uY = p1y - p0y, uZ = p1z - p0z;
+      const vX = p2x - p0x, vY = p2y - p0y, vZ = p2z - p0z;
+      const nX = uY * vZ - uZ * vY;
+      const nY = uZ * vX - uX * vZ;
+      const nZ = uX * vY - uY * vX;
+      normals[i0 * 3] += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
+      normals[i1 * 3] += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
+      normals[i2 * 3] += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
+    }
+    for (let k = 0; k < normals.length; k += 3) {
+      const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+      if (l > 1e-8) {
+        normals[k] /= l;
+        normals[k + 1] /= l;
+        normals[k + 2] /= l;
+      } else {
+        normals[k + 1] = 1.0;
+      }
+    }
+
+    return {
+      vertices: outV,
+      normals: normals,
+      colors: outC,
+      texcoords: outT,
+      indices: outI
+    };
+  }
+
+  // =========================================================================
   // --- 11A-2. 3D White Spread Shirt Collar Mesh (WHITE_SHIRT_SHORT) ---
   // =========================================================================
   function buildWhiteShirtCollarMesh(headP1, chestP1, chestP2, neckP1, neckP2, scale = 1.0, ignoreOuterCoat = false) {
+    const eqS = ignoreOuterCoat ? null : getCharacterEquippedClothingState(false);
+    const underSuit = (eqS && eqS.wearSuit) ? 1 : 0;
+    const key = "collar|" + (ignoreOuterCoat ? 1 : 0) + "|" + underSuit + "|" + _qNum(scale, 1000)
+      + "|" + _qVec3(headP1) + "|" + _qVec3(chestP1) + "|" + _qVec3(chestP2) + "|" + _qVec3(neckP1) + "|" + _qVec3(neckP2);
+    return _cachedClothBuild(key, null, () => _buildWhiteShirtCollarMeshRaw(headP1, chestP1, chestP2, neckP1, neckP2, scale, ignoreOuterCoat));
+  }
+
+  function _buildWhiteShirtCollarMeshRaw(headP1, chestP1, chestP2, neckP1, neckP2, scale = 1.0, ignoreOuterCoat = false) {
     const s = scale || 1.0;
     const eqState = ignoreOuterCoat ? { wearSuit: false } : getCharacterEquippedClothingState(false);
     const underSuit = !!eqState.wearSuit;
@@ -7264,6 +8988,26 @@
     phase = 0.0,
     clothContext = null
   ) {
+    const lod = (clothContext && typeof clothContext.lod === "number") ? clothContext.lod : 0;
+    const useClonePhys = !!(clothContext && clothContext.isClone);
+    const eqS = (!useClonePhys && typeof getCharacterEquippedClothingState === "function") ? getCharacterEquippedClothingState(false) : null;
+    const wHoodie = !!(clothContext && clothContext.wearHoodie !== undefined ? clothContext.wearHoodie : (eqS && eqS.wearHoodie));
+    const wSuit = !wHoodie && !!(clothContext && clothContext.wearSuit !== undefined ? clothContext.wearSuit : (eqS && eqS.wearSuit));
+    const outerKey = wHoodie ? "h" : (wSuit ? "s" : "n");
+    const key = "skirt|" + outerKey + "|" + lod + "|" + _qNum(scale, 1000) + "|" + _qNum(_wrapPhase2Pi(phase), 500)
+      + "|" + _qVec3(headP1) + "|" + _qVec3(chestP1) + "|" + _qVec3(chestP2)
+      + "|" + (clothContext ? (_qVec3(clothContext.leftLegPivot) + "|" + _qVec3(clothContext.leftFootRot) + "|" + _qVec3(clothContext.rightLegPivot) + "|" + _qVec3(clothContext.rightFootRot)) : "n")
+      + "|" + _getClothPhysKey(clothContext, lod);
+    return _cachedClothBuild(key, clothContext, () => _buildBlackPleatedSkirtMeshRaw(headP1, chestP1, chestP2, scale, phase, clothContext));
+  }
+
+  function _buildBlackPleatedSkirtMeshRaw(
+    headP1,
+    chestP1, chestP2,
+    scale = 1.0,
+    phase = 0.0,
+    clothContext = null
+  ) {
     const s = scale || 1.0;
     const baseGroin = chestP1 || [0, -0.105 * s, 0];
     const baseChest = chestP2 || [0, 0.165 * s, 0];
@@ -7308,18 +9052,25 @@
         ? clothContext.wearHoodie
         : (eqClothingSkirt && eqClothingSkirt.wearHoodie)
     );
+    const wearSuitOverSkirt = !wearHoodieOverSkirt && !!(
+      (clothContext && clothContext.wearSuit !== undefined)
+        ? clothContext.wearSuit
+        : (eqClothingSkirt && eqClothingSkirt.wearSuit)
+    );
+    const wearOuterOverSkirt = wearHoodieOverSkirt || wearSuitOverSkirt;
+    const outerCoatMode = wearHoodieOverSkirt ? true : (wearSuitOverSkirt ? "suit" : false);
     const hPhys = useClonePhys
       ? chibiCloneHoodiePhysics
       : ((typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : _createDefaultHoodiePhysState());
     const pAngle = hPhys.pitch || 0.0;
     const yAngle = hPhys.yaw || 0.0;
     const rAngle = hPhys.roll || 0.0;
-    const yawLagTerm = (hPhys.yawLag || 0.0) * (wearHoodieOverSkirt ? 0.06 : 0.10);
+    const yawLagTerm = (hPhys.yawLag || 0.0) * (wearOuterOverSkirt ? 0.06 : 0.10);
     const airFlare = hPhys.airFlare || 0.0;
     const windTurb = hPhys.windTurb || 0.0;
     const nowPerfSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
     const flutterT = nowPerfSec * (11.0 + windTurb * 12.0);
-    const turbMul = wearHoodieOverSkirt ? 0.55 : 1.0;
+    const turbMul = wearOuterOverSkirt ? 0.55 : 1.0;
     const turbX = windTurb > 0 ? Math.sin(flutterT) * (windTurb * 0.010 * turbMul) : 0.0;
     const turbY = windTurb > 0 ? Math.sin(flutterT * 0.85) * (windTurb * 0.007 * turbMul) : 0.0;
     const turbZ = windTurb > 0 ? Math.cos(flutterT * 1.1) * (windTurb * 0.010 * turbMul) : 0.0;
@@ -7330,20 +9081,22 @@
     const computeSkirtDisp = (w) => {
       const wPrimary = w * (0.48 + 0.52 * w);
       const wWhip = w * w * (0.40 + 0.60 * w);
-      const bounceY = Math.sin(phase * 2.0) * (wearHoodieOverSkirt ? 0.0055 : 0.007) * w * s;
-      const gMul = wearHoodieOverSkirt ? 0.24 : 0.28;
-      const tMul = wearHoodieOverSkirt ? 0.28 : 0.34;
-      const aMul = wearHoodieOverSkirt ? 0.45 : 0.55;
-      const yMul = wearHoodieOverSkirt ? 0.024 : 0.032;
-      const rMul = wearHoodieOverSkirt ? 0.016 : 0.020;
-      const pMul = wearHoodieOverSkirt ? 0.028 : 0.036;
-      const dx = (hPhys.gx * gMul * wPrimary + hPhys.tx * tMul * wWhip + hPhys.airX * aMul * w + (yAngle * yMul + rAngle * rMul + yawLagTerm) * w + breezeX * w + turbX * w) * s;
-      const dy = (hPhys.gy * gMul * wPrimary + hPhys.ty * tMul * wWhip + hPhys.airY * aMul * w + turbY * w) * s + bounceY;
-      const dz = (hPhys.gz * gMul * wPrimary + hPhys.tz * tMul * wWhip + hPhys.airZ * aMul * w - pAngle * pMul * w + breezeZ * w + turbZ * w) * s;
+      // When tucked inside structured wool suit, damp upper-ring sway (t <= 0.50) so pleats move harmoniously with jacket hem
+      const coatDamp = wearSuitOverSkirt ? (0.48 + 0.52 * Math.max(0.0, (w - 0.30) / 0.70)) : 1.0;
+      const bounceY = Math.sin(phase * 2.0) * (wearOuterOverSkirt ? 0.0055 : 0.007) * w * s * coatDamp;
+      const gMul = (wearOuterOverSkirt ? 0.24 : 0.28) * coatDamp;
+      const tMul = (wearOuterOverSkirt ? 0.28 : 0.34) * coatDamp;
+      const aMul = (wearOuterOverSkirt ? 0.45 : 0.55) * coatDamp;
+      const yMul = (wearOuterOverSkirt ? 0.024 : 0.032) * coatDamp;
+      const rMul = (wearOuterOverSkirt ? 0.016 : 0.020) * coatDamp;
+      const pMul = (wearOuterOverSkirt ? 0.028 : 0.036) * coatDamp;
+      const dx = (hPhys.gx * gMul * wPrimary + hPhys.tx * tMul * wWhip + hPhys.airX * aMul * w + (yAngle * yMul + rAngle * rMul + yawLagTerm * coatDamp) * w + breezeX * w * coatDamp + turbX * w * coatDamp) * s;
+      const dy = (hPhys.gy * gMul * wPrimary + hPhys.ty * tMul * wWhip + hPhys.airY * aMul * w + turbY * w * coatDamp) * s + bounceY;
+      const dz = (hPhys.gz * gMul * wPrimary + hPhys.tz * tMul * wWhip + hPhys.airZ * aMul * w - pAngle * pMul * w + breezeZ * w * coatDamp + turbZ * w * coatDamp) * s;
       return [dx, dy, dz];
     };
 
-    const skirtStride = _computeGarmentLegStride(clothContext, torsoRight, torsoFwd, 0.68, true);
+    const skirtStride = _computeGarmentLegStride(clothContext, torsoRight, torsoFwd, wearSuitOverSkirt ? 0.44 : 0.68, true);
 
     const bodyColliderData = {
       headP1: headP1 || [baseChest[0], baseChest[1] + 0.08 * s, baseChest[2]],
@@ -7387,18 +9140,19 @@
     const SUB_PER_PLEAT = 3; // 0: crisp outer edge, 1: mid sloped pleat blade, 2: tucked under-fold shadow
     const N_VERTS = NUM_PLEATS * SUB_PER_PLEAT;
 
-    // Fitted exactly to Capsule/GLB waist -> hip yoke -> crisp A-line flare (tucked smoothly when worn under hoodie coat)
-    const skirtRingsDef = _getBlackPleatedSkirtRingsDef(s, torsoRatio, wearHoodieOverSkirt);
+    // Fitted exactly to Capsule/GLB waist -> hip yoke -> crisp A-line flare (tucked smoothly when worn under hoodie coat or blazer)
+    const skirtRingsDef = _getBlackPleatedSkirtRingsDef(s, torsoRatio, outerCoatMode);
 
     const ringVerts = [];
     const waistInnerRing = [];
     const hemInnerRing = [];
-    const envWorldRings = (wearHoodieOverSkirt && clothContext) ? [] : null;
+    const envWorldRings = (wearOuterOverSkirt && clothContext) ? [] : null;
 
     for (let rIdx = 0; rIdx < skirtRingsDef.length; rIdx++) {
       const lvl = skirtRingsDef[rIdx];
       const bDisp = computeSkirtDisp(lvl.t);
-      const flare = (airFlare * (wearHoodieOverSkirt ? 0.24 : 0.36) + Math.abs(yAngle) * (wearHoodieOverSkirt ? 0.012 : 0.016)) * lvl.t * s;
+      const flareDamp = wearSuitOverSkirt ? (0.42 + 0.58 * Math.max(0.0, (lvl.t - 0.35) / 0.65)) : 1.0;
+      const flare = (airFlare * (wearOuterOverSkirt ? 0.24 : 0.36) + Math.abs(yAngle) * (wearOuterOverSkirt ? 0.012 : 0.016)) * lvl.t * s * flareDamp;
       const row = [];
       const envCrestsRow = envWorldRings ? [] : null;
 
@@ -7417,7 +9171,7 @@
 
           const skD = _computeSkirtVertexDisplacement(
             sinA, cosA, lvl.t, 0.18, s, bDisp, skirtStride, 0.042,
-            phase, wearHoodieOverSkirt ? 0.003 : 0.004,
+            phase, wearOuterOverSkirt ? 0.003 : 0.004,
             0.28, 0.30, 0.25, 0.20, 0.72
           );
 
@@ -7530,6 +9284,38 @@
   // worn as an outer Accessory coat mutually exclusive with Traveler Hoodie)
   // =========================================================================
   function buildDoubleBreastedSuitMesh(
+    headP1,
+    chestP1, chestP2,
+    neckP1, neckP2,
+    leftArmPivot, leftElbowRot, leftHandRot,
+    rightArmPivot, rightElbowRot, rightHandRot,
+    scale = 1.0,
+    phase = 0.0,
+    isLocal = false,
+    leftFootRot = null,
+    rightFootRot = null,
+    clothContext = null
+  ) {
+    const lod = (clothContext && typeof clothContext.lod === "number") ? clothContext.lod : 0;
+    const isCl = !!(clothContext && clothContext.isClone);
+    const eqS = (!isLocal && !isCl && typeof getCharacterEquippedClothingState === "function") ? getCharacterEquippedClothingState(false) : null;
+    const wSkirt = !isLocal && !!((clothContext && clothContext.wearSkirt !== undefined) ? clothContext.wearSkirt : (eqS && eqS.wearSkirt));
+    const key = "suit|" + (isLocal ? 1 : 0) + "|" + (wSkirt ? 1 : 0) + "|" + lod + "|" + _qNum(scale, 1000) + "|" + _qNum(_wrapPhase2Pi(phase), 500)
+      + "|" + _qVec3(headP1) + "|" + _qVec3(chestP1) + "|" + _qVec3(chestP2) + "|" + _qVec3(neckP1) + "|" + _qVec3(neckP2)
+      + "|" + _qVec3(leftArmPivot) + "|" + _qVec3(leftElbowRot) + "|" + _qVec3(leftHandRot)
+      + "|" + _qVec3(rightArmPivot) + "|" + _qVec3(rightElbowRot) + "|" + _qVec3(rightHandRot)
+      + "|" + _qVec3(leftFootRot) + "|" + _qVec3(rightFootRot)
+      + "|" + (clothContext ? (_qVec3(clothContext.leftLegPivot) + "|" + _qVec3(clothContext.rightLegPivot)) : "n")
+      + "|" + _getClothPhysKey(clothContext, lod);
+    return _cachedClothBuild(key, clothContext, () => _buildDoubleBreastedSuitMeshRaw(
+      headP1, chestP1, chestP2, neckP1, neckP2,
+      leftArmPivot, leftElbowRot, leftHandRot,
+      rightArmPivot, rightElbowRot, rightHandRot,
+      scale, phase, isLocal, leftFootRot, rightFootRot, clothContext
+    ));
+  }
+
+  function _buildDoubleBreastedSuitMeshRaw(
     headP1,
     chestP1, chestP2,
     neckP1, neckP2,
@@ -7660,25 +9446,99 @@
     // Suit hem ends on the upper thigh (~3cm below hip pivot), so use low footWeight (0.18)
     // to measure upper-thigh swing rather than full ankle swing.
     const suitStride = _computeGarmentLegStride(bodyColliderData, torsoRight, torsoFwd, 0.18, !isLocal);
-    const clampPointOutsideActiveSkirt = (!isLocal && clothContext && Array.isArray(clothContext._cachedSkirtEnvelope) && clothContext._cachedSkirtEnvelope.length >= 2)
-      ? _buildSkirtEnvelopeClampFn(clothContext._cachedSkirtEnvelope, collarBaseX, collarBaseY, collarBaseZ, torsoRight, torsoUp, torsoFwd, s)
+    const eqClothingSuit = (!isLocal && !useClonePhys && typeof getCharacterEquippedClothingState === "function")
+      ? getCharacterEquippedClothingState(false)
       : null;
+    const wearSkirtUnderSuit = !isLocal && !!(
+      (clothContext && clothContext.wearSkirt !== undefined)
+        ? clothContext.wearSkirt
+        : (eqClothingSuit && eqClothingSuit.wearSkirt)
+    );
+
+    // When wearing Black Pleated Skirt underneath, reuse its clamped crest envelope from clothContext if built earlier
+    // in the frame; otherwise sample the tucked-skirt outer pleat crests directly as a fallback.
+    let clampPointOutsideActiveSkirt = null;
+    if (wearSkirtUnderSuit) {
+      let worldRings = (clothContext && Array.isArray(clothContext._cachedSkirtEnvelope) && clothContext._cachedSkirtEnvelope.length >= 2)
+        ? clothContext._cachedSkirtEnvelope
+        : null;
+      if (!worldRings) {
+        const torsoRatioSk = Math.max(0.75, Math.min(1.15, torsoLen / (0.27 * s)));
+        const waistOriginSk = [
+          baseGroin[0] + torsoUp[0] * (torsoLen * 0.41),
+          baseGroin[1] + torsoUp[1] * (torsoLen * 0.41),
+          baseGroin[2] + torsoUp[2] * (torsoLen * 0.41)
+        ];
+        const skRingsDef = _getBlackPleatedSkirtRingsDef(s, torsoRatioSk, "suit");
+        const NUM_PLEATS_SK = 18;
+        const skStride = _computeGarmentLegStride(bodyColliderData, torsoRight, torsoFwd, 0.44, true);
+        const airFlareSk = hPhys.airFlare || 0.0;
+        worldRings = [];
+        for (let sr = 0; sr < skRingsDef.length; sr++) {
+          const sLvl = skRingsDef[sr];
+          const sw = sLvl.t;
+          const wPrimarySk = sw * (0.48 + 0.52 * sw);
+          const wWhipSk = sw * sw * (0.40 + 0.60 * sw);
+          const coatDampSk = 0.48 + 0.52 * Math.max(0.0, (sw - 0.30) / 0.70);
+          const bounceYSk = Math.sin(effPhase * 2.0) * 0.0055 * sw * s * coatDampSk;
+          const sbDisp = [
+            (hPhys.gx * 0.24 * coatDampSk * wPrimarySk + hPhys.tx * 0.28 * coatDampSk * wWhipSk + hPhys.airX * 0.45 * coatDampSk * sw + (yAngle * 0.024 * coatDampSk + rAngle * 0.016 * coatDampSk + yawLagTerm * 1.2 * coatDampSk) * sw) * s,
+            (hPhys.gy * 0.24 * coatDampSk * wPrimarySk + hPhys.ty * 0.28 * coatDampSk * wWhipSk + hPhys.airY * 0.45 * coatDampSk * sw) * s + bounceYSk,
+            (hPhys.gz * 0.24 * coatDampSk * wPrimarySk + hPhys.tz * 0.28 * coatDampSk * wWhipSk + hPhys.airZ * 0.45 * coatDampSk * sw - pAngle * 0.028 * coatDampSk * sw) * s
+          ];
+          const flareDampSk = 0.42 + 0.58 * Math.max(0.0, (sw - 0.35) / 0.65);
+          const sFlare = (airFlareSk * 0.24 + Math.abs(yAngle) * 0.012) * sw * s * flareDampSk;
+          const ringPts = [];
+          for (let p = 0; p < NUM_PLEATS_SK; p++) {
+            const ang = ((p + 0.02) / NUM_PLEATS_SK) * Math.PI * 2.0;
+            const sinA = Math.sin(ang);
+            const cosA = Math.cos(ang);
+            const rz = (cosA >= 0.0) ? sLvl.rzF : sLvl.rzB;
+            const skD = _computeSkirtVertexDisplacement(sinA, cosA, sw, 0.18, s, sbDisp, skStride, 0.042, effPhase, 0.003, 0.28, 0.30, 0.25, 0.20, 0.72);
+            const slx = sinA * (sLvl.rx + sLvl.pleatDepth + sFlare) + sbDisp[0] + skD.legSidePush;
+            const sly = sLvl.dy + sbDisp[1] + skD.rippleY + (skD.legFrontTent * 0.14 + skD.legBackTent * 0.10);
+            const slz = sLvl.cy + cosA * (rz + sLvl.pleatDepth + sFlare) + skD.effDispZ + (skD.legFrontTent * 0.80 - skD.legBackTent * 0.70);
+            const wx = waistOriginSk[0] + torsoRight[0] * slx + torsoUp[0] * sly + torsoFwd[0] * slz;
+            const wy = waistOriginSk[1] + torsoRight[1] * slx + torsoUp[1] * sly + torsoFwd[1] * slz;
+            const wz = waistOriginSk[2] + torsoRight[2] * slx + torsoUp[2] * sly + torsoFwd[2] * slz;
+            const hint = (sr >= 2) ? [torsoRight[0] * sinA + torsoFwd[0] * cosA, 0.0, torsoRight[2] * sinA + torsoFwd[2] * cosA] : null;
+            ringPts.push(clampPointOutsideChibiBodyForCloth(wx, wy, wz, bodyColliderData, sLvl.clr, false, hint));
+          }
+          worldRings.push(ringPts);
+        }
+      }
+      clampPointOutsideActiveSkirt = _buildSkirtEnvelopeClampFn(
+        worldRings, collarBaseX, collarBaseY, collarBaseZ, torsoRight, torsoUp, torsoFwd, s
+      );
+    }
 
     // -------------------------------------------------------------------------
     // 1. Tailored Double-Breasted Jacket Body (Open V Neckline at Top + Straight Tailored Hem)
     //    Trim, straight tailored hip silhouette (no A-line skirt flare) that still clears
-    //    inner shirts and slacks while allowing subtle front/back thigh push when walking.
+    //    inner shirts, slacks, and tucked pleated skirts while allowing subtle thigh push when walking.
     // -------------------------------------------------------------------------
+    const suitSkirtEase = wearSkirtUnderSuit
+      ? [
+          { rx: 0.000 * s, rzF: 0.000 * s, rzB: 0.000 * s },
+          { rx: 0.000 * s, rzF: 0.000 * s, rzB: 0.000 * s },
+          { rx: 0.000 * s, rzF: 0.000 * s, rzB: 0.000 * s },
+          { rx: 0.000 * s, rzF: 0.000 * s, rzB: 0.000 * s },
+          { rx: 0.002 * s, rzF: 0.002 * s, rzB: 0.002 * s },
+          { rx: 0.005 * s, rzF: 0.004 * s, rzB: 0.004 * s },
+          { rx: 0.008 * s, rzF: 0.007 * s, rzB: 0.007 * s },
+          { rx: 0.010 * s, rzF: 0.009 * s, rzB: 0.009 * s }
+        ]
+      : null;
     const N_COLS = 36;
     const suitLevels = [
       { dy:  0.002 * s * torsoRatio, rx: 0.072 * s, rzF: 0.064 * s, rzB: 0.060 * s, t: 0.00, clr: 0.0065, gap: 0.42 }, // 0: Collarbone neckline
       { dy: -0.026 * s * torsoRatio, rx: 0.116 * s, rzF: 0.077 * s, rzB: 0.071 * s, t: 0.08, clr: 0.0085, gap: 0.24 }, // 1: Structured padded shoulders
       { dy: -0.064 * s * torsoRatio, rx: 0.108 * s, rzF: 0.086 * s, rzB: 0.073 * s, t: 0.20, clr: 0.0095, gap: 0.05 }, // 2: Upper chest (near V-apex)
       { dy: -0.104 * s * torsoRatio, rx: 0.098 * s, rzF: 0.082 * s, rzB: 0.070 * s, t: 0.34, clr: 0.0105, gap: 0.00 }, // 3: Closed below V-apex
-      { dy: -0.146 * s * torsoRatio, rx: 0.096 * s, rzF: 0.082 * s, rzB: 0.076 * s, t: 0.50, clr: 0.0110, gap: 0.00 }, // 4: Tailored waist taper (mid button row)
-      { dy: -0.192 * s * torsoRatio, rx: 0.112 * s, rzF: 0.090 * s, rzB: 0.091 * s, t: 0.68, clr: 0.0115, gap: 0.00 }, // 5: High hip
-      { dy: -0.234 * s * torsoRatio, rx: 0.118 * s, rzF: 0.094 * s, rzB: 0.095 * s, t: 0.85, clr: 0.0120, gap: 0.00 }, // 6: Mid hip / pocket level
-      { dy: -0.272 * s * torsoRatio, rx: 0.121 * s, rzF: 0.097 * s, rzB: 0.098 * s, t: 1.00, clr: 0.0125, gap: 0.00 }  // 7: Crisp tailored jacket hem
+      { dy: -0.146 * s * torsoRatio, rx: 0.096 * s + (suitSkirtEase ? suitSkirtEase[4].rx : 0), rzF: 0.082 * s + (suitSkirtEase ? suitSkirtEase[4].rzF : 0), rzB: 0.076 * s + (suitSkirtEase ? suitSkirtEase[4].rzB : 0), t: 0.50, clr: 0.0110, gap: 0.00 }, // 4: Tailored waist taper (mid button row)
+      { dy: -0.192 * s * torsoRatio, rx: 0.112 * s + (suitSkirtEase ? suitSkirtEase[5].rx : 0), rzF: 0.090 * s + (suitSkirtEase ? suitSkirtEase[5].rzF : 0), rzB: 0.091 * s + (suitSkirtEase ? suitSkirtEase[5].rzB : 0), t: 0.68, clr: 0.0115, gap: 0.00 }, // 5: High hip
+      { dy: -0.234 * s * torsoRatio, rx: 0.118 * s + (suitSkirtEase ? suitSkirtEase[6].rx : 0), rzF: 0.094 * s + (suitSkirtEase ? suitSkirtEase[6].rzF : 0), rzB: 0.095 * s + (suitSkirtEase ? suitSkirtEase[6].rzB : 0), t: 0.85, clr: 0.0120, gap: 0.00 }, // 6: Mid hip / pocket level
+      { dy: -0.272 * s * torsoRatio, rx: 0.121 * s + (suitSkirtEase ? suitSkirtEase[7].rx : 0), rzF: 0.097 * s + (suitSkirtEase ? suitSkirtEase[7].rzF : 0), rzB: 0.098 * s + (suitSkirtEase ? suitSkirtEase[7].rzB : 0), t: 1.00, clr: 0.0125, gap: 0.00 }  // 7: Crisp tailored jacket hem
     ];
 
     const bodyRings = [];
@@ -7710,7 +9570,8 @@
         ? [torsoRight[0] * sinA * 0.25 + torsoFwd[0] * (cosA >= 0.0 ? 1.0 : -1.0), 0.0, torsoRight[2] * sinA * 0.25 + torsoFwd[2] * (cosA >= 0.0 ? 1.0 : -1.0)]
         : null;
       if (clampPointOutsideActiveSkirt && lvl.t >= 0.45) {
-        pos = clampPointOutsideActiveSkirt(pos, 0.0085 * s);
+        const skClr = (0.0075 + 0.0045 * Math.max(0.0, (lvl.t - 0.45) / 0.55)) * s;
+        pos = clampPointOutsideActiveSkirt(pos, skClr);
       }
       return { pos, sinA, cosA, pushHint };
     };
@@ -7764,10 +9625,6 @@
         let ao = 0.0;
         if (lvl.t >= 0.30 && ptData.cosA > 0.55 && ptData.sinA < -0.42 && ptData.sinA > -0.58) {
           ao += (1.0 - Math.abs(ptData.sinA + 0.49) / 0.09) * 0.065;
-        }
-        // Back center vent slit AO
-        if (lvl.t >= 0.72 && ptData.cosA < -0.92 && Math.abs(ptData.sinA) < 0.09) {
-          ao += 0.065;
         }
         // Under-hem crisp shadow line
         if (rIdx === suitLevels.length - 1) ao += 0.025;
@@ -8030,6 +9887,76 @@
     }
 
     // -------------------------------------------------------------------------
+    // 2D. Narrow Flush 3D Center Back Vent Slit (rF = 5.05 .. 7.00 at ang ≈ PI)
+    //     No upper stitched dots and no wide one-sided overlap panel (which caught
+    //     an asymmetric pinstripe peak & horizontal top edge). Uses body-matched
+    //     base charcoal across a tight symmetric ±0.045 rad seam with a clean ~1.3mm
+    //     overlap lip and crisp shadowed center slit.
+    // -------------------------------------------------------------------------
+    {
+      const ventSpecs = [
+        { rF: 5.05, hScale: 0.00 }, // 0: Flush blend on back torso (zero horizontal ridge)
+        { rF: 5.55, hScale: 0.45 }, // 1: Smooth taper into vent slit
+        { rF: 6.25, hScale: 0.85 }, // 2: Lower vent
+        { rF: 7.00, hScale: 1.00 }  // 3: Bottom jacket hem
+      ];
+      const ventColsSpec = [
+        { dAng: -0.045, off: 0.0000, shade: 0.000, isAO: false }, // 0: Seamless flush left merge
+        { dAng: -0.022, off: 0.0004, shade: 0.000, isAO: false }, // 1: Gentle rise
+        { dAng: -0.008, off: 0.0011, shade: -0.008, isAO: false }, // 2: Crisp fold lip
+        { dAng:  0.002, off: 0.0013, shade: -0.010, isAO: false }, // 3: Center overlap edge
+        { dAng:  0.012, off: 0.0000, shade: 0.000, isAO: true  }, // 4: Razor-thin 3D slit shadow wall
+        { dAng:  0.026, off: 0.0000, shade: 0.014, isAO: false }, // 5: Subtle under-slit fade
+        { dAng:  0.045, off: 0.0000, shade: 0.000, isAO: false }  // 6: Seamless flush right merge
+      ];
+      const ventGrid = [];
+      for (let vr = 0; vr < ventSpecs.length; vr++) {
+        const vs = ventSpecs[vr];
+        const hemAO = (vr === ventSpecs.length - 1) ? 0.025 : 0.0;
+        const vRow = [];
+        for (let vc = 0; vc < ventColsSpec.length; vc++) {
+          const cs = ventColsSpec[vc];
+          const ang = Math.PI + cs.dAng;
+          const extraOut = 0.0005 * s + cs.off * vs.hScale * s;
+          let colV;
+          if (cs.isAO && vs.hScale > 0.15) {
+            colV = colSeamAO;
+          } else {
+            const aoAdj = hemAO + cs.shade * vs.hScale;
+            colV = [
+              Math.max(0.07, colSuitBase[0] - aoAdj),
+              Math.max(0.07, colSuitBase[1] - aoAdj),
+              Math.max(0.08, colSuitBase[2] - aoAdj)
+            ];
+          }
+          const pV = evalLayeredSuitPt(vs.rF, ang, extraOut);
+          vRow.push(addV(pV[0], pV[1], pV[2], colV, 0.0));
+        }
+        ventGrid.push(vRow);
+      }
+
+      for (let vr = 0; vr < ventSpecs.length - 1; vr++) {
+        const r0 = ventGrid[vr];
+        const r1 = ventGrid[vr + 1];
+        for (let vc = 0; vc < ventColsSpec.length - 1; vc++) {
+          addQuad(r0[vc], r1[vc], r1[vc + 1], r0[vc + 1]);
+        }
+      }
+
+      // Close bottom hem edge cleanly at rF = 7.00
+      const lastVR = ventSpecs.length - 1;
+      const botInVent = [];
+      for (let vc = 0; vc < ventColsSpec.length; vc++) {
+        const ang = Math.PI + ventColsSpec[vc].dAng;
+        const pIn = evalLayeredSuitPt(7.00, ang, 0.0005 * s);
+        botInVent.push(addV(pIn[0], pIn[1], pIn[2], colInner, 0.0));
+      }
+      for (let vc = 0; vc < ventColsSpec.length - 1; vc++) {
+        addQuad(ventGrid[lastVR][vc], botInVent[vc], botInVent[vc + 1], ventGrid[lastVR][vc + 1]);
+      }
+    }
+
+    // -------------------------------------------------------------------------
     // 3. Four 3D Tortoiseshell Amber-Brown Buttons (2 Columns x 2 Lower Rows)
     //    Anchored directly to the raised 3D overlapping front panel quads (flapTopRows)
     //    so buttons stay locked to the overlapping suit flap in every walking pose.
@@ -8252,6 +10179,29 @@
   //   - Asymmetric inner/outer leg radii for a clean separation gap between legs
   // =========================================================================
   function buildBlackSlacksMesh(
+    headP1,
+    chestP1, chestP2,
+    leftLegPivot, leftKneeRot, leftFootRot,
+    rightLegPivot, rightKneeRot, rightFootRot,
+    scale = 1.0,
+    phase = 0.0,
+    clothContext = null
+  ) {
+    const eqS = (clothContext !== null && typeof getCharacterEquippedClothingState === "function") ? getCharacterEquippedClothingState(false) : null;
+    const underSuit = (eqS && eqS.wearSuit) ? 1 : 0;
+    const key = "slacks|" + (clothContext !== null ? 1 : 0) + "|" + underSuit + "|" + _qNum(scale, 1000) + "|" + _qNum(_wrapPhase2Pi(phase), 500)
+      + "|" + _qVec3(headP1) + "|" + _qVec3(chestP1) + "|" + _qVec3(chestP2)
+      + "|" + _qVec3(leftLegPivot) + "|" + _qVec3(leftKneeRot) + "|" + _qVec3(leftFootRot)
+      + "|" + _qVec3(rightLegPivot) + "|" + _qVec3(rightKneeRot) + "|" + _qVec3(rightFootRot);
+    return _cachedClothBuild(key, clothContext, () => _buildBlackSlacksMeshRaw(
+      headP1, chestP1, chestP2,
+      leftLegPivot, leftKneeRot, leftFootRot,
+      rightLegPivot, rightKneeRot, rightFootRot,
+      scale, phase, clothContext
+    ));
+  }
+
+  function _buildBlackSlacksMeshRaw(
     headP1,
     chestP1, chestP2,
     leftLegPivot, leftKneeRot, leftFootRot,
@@ -8554,6 +10504,13 @@
 
       const uS0 = underSuit ? 0.88 : 1.0;
       const uS1 = underSuit ? 0.92 : 1.0;
+      const overBoots = !!(eqState && (eqState.wearBoots || eqState.wearOxfords || eqState.wearDressBoots));
+      const wearDressBoots = !!(eqState && eqState.wearDressBoots);
+      const bootEase = wearDressBoots ? 0.0072 * s
+        : ((eqState && eqState.wearBoots) ? 0.0042 * s : (overBoots ? 0.0018 * s : 0.0));
+      const calfEase = wearDressBoots ? bootEase * 0.45 : 0.0;
+      const hemT = wearDressBoots ? 0.902 : 0.945;
+      const hemInT = wearDressBoots ? 0.838 : 0.87;
       const stations = [
         { p: shiftHip(pHip, 0.024 * s, 0.0030 * s * uS0),                dir: dirThigh,                             rxOut: 0.0660 * s * uS0, rxIn: 0.0510 * s * uS0, rz: 0.0630 * s * uS0, t: 0.00, clamp: false,      isHemIn: false },
         { p: shiftHip(lerp3(pHip, pKnee, 0.16), 0.0, 0.0028 * s * uS1),  dir: dirThigh,                             rxOut: 0.0640 * s * uS1, rxIn: 0.0445 * s * uS1, rz: 0.0600 * s * uS1, t: 0.14, clamp: !underSuit, isHemIn: false },
@@ -8562,10 +10519,10 @@
         { p: shiftHip(lerp3(pHip, pKnee, 0.92), 0.0, 0.0008 * s),        dir: norm3(lerp3(dirThigh, dirKnee, 0.5)), rxOut: 0.0540 * s,       rxIn: 0.0425 * s,       rz: 0.0530 * s,       t: 0.52, clamp: true,       isHemIn: false },
         { p: pKnee,                                                      dir: dirKnee,                              rxOut: 0.0525 * s,       rxIn: 0.0420 * s,       rz: 0.0520 * s,       t: 0.58, clamp: true,       isHemIn: false },
         { p: lerp3(pKnee, pFoot, 0.16),                                  dir: norm3(lerp3(dirKnee, dirCalf, 0.5)),  rxOut: 0.0515 * s,       rxIn: 0.0418 * s,       rz: 0.0515 * s,       t: 0.66, clamp: true,       isHemIn: false },
-        { p: lerp3(pKnee, pFoot, 0.50),                                  dir: dirCalf,                              rxOut: 0.0500 * s,       rxIn: 0.0412 * s,       rz: 0.0500 * s,       t: 0.80, clamp: true,       isHemIn: false },
-        { p: lerp3(pKnee, pFoot, 0.82),                                  dir: dirCalf,                              rxOut: 0.0485 * s,       rxIn: 0.0408 * s,       rz: 0.0485 * s,       t: 0.92, clamp: true,       isHemIn: false },
-        { p: lerp3(pKnee, pFoot, 0.945),                                 dir: dirCalf,                              rxOut: 0.0470 * s,       rxIn: 0.0402 * s,       rz: 0.0475 * s,       t: 1.00, clamp: true,       isHemIn: false },
-        { p: lerp3(pKnee, pFoot, 0.87),                                  dir: dirCalf,                              rxOut: 0.0365 * s,       rxIn: 0.0355 * s,       rz: 0.0365 * s,       t: 0.94, clamp: false,      isHemIn: true }
+        { p: lerp3(pKnee, pFoot, 0.50),                                  dir: dirCalf,                              rxOut: 0.0500 * s + calfEase * 0.65, rxIn: 0.0412 * s + calfEase * 1.15, rz: 0.0500 * s + calfEase * 0.90, t: 0.80, clamp: true, isHemIn: false },
+        { p: lerp3(pKnee, pFoot, 0.82),                                  dir: dirCalf,                              rxOut: 0.0485 * s + bootEase * 0.85, rxIn: 0.0408 * s + bootEase * 1.15, rz: 0.0485 * s + bootEase * 0.95, t: 0.92, clamp: true, isHemIn: false },
+        { p: lerp3(pKnee, pFoot, hemT),                                  dir: dirCalf,                              rxOut: 0.0470 * s + bootEase * 0.90, rxIn: 0.0402 * s + bootEase * 1.25, rz: 0.0475 * s + bootEase * 1.05, t: 1.00, clamp: true, isHemIn: false },
+        { p: lerp3(pKnee, pFoot, hemInT),                                dir: dirCalf,                              rxOut: 0.0365 * s,       rxIn: 0.0355 * s,       rz: 0.0365 * s,       t: 0.94, clamp: false,      isHemIn: true }
       ];
 
       // Precompute orthonormal frame (U = +torsoRight, V = +torsoFwd) at every leg station
@@ -8878,6 +10835,34 @@
     rightFootRot = null,
     clothContext = null
   ) {
+    const lod = (clothContext && typeof clothContext.lod === "number") ? clothContext.lod : 0;
+    const key = "operaCape|" + (isLocal ? 1 : 0) + "|" + lod + "|" + _qNum(scale, 1000) + "|" + _qNum(_wrapPhase2Pi(phase), 500)
+      + "|" + _qVec3(headP1) + "|" + _qVec3(chestP1) + "|" + _qVec3(chestP2) + "|" + _qVec3(neckP1) + "|" + _qVec3(neckP2)
+      + "|" + _qVec3(leftArmPivot) + "|" + _qVec3(leftElbowRot) + "|" + _qVec3(leftHandRot)
+      + "|" + _qVec3(rightArmPivot) + "|" + _qVec3(rightElbowRot) + "|" + _qVec3(rightHandRot)
+      + "|" + _qVec3(leftFootRot) + "|" + _qVec3(rightFootRot)
+      + "|" + _getClothPhysKey(clothContext, lod);
+    return _cachedClothBuild(key, clothContext, () => _buildOperaCapeMeshRaw(
+      headP1, chestP1, chestP2, neckP1, neckP2,
+      leftArmPivot, leftElbowRot, leftHandRot,
+      rightArmPivot, rightElbowRot, rightHandRot,
+      scale, phase, isLocal, leftFootRot, rightFootRot, clothContext
+    ));
+  }
+
+  function _buildOperaCapeMeshRaw(
+    headP1,
+    chestP1, chestP2,
+    neckP1, neckP2,
+    leftArmPivot, leftElbowRot, leftHandRot,
+    rightArmPivot, rightElbowRot, rightHandRot,
+    scale = 1.0,
+    phase = 0.0,
+    isLocal = false,
+    leftFootRot = null,
+    rightFootRot = null,
+    clothContext = null
+  ) {
     const outV = [], outC = [], outT = [], outI = [];
     const s = scale || 1.0;
 
@@ -8994,23 +10979,95 @@
       : Math.min(1.0, Math.hypot(hPhys.gx || 0.0, hPhys.gz || 0.0) * 18.0 + Math.hypot(hPhys.tx || 0.0, hPhys.tz || 0.0) * 10.0 + Math.abs(pAngle) * 2.4 + Math.abs(yAngle) * 2.4);
     const motionIntensity = isLocal ? 0.0 : Math.min(1.0, Math.max(strideAct, physAct));
 
-    // Right upper-arm swing offset relative to neutral hanging pose so the right shoulder drape flows with the arm
+    // Full right-arm swing tracking (shoulder -> elbow -> hand) in torso space
+    // so the cape tents smoothly OVER & BEHIND the arm when walking or jumping
+    const toTorsoLocal = (pt) => {
+      const dx = pt[0] - collarBaseX, dy = pt[1] - collarBaseY, dz = pt[2] - collarBaseZ;
+      return [
+        dx * torsoRight[0] + dy * torsoRight[1] + dz * torsoRight[2],
+        dx * torsoUp[0]    + dy * torsoUp[1]    + dz * torsoUp[2],
+        dx * torsoFwd[0]   + dy * torsoFwd[1]   + dz * torsoFwd[2]
+      ];
+    };
     let armSwingX = 0.0, armSwingZ = 0.0;
+    let elbLocal = null, handLocal = null, handTipWorld = null;
+    let elbBackReach = 0.0, handBackReach = 0.0, armOutReach = 0.0;
+    let elbAng = Math.PI * 0.5, handAng = Math.PI * 0.5;
     if (!isLocal && rightArmPivot && rightElbowRot) {
-      const adx = rightElbowRot[0] - rightArmPivot[0];
-      const ady = rightElbowRot[1] - rightArmPivot[1];
-      const adz = rightElbowRot[2] - rightArmPivot[2];
-      const projX = adx * torsoRight[0] + ady * torsoRight[1] + adz * torsoRight[2];
-      const projZ = adx * torsoFwd[0]   + ady * torsoFwd[1]   + adz * torsoFwd[2];
-      armSwingX = Math.max(-0.035 * s, Math.min(0.045 * s, (projX - 0.028 * s) * 0.55));
-      armSwingZ = Math.max(-0.055 * s, Math.min(0.055 * s, projZ * 0.65));
+      const pvtLocal = toTorsoLocal(rightArmPivot);
+      elbLocal = toTorsoLocal(rightElbowRot);
+      handLocal = rightHandRot ? toTorsoLocal(rightHandRot) : elbLocal;
+      if (rightHandRot) {
+        const fdx = rightHandRot[0] - rightElbowRot[0];
+        const fdy = rightHandRot[1] - rightElbowRot[1];
+        const fdz = rightHandRot[2] - rightElbowRot[2];
+        const fLen = Math.hypot(fdx, fdy, fdz) || 1.0;
+        handTipWorld = [
+          rightHandRot[0] + (fdx / fLen) * (0.030 * s),
+          rightHandRot[1] + (fdy / fLen) * (0.030 * s),
+          rightHandRot[2] + (fdz / fLen) * (0.030 * s)
+        ];
+      }
+      const projX = elbLocal[0] - pvtLocal[0];
+      const projZ = elbLocal[2] - pvtLocal[2];
+      armSwingX = Math.max(-0.025 * s, Math.min(0.065 * s, (projX - 0.028 * s) * 0.65));
+      armSwingZ = Math.max(-0.095 * s, Math.min(0.045 * s, projZ * 0.85));
+      elbBackReach  = Math.max(0.0, -elbLocal[2] - 0.008 * s);
+      handBackReach = Math.max(0.0, -handLocal[2] - 0.010 * s);
+      armOutReach   = Math.max(0.0, elbLocal[0] - 0.116 * s, handLocal[0] - 0.146 * s);
+      elbAng  = Math.atan2(elbLocal[0], elbLocal[2]);
+      if (elbAng < 0.0) elbAng += Math.PI * 2.0;
+      handAng = Math.atan2(handLocal[0], handLocal[2]);
+      if (handAng < 0.0) handAng += Math.PI * 2.0;
     }
+
+    const clampCapeOutsideArmSeg = (pt, segA, segB, radA, radB, clr, outDir) => {
+      if (!segA || !segB) return pt;
+      const abx = segB[0] - segA[0], aby = segB[1] - segA[1], abz = segB[2] - segA[2];
+      const lenSq = abx * abx + aby * aby + abz * abz;
+      let t = 0.0;
+      if (lenSq > 1e-8) {
+        t = ((pt[0] - segA[0]) * abx + (pt[1] - segA[1]) * aby + (pt[2] - segA[2]) * abz) / lenSq;
+        if (t < 0.0) t = 0.0;
+        else if (t > 1.0) t = 1.0;
+      }
+      const cx = segA[0] + abx * t;
+      const cy = segA[1] + aby * t;
+      const cz = segA[2] + abz * t;
+      let dx = pt[0] - cx;
+      let dy = pt[1] - cy;
+      let dz = pt[2] - cz;
+      let dist = Math.hypot(dx, dy, dz);
+      const minR = radA * (1.0 - t) + radB * t + clr;
+      if (dist < minR) {
+        if (dist < 1e-5) {
+          dx = outDir[0]; dy = outDir[1]; dz = outDir[2];
+          dist = Math.hypot(dx, dy, dz) || 1.0;
+        } else {
+          // Enforce outward direction away from torso so swinging arms never poke behind/through the cape
+          const dotOut = dx * outDir[0] + dy * outDir[1] + dz * outDir[2];
+          const minOutDot = dist * 0.62;
+          if (dotOut < minOutDot) {
+            const boost = minOutDot - dotOut;
+            dx += outDir[0] * boost;
+            dy += outDir[1] * boost;
+            dz += outDir[2] * boost;
+            dist = Math.hypot(dx, dy, dz) || 1.0;
+          }
+        }
+        const push = minR / dist;
+        return [cx + dx * push, cy + dy * push, cz + dz * push];
+      }
+      return pt;
+    };
 
     const computeCapeDisp = (w) => {
       if (isLocal || w <= 0.001) return [0.0, 0.0, 0.0];
       const wEff = Math.max(0.0, (w - 0.04) / 0.96);
       const wPrimary = wEff * (0.50 + 0.50 * wEff);
       const wWhip = wEff * wEff * (0.38 + 0.62 * wEff);
+      // Hem-weighted vertical air lift so jumping/falling billows the lower cape without floating the shoulder drape off the arm
+      const wHem = wEff * Math.sqrt(wEff);
       const bounceY = Math.sin(effPhase * 2.0 - w * 1.1) * 0.013 * wEff * s;
       const dx = (
         hPhys.gx * 0.78 * wPrimary +
@@ -9023,7 +11080,7 @@
       const dy = (
         hPhys.gy * 0.64 * wPrimary +
         hPhys.ty * 0.82 * wWhip +
-        hPhys.airY * 0.95 * wEff +
+        hPhys.airY * 0.68 * wHem +
         breezeY * wEff +
         turbY * wEff
       ) * s + bounceY;
@@ -9125,12 +11182,13 @@
       { dy:  0.004 * s * torsoRatio, rx: 0.103 * s, rzF: 0.085 * s, rzB: 0.098 * s, shiftX: 0.003 * s, angStart: 0.22, angEnd: 3.68, t: 0.00 }, // 0: Neck / collar base
       { dy: -0.022 * s * torsoRatio, rx: 0.140 * s, rzF: 0.095 * s, rzB: 0.102 * s, shiftX: 0.010 * s, angStart: 0.44, angEnd: 3.65, t: 0.08 }, // 1: Right shoulder cap
       { dy: -0.058 * s * torsoRatio, rx: 0.153 * s, rzF: 0.100 * s, rzB: 0.105 * s, shiftX: 0.016 * s, angStart: 0.74, angEnd: 3.60, t: 0.18 }, // 2: Upper arm drape
-      { dy: -0.104 * s * torsoRatio, rx: 0.162 * s, rzF: 0.104 * s, rzB: 0.106 * s, shiftX: 0.020 * s, angStart: 1.04, angEnd: 3.54, t: 0.30 }, // 3: Mid arm diagonal sweep
-      { dy: -0.156 * s * torsoRatio, rx: 0.169 * s, rzF: 0.107 * s, rzB: 0.109 * s, shiftX: 0.022 * s, angStart: 1.28, angEnd: 3.48, t: 0.43 }, // 4: Forearm/hand exit level
-      { dy: -0.215 * s * torsoRatio, rx: 0.175 * s, rzF: 0.109 * s, rzB: 0.114 * s, shiftX: 0.025 * s, angStart: 1.35, angEnd: 3.43, t: 0.56 }, // 5: Hip level
-      { dy: -0.278 * s * torsoRatio, rx: 0.182 * s, rzF: 0.112 * s, rzB: 0.120 * s, shiftX: 0.028 * s, angStart: 1.38, angEnd: 3.38, t: 0.70 }, // 6: Suit hem / upper thigh
-      { dy: -0.342 * s * torsoRatio, rx: 0.189 * s, rzF: 0.115 * s, rzB: 0.127 * s, shiftX: 0.030 * s, angStart: 1.40, angEnd: 3.34, t: 0.85 }, // 7: Knee level
-      { dy: -0.408 * s * torsoRatio, rx: 0.196 * s, rzF: 0.118 * s, rzB: 0.134 * s, shiftX: 0.032 * s, angStart: 1.42, angEnd: 3.30, t: 1.00 }  // 8: Mid-calf bottom hem
+      { dy: -0.095 * s * torsoRatio, rx: 0.161 * s, rzF: 0.103 * s, rzB: 0.106 * s, shiftX: 0.019 * s, angStart: 1.00, angEnd: 3.55, t: 0.28 }, // 3: Upper-mid arm diagonal sweep
+      { dy: -0.130 * s * torsoRatio, rx: 0.166 * s, rzF: 0.106 * s, rzB: 0.108 * s, shiftX: 0.021 * s, angStart: 1.18, angEnd: 3.51, t: 0.36 }, // 4: Elbow level
+      { dy: -0.168 * s * torsoRatio, rx: 0.171 * s, rzF: 0.108 * s, rzB: 0.111 * s, shiftX: 0.023 * s, angStart: 1.30, angEnd: 3.47, t: 0.45 }, // 5: Upper forearm exit level
+      { dy: -0.215 * s * torsoRatio, rx: 0.176 * s, rzF: 0.110 * s, rzB: 0.115 * s, shiftX: 0.025 * s, angStart: 1.35, angEnd: 3.43, t: 0.56 }, // 6: Hip / wrist level
+      { dy: -0.275 * s * torsoRatio, rx: 0.182 * s, rzF: 0.112 * s, rzB: 0.120 * s, shiftX: 0.028 * s, angStart: 1.38, angEnd: 3.38, t: 0.70 }, // 7: Suit hem / upper thigh
+      { dy: -0.340 * s * torsoRatio, rx: 0.189 * s, rzF: 0.115 * s, rzB: 0.127 * s, shiftX: 0.030 * s, angStart: 1.40, angEnd: 3.34, t: 0.85 }, // 8: Knee level
+      { dy: -0.408 * s * torsoRatio, rx: 0.196 * s, rzF: 0.118 * s, rzB: 0.134 * s, shiftX: 0.032 * s, angStart: 1.42, angEnd: 3.30, t: 1.00 }  // 9: Mid-calf bottom hem
     ];
 
     const N_CAPE_COLS = 18;
@@ -9160,29 +11218,46 @@
         const rippleR = Math.sin(waveArg) * dynWaveAmp;
         const rippleY = Math.cos(waveArg * 1.15) * dynWaveAmp * 0.62;
 
-        // Leg-stride tenting & side push on the lower cape (r >= 3)
+        // Leg-stride tenting & side push on the lower cape
         const skD = _computeSkirtVertexDisplacement(
           sinA, cosA, w, 0.24, s, bDisp, capeStride, 0.045,
           effPhase, 0.005, 0.24, 0.42, 0.30, 0.28, 0.78
         );
 
-        // Right-arm swing follow on the shoulder & upper-side drape
-        const armFollowW = (!isLocal && r >= 1 && r <= 6 && sinA > 0.15)
-          ? (Math.max(0.0, sinA) * Math.sin(Math.min(1.0, w / 0.72) * Math.PI) * 0.48)
+        // Right-arm swing & jump follow across shoulder/arm-back drape so cape stays OUTSIDE the swinging sleeve & hand
+        // Note: Keep the front-shoulder drape edge (u < 0.25) anchored forward in X/Z so negative dz lag doesn't uncover the outer arm!
+        const armSectorW = Math.max(0.0, sinA * 0.75 + Math.max(0.0, -cosA) * 0.55);
+        const armHeightEnv = (!isLocal && r >= 1) ? Math.sin(Math.min(1.0, w / 0.88) * Math.PI) : 0.0;
+        const armFollowW = armSectorW * armHeightEnv;
+        const backArcW = Math.max(0.0, (0.28 - cosA) / 1.28);
+        const backArmTentZ = (!isLocal && (elbBackReach > 0.0 || handBackReach > 0.0) && backArcW > 0.0)
+          ? (Math.max(elbBackReach * 0.85, handBackReach * 0.95) * armHeightEnv * Math.min(1.0, armSectorW * 1.15) * backArcW)
           : 0.0;
+        const outArmTentX = (!isLocal && armOutReach > 0.0 && sinA > 0.15)
+          ? (armOutReach * 0.95 * armHeightEnv * sinA)
+          : 0.0;
+        // Soften backward Z retraction on the front-most shoulder columns (r <= 5, cosA > -0.15)
+        const zBackDamp = (r <= 5 && skD.effDispZ < 0.0 && cosA > -0.25) ? (0.45 + 0.55 * Math.max(0.0, (-cosA + 0.25) / 0.5)) : 1.0;
 
         // Aerodynamic backward stream along the back of the cape when moving forward
         const backStreamZ = isLocal
           ? 0.0
-          : (-Math.max(0.0, -cosA + 0.25) * motionIntensity * 0.036 * wEff * wEff * s);
+          : (-Math.max(0.0, -cosA + 0.15) * motionIntensity * 0.036 * wEff * wEff * s);
 
         const rz = (cosA >= 0.0 ? lvl.rzF : lvl.rzB) + staticFlute + flare + rippleR;
         const rx = lvl.rx + (staticFlute + flare + rippleR) * 0.88;
 
-        const lx = lvl.shiftX + sinA * rx + bDisp[0] + skD.legSidePush + armSwingX * armFollowW;
+        const lx = lvl.shiftX + sinA * rx + bDisp[0] + skD.legSidePush + armSwingX * armFollowW * 0.55 + outArmTentX;
         const ly = lvl.dy + bDisp[1] + rippleY + skD.rippleY + (skD.legFrontTent * 0.16 + skD.legBackTent * 0.22);
-        const lz = cosA * rz + skD.effDispZ + backStreamZ + armSwingZ * armFollowW + (skD.legFrontTent * 0.78 - skD.legBackTent * 0.88);
+        const lz = cosA * rz + skD.effDispZ * zBackDamp + backStreamZ - backArmTentZ + armSwingZ * armFollowW * 0.35 * backArcW + (skD.legFrontTent * 0.78 - skD.legBackTent * 0.88);
         let pos = torsoPt(lx, ly, lz);
+
+        // Radial outward direction from torso center for unambiguous outward garment pushout
+        const rdxOut = torsoRight[0] * sinA + torsoFwd[0] * cosA;
+        const rdyOut = torsoRight[1] * sinA + torsoFwd[1] * cosA;
+        const rdzOut = torsoRight[2] * sinA + torsoFwd[2] * cosA;
+        const rOutLen = Math.hypot(rdxOut, rdyOut, rdzOut) || 1.0;
+        const outDir = [rdxOut / rOutLen, rdyOut / rOutLen, rdzOut / rOutLen];
 
         // 1) Clamp against Chibi neck/chest/torso collider on upper rows so collar & upper back never clip
         if (r <= 2) {
@@ -9192,22 +11267,27 @@
           pos = clampOutsideSuitCollar(pos, 0.0065 * s);
         }
 
-        // 2) Ensure outer clearance over the right shoulder & upper arm (rightArmPivot -> rightElbowRot)
-        //    while allowing the lower forearm/hand to emerge cleanly in front of the diagonal cut!
-        if (rightArmPivot && rightElbowRot && r >= 1 && r <= 4 && sinA > 0.25) {
-          const armRestEnd = [
-            rightArmPivot[0] + (rightElbowRot[0] - rightArmPivot[0]) * 0.85,
-            rightArmPivot[1] + (rightElbowRot[1] - rightArmPivot[1]) * 0.85,
-            rightArmPivot[2] + (rightElbowRot[2] - rightArmPivot[2]) * 0.85
-          ];
-          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], rightArmPivot, armRestEnd, 0.055 * s, 0.049 * s, 0.005 * s);
+        // 2) Full right-arm, elbow, forearm & hand clearance (prevents sleeve & hand poke-through while walking or jumping)
+        //    Upper arm always cleared over shoulder/back; forearm & hand cleared whenever inside/behind the cape opening.
+        if (rightArmPivot && rightElbowRot && r >= 1 && r <= 7 && (sinA > 0.05 || cosA < 0.0)) {
+          pos = clampCapeOutsideArmSeg(pos, rightArmPivot, rightElbowRot, 0.056 * s, 0.050 * s, 0.012 * s, outDir);
+        }
+        if (!isLocal && rightElbowRot && rightHandRot && r >= 2 && r <= 8 && (c >= 1 || ang >= lvl.angStart + 0.10)) {
+          const foreArmCovered = (handLocal && (handLocal[2] <= 0.050 * s || handAng >= lvl.angStart - 0.16)) ||
+                                 (elbLocal  && (elbLocal[2]  <= 0.030 * s || elbAng  >= lvl.angStart - 0.16));
+          if (foreArmCovered) {
+            pos = clampCapeOutsideArmSeg(pos, rightElbowRot, rightHandRot, 0.049 * s, 0.044 * s, 0.012 * s, outDir);
+            if (handTipWorld) {
+              pos = clampCapeOutsideArmSeg(pos, rightHandRot, handTipWorld, 0.040 * s, 0.035 * s, 0.012 * s, outDir);
+            }
+          }
         }
 
         // 3) Ensure clearance outside the suit torso & upper back (including inner lining thickness!)
-        if (r <= 5) {
-          const suitRx = (r === 0 ? 0.100 : (r === 1 ? 0.132 : (r <= 4 ? 0.112 : 0.128))) * s;
-          const suitRzB = (r === 0 ? 0.097 : (r === 1 ? 0.099 : (r <= 4 ? 0.095 : 0.105))) * s;
-          const suitRzF = (r === 0 ? 0.083 : (r === 1 ? 0.089 : (r <= 4 ? 0.090 : 0.102))) * s;
+        if (r <= 6) {
+          const suitRx = (r === 0 ? 0.100 : (r === 1 ? 0.132 : (r <= 5 ? 0.112 : 0.128))) * s;
+          const suitRzB = (r === 0 ? 0.097 : (r === 1 ? 0.099 : (r <= 5 ? 0.095 : 0.105))) * s;
+          const suitRzF = (r === 0 ? 0.083 : (r === 1 ? 0.089 : (r <= 5 ? 0.090 : 0.102))) * s;
           const relX = pos[0] - collarBaseX, relY = pos[1] - collarBaseY, relZ = pos[2] - collarBaseZ;
           const tx = relX * torsoRight[0] + relY * torsoRight[1] + relZ * torsoRight[2];
           const ty = relX * torsoUp[0]    + relY * torsoUp[1]    + relZ * torsoUp[2];
@@ -9222,11 +11302,11 @@
         }
 
         // 4) Ensure lower cape clears walking thighs and calves (pushing backward/outward, never forward through the leg)
-        if (r >= 5) {
-          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pRHip, pRKnee, 0.068 * s, 0.056 * s, 0.006 * s);
-          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pRKnee, pRFoot, 0.056 * s, 0.048 * s, 0.006 * s);
-          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pLHip, pLKnee, 0.068 * s, 0.056 * s, 0.006 * s);
-          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pLKnee, pLFoot, 0.056 * s, 0.048 * s, 0.006 * s);
+        if (r >= 6) {
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pRHip, pRKnee, 0.068 * s, 0.056 * s, 0.006 * s, outDir);
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pRKnee, pRFoot, 0.056 * s, 0.048 * s, 0.006 * s, outDir);
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pLHip, pLKnee, 0.068 * s, 0.056 * s, 0.006 * s, outDir);
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pLKnee, pLFoot, 0.056 * s, 0.048 * s, 0.006 * s, outDir);
         }
 
         // Outward radial normal for offsetting the inner emerald-teal lining shell
@@ -9865,6 +11945,66 @@
     });
   }
 
+  function buildOxfordShoesIconMesh(rawVertices, rawColors, rawIndices) {
+    // Showcase staggered Cap-Toe Oxfords in crisp 3/4 view revealing tan leather interior,
+    // closed lacing bar laces, cap-toe stitch crest, and stacked dress heel block
+    const oMesh = buildOxfordShoesMesh(
+      [-0.056, 0.0, -0.012],
+      [ 0.056, 0.0,  0.014],
+      1.15,
+      {
+        leftKneeRot:  [-0.056, 0.175, -0.012],
+        rightKneeRot: [ 0.056, 0.175,  0.014]
+      }
+    );
+    _appendCCWMeshAsCWIcon(oMesh, rawVertices, rawColors, rawIndices, {
+      firstHalfOnly: false,
+      colorMap: (r, g, b) => {
+        // Keep warm tan interior & footbed bright & iconic while lifting dark glossy black leather for dark UI slots
+        if (r > 0.45 && r > b * 1.4) {
+          return [Math.min(1.0, r * 1.08), Math.min(1.0, g * 1.06), Math.min(1.0, b * 1.04)];
+        }
+        if (r > 0.150) return [0.40, 0.415, 0.465]; // Cap-toe ridge & quarter seam piping
+        if (r > 0.136) return [0.34, 0.355, 0.400]; // Raised horizontal bar laces
+        if (r > 0.115) return [0.29, 0.305, 0.345]; // Glossy black leather bevel sheen
+        if (r > 0.075) return [0.20, 0.210, 0.245]; // Closed facing flaps
+        if (r > 0.060) return [0.16, 0.168, 0.198]; // Polished black calfskin body
+        if (r > 0.045) return [0.105, 0.110, 0.132]; // Welt & heel tier highlight
+        return [0.070, 0.075, 0.092];                // Outsole & deep lace throat slit
+      }
+    });
+  }
+
+  function buildDressBootsIconMesh(rawVertices, rawColors, rawIndices) {
+    // Showcase staggered Cap-Toe Balmoral Dress Boots in crisp 3/4 view highlighting the tall
+    // stitched shaft, 7-bar closed lacing, tan leather lining glimpse, cap-toe, and stacked heel
+    const dMesh = buildDressBootsMesh(
+      [-0.058, 0.0, -0.014],
+      [ 0.058, 0.0,  0.016],
+      1.15,
+      {
+        isIcon: true,
+        leftKneeRot:  [-0.058, 0.175, -0.014],
+        rightKneeRot: [ 0.058, 0.175,  0.016]
+      }
+    );
+    _appendCCWMeshAsCWIcon(dMesh, rawVertices, rawColors, rawIndices, {
+      firstHalfOnly: false,
+      colorMap: (r, g, b) => {
+        if (r > 0.45 && r > b * 1.4) {
+          return [Math.min(1.0, r * 1.08), Math.min(1.0, g * 1.06), Math.min(1.0, b * 1.04)];
+        }
+        if (r > 0.150) return [0.40, 0.415, 0.465]; // Collar cuff piping, cap-toe & galosh stitch piping
+        if (r > 0.136) return [0.34, 0.355, 0.400]; // 7-bar horizontal laces
+        if (r > 0.115) return [0.29, 0.305, 0.345]; // Glossy black leather bevel sheen
+        if (r > 0.075) return [0.20, 0.210, 0.245]; // Closed quarter facing panels
+        if (r > 0.060) return [0.16, 0.168, 0.198]; // Polished black calfskin boot shaft
+        if (r > 0.045) return [0.105, 0.110, 0.132]; // Welt & heel lift tier
+        return [0.070, 0.075, 0.092];                // Outsole & tongue slit
+      }
+    });
+  }
+
   function buildWhiteShirtIconMesh(rawVertices, rawColors, rawIndices) {
     const chestP1 = [0, -0.090, 0];
     const chestP2 = [0,  0.170, 0];
@@ -10423,6 +12563,12 @@
     window.playerHairColor = ANIME_HAIR_COLORS[8];
   }
 
+  window.computeClothHairLOD = computeClothHairLOD;
+  window.quantizePhaseForLOD = quantizePhaseForLOD;
+  window.quantizeBlendForLOD = quantizeBlendForLOD;
+  window.getClothCacheStats = getClothCacheStats;
+  window.clearClothCache = clearClothCache;
+
   // Clothes, Traveler Hoodie & Cloak, and Seamless White Bodysuit
   window.getCharacterEquippedClothingState = getCharacterEquippedClothingState;
   window.chibiHoodiePhysics = chibiHoodiePhysics;
@@ -10434,6 +12580,8 @@
   window.updateChibiHandPose = updateChibiHandPose;
   window.buildTravelerHoodieCloakMesh = buildTravelerHoodieCloakMesh;
   window.buildTravelerBootsMesh = buildTravelerBootsMesh;
+  window.buildOxfordShoesMesh = buildOxfordShoesMesh;
+  window.buildDressBootsMesh = buildDressBootsMesh;
   window.buildWhiteShirtCollarMesh = buildWhiteShirtCollarMesh;
   window.buildBlackPleatedSkirtMesh = buildBlackPleatedSkirtMesh;
   window.buildDoubleBreastedSuitMesh = buildDoubleBreastedSuitMesh;
@@ -10443,6 +12591,8 @@
   window.buildWhiteBodysuitShortsIconMesh = buildWhiteBodysuitShortsIconMesh;
   window.buildTravelerHoodieIconMesh = buildTravelerHoodieIconMesh;
   window.buildTravelerBootsIconMesh = buildTravelerBootsIconMesh;
+  window.buildOxfordShoesIconMesh = buildOxfordShoesIconMesh;
+  window.buildDressBootsIconMesh = buildDressBootsIconMesh;
   window.buildWhiteShirtIconMesh = buildWhiteShirtIconMesh;
   window.buildBlackPleatedSkirtIconMesh = buildBlackPleatedSkirtIconMesh;
   window.buildBlackLeggingsIconMesh = buildBlackLeggingsIconMesh;
@@ -10497,7 +12647,12 @@
     triggerHairJiggle,
     updateChibiVirtualHair,
 
-    // Clothes, Bodysuit & Hoodie
+    // Clothes, Bodysuit & Hoodie + LOD & Cache
+    computeClothHairLOD,
+    quantizePhaseForLOD,
+    quantizeBlendForLOD,
+    getClothCacheStats,
+    clearClothCache,
     getCharacterEquippedClothingState,
     createHoodiePhysicsState: _createDefaultHoodiePhysState,
     chibiHoodiePhysics,
@@ -10509,6 +12664,8 @@
     updateChibiHandPose,
     buildTravelerHoodieCloakMesh,
     buildTravelerBootsMesh,
+    buildOxfordShoesMesh,
+    buildDressBootsMesh,
     buildWhiteShirtCollarMesh,
     buildBlackPleatedSkirtMesh,
     buildDoubleBreastedSuitMesh,
@@ -10518,6 +12675,8 @@
     buildWhiteBodysuitShortsIconMesh,
     buildTravelerHoodieIconMesh,
     buildTravelerBootsIconMesh,
+    buildOxfordShoesIconMesh,
+    buildDressBootsIconMesh,
     buildWhiteShirtIconMesh,
     buildBlackPleatedSkirtIconMesh,
     buildBlackLeggingsIconMesh,

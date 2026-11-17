@@ -1,5 +1,113 @@
 // === SEEDPLANET MODULE: JS/ITEMS/WOOD_WALL.JS ===
 
+// Pre-baked Local Template Cache for untrimmed wood_wall (standard full-height wall, with door cutout, or with window cutout)
+const _woodWallTemplateCache = {};
+
+function _addCustomWallBoxLocal(bottomCenter, w, d, hl, hr, colorMult, outVertices, outColors, outIndices) {
+  if (hl <= 0.001 && hr <= 0.001) return;
+  const hw = w / 2;
+  const hd = d / 2;
+  const cubeVerts = [
+    [-hw, 0, -hd],
+    [hw, 0, -hd],
+    [hw, 0, hd],
+    [-hw, 0, hd],
+    [-hw, hl, -hd],
+    [hw, hr, -hd],
+    [hw, hr, hd],
+    [-hw, hl, hd],
+  ];
+  const baseIdx = outVertices.length / 3;
+  for (let i = 0; i < 8; i++) {
+    const v = cubeVerts[i];
+    outVertices.push(bottomCenter[0] + v[0], bottomCenter[1] + v[1], bottomCenter[2] + v[2]);
+    outColors.push(colorMult[0], colorMult[1], colorMult[2]);
+  }
+  const cubeIndices = [
+    0, 2, 1, 0, 3, 2,
+    4, 5, 6, 4, 6, 7,
+    0, 1, 5, 0, 5, 4,
+    2, 3, 7, 2, 7, 6,
+    0, 7, 3, 0, 4, 7,
+    1, 2, 6, 1, 6, 5,
+  ];
+  for (let i = 0; i < cubeIndices.length; i++) {
+    outIndices.push(baseIdx + cubeIndices[i]);
+  }
+}
+
+function _getUntrimmedWoodWallTemplate(hasDoor, hasWindow, isPreview, seedBucket) {
+  const key = (hasDoor ? 'D1' : 'D0') + '_' + (hasWindow ? 'W1' : 'W0') + '_' + (isPreview ? 'P1' : 'P0') + '_' + seedBucket;
+  if (_woodWallTemplateCache[key]) return _woodWallTemplateCache[key];
+
+  const v = [], cMult = [], idx = [];
+  const localR = [1, 0, 0];
+  const localN = [0, 1, 0];
+  const localF = [0, 0, 1];
+  const beamDarkMult = [0.8, 0.8, 0.8];
+
+  // 1) Bottom horizontal support beam & doorway stumps
+  if (hasDoor) {
+    addBox([-0.120, 0.0105, 0.0], 0.060, 0.025, 0.032, beamDarkMult, localR, localN, localF, v, cMult, idx);
+    addBox([0.120, 0.0105, 0.0], 0.060, 0.025, 0.032, beamDarkMult, localR, localN, localF, v, cMult, idx);
+    addBox([-0.120, -0.003, 0.0], 0.068, 0.012, 0.022, beamDarkMult, localR, localN, localF, v, cMult, idx);
+    addBox([0.120, -0.003, 0.0], 0.068, 0.012, 0.022, beamDarkMult, localR, localN, localF, v, cMult, idx);
+  } else {
+    addBox([0.0, 0.0105, 0.0], 0.300, 0.025, 0.032, beamDarkMult, localR, localN, localF, v, cMult, idx);
+    addBox([0.0, -0.003, 0.0], 0.316, 0.012, 0.022, beamDarkMult, localR, localN, localF, v, cMult, idx);
+  }
+
+  // 1.5) Internal Corner End-Seals at t = -0.15 and t = +0.15
+  _addCustomWallBoxLocal([-0.15, -0.002, 0.0], 0.0235, 0.0235, 0.246, 0.246, beamDarkMult, v, cMult, idx);
+  _addCustomWallBoxLocal([0.15, -0.002, 0.0], 0.0235, 0.0235, 0.246, 0.246, beamDarkMult, v, cMult, idx);
+
+  // 2) Top horizontal support beam
+  const bH = 0.021;
+  if (hasDoor) {
+    _addCustomWallBoxLocal([-0.120, 0.228, 0.0], 0.060, 0.028, bH, bH, beamDarkMult, v, cMult, idx);
+    _addCustomWallBoxLocal([0.120, 0.228, 0.0], 0.060, 0.028, bH, bH, beamDarkMult, v, cMult, idx);
+  } else {
+    _addCustomWallBoxLocal([0.0, 0.228, 0.0], 0.300, 0.028, bH, bH, beamDarkMult, v, cMult, idx);
+    addBox([0.0, 0.249, 0.0], 0.296, 0.010, 0.018, beamDarkMult, localR, localN, localF, v, cMult, idx);
+  }
+
+  // 3) Vertical planks (5 planks)
+  const numPlanks = 5;
+  const seedVal = seedBucket * 19.37;
+  function pRand(s) {
+    const x = Math.sin(s) * 10000;
+    return x - Math.floor(x);
+  }
+
+  const plankBaseY = 0.022;
+  const maxPlankH = 0.228 - plankBaseY;
+  const plankThick = 0.024;
+  const plankW = 0.060;
+
+  for (let i = 0; i < numPlanks; i++) {
+    if (hasDoor && (i === 1 || i === 2 || i === 3)) continue;
+    const t = -0.15 + 0.03 + i * 0.06;
+    const shadeNoise = pRand(seedVal + i * 17.3);
+    const pMult = isPreview ? [1.0, 1.0, 1.0] : [0.94 + shadeNoise * 0.12, 0.94 + shadeNoise * 0.12, 0.94 + shadeNoise * 0.12];
+
+    if (hasWindow && (i === 1 || i === 2 || i === 3)) {
+      addBox([t, 0.0485, 0.0], plankW, 0.053, plankThick, pMult, localR, localN, localF, v, cMult, idx);
+      const topMaxH = 0.228 - 0.175;
+      _addCustomWallBoxLocal([t, 0.175, 0.0], plankW, plankThick, topMaxH, topMaxH, pMult, v, cMult, idx);
+    } else {
+      _addCustomWallBoxLocal([t, plankBaseY, 0.0], plankW, plankThick, maxPlankH, maxPlankH, pMult, v, cMult, idx);
+    }
+  }
+
+  const tpl = {
+    v: new Float32Array(v),
+    cMult: new Float32Array(cMult),
+    idx: new Uint16Array(idx)
+  };
+  _woodWallTemplateCache[key] = tpl;
+  return tpl;
+}
+
 window.ItemRegistry["wood_wall"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     const p = item.position;
@@ -64,6 +172,7 @@ window.ItemRegistry["wood_wall"] = {
             }
           }
         }
+        return false;
       }
       for (let i = 0; i < itemsList.length; i++) {
         const other = itemsList[i];
@@ -79,8 +188,20 @@ window.ItemRegistry["wood_wall"] = {
       return false;
     }
 
-    let hasCoLocatedDoor = checkCoLocatedFixture("wood_door");
-    let hasCoLocatedWindow = (item.type === "wood_wall") ? checkCoLocatedFixture("wood_window") : false;
+    let hasCoLocatedDoor = false;
+    let hasCoLocatedWindow = false;
+    if (!item.isPreview && item._coFixtureColLen === colLen && item._coDoorCached !== undefined && item._coWinCached !== undefined) {
+      hasCoLocatedDoor = item._coDoorCached;
+      hasCoLocatedWindow = item._coWinCached;
+    } else {
+      hasCoLocatedDoor = checkCoLocatedFixture("wood_door");
+      hasCoLocatedWindow = (item.type === "wood_wall") ? checkCoLocatedFixture("wood_window") : false;
+      if (!item.isPreview) {
+        item._coFixtureColLen = colLen;
+        item._coDoorCached = hasCoLocatedDoor;
+        item._coWinCached = hasCoLocatedWindow;
+      }
+    }
 
     // Check preview hovering over this wall in real time
     if (typeof window !== "undefined" && window.floorPreviewCollectible && window.floorPreviewCollectible.isPreview && window.floorPreviewCollectible.active) {
@@ -289,6 +410,55 @@ window.ItemRegistry["wood_wall"] = {
     const topTrimLeft = getTrimHeight(-0.15, 0.25);
     const topTrimRight = getTrimHeight(0.15, 0.25);
     const topTrimMid = getTrimHeight(0.0, 0.25);
+
+    // Fast path: Untrimmed wood_wall uses pre-baked Local Template Cache
+    if (
+      !isWindow &&
+      topTrimLeft >= 0.249 &&
+      topTrimRight >= 0.249 &&
+      topTrimMid >= 0.249 &&
+      getTrimHeight(-0.075, 0.25) >= 0.249 &&
+      getTrimHeight(0.075, 0.25) >= 0.249
+    ) {
+      const rawSeed = item.seed || (p[0] * 123.4 + p[2] * 56.7);
+      const seedBucket = Math.abs(Math.floor(rawSeed * 10)) % 32;
+      const tpl = _getUntrimmedWoodWallTemplate(hasCoLocatedDoor, hasCoLocatedWindow, !!item.isPreview, seedBucket);
+
+      const baseVertIdx = vertices.length / 3;
+      const tv = tpl.v;
+      const tcMult = tpl.cMult;
+      const tidx = tpl.idx;
+      const p0 = p[0], p1 = p[1], p2 = p[2];
+      const wr0 = wallR[0], wr1 = wallR[1], wr2 = wallR[2];
+      const n0 = n[0], n1 = n[1], n2 = n[2];
+      const wf0 = wallF[0], wf1 = wallF[1], wf2 = wallF[2];
+      const det = (wr1 * n2 - wr2 * n1) * wf0 + (wr2 * n0 - wr0 * n2) * wf1 + (wr0 * n1 - wr1 * n0) * wf2;
+      const isFlipped = det < 0;
+
+      for (let i = 0, len = tv.length; i < len; i += 3) {
+        const lx = tv[i], ly = tv[i + 1], lz = tv[i + 2];
+        vertices.push(
+          p0 + lx * wr0 + ly * n0 + lz * wf0,
+          p1 + lx * wr1 + ly * n1 + lz * wf1,
+          p2 + lx * wr2 + ly * n2 + lz * wf2
+        );
+        colors.push(
+          rCol * tcMult[i],
+          gCol * tcMult[i + 1],
+          bCol * tcMult[i + 2]
+        );
+      }
+      if (isFlipped) {
+        for (let i = 0, len = tidx.length; i < len; i += 3) {
+          indices.push(baseVertIdx + tidx[i], baseVertIdx + tidx[i + 2], baseVertIdx + tidx[i + 1]);
+        }
+      } else {
+        for (let i = 0, len = tidx.length; i < len; i++) {
+          indices.push(baseVertIdx + tidx[i]);
+        }
+      }
+      return;
+    }
 
     if (!isWindow) {
       // 1) Bottom horizontal support beam & doorway stumps (non-overlapping width 0.300, extends 2mm into floor to prevent light leaks)

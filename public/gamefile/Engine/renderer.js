@@ -2280,6 +2280,7 @@ window.cloud3DProgram = cloud3DProgram;
       let activeBoatIndicesLength = 0;
       let activeBoatUpdatedFrame = -1;
       let currentRenderFrameId = 0;
+      let activeBoatLastState = null;
 
       function updateDedicatedActiveBoatBuffers(gl) {
         if (activeBoatUpdatedFrame === currentRenderFrameId) return;
@@ -2288,6 +2289,58 @@ window.cloud3DProgram = cloud3DProgram;
         const boat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
         if (!boat || !boat.position) {
           activeBoatIndicesLength = 0;
+          activeBoatLastState = null;
+          return;
+        }
+
+        const p = boat.position;
+        const rVec = boat.R || [1, 0, 0];
+        const nVec = boat.normal || [0, 1, 0];
+        const fVec = boat.F || [0, 0, 1];
+        const angle = boat.angle || 0;
+        const bankAngle = boat.bankAngle || 0;
+        const hasWheel = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
+        const hasEngine = !!boat.hasEngine;
+        const hasWing = !!(boat.hasWing || boat.hasWings);
+        const isFlying = !!(boat.isFlying || boat.isAirborne);
+        const spinAngle = hasWheel
+          ? (isFlying ? (boat.frozenSpinAngle !== undefined ? boat.frozenSpinAngle : (boat.spinAngle || 0)) : (boat.spinAngle || 0))
+          : 0;
+        const steerAngle = hasWheel ? (boat.steerAngle || 0) : 0;
+        const rowTimer = (!hasWheel && !hasEngine && typeof boatRowTimer !== "undefined") ? boatRowTimer : 0;
+        const wheelScale = (hasWheel && typeof window.wheelScaleMultiplier === "number") ? window.wheelScaleMultiplier : 1.0;
+        const engScale = (hasEngine && typeof window.electricEngineScaleMultiplier === "number") ? window.electricEngineScaleMultiplier : 0.36;
+
+        const s = activeBoatLastState;
+        if (
+          s &&
+          activeBoatVBO &&
+          activeBoatIndexBuffer &&
+          activeBoatIndicesLength > 0 &&
+          s.boat === boat &&
+          s.hasWheel === hasWheel &&
+          s.hasEngine === hasEngine &&
+          s.hasWing === hasWing &&
+          Math.abs(p[0] - s.px) < 1e-6 &&
+          Math.abs(p[1] - s.py) < 1e-6 &&
+          Math.abs(p[2] - s.pz) < 1e-6 &&
+          Math.abs(rVec[0] - s.rx) < 1e-6 &&
+          Math.abs(rVec[1] - s.ry) < 1e-6 &&
+          Math.abs(rVec[2] - s.rz) < 1e-6 &&
+          Math.abs(nVec[0] - s.nx) < 1e-6 &&
+          Math.abs(nVec[1] - s.ny) < 1e-6 &&
+          Math.abs(nVec[2] - s.nz) < 1e-6 &&
+          Math.abs(fVec[0] - s.fx) < 1e-6 &&
+          Math.abs(fVec[1] - s.fy) < 1e-6 &&
+          Math.abs(fVec[2] - s.fz) < 1e-6 &&
+          Math.abs(angle - s.angle) < 1e-6 &&
+          Math.abs(bankAngle - s.bankAngle) < 1e-6 &&
+          Math.abs(spinAngle - s.spinAngle) < 1e-6 &&
+          Math.abs(steerAngle - s.steerAngle) < 1e-6 &&
+          Math.abs(rowTimer - s.rowTimer) < 1e-6 &&
+          Math.abs(wheelScale - s.wheelScale) < 1e-6 &&
+          Math.abs(engScale - s.engScale) < 1e-6
+        ) {
           return;
         }
 
@@ -2308,6 +2361,7 @@ window.cloud3DProgram = cloud3DProgram;
 
         if (rawIndices.length === 0) {
           activeBoatIndicesLength = 0;
+          activeBoatLastState = null;
           return;
         }
 
@@ -2334,6 +2388,24 @@ window.cloud3DProgram = cloud3DProgram;
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, activeBoatIndexBuffer);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, flat.indices, gl.DYNAMIC_DRAW);
+
+        activeBoatLastState = {
+          boat,
+          px: p[0], py: p[1], pz: p[2],
+          rx: rVec[0], ry: rVec[1], rz: rVec[2],
+          nx: nVec[0], ny: nVec[1], nz: nVec[2],
+          fx: fVec[0], fy: fVec[1], fz: fVec[2],
+          angle,
+          bankAngle,
+          hasWheel,
+          hasEngine,
+          hasWing,
+          spinAngle,
+          steerAngle,
+          rowTimer,
+          wheelScale,
+          engScale
+        };
       }
 
       function drawDedicatedActiveBoat(gl, posLoc, colorLoc, normalLoc) {
@@ -2742,6 +2814,7 @@ window.cloud3DProgram = cloud3DProgram;
           }
         }
 
+        const swingingDoorWindowItems = [];
         for (let other of doorsToCheck) {
           if (other.active && other.type === "wood_door" && !other.isPreview) {
             if (other.doorAngle === undefined) other.doorAngle = 0.0;
@@ -2824,6 +2897,7 @@ window.cloud3DProgram = cloud3DProgram;
                 other.doorAngle = Math.max(other.doorTargetAngle, other.doorAngle - swingSpeed * dt);
               }
               doorActiveSwinging = true;
+              swingingDoorWindowItems.push(other);
               if (window._activeSwingingDoors) window._activeSwingingDoors.add(other);
             } else {
               other.doorAngle = other.doorTargetAngle;
@@ -2878,10 +2952,12 @@ window.cloud3DProgram = cloud3DProgram;
               if (other.windowAngle < other.windowTargetAngle) {
                 other.windowAngle = Math.min(other.windowTargetAngle, other.windowAngle + speed * dt);
                 windowActiveSwinging = true;
+                swingingDoorWindowItems.push(other);
                 if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
               } else if (other.windowAngle > other.windowTargetAngle) {
                 other.windowAngle = Math.max(other.windowTargetAngle, other.windowAngle - speed * dt);
                 windowActiveSwinging = true;
+                swingingDoorWindowItems.push(other);
                 if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
               } else {
                 if (window._activeSwingingWindows) window._activeSwingingWindows.delete(other);
@@ -2896,10 +2972,12 @@ window.cloud3DProgram = cloud3DProgram;
                 if (other.windowAngle < other.windowTargetAngle) {
                   other.windowAngle = Math.min(other.windowTargetAngle, other.windowAngle + speed * dt);
                   windowActiveSwinging = true;
+                  swingingDoorWindowItems.push(other);
                   if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
                 } else {
                   other.windowAngle = Math.max(other.windowTargetAngle, other.windowAngle - speed * dt);
                   windowActiveSwinging = true;
+                  swingingDoorWindowItems.push(other);
                   if (window._activeSwingingWindows) window._activeSwingingWindows.add(other);
                 }
               } else {
@@ -2910,13 +2988,13 @@ window.cloud3DProgram = cloud3DProgram;
         }
 
         let pendingDynamicRefresh = false;
-        if (doorActiveSwinging || windowActiveSwinging || (typeof pendingDynamicCollectibleRefresh !== 'undefined' && pendingDynamicCollectibleRefresh)) {
+        if (typeof pendingDynamicCollectibleRefresh !== 'undefined' && pendingDynamicCollectibleRefresh) {
           let shouldRefresh = true;
           const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
             ? renderDistEnabled
             : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
 
-          if (isRenderDistOn && !doorActiveSwinging && !windowActiveSwinging && (typeof activeRidingBoat === "undefined" || !activeRidingBoat)) {
+          if (isRenderDistOn && (typeof activeRidingBoat === "undefined" || !activeRidingBoat)) {
             const curObjectDist = typeof objectRenderDistValue !== "undefined"
               ? objectRenderDistValue
               : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
@@ -2940,12 +3018,12 @@ window.cloud3DProgram = cloud3DProgram;
             }
             if (!hasNearDynamicItem) {
               if (typeof SpatialGrid !== "undefined") {
-                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => (c.isDynamic || c.type === "wood_door" || c.type === "wood_window" || c.type === "wood_planter_box"));
+                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box"));
                 hasNearDynamicItem = nearDyn.length > 0;
               } else if (typeof collectibles !== "undefined" && collectibles) {
                 for (let i = 0; i < collectibles.length; i++) {
                   const c = collectibles[i];
-                  if (c.active && (c.isDynamic || c.type === "wood_door" || c.type === "wood_window" || c.type === "wood_planter_box") && c.position) {
+                  if (c.active && ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box") && c.position) {
                     const dx = c.position[0] - pX;
                     const dy = c.position[1] - pY;
                     const dz = c.position[2] - pZ;
@@ -2972,15 +3050,24 @@ window.cloud3DProgram = cloud3DProgram;
         if (hasPendingCollectibles) {
           if (typeof pendingCollectibleRefresh !== 'undefined') pendingCollectibleRefresh = false;
           if (typeof window !== 'undefined') window.pendingCollectibleRefresh = false;
-          refreshCollectiblesVBO(); // Rebuild both main and dynamic
+          refreshCollectiblesVBO(); // Rebuild main, dynamic, and doors
           if (typeof SpatialGrid !== "undefined" && typeof collectibles !== "undefined") {
             SpatialGrid.rebuild(collectibles);
           }
           if (typeof window !== "undefined" && typeof window.invalidateStructureCollisionCache === "function") {
             window.invalidateStructureCollisionCache();
           }
-        } else if (pendingDynamicRefresh) {
-          refreshCollectiblesVBO('dynamic'); // Only rebuild dynamic
+        } else {
+          if (pendingDynamicRefresh) {
+            refreshCollectiblesVBO('dynamic'); // Only rebuild dynamic
+          }
+          if (swingingDoorWindowItems.length > 0) {
+            if (typeof window !== "undefined" && typeof window.updateSwingingDoorsAndWindowsInVBO === "function") {
+              window.updateSwingingDoorsAndWindowsInVBO(swingingDoorWindowItems);
+            } else {
+              refreshCollectiblesVBO('doors');
+            }
+          }
         }
 
         // --- Render Loop ---
@@ -5118,9 +5205,40 @@ window.cloud3DProgram = cloud3DProgram;
         if (needsEveryFrame || timestamp - lastCharAnimTime >= charInterval) {
           updateCharacterMesh(walkPhase);
           if (typeof window.playerClonesState !== "undefined" && window.playerClonesState && window.playerClonesState.length > 0) {
+              const refEye = (typeof window.eyePos !== "undefined" && window.eyePos) ? window.eyePos : [px, py, pz];
+              const rx = refEye[0] || 0.0, ry = refEye[1] || 0.0, rz = refEye[2] || 0.0;
+              const lodFn = (typeof window.computeClothHairLOD === "function") ? window.computeClothHairLOD : null;
+              const defRad = (typeof RADIUS === "number") ? RADIUS : 8.0;
+              const sVal = (typeof playerScale === "number") ? playerScale : ((typeof charScale === "number") ? charScale : 0.1);
+              window._cloneMeshFrameCounter = ((window._cloneMeshFrameCounter || 0) + 1) | 0;
+              const frameTick = window._cloneMeshFrameCounter;
+
               for (let ci = 0; ci < window.playerClonesState.length; ci++) {
                 const cs = window.playerClonesState[ci];
                 if (!cs) continue;
+                const sinT = Math.sin(cs.theta || 0.0), cosT = Math.cos(cs.theta || 0.0);
+                const sinP = Math.sin(cs.phi || 0.0), cosP = Math.cos(cs.phi || 0.0);
+                const cRad = cs.centerRadius || defRad;
+                const wx = cRad * sinT * cosP;
+                const wy = cRad * cosT;
+                const wz = cRad * sinT * sinP;
+                const dx = wx - rx, dy = wy - ry, dz = wz - rz;
+                const distSq = dx * dx + dy * dy + dz * dz;
+
+                const prevLod = (typeof cs._lod === "number") ? cs._lod : 0;
+                const lodInfo = lodFn
+                  ? lodFn(distSq, sVal, true)
+                  : { lod: 0, phaseBuckets: 0, walkBuckets: 0, updateStride: 1, enableSpringPhysics: true, enableBodyCollider: true, enableHairSway: true, enableHairBodyCollider: true };
+                cs._lodInfo = lodInfo;
+                cs._lod = lodInfo.lod;
+
+                const appSig = `${cs.hoodOpen ? 1 : 0}_${cs.equippedTool || ""}_${cs.activeItem ? cs.activeItem.name : ""}_${cs.ridingBoat && cs.ridingBoat.active ? 1 : 0}`;
+                const forceNeedUpdate = !cs._meshBuffers || !cs._meshBuffers.vertexBuffer || cs._lastAppSig !== appSig || lodInfo.lod < prevLod || (cs.actionAnim && cs.actionAnim > 0.01);
+                if (!forceNeedUpdate && lodInfo.updateStride > 1 && ((frameTick + ci) % lodInfo.updateStride) !== 0) {
+                  continue;
+                }
+                cs._lastAppSig = appSig;
+
                 updateCharacterMesh(
                   cs.animPhase || 0.0,
                   true,
@@ -7491,47 +7609,63 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           );
         }
 
+        if (
+          doorWindowVertexBuffer &&
+          doorWindowIndexBuffer &&
+          doorWindowIndicesLength > 0
+        ) {
+          gl.uniform1f(depthSwayFactorLoc, 0.0);
+          gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
+          gl.uniformMatrix4fv(
+            depthModelLoc,
+            false,
+            f32_identity,
+          );
+          gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowVertexBuffer);
+          gl.enableVertexAttribArray(depthPosLoc);
+          gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, doorWindowIndexBuffer);
+          const isUint32Doors = doorWindowIndicesLength > 65535;
+          const doorType = isUint32Doors ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+
+          gl.drawElements(
+            gl.TRIANGLES,
+            doorWindowIndicesLength,
+            doorType,
+            0,
+          );
+        }
+
         if (activeRidingBoat && typeof drawDedicatedActiveBoatShadow === "function") {
           if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, 0.0);
           drawDedicatedActiveBoatShadow(gl, depthPosLoc);
           if (depthMaxShadowDistLoc) gl.uniform1f(depthMaxShadowDistLoc, objShadowDist);
         }
 
-        // Amphibians to depth (Cull creatures if outside object render distance)
+        // Amphibians to depth (Draw only shadow-range leading slice partitioned by updateAmphibians)
+        const npcShadowCount = (typeof window !== "undefined" && typeof window.amphibianShadowIndicesLength === "number")
+          ? Math.min(amphibianIndicesLength, window.amphibianShadowIndicesLength)
+          : amphibianIndicesLength;
         if (
           amphibianVertexBuffer &&
           amphibianIndexBuffer &&
-          amphibianIndicesLength > 0
+          npcShadowCount > 0
         ) {
-          let hasNearbyAmphibians = true;
-          if (typeof amphibians !== "undefined" && amphibians && amphibians.length > 0 && eyePos) {
-            const maxSq = (objShadowDist + 1.0) * (objShadowDist + 1.0);
-            hasNearbyAmphibians = amphibians.some(npc => {
-              if (npc.hp !== undefined && npc.hp <= 0) return false;
-              const pos = npc.position || npc.pos;
-              if (!pos) return true;
-              const dx = pos[0] - eyePos[0], dy = pos[1] - eyePos[1], dz = pos[2] - eyePos[2];
-              return (dx * dx + dy * dy + dz * dz) <= maxSq;
-            });
-          }
-
-          if (hasNearbyAmphibians) {
-            gl.uniform1f(depthSwayFactorLoc, 0.0);
-            gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
-            gl.uniformMatrix4fv(
-              depthModelLoc,
-              false,
-              f32_identity,
-            );
-            gl.bindBuffer(gl.ARRAY_BUFFER, amphibianVertexBuffer);
-            gl.enableVertexAttribArray(depthPosLoc);
-            gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, amphibianIndexBuffer);
-            if (amphibianIndicesLength > 65535) {
-               gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_INT, 0);
-            } else {
-               gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_SHORT, 0);
-            }
+          gl.uniform1f(depthSwayFactorLoc, 0.0);
+          gl.uniform1f(depthWaterSwayFactorLoc, 0.0);
+          gl.uniformMatrix4fv(
+            depthModelLoc,
+            false,
+            f32_identity,
+          );
+          gl.bindBuffer(gl.ARRAY_BUFFER, amphibianVertexBuffer);
+          gl.enableVertexAttribArray(depthPosLoc);
+          gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, amphibianIndexBuffer);
+          if (amphibianIndicesLength > 65535) {
+             gl.drawElements(gl.TRIANGLES, npcShadowCount, gl.UNSIGNED_INT, 0);
+          } else {
+             gl.drawElements(gl.TRIANGLES, npcShadowCount, gl.UNSIGNED_SHORT, 0);
           }
         }
         
@@ -9152,8 +9286,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   });
                 }
 
-                // 4) Draw Mirrored Creatures (Amphibians)
-                if (amphibianVertexBuffer && amphibianIndicesLength > 0) {
+                // 4) Draw Mirrored Creatures (Amphibians - nearby/visible leading slice only)
+                const npcReflectCount = (typeof window !== "undefined" && typeof window.amphibianShadowIndicesLength === "number")
+                  ? Math.min(amphibianIndicesLength, window.amphibianShadowIndicesLength)
+                  : amphibianIndicesLength;
+                if (amphibianVertexBuffer && npcReflectCount > 0) {
                   gl.useProgram(modelProgram);
                   gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
                   gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_reflectedModelViewMatrixStatic, reflectedModelViewMatrixStatic));
@@ -9191,9 +9328,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   gl.cullFace(gl.BACK);
 
                   if (amphibianIndicesLength > 65535) {
-                    gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_INT, 0);
+                    gl.drawElements(gl.TRIANGLES, npcReflectCount, gl.UNSIGNED_INT, 0);
                   } else {
-                    gl.drawElements(gl.TRIANGLES, amphibianIndicesLength, gl.UNSIGNED_SHORT, 0);
+                    gl.drawElements(gl.TRIANGLES, npcReflectCount, gl.UNSIGNED_SHORT, 0);
                   }
                   gl.disable(gl.CULL_FACE);
                 }
@@ -9444,10 +9581,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
         const hasStaticCollectibles = collectibleVertexBuffer && collectibleColorBuffer && collectibleIndexBuffer && collectibleIndicesLength > 0;
         const hasDynamicCollectibles = dynamicCollectibleVertexBuffer && dynamicCollectibleColorBuffer && dynamicCollectibleIndexBuffer && dynamicCollectibleIndicesLength > 0;
+        const hasDoorWindowCollectibles = doorWindowVertexBuffer && doorWindowColorBuffer && doorWindowIndexBuffer && doorWindowIndicesLength > 0;
         const hasActiveBoat = !!activeRidingBoat;
 
         // วาดไอเทมสวมใส่ (Collectibles)
-        if (hasStaticCollectibles || hasDynamicCollectibles || hasActiveBoat) {
+        if (hasStaticCollectibles || hasDynamicCollectibles || hasDoorWindowCollectibles || hasActiveBoat) {
           gl.enable(gl.CULL_FACE);
           gl.frontFace(gl.CW);
           gl.cullFace(gl.BACK);
@@ -9547,6 +9685,43 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 gl.drawElements(gl.TRIANGLES, dynamicCollectibleIndicesLength, gl.UNSIGNED_INT, 0);
               } else {
                 gl.drawElements(gl.TRIANGLES, dynamicCollectibleIndicesLength, gl.UNSIGNED_SHORT, 0);
+              }
+            }
+          }
+
+          if (hasDoorWindowCollectibles) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowVertexBuffer);
+            gl.enableVertexAttribArray(modelPosLoc);
+            gl.vertexAttribPointer(modelPosLoc, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowColorBuffer);
+            gl.enableVertexAttribArray(modelColorLoc);
+            gl.vertexAttribPointer(modelColorLoc, 3, gl.FLOAT, false, 0, 0);
+
+            if (modelNormalLoc !== -1 && doorWindowNormalBuffer) {
+              gl.bindBuffer(gl.ARRAY_BUFFER, doorWindowNormalBuffer);
+              gl.enableVertexAttribArray(modelNormalLoc);
+              gl.vertexAttribPointer(modelNormalLoc, 3, gl.FLOAT, false, 0, 0);
+            }
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, doorWindowIndexBuffer);
+            const isUint32Doors = doorWindowIndicesLength > 65535;
+            if (frustumCullingEnabled && frustumPlanes && window.doorWindowCollectiblesList && window.doorWindowCollectiblesList.length > 0) {
+              const ranges = getVisibleIndexRanges(window.doorWindowCollectiblesList, frustumPlanes);
+              const type = isUint32Doors ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+              const bytesPerIndex = isUint32Doors ? 4 : 2;
+              for (let i = 0; i < ranges.length; i++) {
+                const range = ranges[i];
+                const count = range.end - range.start;
+                if (count > 0) {
+                  gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
+                }
+              }
+            } else {
+              if (isUint32Doors) {
+                gl.drawElements(gl.TRIANGLES, doorWindowIndicesLength, gl.UNSIGNED_INT, 0);
+              } else {
+                gl.drawElements(gl.TRIANGLES, doorWindowIndicesLength, gl.UNSIGNED_SHORT, 0);
               }
             }
           }
