@@ -16,6 +16,7 @@
       let bowHoldArmTimer = 3.3;
       let bowSpamClickDelay = 0.5;
       let bowLockDistance = 3.0;
+      let meleeLockDistance = 0.25;
       let isUsingItem = false;
       let isActionDown = false;
 
@@ -590,6 +591,258 @@
         noise.stop(t + 0.15);
       }
 
+      function playSwordDrawSound() {
+        if (!audioCtx && typeof initAudio === "function") initAudio();
+        if (!audioCtx || sfxMuted || collectSfxVolume <= 0) return;
+
+        const t = audioCtx.currentTime;
+        const vol = sfxVolume * collectSfxVolume * 1.4;
+        const dur = 0.24;
+
+        // 1. Metallic scabbard friction scrape (fast rising high-Q bandpass)
+        const bufSize = Math.floor(audioCtx.sampleRate * dur);
+        const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buf;
+
+        const bp = audioCtx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.setValueAtTime(1600, t);
+        bp.frequency.exponentialRampToValueAtTime(5400, t + 0.16);
+        bp.Q.value = 5.5;
+
+        const nGain = audioCtx.createGain();
+        nGain.gain.setValueAtTime(0.001, t);
+        nGain.gain.linearRampToValueAtTime(vol * 0.45, t + 0.04);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        noise.connect(bp);
+        bp.connect(nGain);
+        nGain.connect(audioCtx.destination);
+        noise.start(t);
+
+        // 2. Crisp "Shing!" katana steel partials
+        const steelFreqs = [2820, 4460, 6390];
+        const steelGains = [0.16, 0.10, 0.06];
+        for (let i = 0; i < steelFreqs.length; i++) {
+          const osc = audioCtx.createOscillator();
+          osc.type = i === 0 ? "triangle" : "sine";
+          osc.frequency.setValueAtTime(steelFreqs[i] * (0.985 + Math.random() * 0.03), t);
+          osc.frequency.exponentialRampToValueAtTime(steelFreqs[i] * 0.99, t + 0.26);
+
+          const g = audioCtx.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(vol * steelGains[i], t + 0.025);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+
+          osc.connect(g);
+          g.connect(audioCtx.destination);
+          osc.start(t);
+          osc.stop(t + 0.29);
+        }
+      }
+
+      function playSwordSlashSound(style = 1) {
+        if (!audioCtx && typeof initAudio === "function") initAudio();
+        if (!audioCtx || sfxMuted || collectSfxVolume <= 0) return;
+
+        const t = audioCtx.currentTime;
+        const vol = sfxVolume * collectSfxVolume * 1.85;
+        const sType = Math.max(0, Math.min(4, style | 0));
+
+        const triggerSingleCut = (delay, dur, peakRatio, startHz, peakHz, endHz, qVal, steelBaseHz, ringMix, punchAmt) => {
+          const st = t + delay;
+          const peakT = st + dur * peakRatio;
+
+          // A. Tachikaze (Blade splitting air: tightly resonant bandpass sweep + crisp upper air edge)
+          const bufLen = Math.max(64, Math.floor(audioCtx.sampleRate * dur));
+          const buf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+          const ch = buf.getChannelData(0);
+          let prev = 0;
+          for (let i = 0; i < bufLen; i++) {
+            const w = Math.random() * 2 - 1;
+            // Emphasize transient hiss vs brown rumble
+            ch[i] = w - prev * 0.35;
+            prev = w;
+          }
+
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+
+          const mainBp = audioCtx.createBiquadFilter();
+          mainBp.type = "bandpass";
+          mainBp.frequency.setValueAtTime(startHz, st);
+          mainBp.frequency.exponentialRampToValueAtTime(peakHz, peakT);
+          mainBp.frequency.exponentialRampToValueAtTime(endHz, st + dur);
+          mainBp.Q.value = qVal;
+
+          const mainGain = audioCtx.createGain();
+          mainGain.gain.setValueAtTime(0.0001, st);
+          mainGain.gain.linearRampToValueAtTime(vol * 1.05, peakT);
+          mainGain.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+
+          src.connect(mainBp);
+          mainBp.connect(mainGain);
+          mainGain.connect(audioCtx.destination);
+
+          // B. High-velocity knife-edge whistle / shimmer over air cut
+          const edgeSrc = audioCtx.createBufferSource();
+          edgeSrc.buffer = buf;
+
+          const edgeBp = audioCtx.createBiquadFilter();
+          edgeBp.type = "bandpass";
+          edgeBp.frequency.setValueAtTime(peakHz * 1.25, st);
+          edgeBp.frequency.exponentialRampToValueAtTime(endHz * 1.4, st + dur * 0.9);
+          edgeBp.Q.value = qVal * 1.6;
+
+          const edgeGain = audioCtx.createGain();
+          edgeGain.gain.setValueAtTime(0.0001, st);
+          edgeGain.gain.linearRampToValueAtTime(vol * 0.42, st + dur * (peakRatio * 0.75));
+          edgeGain.gain.exponentialRampToValueAtTime(0.0001, st + dur * 0.85);
+
+          edgeSrc.connect(edgeBp);
+          edgeBp.connect(edgeGain);
+          edgeGain.connect(audioCtx.destination);
+
+          src.start(st);
+          edgeSrc.start(st);
+
+          // C. Forged steel resonance harmonic partials ("Sshh-ing!")
+          const ratios = [1.0, 1.58, 2.27];
+          const amps = [0.16, 0.09, 0.05];
+          const ringDur = Math.min(0.24, dur * 0.9);
+          for (let k = 0; k < ratios.length; k++) {
+            const osc = audioCtx.createOscillator();
+            osc.type = k === 0 ? "triangle" : "sine";
+            const f0 = steelBaseHz * ratios[k] * (0.97 + Math.random() * 0.06);
+            osc.frequency.setValueAtTime(f0 * 1.06, st);
+            osc.frequency.exponentialRampToValueAtTime(f0 * 0.94, st + ringDur);
+
+            const og = audioCtx.createGain();
+            og.gain.setValueAtTime(0.0001, st);
+            og.gain.linearRampToValueAtTime(vol * amps[k] * ringMix, st + Math.min(0.025, dur * 0.14));
+            og.gain.exponentialRampToValueAtTime(0.0001, st + ringDur);
+
+            osc.connect(og);
+            og.connect(audioCtx.destination);
+            osc.start(st);
+            osc.stop(st + ringDur + 0.01);
+          }
+
+          // D. Sub-air displacement punch
+          if (punchAmt > 0) {
+            const pOsc = audioCtx.createOscillator();
+            pOsc.type = "sine";
+            pOsc.frequency.setValueAtTime(175, st);
+            pOsc.frequency.exponentialRampToValueAtTime(42, st + 0.065);
+
+            const pGain = audioCtx.createGain();
+            pGain.gain.setValueAtTime(0.0001, st);
+            pGain.gain.linearRampToValueAtTime(vol * punchAmt, st + 0.01);
+            pGain.gain.exponentialRampToValueAtTime(0.0001, st + 0.07);
+
+            pOsc.connect(pGain);
+            pGain.connect(audioCtx.destination);
+            pOsc.start(st);
+            pOsc.stop(st + 0.075);
+          }
+        };
+
+        if (sType === 0) {
+          // Basic Tanto left-click quick slash
+          triggerSingleCut(0.0, 0.15, 0.20, 1200, 4800, 820, 2.6, 2900, 0.75, 0.35);
+        } else if (sType === 1) {
+          // Skill 1: High-speed forward dash katana flash
+          triggerSingleCut(0.0, 0.21, 0.18, 1050, 5400, 680, 2.9, 2750, 1.0, 0.55);
+        } else if (sType === 2) {
+          // Skill 2 (Panel 1): Wide low horizontal sweeping crescent cut
+          triggerSingleCut(0.0, 0.28, 0.26, 650, 3950, 440, 2.4, 2450, 1.15, 0.50);
+          triggerSingleCut(0.07, 0.16, 0.22, 1600, 4400, 950, 3.4, 3300, 0.55, 0.0);
+        } else if (sType === 3) {
+          // Skill 3 (Panel 2): 360-degree mid-air spinning cyclone multi-slash
+          triggerSingleCut(0.0,  0.17, 0.25, 950,  4600, 750, 2.8, 2850, 0.85, 0.40);
+          triggerSingleCut(0.09, 0.17, 0.25, 1150, 5200, 850, 3.1, 3150, 0.90, 0.30);
+          triggerSingleCut(0.18, 0.19, 0.24, 900,  4900, 650, 2.7, 2650, 0.95, 0.35);
+        } else {
+          // Skill 4 (Panel 3): Rising overhead wind-slice before slam impact
+          triggerSingleCut(0.03, 0.19, 0.38, 520, 3200, 1400, 2.2, 2250, 0.90, 0.30);
+        }
+      }
+
+      function playSwordSlamImpactSound() {
+        if (!audioCtx && typeof initAudio === "function") initAudio();
+        if (!audioCtx || sfxMuted || collectSfxVolume <= 0) return;
+
+        const t = audioCtx.currentTime;
+        const vol = sfxVolume * collectSfxVolume * 2.0;
+
+        // 1. Heavy cleave earth shockwave (sub drop)
+        const sub = audioCtx.createOscillator();
+        sub.type = "sine";
+        sub.frequency.setValueAtTime(115, t);
+        sub.frequency.exponentialRampToValueAtTime(28, t + 0.22);
+
+        const subGain = audioCtx.createGain();
+        subGain.gain.setValueAtTime(0.001, t);
+        subGain.gain.linearRampToValueAtTime(vol * 0.95, t + 0.012);
+        subGain.gain.exponentialRampToValueAtTime(0.0005, t + 0.26);
+
+        sub.connect(subGain);
+        subGain.connect(audioCtx.destination);
+        sub.start(t);
+        sub.stop(t + 0.28);
+
+        // 2. Sharp cleave air-burst & debris shatter noise
+        const dur = 0.28;
+        const bufLen = Math.floor(audioCtx.sampleRate * dur);
+        const buf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) {
+          data[i] = (Math.random() * 2 - 1) * (0.4 + 0.6 * Math.random());
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buf;
+
+        const lp = audioCtx.createBiquadFilter();
+        lp.type = "bandpass";
+        lp.frequency.setValueAtTime(2800, t);
+        lp.frequency.exponentialRampToValueAtTime(220, t + dur);
+        lp.Q.value = 1.1;
+
+        const nGain = audioCtx.createGain();
+        nGain.gain.setValueAtTime(vol * 0.9, t);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        noise.connect(lp);
+        lp.connect(nGain);
+        nGain.connect(audioCtx.destination);
+        noise.start(t);
+
+        // 3. Long resonant steel impact chime ("KANGGG!!")
+        const freqs = [1920, 3040, 4820];
+        const amps = [0.22, 0.14, 0.08];
+        for (let i = 0; i < freqs.length; i++) {
+          const osc = audioCtx.createOscillator();
+          osc.type = i === 0 ? "triangle" : "sine";
+          osc.frequency.setValueAtTime(freqs[i], t);
+          osc.frequency.exponentialRampToValueAtTime(freqs[i] * 0.97, t + 0.36);
+
+          const g = audioCtx.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(vol * amps[i], t + 0.008);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+
+          osc.connect(g);
+          g.connect(audioCtx.destination);
+          osc.start(t);
+          osc.stop(t + 0.40);
+        }
+      }
+
       function playCollectSound() {
         if (!audioCtx || sfxMuted || collectSfxVolume <= 0) return;
         const osc = audioCtx.createOscillator();
@@ -906,6 +1159,9 @@
         window.playRockHitSound = playRockHitSound;
         window.playDigSound = playDigSound;
         window.playPlaceSound = playPlaceSound;
+        window.playSwordDrawSound = playSwordDrawSound;
+        window.playSwordSlashSound = playSwordSlashSound;
+        window.playSwordSlamImpactSound = playSwordSlamImpactSound;
 
         window.AudioEngine3D = {
           calculate3DSpatial: calculate3DSpatial,
@@ -917,7 +1173,10 @@
           playChopSound: playChopSound,
           playRockHitSound: playRockHitSound,
           playDigSound: playDigSound,
-          playPlaceSound: playPlaceSound
+          playPlaceSound: playPlaceSound,
+          playSwordDrawSound: playSwordDrawSound,
+          playSwordSlashSound: playSwordSlashSound,
+          playSwordSlamImpactSound: playSwordSlamImpactSound
         };
       }
 

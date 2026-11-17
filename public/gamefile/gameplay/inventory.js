@@ -264,8 +264,10 @@
         { name: "GLOW_BATTERY", icon: "🔋" },
         { name: "GLOW_BATTERY_EMPTY", icon: "🪫" },
         { name: "BRANCH", icon: "🌿" },
+        { name: "TANTO", icon: "🗡️" },
         { name: "AXE", icon: "🪓" },
         { name: "PICKAXE", icon: "⛏️" },
+        { name: "AEGIS_SHIFT", icon: "⛏️⚔️" },
         { name: "LOG", icon: "🪵" },
         { name: "BOW", icon: "🏹" },
         { name: "ARROW", icon: "🏹" },
@@ -315,6 +317,9 @@
         { name: "WHITE_SHIRT_SHORT", icon: "👔" },
         { name: "BLACK_PLEATED_SKIRT", icon: "👗" },
         { name: "BLACK_LEGGINGS", icon: "👖" },
+        { name: "DOUBLE_BREASTED_SUIT", icon: "🧥" },
+        { name: "BLACK_SLACKS", icon: "👖" },
+        { name: "OPERA_CAPE", icon: "🧛" },
       ];
 
       const icon3DCache = new Map();
@@ -560,6 +565,14 @@
           } else if (name === "WATER_BUCKET") {
             scaleFactor = 1.25;
             mockItem.hasWater = true;
+          } else if (name === "TANTO") {
+            scaleFactor = 1.25;
+            mockItem.size = 0.5;
+            mockItem.isIconPreview = true;
+          } else if (name === "AEGIS_SHIFT") {
+            scaleFactor = 1.22;
+            mockItem.size = 0.5;
+            mockItem.isIconPreview = true;
           }
 
           try {
@@ -682,6 +695,22 @@
               buildTaperedSegment([-0.20, 0.16, 0], [-0.12, 0.32, 0], 0.014, 0.014, 5, [0.45, 0.48, 0.52], rawVertices, rawColors, rawIndices);
               buildTaperedSegment([-0.12, 0.32, 0], [0.12, 0.32, 0], 0.018, 0.018, 5, [0.42, 0.28, 0.16], rawVertices, rawColors, rawIndices);
               buildTaperedSegment([0.12, 0.32, 0], [0.20, 0.16, 0], 0.014, 0.014, 5, [0.45, 0.48, 0.52], rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "TANTO") {
+            scaleFactor = 1.25;
+            if (typeof window.buildTantoModel === "function") {
+              window.buildTantoModel(1.0, [0, 0, 0], [0.37, 0.93, 0], [0.93, -0.37, 0], [0, 0, 1], rawVertices, rawColors, rawIndices);
+            } else {
+              buildTaperedSegment([0, -0.35, 0], [0, -0.05, 0], 0.03, 0.03, 5, [0.14, 0.15, 0.18], rawVertices, rawColors, rawIndices);
+              buildTaperedSegment([0, -0.05, 0], [0, 0.40, 0], 0.035, 0.005, 4, [0.22, 0.95, 0.88], rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "AEGIS_SHIFT") {
+            scaleFactor = 1.22;
+            if (typeof window.buildAegisShiftModel === "function") {
+              window.buildAegisShiftModel(1.0, [0, 0, 0], [0.34, 0.94, 0], [0.94, -0.34, 0], [0, 0, 1], rawVertices, rawColors, rawIndices, "pickaxe");
+            } else {
+              buildTaperedSegment([0, -0.4, 0], [0, 0.3, 0], 0.03, 0.03, 5, [0.16, 0.18, 0.22], rawVertices, rawColors, rawIndices);
+              buildTaperedSegment([-0.28, 0.22, 0], [0.28, 0.22, 0], 0.05, 0.01, 4, [0.20, 0.94, 0.92], rawVertices, rawColors, rawIndices);
             }
           } else if (name === "BOW") {
             scaleFactor = 1.25;
@@ -863,6 +892,18 @@
             if (typeof window.buildBlackLeggingsIconMesh === "function") {
               window.buildBlackLeggingsIconMesh(rawVertices, rawColors, rawIndices);
             }
+          } else if (name === "DOUBLE_BREASTED_SUIT") {
+            if (typeof window.buildDoubleBreastedSuitIconMesh === "function") {
+              window.buildDoubleBreastedSuitIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "BLACK_SLACKS") {
+            if (typeof window.buildBlackSlacksIconMesh === "function") {
+              window.buildBlackSlacksIconMesh(rawVertices, rawColors, rawIndices);
+            }
+          } else if (name === "OPERA_CAPE") {
+            if (typeof window.buildOperaCapeIconMesh === "function") {
+              window.buildOperaCapeIconMesh(rawVertices, rawColors, rawIndices);
+            }
           } else {
             return null; // Return null if not a 3D item
           }
@@ -910,9 +951,11 @@
             targetSize = 0.85;
           } else if (name === "WOOD_CHAIR" || name === "LANTERN" || name === "IRON_BUCKET" || name === "WATER_BUCKET") {
             targetSize = 0.82;
+          } else if (name === "TANTO" || name === "AEGIS_SHIFT") {
+            targetSize = 0.88;
           } else if (name === "IRON_BULLET") {
             targetSize = 0.68;
-          } else if (name === "WHITE_BODYSUIT_TOP" || name === "WHITE_BODYSUIT_SHORTS" || name === "TRAVELER_HOODIE" || name === "TRAVELER_BOOTS" || name === "WHITE_SHIRT_SHORT" || name === "BLACK_PLEATED_SKIRT" || name === "BLACK_LEGGINGS") {
+          } else if (name === "WHITE_BODYSUIT_TOP" || name === "WHITE_BODYSUIT_SHORTS" || name === "TRAVELER_HOODIE" || name === "TRAVELER_BOOTS" || name === "WHITE_SHIRT_SHORT" || name === "BLACK_PLEATED_SKIRT" || name === "BLACK_LEGGINGS" || name === "DOUBLE_BREASTED_SUIT" || name === "BLACK_SLACKS" || name === "OPERA_CAPE") {
             targetSize = 0.86;
           }
           
@@ -1192,7 +1235,8 @@
             // Position action slots exactly adjacent to the right edge of the inventory panel with a 16px gap
             actionSlotsWrapper.style.left = `${rect.right + 16}px`;
             actionSlotsWrapper.style.top = `${rect.top + rect.height / 2}px`;
-            actionSlotsWrapper.style.transform = "translateY(-50%)";
+            actionSlotsWrapper.style.transform = "translateY(-50%) scale(var(--ui-hud-scale, 1))";
+            actionSlotsWrapper.style.transformOrigin = "left center";
             actionSlotsWrapper.style.bottom = "auto";
             actionSlotsWrapper.style.right = "auto";
           }
@@ -1201,10 +1245,12 @@
           actionSlotsWrapper.style.left = "";
           actionSlotsWrapper.style.top = "";
           actionSlotsWrapper.style.transform = "";
+          actionSlotsWrapper.style.transformOrigin = "";
           actionSlotsWrapper.style.bottom = "";
           actionSlotsWrapper.style.right = "";
         }
       }
+      window.updateActionSlotsPosition = updateActionSlotsPosition;
 
       
       function closeInventoryActually() {
@@ -1617,9 +1663,9 @@
         const def = (typeof window !== "undefined" && window.ITEM_DEFINITIONS && window.ITEM_DEFINITIONS[raw]) ? window.ITEM_DEFINITIONS[raw] : null;
         const slotType = item.equipSlot || (def && def.equipSlot) || "";
         if (raw === "WHITE_BODYSUIT_TOP" || raw === "WHITE_SHIRT_SHORT" || slotType === "shirt") return [0];
-        if (raw === "WHITE_BODYSUIT_SHORTS" || raw === "BLACK_PLEATED_SKIRT" || slotType === "pants") return [1];
+        if (raw === "WHITE_BODYSUIT_SHORTS" || raw === "BLACK_PLEATED_SKIRT" || raw === "BLACK_SLACKS" || slotType === "pants") return [1];
         if (raw === "TRAVELER_BOOTS" || raw === "HOODIE_BOOTS" || slotType === "shoes") return [2];
-        if (raw === "TRAVELER_HOODIE" || raw === "BLACK_LEGGINGS" || slotType === "accessory") return [3, 4];
+        if (raw === "TRAVELER_HOODIE" || raw === "BLACK_LEGGINGS" || raw === "DOUBLE_BREASTED_SUIT" || raw === "OPERA_CAPE" || slotType === "accessory") return [3, 4];
         return [];
       }
       window.getValidEquipSlotsForItem = getValidEquipSlotsForItem;
@@ -1627,9 +1673,39 @@
       function getEquipSlotIndexForItem(item, preferredIndex = -1) {
         const valid = getValidEquipSlotsForItem(item);
         if (valid.length === 0) return -1;
+        const raw = String(item.name || item.label || "").toUpperCase();
+        // Mutual exclusion & smart pairing in accessory slots 3 & 4:
+        // - DOUBLE_BREASTED_SUIT and OPERA_CAPE CAN be worn together (one in slot 3, one in slot 4).
+        // - Neither DOUBLE_BREASTED_SUIT nor OPERA_CAPE can be worn simultaneously with TRAVELER_HOODIE.
+        if (raw === "DOUBLE_BREASTED_SUIT" || raw === "OPERA_CAPE" || raw === "TRAVELER_HOODIE" || raw === "HOODIE_CLOAK") {
+          const isHoodie = (raw === "TRAVELER_HOODIE" || raw === "HOODIE_CLOAK");
+          for (let i = 0; i < valid.length; i++) {
+            const sIdx = valid[i];
+            const cur = equipSlotsItems[sIdx];
+            if (!cur) continue;
+            const curName = String(cur.name || cur.label || "").toUpperCase();
+            if (!isHoodie && (curName === "TRAVELER_HOODIE" || curName === "HOODIE_CLOAK")) {
+              return sIdx;
+            }
+            if (isHoodie && (curName === "DOUBLE_BREASTED_SUIT" || curName === "OPERA_CAPE")) {
+              return sIdx;
+            }
+          }
+        }
         if (typeof preferredIndex === "number" && valid.includes(preferredIndex)) return preferredIndex;
         for (let i = 0; i < valid.length; i++) {
           if (!equipSlotsItems[valid[i]]) return valid[i];
+        }
+        // If both slots 3 & 4 are occupied and equipping OPERA_CAPE while DOUBLE_BREASTED_SUIT is equipped (or vice versa),
+        // pick the OTHER slot so DOUBLE_BREASTED_SUIT and OPERA_CAPE stay equipped together!
+        if (raw === "OPERA_CAPE" || raw === "DOUBLE_BREASTED_SUIT") {
+          const partnerName = raw === "OPERA_CAPE" ? "DOUBLE_BREASTED_SUIT" : "OPERA_CAPE";
+          for (let i = 0; i < valid.length; i++) {
+            const sIdx = valid[i];
+            const cur = equipSlotsItems[sIdx];
+            const curName = cur ? String(cur.name || cur.label || "").toUpperCase() : "";
+            if (curName !== partnerName) return sIdx;
+          }
         }
         return valid[0];
       }
@@ -2226,92 +2302,169 @@
         }
       }
 
-      function checkNpcMeleeHit(dmg = 1) {
-        const sinTheta = Math.sin(charTheta);
-        const cosTheta = Math.cos(charTheta);
-        const sinPhi = Math.sin(charPhi);
-        const cosPhi = Math.cos(charPhi);
+      window.getMeleeEntityRadius = function(entity) {
+        if (!entity) return 0.3;
+        if (typeof entity.radius === "number") return entity.radius;
+        if (entity.type === "meganeura") return 0.28;
+        if (entity.type === "isopod") return 0.35;
+        if (entity.type === "placoderm") return 0.65;
+        if (typeof entity.theta === "number" && !entity.type) {
+          const pScaleVal = (typeof playerScale === "number") ? playerScale : 0.1;
+          return 0.25 * (pScaleVal / 0.1);
+        }
+        return 0.3;
+      };
 
-        const nx = sinTheta * cosPhi;
-        const ny = cosTheta;
-        const nz = sinTheta * sinPhi;
-        
-        const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : (typeof globalSeed !== "undefined" ? globalSeed : 0);
-        const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
-        const terrainRadius = RADIUS + height * HEIGHT_SCALE;
-        const charPos = [terrainRadius * nx, terrainRadius * ny, terrainRadius * nz];
-        
-        const East = [-sinPhi, 0, cosPhi];
-        const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
-        const cosH = Math.cos(charHeading);
-        const sinH = Math.sin(charHeading);
-        const F = [
-          North[0] * cosH + East[0] * sinH,
-          North[1] * cosH + East[1] * sinH,
-          North[2] * cosH + East[2] * sinH,
-        ];
+      window.getUnifiedMeleeReach = function() {
+        return (typeof meleeLockDistance === "number" && meleeLockDistance > 0.05)
+          ? meleeLockDistance
+          : ((typeof actionReachDistance === "number" && actionReachDistance > 0.05) ? actionReachDistance : 0.25);
+      };
+
+      function checkNpcMeleeHit(dmg = 1, customWeaponLabel = null, options = null) {
+        const actor = (options && options.actor && typeof window !== "undefined" && window.ActorCore)
+          ? window.ActorCore.resolveActor(options.actor)
+          : ((typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getPlayerActor() : null);
+        const isActorPlayer = !actor || actor.isPlayer !== false;
+        const hitSet = (options && options.hitSet) ? options.hitSet : null;
+        const isOmni = !!(options && options.omni);
+        const coneCos = (options && typeof options.coneCos === "number") ? options.coneCos : null;
+        const maxVert = (options && typeof options.maxVert === "number") ? options.maxVert : null;
+        const lockedTarget = (options && options.lockedTarget) ? options.lockedTarget : ((options && options.targetEntity) ? options.targetEntity : null);
+        const isShirasayaHit = !!(customWeaponLabel && (customWeaponLabel.indexOf("ชิราซายะ") !== -1 || customWeaponLabel.indexOf("Aegis-Shift") !== -1));
+        const baseReachDist = (typeof actionReachDistance === "number" ? actionReachDistance : 1.0);
+        const reachDist = (options && typeof options.reachOverride === "number")
+          ? options.reachOverride
+          : (!isActorPlayer ? Math.max(baseReachDist, 0.75) : baseReachDist);
+
+        const basis = (actor && typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actor) : null;
+        let nx, ny, nz, F, charPos, pScale, gSeed;
+        if (basis) {
+          nx = basis.normal[0]; ny = basis.normal[1]; nz = basis.normal[2];
+          F = basis.F;
+          charPos = basis.centerPos;
+          pScale = basis.pScale;
+          gSeed = basis.seed;
+        } else {
+          const sinTheta = Math.sin(charTheta);
+          const cosTheta = Math.cos(charTheta);
+          const sinPhi = Math.sin(charPhi);
+          const cosPhi = Math.cos(charPhi);
+
+          nx = sinTheta * cosPhi;
+          ny = cosTheta;
+          nz = sinTheta * sinPhi;
+
+          gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : (typeof globalSeed !== "undefined" ? globalSeed : 0);
+          const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
+          pScale = (typeof playerScale === "number") ? playerScale : 0.1;
+          const terrainRadius = RADIUS + height * HEIGHT_SCALE;
+          const actualPlayerRadius = (typeof playerCenterRadius === "number" && playerCenterRadius !== null)
+            ? playerCenterRadius
+            : (terrainRadius + 0.46 * pScale);
+          charPos = [actualPlayerRadius * nx, actualPlayerRadius * ny, actualPlayerRadius * nz];
+
+          const East = [-sinPhi, 0, cosPhi];
+          const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+          const cosH = Math.cos(charHeading);
+          const sinH = Math.sin(charHeading);
+          F = [
+            North[0] * cosH + East[0] * sinH,
+            North[1] * cosH + East[1] * sinH,
+            North[2] * cosH + East[2] * sinH,
+          ];
+        }
 
         const hitCenter = [charPos[0], charPos[1], charPos[2]];
         let hitTarget = null;
         let minScore = Infinity;
 
-        // 1. Check amphibians (NPCs: Meganeura, Isopod, Placoderm, etc.) using exact axe/pickaxe reach calculation
+        const evalTargetHit = (nPos, physicalRadius, entityRef) => {
+          const dx = nPos[0] - hitCenter[0];
+          const dy = nPos[1] - hitCenter[1];
+          const dz = nPos[2] - hitCenter[2];
+
+          const h = dx * nx + dy * ny + dz * nz;
+          const t = dx * F[0] + dy * F[1] + dz * F[2];
+
+          const rx = dx - t * F[0];
+          const ry = dy - t * F[1];
+          const rz = dz - t * F[2];
+          const distToRaySq = rx * rx + ry * ry + rz * rz;
+          const dist3DSq = dx * dx + dy * dy + dz * dz;
+          const horizDistSq = Math.max(0, dist3DSq - h * h);
+
+          if (isOmni) {
+            // Short 360° AOE (Spinning Cyclone Skill 3 ONLY)
+            const maxR = reachDist + physicalRadius;
+            const vertLimit = (maxVert !== null ? maxVert : 0.72) + physicalRadius;
+            if (horizDistSq <= maxR * maxR && Math.abs(h) <= vertLimit) {
+              return { hit: true, score: dist3DSq };
+            }
+            return { hit: false, score: Infinity };
+          }
+
+          if (coneCos !== null) {
+            // Directional forward slash arc (Steps 1, 2, 4 — does NOT hit behind or 360°!)
+            const maxR = reachDist + physicalRadius;
+            const vertLimit = (maxVert !== null ? maxVert : 0.65) + physicalRadius;
+            if (dist3DSq > maxR * maxR || Math.abs(h) > vertLimit) {
+              return { hit: false, score: Infinity };
+            }
+            const horizLen = Math.sqrt(horizDistSq);
+            const isCloseInFront = (horizLen <= (0.26 + physicalRadius) && t >= -0.02);
+            const cosAngle = horizLen > 1e-4 ? (t / horizLen) : 1.0;
+            const effectiveCone = (lockedTarget && entityRef === lockedTarget) ? Math.min(coneCos, 0.15) : coneCos;
+            if (isCloseInFront || (t >= 0.0 && cosAngle >= effectiveCone)) {
+              const lockBonus = (lockedTarget && entityRef === lockedTarget) ? -0.35 : 0.0;
+              return { hit: true, score: dist3DSq + lockBonus };
+            }
+            return { hit: false, score: Infinity };
+          }
+
+          if (actionReachMode === 1 && isActorPlayer) {
+            const hitRadiusSq = physicalRadius * physicalRadius;
+            if (distToRaySq <= hitRadiusSq) {
+              const distanceToSurface = Math.max(0, t - physicalRadius);
+              if (t > 0.0 && distanceToSurface <= reachDist && h >= -15.0 && h <= 15.0) {
+                return { hit: true, score: distToRaySq * 2.0 + t };
+              }
+            }
+          } else {
+            const reachInfo = (typeof isTargetWithinReach === "function") ? isTargetWithinReach(nPos, reachDist + physicalRadius, basis || actor) : null;
+            if (reachInfo && reachInfo.valid) {
+              return { hit: true, score: reachInfo.perpSq };
+            }
+          }
+          return { hit: false, score: Infinity };
+        };
+
+        // 1. Check amphibians (NPCs: Meganeura, Isopod, Placoderm, etc.)
         if (typeof amphibians !== "undefined" && Array.isArray(amphibians)) {
           for (let npc of amphibians) {
             if (npc.ragdollEnabled || (npc.hp !== undefined && npc.hp <= 0)) continue;
-            let nPos = npc.position || [0, 0, 0];
+            if (hitSet && hitSet.has(npc)) continue;
+            let nPos = (typeof window !== "undefined" && typeof window.getNPCTargetPoint === "function")
+              ? (window.getNPCTargetPoint(npc) || npc.position || [0, 0, 0])
+              : (npc.position || [0, 0, 0]);
             if (npc.ragdollPos && npc.ragdollInitialized) {
               nPos = npc.ragdollPos;
             }
 
-            const dx = nPos[0] - hitCenter[0];
-            const dy = nPos[1] - hitCenter[1];
-            const dz = nPos[2] - hitCenter[2];
-
-            const h = dx * nx + dy * ny + dz * nz;
-            const t = dx * F[0] + dy * F[1] + dz * F[2];
-
-            const rx = dx - t * F[0];
-            const ry = dy - t * F[1];
-            const rz = dz - t * F[2];
-            const distToRaySq = rx * rx + ry * ry + rz * rz;
-
-            const physicalRadius = (typeof npc.radius === "number" ? npc.radius : (npc.type === "meganeura" ? 0.25 : (npc.type === "isopod" ? 0.35 : (npc.type === "placoderm" ? 0.65 : 0.3))));
-            const hitRadius = physicalRadius;
-            const hitRadiusSq = hitRadius * hitRadius;
-
-            let isHit = false;
-            let score = Infinity;
-
-            if (actionReachMode === 1) {
-              // Line Mode
-              if (distToRaySq <= hitRadiusSq) {
-                const distanceToSurface = Math.max(0, t - physicalRadius);
-                if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
-                  isHit = true;
-                  score = distToRaySq * 2.0 + t;
-                }
-              }
-            } else {
-              // Circle or Capsule Mode (matches checkMeleeHit with actionReachDistance + physicalRadius)
-              const reachInfo = (typeof isTargetWithinReach === "function") ? isTargetWithinReach(nPos, actionReachDistance + physicalRadius) : null;
-              if (reachInfo && reachInfo.valid) {
-                isHit = true;
-                score = reachInfo.perpSq;
-              }
-            }
-
-            if (isHit && score < minScore) {
-              minScore = score;
+            const physicalRadius = window.getMeleeEntityRadius(npc);
+            const res = evalTargetHit(nPos, physicalRadius, npc);
+            if (res.hit && res.score < minScore) {
+              minScore = res.score;
               hitTarget = { type: "amphibian", entity: npc };
             }
           }
         }
 
-        // 2. Check Player Clones using exact reach calculation
+        // 2. Check Player Clones (only hit other actors, never self)
         if (!hitTarget && typeof window !== "undefined" && Array.isArray(window.playerClonesState)) {
           for (let clone of window.playerClonesState) {
-            if (!clone || (clone.hp !== undefined && clone.hp <= 0)) continue;
+            if (!clone || (actor && actor.isClone && clone === actor.state) || (clone.hp !== undefined && clone.hp <= 0)) continue;
+            if (hitSet && hitSet.has(clone)) continue;
             let cPos = clone.position;
             if (!cPos && typeof clone.theta === "number" && typeof clone.phi === "number") {
               const cSinT = Math.sin(clone.theta);
@@ -2323,43 +2476,10 @@
             }
             if (!cPos) continue;
 
-            const dx = cPos[0] - hitCenter[0];
-            const dy = cPos[1] - hitCenter[1];
-            const dz = cPos[2] - hitCenter[2];
-
-            const h = dx * nx + dy * ny + dz * nz;
-            const t = dx * F[0] + dy * F[1] + dz * F[2];
-
-            const rx = dx - t * F[0];
-            const ry = dy - t * F[1];
-            const rz = dz - t * F[2];
-            const distToRaySq = rx * rx + ry * ry + rz * rz;
-
-            const physicalRadius = 0.25 * ((typeof playerScale === "number" ? playerScale : 0.1) / 0.1);
-            const hitRadius = physicalRadius;
-            const hitRadiusSq = hitRadius * hitRadius;
-
-            let isHit = false;
-            let score = Infinity;
-
-            if (actionReachMode === 1) {
-              if (distToRaySq <= hitRadiusSq) {
-                const distanceToSurface = Math.max(0, t - physicalRadius);
-                if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
-                  isHit = true;
-                  score = distToRaySq * 2.0 + t;
-                }
-              }
-            } else {
-              const reachInfo = (typeof isTargetWithinReach === "function") ? isTargetWithinReach(cPos, actionReachDistance + physicalRadius) : null;
-              if (reachInfo && reachInfo.valid) {
-                isHit = true;
-                score = reachInfo.perpSq;
-              }
-            }
-
-            if (isHit && score < minScore) {
-              minScore = score;
+            const physicalRadius = 0.25 * (pScale / 0.1);
+            const res = evalTargetHit(cPos, physicalRadius, clone);
+            if (res.hit && res.score < minScore) {
+              minScore = res.score;
               hitTarget = { type: "clone", entity: clone };
             }
           }
@@ -2378,12 +2498,18 @@
             for (let i = 0; i < npc.maxHp; i++) {
               hpHearts += i < npc.hp ? "🔴" : "⚪";
             }
-            if (typeof showNotice === "function") {
-              showNotice(`🌿💥 ฟาดด้วยกิ่งไม้! ทำดาเมจ ${dmg} จุด (Hit target! -${dmg} DMG) ${hpHearts}`);
+            if (isActorPlayer && typeof showNotice === "function") {
+              const hitMsg = customWeaponLabel
+                ? `${customWeaponLabel} ทำดาเมจ ${dmg} จุด (Hit target! -${dmg} DMG) ${hpHearts}`
+                : `🌿💥 ฟาดด้วยกิ่งไม้! ทำดาเมจ ${dmg} จุด (Hit target! -${dmg} DMG) ${hpHearts}`;
+              showNotice(hitMsg);
             }
             if (npc.hp <= 0) {
               npc.ragdollEnabled = true;
-              if (typeof showNotice === "function") {
+              if (!isActorPlayer && typeof window.grantNpcKillLootToActor === "function") {
+                window.grantNpcKillLootToActor(actor, npc);
+              }
+              if (isActorPlayer && typeof showNotice === "function") {
                 showNotice("💀 กำจัดเป้าหมายสำเร็จ! (Target eliminated!)");
               }
             } else {
@@ -2408,12 +2534,23 @@
             }
             clone.emoji = "😵";
             clone.emojiTimer = 3.0;
-            if (typeof showNotice === "function") {
-              showNotice(`🌿💥 ฟาดโคลนด้วยกิ่งไม้! ทำดาเมจ ${dmg} จุด (Hit clone! -${dmg} DMG) ${hpHearts}`);
+            if (isActorPlayer && typeof showNotice === "function") {
+              const cloneMsg = customWeaponLabel
+                ? `${customWeaponLabel} (โคลน) ทำดาเมจ ${dmg} จุด (Hit clone! -${dmg} DMG) ${hpHearts}`
+                : `🌿💥 ฟาดโคลนด้วยกิ่งไม้! ทำดาเมจ ${dmg} จุด (Hit clone! -${dmg} DMG) ${hpHearts}`;
+              showNotice(cloneMsg);
             }
           }
 
-          if (typeof playSplashSound === "function") {
+          if (hitSet && hitTarget.entity) {
+            hitSet.add(hitTarget.entity);
+          }
+
+          if (isShirasayaHit) {
+            if (typeof playSwordSlashSound === "function") {
+              if (typeof playChopSound === "function") playChopSound();
+            }
+          } else if (typeof playSplashSound === "function") {
             playSplashSound(0.8);
           } else if (typeof playChopSound === "function") {
             playChopSound();
@@ -2424,58 +2561,129 @@
       }
       window.checkNpcMeleeHit = checkNpcMeleeHit;
 
-      // Shared Tool Target Validation rule (Used by both player checkMeleeHit and PlayerClones)
+      // Shared Tool Target Validation rule (Data-driven via ITEM_DEFINITIONS + backward-compatible fallback)
       window.checkToolTargetValid = function(toolType, targetType) {
         if (!toolType || !targetType) return false;
         const normTool = String(toolType).toUpperCase();
-        if (normTool === "AXE") {
+        if (normTool === "HAND") return true;
+        const def = (typeof getItemDefinition === "function") ? getItemDefinition(normTool) : (window.getItemDefinition ? window.getItemDefinition(normTool) : null);
+        if (def && Array.isArray(def.targetTypes)) {
+          return def.targetTypes.includes(targetType);
+        }
+        if (normTool === "AXE" || normTool === "TANTO") {
           return targetType === "tree";
         }
         if (normTool === "PICKAXE") {
           return targetType === "rock" || targetType === "iron_ore" || targetType === "gold_ore" || targetType === "glow_ore";
         }
-        if (normTool === "HAND") {
-          return true;
+        if (normTool === "AEGIS_SHIFT") {
+          return targetType === "tree" || targetType === "rock" || targetType === "iron_ore" || targetType === "gold_ore" || targetType === "glow_ore";
         }
         return false;
       };
 
-      // Shared Food Healing Rules
+      // Shared Food Healing Rules (Data-driven via ITEM_DEFINITIONS + fallback)
       window.getFoodItemHealAmount = function(itemName) {
         if (!itemName) return 0;
+        const def = (typeof getItemDefinition === "function") ? getItemDefinition(itemName) : (window.getItemDefinition ? window.getItemDefinition(itemName) : null);
+        if (def && def.actionType === "CONSUMABLE_FOOD" && typeof def.healHP === "number") {
+          return def.healHP;
+        }
         const norm = String(itemName).toUpperCase();
-        if (norm === "FRIED_BUG") return 5;
-        if (norm === "DRAGON_FRUIT" || norm === "DRAGONFRUIT") return 4;
+        if (norm === "FRIED_BUG") return 2;
+        if (norm === "DRAGON_FRUIT" || norm === "DRAGONFRUIT") return 1;
         if (norm === "BREAD") return 10;
         if (norm === "MEAT" || norm === "COOKED_MEAT") return 15;
         if (norm === "APPLE") return 4;
         return 0;
       };
 
-      function checkMeleeHit(toolType) {
-    const sinTheta = Math.sin(charTheta);
-    const cosTheta = Math.cos(charTheta);
-    const sinPhi = Math.sin(charPhi);
-    const cosPhi = Math.cos(charPhi);
+  function getObstacleHarvestDrops(hitType, toolType) {
+    const isAegisHit = (toolType === "AEGIS_SHIFT");
+    const isEffectiveAxe = (toolType === "AXE" || (isAegisHit && hitType === "tree"));
+    const isEffectivePick = (toolType === "PICKAXE" || (isAegisHit && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore")));
+    const drops = [];
 
-    const nx = sinTheta * cosPhi;
-    const ny = cosTheta;
-    const nz = sinTheta * sinPhi;
-    
-    const height = getHeightOnSphere(charTheta, charPhi, globalSeed);
-    const terrainRadius = RADIUS + height * HEIGHT_SCALE;
-    
-    const charPos = [terrainRadius * nx, terrainRadius * ny, terrainRadius * nz];
-    
-    const East = [-sinPhi, 0, cosPhi];
-    const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
-    const cosH = Math.cos(charHeading);
-    const sinH = Math.sin(charHeading);
-    const F = [
-      North[0] * cosH + East[0] * sinH,
-      North[1] * cosH + East[1] * sinH,
-      North[2] * cosH + East[2] * sinH,
-    ];
+    if (isEffectiveAxe && hitType === "tree") {
+      const numLogs = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < numLogs; i++) {
+        drops.push({ type: "log", itemName: "LOG", icon: "🪵", color: [0.5, 0.3, 0.15], size: 0.075 + Math.random() * 0.025, isHand: false });
+      }
+      const numBranches = 1 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < numBranches; i++) {
+        drops.push({ type: "branch", itemName: "BRANCH", icon: "🌿", color: [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], size: 0.015 + Math.random() * 0.02, isHand: false });
+      }
+    } else if (isEffectivePick && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore")) {
+      if (hitType === "iron_ore") {
+        const numBig = 3 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numBig; i++) drops.push({ type: "iron_ore", itemName: "IRON_ORE", icon: "🟥", color: [0.45, 0.22, 0.18], size: 0.045 + Math.random() * 0.02, isHand: false });
+        const numSmall = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numSmall; i++) drops.push({ type: "rock", itemName: "ROCK", icon: "🪨", color: [0.4, 0.4, 0.4], size: 0.02 + Math.random() * 0.02, isHand: false });
+      } else if (hitType === "gold_ore") {
+        const numBig = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numBig; i++) drops.push({ type: "gold_ore", itemName: "GOLD_ORE", icon: "🪙", color: [0.85, 0.68, 0.12], size: 0.045 + Math.random() * 0.02, isHand: false });
+        drops.push({ type: "rock", itemName: "ROCK", icon: "🪨", color: [0.4, 0.4, 0.4], size: 0.02 + Math.random() * 0.02, isHand: false });
+      } else if (hitType === "glow_ore") {
+        const numBig = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numBig; i++) drops.push({ type: "glow_ore", itemName: "GLOW_ORE", icon: "✨", color: [0.22, 0.95, 0.88], size: 0.045 + Math.random() * 0.02, isHand: false });
+        const numSmall = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numSmall; i++) drops.push({ type: "rock", itemName: "ROCK", icon: "🪨", color: [0.4, 0.4, 0.4], size: 0.02 + Math.random() * 0.02, isHand: false });
+      } else {
+        const numBig = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numBig; i++) drops.push({ type: "big_rock", itemName: "BIG_ROCK", icon: "🪨", color: [0.5, 0.5, 0.5], size: 0.05 + Math.random() * 0.03, isHand: false });
+        const numSmall = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numSmall; i++) drops.push({ type: "rock", itemName: "ROCK", icon: "🪨", color: [0.4, 0.4, 0.4], size: 0.02 + Math.random() * 0.02, isHand: false });
+      }
+    } else if (toolType === "HAND") {
+      const dropType = hitType === "tree" ? "branch" : "rock";
+      const numDrops = 1 + Math.floor(Math.random() * 2);
+      const dropColor = dropType === "rock" ? [0.5, 0.5, 0.5] : [0.5, 0.3, 0.15];
+      for (let i = 0; i < numDrops; i++) {
+        drops.push({ type: dropType, itemName: dropType.toUpperCase(), icon: dropType === "rock" ? "🪨" : "🌿", color: dropColor, size: 0.015 + Math.random() * 0.02, isHand: true });
+      }
+    }
+    return drops;
+  }
+  window.getObstacleHarvestDrops = getObstacleHarvestDrops;
+
+  function checkMeleeHit(toolType, options = null) {
+    const actor = (options && options.actor && typeof window !== "undefined" && window.ActorCore)
+      ? window.ActorCore.resolveActor(options.actor)
+      : ((typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getPlayerActor() : null);
+    const isActorPlayer = !actor || actor.isPlayer !== false;
+    const directCollect = !!(options && options.directCollect);
+    const preferredTarget = (options && options.targetObstacle) ? options.targetObstacle : null;
+
+    const basis = (actor && typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actor) : null;
+    let charPos, F;
+    if (basis) {
+      charPos = basis.terrainPos;
+      F = basis.F;
+    } else {
+      const sinTheta = Math.sin(charTheta);
+      const cosTheta = Math.cos(charTheta);
+      const sinPhi = Math.sin(charPhi);
+      const cosPhi = Math.cos(charPhi);
+
+      const nx = sinTheta * cosPhi;
+      const ny = cosTheta;
+      const nz = sinTheta * sinPhi;
+      
+      const height = getHeightOnSphere(charTheta, charPhi, globalSeed);
+      const terrainRadius = RADIUS + height * HEIGHT_SCALE;
+      
+      charPos = [terrainRadius * nx, terrainRadius * ny, terrainRadius * nz];
+      
+      const East = [-sinPhi, 0, cosPhi];
+      const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+      const cosH = Math.cos(charHeading);
+      const sinH = Math.sin(charHeading);
+      F = [
+        North[0] * cosH + East[0] * sinH,
+        North[1] * cosH + East[1] * sinH,
+        North[2] * cosH + East[2] * sinH,
+      ];
+    }
     
     const hitCenter = [charPos[0], charPos[1], charPos[2]];
     
@@ -2485,69 +2693,66 @@
     
     for (let i = 0; i < natureObstacles.length; i++) {
        const obs = natureObstacles[i];
-       if (obs.type === "tree" || obs.type === "rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore") {
-          if (toolType === "AXE" && obs.type !== "tree") continue;
-          if (toolType === "PICKAXE" && obs.type === "tree") continue;
+        if (obs.type === "tree" || obs.type === "rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore") {
+          if (typeof window.checkToolTargetValid === "function") {
+            if (!window.checkToolTargetValid(toolType, obs.type)) continue;
+          } else {
+            if ((toolType === "AXE" || toolType === "TANTO") && obs.type !== "tree") continue;
+            if (toolType === "PICKAXE" && obs.type === "tree") continue;
+          }
           
           const dx = obs.position[0] - hitCenter[0];
           const dy = obs.position[1] - hitCenter[1];
           const dz = obs.position[2] - hitCenter[2];
           
           const h = dx * obs.normal[0] + dy * obs.normal[1] + dz * obs.normal[2];
-          const perpX = dx - h * obs.normal[0];
-          const perpY = dy - h * obs.normal[1];
-          const perpZ = dz - h * obs.normal[2];
-          
           const t = dx * F[0] + dy * F[1] + dz * F[2];
           
-          // Calculate perpendicular distance from object center to the ray
           const rx = dx - t * F[0];
           const ry = dy - t * F[1];
           const rz = dz - t * F[2];
           const distToRaySq = rx * rx + ry * ry + rz * rz;
           
-          // Use exact object radius for hit detection (use physical trunk radius for trees to match action reach)
           const physicalRadius = obs.type === "tree" ? (obs.radius / 5.0) : obs.radius;
-          const hitRadius = obs.radius; // still allow aiming at the full tree/rock volume
+          const hitRadius = obs.radius;
           const hitRadiusSq = hitRadius * hitRadius;
           
           let isHit = false;
           let score = Infinity;
           
-          if (actionReachMode === 1) {
+          if (actionReachMode === 1 && isActorPlayer) {
               if (distToRaySq <= hitRadiusSq) {
                   const distanceToSurface = Math.max(0, t - physicalRadius);
-                  // Only hit if the object is in front of the character within the action reach distance
                   if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
                       isHit = true;
                       score = distToRaySq * 2.0 + t;
                   }
               }
           } else {
-              // Circle or Capsule Mode
-              // The reach of the player to hit the obstacle includes the physical radius of the tree/rock
-              const reachInfo = isTargetWithinReach(obs.position, actionReachDistance + physicalRadius);
+              const minCloneReach = (options && typeof options.reachOverride === "number") ? options.reachOverride : 0.75;
+              const effectiveReach = (!isActorPlayer && preferredTarget && obs === preferredTarget)
+                ? Math.max(actionReachDistance, minCloneReach)
+                : actionReachDistance;
+              const reachInfo = isTargetWithinReach(obs.position, effectiveReach + physicalRadius, basis || actor);
               if (reachInfo.valid) {
                   isHit = true;
-                  score = reachInfo.perpSq;
+                  score = reachInfo.perpSq + ((preferredTarget && obs === preferredTarget) ? -1.0 : 0.0);
               }
           }
           
-          if (isHit) {
-              if (score < minScore) {
-                  minScore = score;
-                  bestIndex = i;
-                  bestType = obs.type;
-              }
+          if (isHit && score < minScore) {
+              minScore = score;
+              bestIndex = i;
+              bestType = obs.type;
           }
        }
     }
     
-    // Check mature trees in wood planter boxes (axe chopping and hand punching reuse map tree mechanics)
+    // Check mature trees in wood planter boxes (player & clones share tree chopping mechanics)
     let bestPlanterTree = null;
     let minPlanterScore = Infinity;
 
-    if (toolType === "AXE" || toolType === "HAND") {
+    if (toolType === "AXE" || toolType === "HAND" || toolType === "TANTO" || toolType === "AEGIS_SHIFT") {
        const plantCandidates = (typeof collectibles !== "undefined" && collectibles) ? collectibles : [];
        for (let i = 0; i < plantCandidates.length; i++) {
           const c = plantCandidates[i];
@@ -2582,7 +2787,7 @@
           let isHit = false;
           let score = Infinity;
 
-          if (actionReachMode === 1) {
+          if (actionReachMode === 1 && isActorPlayer) {
              if (distToRaySq <= hitRadiusSq) {
                 const distanceToSurface = Math.max(0, t - physicalRadius);
                 if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
@@ -2592,7 +2797,7 @@
              }
           } else {
              const reachInfo = (typeof isTargetWithinReach === "function")
-                ? isTargetWithinReach(treePos, actionReachDistance + physicalRadius)
+                ? isTargetWithinReach(treePos, actionReachDistance + physicalRadius, basis || actor)
                 : { valid: Math.hypot(dx, dy, dz) <= (actionReachDistance + physicalRadius), perpSq: dx*dx + dy*dy + dz*dz };
              if (reachInfo.valid) {
                 isHit = true;
@@ -2608,9 +2813,12 @@
     }
 
     if (bestPlanterTree && minPlanterScore < minScore) {
+       if (isActorPlayer && toolType === "AEGIS_SHIFT" && typeof window !== "undefined" && window.aegisShiftState) {
+         window.aegisShiftState.toolMode = "axe";
+       }
        const pData = bestPlanterTree.plantData;
        if (!pData.watered || !pData.plantTime) {
-          if (typeof showNotice === "function") {
+          if (isActorPlayer && typeof showNotice === "function") {
              showNotice(`💧 ต้นอ่อนยังไม่ได้รดน้ำ! กรุณาใช้ถังใส่น้ำ (Water Bucket) มารดน้ำเพื่อเริ่มเติบโต`);
           }
           return true;
@@ -2620,7 +2828,7 @@
 
        if (!isMature) {
           if (typeof playChopSound === "function") playChopSound(bestPlanterTree.position);
-          if (typeof showNotice === "function") {
+          if (isActorPlayer && typeof showNotice === "function") {
              const rem = Math.ceil((pData.growthDuration || 300) - elapsed);
              const m = Math.floor(rem / 60);
              const s = rem % 60;
@@ -2631,8 +2839,8 @@
 
        if (typeof playChopSound === "function") playChopSound(bestPlanterTree.position);
 
-       if (toolType === "HAND") {
-          pData.handHits = (pData.handHits || 0) + 1;
+       if (toolType === "HAND" || toolType === "TANTO") {
+          pData.handHits = (pData.handHits || 0) + (toolType === "TANTO" ? 2 : 1);
           if (pData.handHits >= 4) {
              pData.handHits = 0;
              const tNormal = bestPlanterTree.normal || [0, 1, 0];
@@ -2652,7 +2860,11 @@
              ];
              const numDrops = 1 + Math.floor(Math.random() * 2);
              for (let i = 0; i < numDrops; i++) {
-                spawnDrop(bestPlanterTree.position, "branch", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.015 + Math.random() * 0.02, true);
+                if (directCollect && actor) {
+                  actor.addItem({ name: "BRANCH", icon: "🌿", count: 1 }, false, false);
+                } else {
+                  spawnDrop(bestPlanterTree.position, "branch", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.015 + Math.random() * 0.02, true);
+                }
              }
           }
           return true;
@@ -2679,18 +2891,21 @@
 
           const numLogs = 2 + Math.floor(Math.random() * 2);
           for (let i = 0; i < numLogs; i++) {
-             spawnDrop(bestPlanterTree.position, "log", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.075 + Math.random() * 0.025);
+             if (directCollect && actor) actor.addItem({ name: "LOG", icon: "🪵", count: 1 }, false, false);
+             else spawnDrop(bestPlanterTree.position, "log", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.075 + Math.random() * 0.025);
           }
           const numBranches = 1 + Math.floor(Math.random() * 2);
           for (let i = 0; i < numBranches; i++) {
-             spawnDrop(bestPlanterTree.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
+             if (directCollect && actor) actor.addItem({ name: "BRANCH", icon: "🌿", count: 1 }, false, false);
+             else spawnDrop(bestPlanterTree.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
           }
 
           const sType = String(pData.seedType || "").toUpperCase();
           if (sType.includes("DRAGON")) {
              const numFruits = 2 + Math.floor(Math.random() * 2);
              for (let i = 0; i < numFruits; i++) {
-                spawnDrop(bestPlanterTree.position, "dragon_fruit", tNormal, tTangent, tBitangent, [0.95, 0.2, 0.4], 0.035 + Math.random() * 0.015);
+                if (directCollect && actor) actor.addItem({ name: "DRAGON_FRUIT", icon: "🐉", count: 1 }, false, false);
+                else spawnDrop(bestPlanterTree.position, "dragon_fruit", tNormal, tTangent, tBitangent, [0.95, 0.2, 0.4], 0.035 + Math.random() * 0.015);
              }
           }
 
@@ -2711,21 +2926,55 @@
        const obs = natureObstacles[bestIndex];
        const hitType = bestType;
        const hitIndex = bestIndex;
+       const isAegisHit = (toolType === "AEGIS_SHIFT");
+       const isEffectiveAxe = (toolType === "AXE" || (isAegisHit && hitType === "tree"));
+       const isEffectivePick = (toolType === "PICKAXE" || (isAegisHit && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore")));
+       if (isActorPlayer && isAegisHit && typeof window !== "undefined" && window.aegisShiftState) {
+         window.aegisShiftState.toolMode = (hitType === "tree") ? "axe" : "pickaxe";
+       }
        
        if (hitType === "tree" && obs.isWhiteRedTree) {
          if (typeof window.detachTreeAttachedFruits === "function") {
            window.detachTreeAttachedFruits(obs);
          }
        }
-        if (toolType !== "HAND") { obs.hits = (obs.hits || 0) + 1; } else { obs.handHits = (obs.handHits || 0) + 1; }
+       if (toolType !== "HAND" && toolType !== "TANTO") { obs.hits = (obs.hits || 0) + 1; } else { obs.handHits = (obs.handHits || 0) + (toolType === "TANTO" ? 2 : 1); }
        const requiredHits = 3;
        
-       if (toolType === "AXE" && hitType === "tree" && typeof playChopSound === "function") playChopSound(obs.position);
-       else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore") && typeof playRockHitSound === "function") playRockHitSound(obs.position);
-       else if (toolType === "HAND") { if (hitType === "tree" && typeof playChopSound === "function") playChopSound(obs.position); else if (hitType === "rock" && typeof playRockHitSound === "function") playRockHitSound(obs.position); if (obs.handHits >= 4) { obs.handHits = 0; const tNormal = obs.normal || [0, 1, 0]; let tTangent = [1, 0, 0]; if (Math.abs(tNormal[0]) > 0.9) tTangent = [0, 1, 0]; let tBitangent = [ tNormal[1] * tTangent[2] - tNormal[2] * tTangent[1], tNormal[2] * tTangent[0] - tNormal[0] * tTangent[2], tNormal[0] * tTangent[1] - tNormal[1] * tTangent[0] ]; const tBLen = Math.sqrt(tBitangent[0]*tBitangent[0] + tBitangent[1]*tBitangent[1] + tBitangent[2]*tBitangent[2]); tBitangent = [tBitangent[0]/tBLen, tBitangent[1]/tBLen, tBitangent[2]/tBLen]; tTangent = [ tBitangent[1] * tNormal[2] - tBitangent[2] * tNormal[1], tBitangent[2] * tNormal[0] - tBitangent[0] * tNormal[2], tBitangent[0] * tNormal[1] - tBitangent[1] * tNormal[0] ]; const dropType = hitType === "tree" ? "branch" : "rock"; const numDrops = 1 + Math.floor(Math.random() * 2); const dropColor = dropType === "rock" ? [0.5, 0.5, 0.5] : [0.5, 0.3, 0.15]; for (let i = 0; i < numDrops; i++) spawnDrop(obs.position, dropType, tNormal, tTangent, tBitangent, dropColor, 0.015 + Math.random() * 0.02, true); } }
+       if (isEffectiveAxe && hitType === "tree" && typeof playChopSound === "function") playChopSound(obs.position);
+       else if (isEffectivePick && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore") && typeof playRockHitSound === "function") playRockHitSound(obs.position);
+       else if (toolType === "HAND" || toolType === "TANTO") {
+         if (hitType === "tree" && typeof playChopSound === "function") playChopSound(obs.position);
+         else if (hitType === "rock" && typeof playRockHitSound === "function") playRockHitSound(obs.position);
+         if (obs.handHits >= 4) {
+           obs.handHits = 0;
+           const tNormal = obs.normal || [0, 1, 0];
+           let tTangent = [1, 0, 0];
+           if (Math.abs(tNormal[0]) > 0.9) tTangent = [0, 1, 0];
+           let tBitangent = [
+             tNormal[1] * tTangent[2] - tNormal[2] * tTangent[1],
+             tNormal[2] * tTangent[0] - tNormal[0] * tTangent[2],
+             tNormal[0] * tTangent[1] - tNormal[1] * tTangent[0]
+           ];
+           const tBLen = Math.sqrt(tBitangent[0]*tBitangent[0] + tBitangent[1]*tBitangent[1] + tBitangent[2]*tBitangent[2]);
+           tBitangent = [tBitangent[0]/tBLen, tBitangent[1]/tBLen, tBitangent[2]/tBLen];
+           tTangent = [
+             tBitangent[1] * tNormal[2] - tBitangent[2] * tNormal[1],
+             tBitangent[2] * tNormal[0] - tBitangent[0] * tNormal[2],
+             tBitangent[0] * tNormal[1] - tBitangent[1] * tNormal[0]
+           ];
+           const dropType = hitType === "tree" ? "branch" : "rock";
+           const numDrops = 1 + Math.floor(Math.random() * 2);
+           const dropColor = dropType === "rock" ? [0.5, 0.5, 0.5] : [0.5, 0.3, 0.15];
+           for (let i = 0; i < numDrops; i++) {
+             if (directCollect && actor) actor.addItem({ name: dropType.toUpperCase(), icon: dropType === "rock" ? "🪨" : "🌿", count: 1 }, false, false);
+             else spawnDrop(obs.position, dropType, tNormal, tTangent, tBitangent, dropColor, 0.015 + Math.random() * 0.02, true);
+           }
+         }
+       }
        
-       if (toolType !== "HAND" && obs.hits >= requiredHits) {
-           console.log(toolType + " destroyed " + hitType + "!");
+       if (toolType !== "HAND" && toolType !== "TANTO" && obs.hits >= requiredHits) {
+           if (isActorPlayer) console.log(toolType + " destroyed " + hitType + "!");
            
            const tNormal = obs.normal || [0, 1, 0];
            let tTangent = [1, 0, 0];
@@ -2743,56 +2992,30 @@
                tBitangent[0] * tNormal[1] - tBitangent[1] * tNormal[0]
            ];
 
-           if (toolType === "AXE" && hitType === "tree") {
-               const numLogs = 2 + Math.floor(Math.random() * 2);
-               for (let i = 0; i < numLogs; i++) spawnDrop(obs.position, "log", tNormal, tTangent, tBitangent, [0.5, 0.3, 0.15], 0.075 + Math.random() * 0.025);
-               const numBranches = 1 + Math.floor(Math.random() * 2);
-               for (let i = 0; i < numBranches; i++) spawnDrop(obs.position, "branch", tNormal, tTangent, tBitangent, [0.4 + Math.random() * 0.1, 0.25 + Math.random() * 0.05, 0.15], 0.015 + Math.random() * 0.02);
-               if (obs.isWhiteRedTree) {
-                    if (typeof window.detachTreeAttachedFruits === "function") {
-                        window.detachTreeAttachedFruits(obs);
-                    }
-                    if (obs.fruitPositions && obs.fruitPositions.length > 0) {
-                        obs.fruitPositions = [];
-                    }
-               }
-           } else if (toolType === "PICKAXE" && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore")) {
-               if (hitType === "iron_ore") {
-                   const numBig = 3 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "iron_ore", tNormal, tTangent, tBitangent, [0.45, 0.22, 0.18], 0.045 + Math.random() * 0.02);
-                   const numSmall = 1 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
-               } else if (hitType === "gold_ore") {
-                   const numBig = 2 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "gold_ore", tNormal, tTangent, tBitangent, [0.85, 0.68, 0.12], 0.045 + Math.random() * 0.02);
-                   const numSmall = 1 + Math.floor(Math.random() * 1);
-                   for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
-               } else if (hitType === "glow_ore") {
-                   const numBig = 2 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "glow_ore", tNormal, tTangent, tBitangent, [0.22, 0.95, 0.88], 0.045 + Math.random() * 0.02);
-                   const numSmall = 1 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
-               } else {
-                   const numBig = 2 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numBig; i++) spawnDrop(obs.position, "big_rock", tNormal, tTangent, tBitangent, [0.5, 0.5, 0.5], 0.05 + Math.random() * 0.03);
-                   const numSmall = 2 + Math.floor(Math.random() * 2);
-                   for (let i = 0; i < numSmall; i++) spawnDrop(obs.position, "rock", tNormal, tTangent, tBitangent, [0.4, 0.4, 0.4], 0.02 + Math.random() * 0.02);
-               }
-           } else if (toolType === "HAND") {
-               const dropType = hitType === "tree" ? "branch" : "rock";
-               const numDrops = 1 + Math.floor(Math.random() * 2);
-               const dropColor = dropType === "rock" ? [0.5, 0.5, 0.5] : [0.5, 0.3, 0.15];
-               for (let i = 0; i < numDrops; i++) spawnDrop(obs.position, dropType, tNormal, tTangent, tBitangent, dropColor, 0.015 + Math.random() * 0.02, true);
-               if (hitType === "tree" && obs.isWhiteRedTree) {
-                   obs.fruitPositions = [];
-               }
+           const drops = getObstacleHarvestDrops(hitType, toolType);
+           for (let di = 0; di < drops.length; di++) {
+             const d = drops[di];
+             if (directCollect && actor) {
+               actor.addItem({ name: d.itemName, icon: d.icon, count: 1 }, false, false);
+             } else {
+               spawnDrop(obs.position, d.type, tNormal, tTangent, tBitangent, d.color, d.size, d.isHand);
+             }
+           }
+
+           if (hitType === "tree" && obs.isWhiteRedTree) {
+             if (typeof window.detachTreeAttachedFruits === "function") {
+               window.detachTreeAttachedFruits(obs);
+             }
+             if (obs.fruitPositions && obs.fruitPositions.length > 0) {
+               obs.fruitPositions = [];
+             }
            }
            
            if (hitType === "tree") {
-               choppedTrees.push(obs.id);
+               if (obs.id !== undefined && !choppedTrees.includes(obs.id)) choppedTrees.push(obs.id);
                window.choppedTrees = choppedTrees;
            } else {
-               destroyedRocks.push(obs.id);
+               if (obs.id !== undefined && !destroyedRocks.includes(obs.id)) destroyedRocks.push(obs.id);
                window.destroyedRocks = destroyedRocks;
            }
            
@@ -2810,11 +3033,13 @@
            if (typeof saveSettingsToLocalStorage === "function") {
                saveSettingsToLocalStorage();
            }
-           // refreshCollectiblesVBO();
+           return { hit: true, destroyed: true, obstacle: obs, hitType };
        }
+       return { hit: true, destroyed: false, obstacle: obs, hitType };
     }
-    return (bestIndex !== -1);
-}
+    return false;
+  }
+  window.checkMeleeHit = checkMeleeHit;
 
 function spawnDrop(pos, type, normal, tangent, bitangent, color, size, isHand=false) {
    const offsetRadius = 0.002 + Math.random() * 0.005;
@@ -3036,11 +3261,18 @@ function cancelFloorPlacement() {
             let pR_len = Math.sqrt(floorPreviewCollectible.position[0]**2 + floorPreviewCollectible.position[1]**2 + floorPreviewCollectible.position[2]**2) || 1;
             let pTheta = Math.acos(Math.max(-1.0, Math.min(1.0, floorPreviewCollectible.position[1] / pR_len)));
             let pPhi = Math.atan2(floorPreviewCollectible.position[2], floorPreviewCollectible.position[0]);
+            const seedVal = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+            const pSurf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
+              ? Physics.resolveEntitySurfaceAndWater({ theta: pTheta, phi: pPhi, feetRadius: pR_len, planetRadius: RADIUS, heightScale: HEIGHT_SCALE, seed: seedVal })
+              : null;
             const sampleH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere : getHeightOnSphere;
-            let pHeight = sampleH(pTheta, pPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-            let pTerrainR = RADIUS + pHeight * HEIGHT_SCALE;
-            let pWaterR = RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * 0.15;
-            if (isWaterPlacement && pTerrainR < pWaterR) {
+            const pTerrainR = pSurf ? pSurf.terrainRad : (RADIUS + sampleH(pTheta, pPhi, seedVal) * HEIGHT_SCALE);
+            const pWaterR = pSurf
+              ? (pSurf.wRadiusLocal > 0 ? pSurf.wRadiusLocal : pSurf.waterRadius)
+              : (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function"
+                  ? Physics.getCanonicalWaterRadius(RADIUS, (typeof waterLevel !== "undefined" ? waterLevel : 0), HEIGHT_SCALE)
+                  : (RADIUS + (typeof waterLevel !== "undefined" ? waterLevel : 0) * (HEIGHT_SCALE * 0.25)));
+            if (isWaterPlacement && (pSurf ? pSurf.isWaterPresent : (pTerrainR < pWaterR))) {
                 floorPreviewCollectible.position[0] += floorPreviewCollectible.normal[0] * 0.05;
                 floorPreviewCollectible.position[1] += floorPreviewCollectible.normal[1] * 0.05;
                 floorPreviewCollectible.position[2] += floorPreviewCollectible.normal[2] * 0.05;
@@ -3465,49 +3697,75 @@ function cancelFloorPlacement() {
         saveSettingsToLocalStorage();
       }
 
-      function shootArrowProjectile(drawPower = 1.0, ammoName = null) {
+      function shootArrowProjectile(drawPower = 1.0, ammoName = null, options = null) {
+        const actor = (options && options.actor && typeof window !== "undefined" && window.ActorCore)
+          ? window.ActorCore.resolveActor(options.actor)
+          : ((typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getPlayerActor() : null);
+        const isActorPlayer = !actor || actor.isPlayer !== false;
+
         if (!ammoName) {
-          const ref = findArrowInInventory();
+          const ref = actor ? actor.findAmmo() : findArrowInInventory();
           if (ref && ref.item) ammoName = ref.item.name;
-          else ammoName = window.activeAmmoType || "ARROW";
+          else ammoName = isActorPlayer ? (window.activeAmmoType || "ARROW") : "ARROW";
         }
         const isIron = (ammoName === "IRON_BULLET");
-        const sinTheta = Math.sin(charTheta);
-        const cosTheta = Math.cos(charTheta);
-        const sinPhi = Math.sin(charPhi);
-        const cosPhi = Math.cos(charPhi);
-        const nx = sinTheta * cosPhi;
-        const ny = cosTheta;
-        const nz = sinTheta * sinPhi;
-        
-        let height = getHeightOnSphere(charTheta, charPhi, globalSeed);
-        let terrainRadius = RADIUS + height * HEIGHT_SCALE;
-        let groundRadius = terrainRadius;
-        const waterRadius = RADIUS + waterLevel * 0.15;
-        if (waterEnabled && terrainRadius < waterRadius) {
+        const basis = (actor && typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actor) : null;
+
+        let nx, ny, nz, East, North, F_char, groundRadius, pScale;
+        if (basis) {
+          nx = basis.normal[0]; ny = basis.normal[1]; nz = basis.normal[2];
+          East = basis.East;
+          North = basis.North;
+          F_char = basis.F;
+          pScale = basis.pScale;
+          groundRadius = basis.terrainRadius;
+          const waterRadius = basis.planetRadius + waterLevel * 0.15;
+          if (waterEnabled && groundRadius < waterRadius) {
             groundRadius = waterRadius;
+          }
+        } else {
+          const sinTheta = Math.sin(charTheta);
+          const cosTheta = Math.cos(charTheta);
+          const sinPhi = Math.sin(charPhi);
+          const cosPhi = Math.cos(charPhi);
+          nx = sinTheta * cosPhi;
+          ny = cosTheta;
+          nz = sinTheta * sinPhi;
+          pScale = playerScale;
+
+          let height = getHeightOnSphere(charTheta, charPhi, globalSeed);
+          let terrainRadius = RADIUS + height * HEIGHT_SCALE;
+          groundRadius = terrainRadius;
+          const waterRadius = RADIUS + waterLevel * 0.15;
+          if (waterEnabled && terrainRadius < waterRadius) {
+              groundRadius = waterRadius;
+          }
+          East = [-sinPhi, 0, cosPhi];
+          North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+          const cosH = Math.cos(charHeading);
+          const sinH = Math.sin(charHeading);
+          F_char = [
+            North[0] * cosH + East[0] * sinH,
+            North[1] * cosH + East[1] * sinH,
+            North[2] * cosH + East[2] * sinH,
+          ];
         }
         
-        const East = [-sinPhi, 0, cosPhi];
-        const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
-        const cosH = Math.cos(charHeading);
-        const sinH = Math.sin(charHeading);
-        
-        const F_char = [
-          North[0] * cosH + East[0] * sinH,
-          North[1] * cosH + East[1] * sinH,
-          North[2] * cosH + East[2] * sinH,
-        ];
-        
-        const headOffset = 0.6 * playerScale;
+        const headOffset = 0.6 * pScale;
         let startPos = [
-          nx * (groundRadius + headOffset) + F_char[0] * 0.2 * playerScale,
-          ny * (groundRadius + headOffset) + F_char[1] * 0.2 * playerScale,
-          nz * (groundRadius + headOffset) + F_char[2] * 0.2 * playerScale
+          nx * (groundRadius + headOffset) + F_char[0] * 0.2 * pScale,
+          ny * (groundRadius + headOffset) + F_char[1] * 0.2 * pScale,
+          nz * (groundRadius + headOffset) + F_char[2] * 0.2 * pScale
         ];
         
         let arrowDir = [];
-        if (typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps")) {
+        if (options && options.targetPos) {
+            arrowDir = [
+                options.targetPos[0] - startPos[0],
+                options.targetPos[1] - startPos[1],
+                options.targetPos[2] - startPos[2],
+            ];
+        } else if (isActorPlayer && typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps")) {
             let targetPoint = null;
             if (activeTargetNPC && activeTargetNPC.position) {
                 const npc = activeTargetNPC;
@@ -3549,13 +3807,13 @@ function cancelFloorPlacement() {
                 ];
                 const lookDir = [-camDir[0], -camDir[1], -camDir[2]];
                 
-                const headHeight = 0.45 * playerScale;
+                const headHeight = 0.45 * pScale;
                 const basePlayerHeadPos = [
                     nx * groundRadius + nx * headHeight,
                     ny * groundRadius + ny * headHeight,
                     nz * groundRadius + nz * headHeight,
                 ];
-                const shoulderOffset = -0.9 * playerScale;
+                const shoulderOffset = -0.9 * pScale;
                 const camRight = [
                     East[0] * cosY - North[0] * sinY,
                     East[1] * cosY - North[1] * sinY,
@@ -3567,15 +3825,13 @@ function cancelFloorPlacement() {
                     basePlayerHeadPos[2] + camRight[2] * shoulderOffset
                 ];
                 
-                // Use actual camera distance if available, to match exactly what the user sees
-                const actualCamDist = typeof currentSmoothDistance !== "undefined" ? currentSmoothDistance : (1.0 + (zoom - 3.5) * 0.4) * (playerScale / 0.22);
+                const actualCamDist = typeof currentSmoothDistance !== "undefined" ? currentSmoothDistance : (1.0 + (zoom - 3.5) * 0.4) * (pScale / 0.22);
                 const eyePos = [
                     playerHeadPos[0] + camDir[0] * actualCamDist,
                     playerHeadPos[1] + camDir[1] * actualCamDist,
                     playerHeadPos[2] + camDir[2] * actualCamDist,
                 ];
                 
-                // Raymarch from eyePos along lookDir to find what the crosshair is pointing at
                 let currentDist = 1.0;
                 const maxDist = 50.0;
                 const step = 0.5;
@@ -3623,7 +3879,7 @@ function cancelFloorPlacement() {
                 targetPoint[2] - startPos[2],
             ];
         } else {
-            const aimPitch = -rotationX * 0.5 + 0.15;
+            const aimPitch = isActorPlayer ? (-rotationX * 0.5 + 0.15) : 0.05;
             arrowDir = [
               F_char[0] * Math.cos(aimPitch) + nx * Math.sin(aimPitch),
               F_char[1] * Math.cos(aimPitch) + ny * Math.sin(aimPitch),
@@ -3631,10 +3887,12 @@ function cancelFloorPlacement() {
             ];
         }
 
-        const isCannon = activeItem && (activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+        const weaponRef = (options && options.weaponItem) ? options.weaponItem : (actor ? actor.getActiveItem() : activeItem);
+        const wName = weaponRef ? (weaponRef.name || weaponRef.label || "").toUpperCase() : "";
+        const isCannon = (wName === "WOODEN_ARM_CANNON" || wName === "ARM_CANNON");
 
-        if (window.lastBowGripPos && window.lastBowAimDir && (window.lastBowAimDir[0] !== 0 || window.lastBowAimDir[1] !== 0 || window.lastBowAimDir[2] !== 0)) {
-            const clearance = isCannon ? 0.09 * (playerScale / 0.1) : 0.05;
+        if (isActorPlayer && window.lastBowGripPos && window.lastBowAimDir && (window.lastBowAimDir[0] !== 0 || window.lastBowAimDir[1] !== 0 || window.lastBowAimDir[2] !== 0)) {
+            const clearance = isCannon ? 0.09 * (pScale / 0.1) : 0.05;
             startPos = [
                 window.lastBowGripPos[0] + window.lastBowAimDir[0] * clearance,
                 window.lastBowGripPos[1] + window.lastBowAimDir[1] * clearance,
@@ -3654,8 +3912,7 @@ function cancelFloorPlacement() {
             }
         }
 
-        // Direct arrow trajectory exactly towards currentAimTargetPos
-        if (window.currentAimTargetPos) {
+        if (isActorPlayer && window.currentAimTargetPos) {
             const toTarget = [
                 window.currentAimTargetPos[0] - startPos[0],
                 window.currentAimTargetPos[1] - startPos[1],
@@ -3667,8 +3924,7 @@ function cancelFloorPlacement() {
             }
         }
 
-        // Only bows not locked add slight upward arc pitch angle; cannon fires 100% straight
-        if (!isCannon && !window.isAimTargetLocked) {
+        if (isActorPlayer && !isCannon && !window.isAimTargetLocked) {
             const pitchUpAngle = 0.05 * (1.0 - drawPower) + 0.01;
             arrowDir[0] += nx * pitchUpAngle;
             arrowDir[1] += ny * pitchUpAngle;
@@ -3682,8 +3938,7 @@ function cancelFloorPlacement() {
           arrowDir[2] /= dLen;
         }
         
-        // Base speed for full draw (cannon has higher initial muzzle velocity)
-        const speed = (isCannon ? 1.15 : (0.2 + (0.6 * drawPower))) * playerScale; 
+        const speed = (isCannon ? 1.15 : (0.2 + (0.6 * drawPower))) * pScale; 
         const arrowVel = [
           arrowDir[0] * speed,
           arrowDir[1] * speed,
@@ -3722,16 +3977,16 @@ function cancelFloorPlacement() {
           active: true,
           isDynamic: true,
           seed: Math.random(),
-          // Hybrid Animation + Physics parameters
           sourceWeapon: isCannon ? "WOODEN_ARM_CANNON" : "BOW",
           isCannonShot: !!isCannon,
           animPhaseActive: !!isCannon,
           animElapsed: 0,
-          animMaxTime: 0.25, // Pure animated barrel exit phase
+          animMaxTime: 0.25,
           animOrigin: [startPos[0], startPos[1], startPos[2]],
           animDir: [arrowDir[0], arrowDir[1], arrowDir[2]],
           animSpeed: isIron ? speed * 1.35 : speed,
-          ignorePlayer: true
+          ownerActor: actor || null,
+          ignorePlayer: isActorPlayer
         };
         
         collectibles.push(arrowCollectible);
@@ -3740,338 +3995,470 @@ function cancelFloorPlacement() {
         if (typeof playPlaceSound === "function") {
           playPlaceSound();
         }
+        return arrowCollectible;
       }
+      window.shootArrowProjectile = shootArrowProjectile;
 
       function useItem(item, index, source, isAltAction = false) {
         if (!item) return;
         console.log("Using item:", item);
+        if (typeof window !== "undefined" && window.ActorCore && typeof window.useEntityItem === "function") {
+          return window.useEntityItem(window.ActorCore.getPlayerActor(), item, { index, source, isAltAction });
+        }
         const itemName = item.name || item.label || "";
         const itemDef = (typeof getItemDefinition === "function") ? getItemDefinition(itemName) : (window.getItemDefinition ? window.getItemDefinition(itemName) : null);
-        
-        let isPlaceable = false;
-        if (typeof isPlaceableItem === "function") {
-          isPlaceable = isPlaceableItem(itemName);
-        } else if (window.isPlaceableItem) {
-          isPlaceable = window.isPlaceableItem(itemName);
-        } else if (itemDef) {
-          const checkCat = Array.isArray(itemDef.category) ? itemDef.category.includes("PRE_PLACE") : itemDef.category === "PRE_PLACE";
-          let isValid = checkCat;
-          if (checkCat) {
-             if ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) ||
-                 (typeof activeRidingMech !== "undefined" && activeRidingMech)) {
-                 isValid = false;
-             }
+        if (itemDef) {
+          const usageText = itemDef.usage_th || "ใช้เป็นวัตถุดิบคราฟต์และอื่นๆ";
+          showNotice(`📦 [${itemDef.name_th}] เป็นไอเทมประเภทวัตถุดิบ (NONE): ${usageText}`);
+        }
+      }
+
+      window.tantoShirasayaState = {
+        mode: "idle", // "idle" | "charging" | "dashing" | "post_skill"
+        comboStep: 1, // 1 = Forward Dash, 2 = Low Lunge Sweep, 3 = Air Spin Cyclone, 4 = Heavy Ground Slam
+        comboActive: false,
+        chargeTime: 0.0,
+        holdThreshold: 0.15,
+        comboChargeTrigger: 0.22,
+        dashTimer: 0.0,
+        dashDuration: 0.27,
+        dashSpeed: 0.023,
+        dashDirNorth: 0.0,
+        dashDirEast: 0.0,
+        lockedTarget: null,
+        isAerialCombo: false,
+        aerialTarget: null,
+        aerialBaseRadius: null,
+        stopForwardMove: false,
+        hitEntities: null,
+        impactPlayed: false,
+        visualSpinYaw: 0.0,
+        visualAirLift: 0.0,
+        postGraceTimer: 0.0,
+        slotIndex: -1
+      };
+
+      window.findTantoBestTarget = function(maxDist = window.getUnifiedMeleeReach()) {
+        const sinT = Math.sin(charTheta), cosT = Math.cos(charTheta);
+        const sinP = Math.sin(charPhi), cosP = Math.cos(charPhi);
+        const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+        const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+        const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
+        const pScale = (typeof playerScale === "number") ? playerScale : 0.1;
+        const pRad = (typeof playerCenterRadius === "number" && playerCenterRadius !== null)
+          ? playerCenterRadius
+          : (RADIUS + height * HEIGHT_SCALE + 0.46 * pScale);
+        const pPos = [pRad * nx, pRad * ny, pRad * nz];
+
+        const East = [-sinP, 0, cosP];
+        const North = [-cosT * cosP, sinT, -cosT * sinP];
+        const lookYaw = (typeof rotationY === "number") ? rotationY : ((typeof charHeading === "number") ? charHeading : 0);
+        const F = [
+          North[0] * Math.cos(lookYaw) + East[0] * Math.sin(lookYaw),
+          North[1] * Math.cos(lookYaw) + East[1] * Math.sin(lookYaw),
+          North[2] * Math.cos(lookYaw) + East[2] * Math.sin(lookYaw)
+        ];
+
+        const isAliveTarget = (t) => !!(t && !t.ragdollEnabled && (t.hp === undefined || t.hp > 0) && t.position);
+        if (typeof activeTargetNPC !== "undefined" && isAliveTarget(activeTargetNPC)) {
+          const tp = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(activeTargetNPC) : null) || activeTargetNPC.position;
+          const d3 = Math.hypot(tp[0] - pPos[0], tp[1] - pPos[1], tp[2] - pPos[2]);
+          const radBonus = window.getMeleeEntityRadius(activeTargetNPC);
+          if (d3 <= maxDist * 1.1 + radBonus) {
+            return activeTargetNPC;
           }
-          isPlaceable = isValid;
         }
 
-        if (itemName === "DRAGON_FRUIT" || itemName === "dragon_fruit") {
-          activeItem = item;
-          isUsingItem = true;
-          if (playerHunger < playerMaxHunger || playerHP < playerMaxHP) {
-            playerHunger = Math.min(playerMaxHunger, (playerHunger || 0) + 2);
-            playerHP = Math.min(playerMaxHP, playerHP + 1);
-            playerHungerTimer = 0.0;
-            playerStarvationTimer = 0.0;
-            window.playerHunger = playerHunger;
-            updatePlayerHPUI();
-            showNotice("กินแก้วมังกร! ฟื้นฟูความหิว +2 ช่อง และ HP +1 ช่อง (Ate dragon fruit! Hunger +2, HP +1)");
-            consumeItem("DRAGON_FRUIT", 1);
-            if (source === "action") renderActionSlots();
-            else renderInventory();
-            if (typeof playCollectSound === "function") playCollectSound();
-          } else {
-            showNotice("ค่าความหิวและ HP เต็มแล้ว! (Hunger & HP are full!)");
-          }
-          setTimeout(() => {
-            isUsingItem = false;
-            activeItem = null;
-          }, 300);
-        } else if (itemName === "FRIED_BUG") {
-          activeItem = item;
-          isUsingItem = true;
-          if (playerHunger < playerMaxHunger || playerHP < playerMaxHP) {
-            playerHunger = Math.min(playerMaxHunger, (playerHunger || 0) + 3);
-            playerHP = Math.min(playerMaxHP, playerHP + 2);
-            playerHungerTimer = 0.0;
-            playerStarvationTimer = 0.0;
-            window.playerHunger = playerHunger;
-            updatePlayerHPUI();
-            showNotice("กินแมลงทอด! ฟื้นฟูความหิว +3 ช่อง และ HP +2 ช่อง (Ate fried bug! Hunger +3, HP +2)");
-            consumeItem("FRIED_BUG", 1);
-            if (source === "action") renderActionSlots();
-            else renderInventory();
-            if (typeof playCollectSound === "function") playCollectSound();
-          } else {
-            showNotice("ค่าความหิวและ HP เต็มแล้ว! (Hunger & HP are full!)");
-          }
-          setTimeout(() => {
-            isUsingItem = false;
-            activeItem = null;
-          }, 300);
-        } else if (itemName === "AXE") {
-          activeItem = item;
-          useAnimTimer = 1.0;
-          isUsingItem = true;
-          checkMeleeHit("AXE");
-        } else if (itemName === "PICKAXE") {
-          activeItem = item;
-          useAnimTimer = 1.0;
-          isUsingItem = true;
-          checkMeleeHit("PICKAXE");
-        } else if (itemName === "SHOVEL") {
-          activeItem = item;
-          useAnimTimer = 1.0;
-          isUsingItem = true;
-          checkMeleeHit("SHOVEL");
-          
-          let dugSuccess = false;
-          if (isAltAction) {
-              const forwardPoint = calculateForwardTarget();
-              // Use a reasonable radius (0.05 rad = 40cm) to cleanly expand and connect with the existing hole (0.08 rad = 64cm)
-              if (forwardPoint) {
-                  dugSuccess = Boolean(modTerrainAtPlayer(-0.35, true, forwardPoint, 0.05, "trench"));
-              }
-          } else {
-              // Trigger the digging terrain modifications (dig down)!
-              dugSuccess = Boolean(modTerrainAtPlayer(-0.35, true));
-          }
-          if (dugSuccess) {
-              addItemToInventory({ name: "DIRT", icon: "🟫", count: 1, label: "DIRT" }, false, true);
-          }
-        } else if (itemName === "IRON_BUCKET" || itemName === "iron_bucket") {
-          if (source !== "action") {
-            showNotice("🪣 กรุณานำถังเหล็กไปใส่ในช่องแอคชั่น (Action Slot) เพื่อถือและตักน้ำ!");
-            return;
-          }
-          // Check if player is standing in water or looking/facing toward water within reach
-          let isNearWater = false;
-          const isWaterOn = (typeof waterEnabled !== "undefined") ? waterEnabled : true;
-          if (isWaterOn && typeof RADIUS === "number" && typeof waterLevel === "number") {
-            const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 0.6;
-            const wRad = RADIUS + waterLevel * (hScale * 0.25);
-            const getH = (typeof getVisualHeightOnSphere === "function")
-              ? getVisualHeightOnSphere
-              : ((typeof getHeightOnSphere === "function") ? getHeightOnSphere : null);
-
-            if (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0) {
-              isNearWater = true;
-            } else if (getH && typeof charTheta === "number" && typeof charPhi === "number") {
-              const playerTH = getH(charTheta, charPhi, window.globalSeed);
-              const playerTRad = RADIUS + playerTH * hScale;
-              if (playerTRad < wRad + 0.04) {
-                isNearWater = true;
-              } else {
-                const pRad = (typeof playerCenterRadius === "number" && playerCenterRadius > 0) ? playerCenterRadius : playerTRad;
-                // Ensure player isn't on a high mountain far above the water surface
-                if (pRad - wRad <= 0.45) {
-                  const sinT = Math.sin(charTheta), cosT = Math.cos(charTheta);
-                  const sinP = Math.sin(charPhi), cosP = Math.cos(charPhi);
-                  const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
-                  const East = [-sinP, 0, cosP];
-                  const North = [-cosT * cosP, sinT, -cosT * sinP];
-
-                  const headingsToCheck = [];
-                  if (typeof charHeading === "number") headingsToCheck.push(charHeading);
-                  if (typeof rotationY === "number") headingsToCheck.push(rotationY);
-
-                  const reachMax = (typeof actionReachDistance === "number" ? actionReachDistance : 0.4) * 1.65;
-                  for (let hIdx = 0; hIdx < headingsToCheck.length && !isNearWater; hIdx++) {
-                    const ang = headingsToCheck[hIdx];
-                    const cosH = Math.cos(ang), sinH = Math.sin(ang);
-                    const fx = North[0] * cosH + East[0] * sinH;
-                    const fy = North[1] * cosH + East[1] * sinH;
-                    const fz = North[2] * cosH + East[2] * sinH;
-
-                    for (let d = 0.06; d <= reachMax; d += 0.06) {
-                      const px = nx * wRad + fx * d;
-                      const py = ny * wRad + fy * d;
-                      const pz = nz * wRad + fz * d;
-                      const dist = Math.hypot(px, py, pz);
-                      if (dist < 0.001) continue;
-                      const sTheta = Math.acos(Math.max(-1.0, Math.min(1.0, py / dist)));
-                      const sPhi = Math.atan2(pz / dist, px / dist);
-                      const sTH = getH(sTheta, sPhi, window.globalSeed);
-                      const sTRad = RADIUS + sTH * hScale;
-                      if (sTRad < wRad + 0.015) {
-                        isNearWater = true;
-                        break;
-                      }
-                    }
-                  }
-                }
-              }
+        let best = null;
+        let bestScore = Infinity;
+        if (typeof amphibians !== "undefined" && Array.isArray(amphibians)) {
+          for (let npc of amphibians) {
+            if (!isAliveTarget(npc)) continue;
+            const tp = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(npc) : null) || npc.position;
+            const dx = tp[0] - pPos[0], dy = tp[1] - pPos[1], dz = tp[2] - pPos[2];
+            const dist3D = Math.hypot(dx, dy, dz);
+            const npcRad = window.getMeleeEntityRadius(npc);
+            if (dist3D > maxDist + npcRad) continue;
+            const hDiff = dx * nx + dy * ny + dz * nz;
+            const horiz = Math.sqrt(Math.max(1e-6, dist3D * dist3D - hDiff * hDiff));
+            const cosF = horiz > 0.05 ? ((dx * F[0] + dy * F[1] + dz * F[2]) / horiz) : 1.0;
+            if (dist3D > 0.65 && cosF < 0.15) continue;
+            const score = (dist3D - npcRad) - cosF * 0.55;
+            if (score < bestScore) {
+              bestScore = score;
+              best = npc;
             }
           }
+        }
+        return best;
+      };
 
-          if (isNearWater) {
-            const count = (typeof item.count === "number") ? item.count : 1;
-            const waterBucketObj = { name: "WATER_BUCKET", icon: "🪣💧", count: 1, label: "WATER_BUCKET" };
-            if (count <= 1) {
-              // Replace the single empty bucket directly in the action slot with a Water Bucket
-              actionSlotsItems[index] = waterBucketObj;
-            } else {
-              // Decrement empty bucket stack by 1 and add 1 separate Water Bucket item
-              const added = addItemToInventory(waterBucketObj, false, false);
-              if (!added) {
-                showNotice("❌ กระเป๋าเต็มแล้ว! ไม่สามารถรับถังใส่น้ำเพิ่มได้ (Inventory is full)");
-                return;
-              }
-              item.count = count - 1;
-            }
+      window.updateUnifiedMeleeDashTracking = function(state, step, prog, dt, opts = {}) {
+        if (!state) return;
+        const turnStopBeforeEnd = (typeof opts.turnStopBeforeEnd === "number") ? opts.turnStopBeforeEnd : 0.34;
+        const turnSpeed = (typeof opts.turnSpeed === "number") ? opts.turnSpeed : 15.5;
+        const _sinT = Math.sin(charTheta), _cosT = Math.cos(charTheta);
+        const _sinP = Math.sin(charPhi), _cosP = Math.cos(charPhi);
+        const _nx = _sinT * _cosP, _ny = _cosT, _nz = _sinT * _sinP;
+        const _N = [-_cosT * _cosP, _sinT, -_cosT * _sinP];
+        const _E = [-_sinP, 0, _cosP];
+        const _pRad = (typeof playerCenterRadius === "number" && playerCenterRadius) ? playerCenterRadius : RADIUS;
+        const _pPos = [_pRad * _nx, _pRad * _ny, _pRad * _nz];
 
-            // Trigger bucket-only water scooping animation (does not animate character arms)
-            window.bucketScoopTimer = 1.0;
-            if (typeof playSplashSound === "function") {
-              playSplashSound(0.95, true);
-            } else if (typeof playCollectSound === "function") {
-              playCollectSound();
-            }
-            if (typeof renderActionSlots === "function") renderActionSlots();
-            if (typeof renderInventory === "function") renderInventory();
-            if (typeof updateBadge === "function") updateBadge();
-            showNotice("💧 ตักน้ำสำเร็จ! ได้รับ ถังใส่น้ำ (WATER BUCKET) x1");
-          } else {
-            showNotice("🚫 ต้องใช้ถังน้ำตรงจุดที่มีน้ำเพื่อเติมน้ำ! (Must use near water to fill the bucket!)");
-          }
-        } else if (itemName === "WATER_BUCKET" || itemName === "water_bucket") {
-          if (source !== "action") {
-            showNotice("🪣💧 ถังใส่น้ำ: กรุณานำไปใส่ในช่องแอคชั่น (Action Slot) เพื่อถือและใช้รดน้ำต้นไม้!");
-            return;
-          }
-          if (typeof window.PlanterSystem !== "undefined" && typeof window.PlanterSystem.water === "function") {
-            let targetPlanter = window.activeWateringTargetPlanter || null;
-            if (!targetPlanter && typeof collectibles !== "undefined" && collectibles) {
-              const pScale = (typeof playerScale === "number" && playerScale > 0) ? playerScale : 0.1;
-              const chestReachDist = Math.max(
-                (typeof actionReachDistance === "number" && actionReachDistance > 0.01) ? actionReachDistance : (0.15 * (pScale / 0.1)),
-                0.15 * (pScale / 0.1)
-              );
-              let bestT = Infinity;
-              for (let i = 0; i < collectibles.length; i++) {
-                const c = collectibles[i];
-                if (c && c.active && !c.isPreview && c.type === "wood_planter_box" && c.plantData && !c.plantData.watered && c.position) {
-                  if (typeof isTargetWithinReach === "function") {
-                    const reachInfo = isTargetWithinReach(c.position, chestReachDist);
-                    if (reachInfo && reachInfo.valid && reachInfo.t < bestT) {
-                      bestT = reachInfo.t;
-                      targetPlanter = c;
-                    }
-                  }
-                }
-              }
-            }
-            if (targetPlanter) {
-              window.PlanterSystem.water(targetPlanter);
-              return;
-            }
-          }
-          showNotice("💧 เดินเข้าไปชิดกล่องดินที่ปลูกต้นอ่อนไว้เพื่อรดน้ำ! (Stand next to a planted box to water it!)");
-        } else if (itemName === "BOW") {
-          showNotice("🚫 คันธนูถูกปิดใช้งาน กรุณาใช้ปืนไม้ติดแขน (ARM CANNON) แทน!");
-          return;
-        } else if (itemName === "WOODEN_ARM_CANNON" || itemName === "ARM_CANNON") {
-          if (isAltAction) {
-            switchCannonAmmo();
-            return;
-          }
-          const arrowRef = findArrowInInventory();
-          if (!arrowRef) {
-            showNotice("🚫 ไม่พบกระสุนในกระเป๋า! กรุณาคราฟ ลูกธนู หรือ กระสุนเหล็ก ทรงกลม");
-            return;
-          }
-          // Animation 01a09186-787b-771f-b4ee-5b234572bcef trimmed 1.40s to 2.47s (total 1.07s)
-          useAnimTimer = 1.07;
-          bowComboActive = false;
-          activeItem = item;
-          isUsingItem = true;
-          arrowShotInCurrentAnim = false;
-        } else if (itemName === "OBSIDIAN_FLUX" || itemName === "OBSIDIAN_FLUX") {
-          if (typeof isActionDown !== "undefined") {
-            isActionDown = false;
-          }
-          openWarpUI({ item, index, source });
-          return;
-        } else if (isPlaceable || itemName.startsWith("ROBOT_")) {
-          if ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof activeRidingMech !== "undefined" && activeRidingMech)) {
-            showNotice("🚫 ไม่สามารถวางไอเทมขณะอยู่บนพาหนะได้ (Cannot place items while riding)");
-            return;
-          }
-          if ((itemName === "OBSIDIAN_PAD_WARP" || itemName === "OBSIDIAN_COMPASS_PAD") && getPlacedObsidianPadsInOrder().length >= MAX_OBSIDIAN_PADS) {
-            const msg = (typeof window.t === "function") ? window.t("max_warp_pads_notice") : "🚫 วาง Obsidian Pad ได้สูงสุดไม่เกิน 5 อัน! (Max 5 Obsidian Pads)";
-            showNotice(msg);
-            return;
-          }
-          // ไอเทมหมวดหมู่ พรี-วาง (PRE_PLACE) เข้าสู่โหมดพรีวิววางสิ่งปลูกสร้าง
-          isPlacingFloor = true;
-          placementRotationAngle = 0.0;
-          floorPlacementInfo = { item, index, source };
-          closeInventoryActually();
-          if (source === "action") {
-            selectedActionSlotIndex = index;
-            renderActionSlots();
-          }
-        } else if (itemName === "LOG") {
-          // Remove 1 item
-          if (item.count > 1) {
-            item.count--;
-          } else {
-            if (source === "inventory") inventory[index] = null;
-            else actionSlotsItems[index] = null;
-            // Clear selection if slot is empty
-            if (source === "action" && selectedActionSlotIndex === index) {
-                selectedActionSlotIndex = -1;
-            }
-          }
-          if (typeof renderInventory === "function") renderInventory();
-          if (typeof renderActionSlots === "function") renderActionSlots();
-          if (typeof updateBadge === "function") updateBadge();
-          
-          spawnLogInFront();
-        } else if (itemName === "BRANCH" || itemName === "branch") {
-          // Trigger basic swing animation with the branch held in hand
-          activeItem = { ...item, name: "BRANCH" };
-          useAnimTimer = 1.0;
-          isUsingItem = true;
+        const _lockDistMax = window.getUnifiedMeleeReach();
+        let tLocked = state.lockedTarget;
+        if (tLocked && (tLocked.ragdollEnabled || (tLocked.hp !== undefined && tLocked.hp <= 0) || !tLocked.position)) {
+          tLocked = null;
+        } else if (tLocked) {
+          const tpChk = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(tLocked) : null) || tLocked.position;
+          const dChk = Math.hypot(tpChk[0] - _pPos[0], tpChk[1] - _pPos[1], tpChk[2] - _pPos[2]);
+          const radChk = window.getMeleeEntityRadius(tLocked);
+          if (dChk > (_lockDistMax + radChk) * 1.15) tLocked = null;
+        }
+        if (!tLocked && typeof window.findTantoBestTarget === "function") {
+          tLocked = window.findTantoBestTarget(_lockDistMax);
+        }
+        state.lockedTarget = tLocked;
+        if (tLocked && typeof activeTargetNPC !== "undefined") {
+          activeTargetNPC = tLocked;
+        }
 
-          if (typeof playChopSound === "function") {
-            playChopSound();
+        if (tLocked && tLocked.position) {
+          const tp = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(tLocked) : null) || tLocked.position;
+          const dx = tp[0] - _pPos[0], dy = tp[1] - _pPos[1], dz = tp[2] - _pPos[2];
+          const tN = dx * _N[0] + dy * _N[1] + dz * _N[2];
+          const tE = dx * _E[0] + dy * _E[1] + dz * _E[2];
+          const horizDist = Math.hypot(tN, tE);
+
+          if (horizDist > 0.08 && (step !== 4 || prog < turnStopBeforeEnd)) {
+            const aimH = Math.atan2(tE, tN);
+            const hDiff = Math.atan2(Math.sin(aimH - charHeading), Math.cos(aimH - charHeading));
+            charHeading += hDiff * Math.min(1.0, dt * turnSpeed);
+            state.dashDirNorth = Math.cos(charHeading);
+            state.dashDirEast = Math.sin(charHeading);
           }
-
-          // Deal 1 damage ONLY when melee hit connects with an NPC within reach (using axe/pickaxe reach system)
-          const hitTarget = (typeof checkNpcMeleeHit === "function") ? checkNpcMeleeHit(1) : null;
-
-          // Branch only breaks and disappears upon successfully hitting an NPC!
-          if (hitTarget) {
-            if (item.count > 1) {
-              item.count--;
-            } else {
-              if (source === "inventory") {
-                inventory[index] = null;
-              } else {
-                actionSlotsItems[index] = null;
-              }
-              if (source === "action" && selectedActionSlotIndex === index) {
-                selectedActionSlotIndex = -1;
-              }
-            }
-
-            if (typeof renderInventory === "function") renderInventory();
-            if (typeof renderActionSlots === "function") renderActionSlots();
-            if (typeof updateBadge === "function") updateBadge();
-
-            if (typeof showNotice === "function") {
-              showNotice("🌿 กิ่งไม้ฟาดโดนเป้าหมายจนหักพังแล้ว! (Branch hit target and broke!)");
-            }
+          // Adapt dash stop distance to target hitbox radius + unified melee reach so player stops right inside strike range
+          const tRad = window.getMeleeEntityRadius(tLocked);
+          const stopDist = Math.min(0.42, Math.max(0.18, tRad + _lockDistMax * 0.45));
+          state.stopForwardMove = (horizDist <= stopDist);
+          if (state.isAerialCombo) {
+            state.aerialTarget = tLocked;
           }
         } else {
-          // ไอเทมประเภทวัตถุดิบ/ทั่วไป (NONE) ที่ไม่ได้มีฟังก์ชันกดใช้โดยตรง
-          if (itemDef) {
-            const usageText = itemDef.usage_th || "ใช้เป็นวัตถุดิบคราฟต์และอื่นๆ";
-            showNotice(`📦 [${itemDef.name_th}] เป็นไอเทมประเภทวัตถุดิบ (NONE): ${usageText}`);
+          state.stopForwardMove = false;
+          if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && (step !== 4 || prog < turnStopBeforeEnd)) {
+            const hDiff = Math.atan2(Math.sin(rotationY - charHeading), Math.cos(rotationY - charHeading));
+            charHeading += hDiff * Math.min(1.0, dt * 10.0);
+            state.dashDirNorth = Math.cos(charHeading);
+            state.dashDirEast = Math.sin(charHeading);
+          }
+        }
+      };
+
+      window.performUnifiedMeleeSkillHit = function(dmg, label, options = {}) {
+        const reachDist = window.getUnifiedMeleeReach();
+        return checkNpcMeleeHit(dmg, label, {
+          hitSet: options.hitSet || null,
+          reachOverride: reachDist,
+          omni: !!options.omni,
+          coneCos: (options.coneCos !== undefined) ? options.coneCos : null,
+          maxVert: (typeof options.maxVert === "number") ? options.maxVert : 0.72,
+          lockedTarget: options.lockedTarget || null
+        });
+      };
+
+      function _resetMeleeSkillStateCommon(st) {
+        if (!st) return;
+        st.mode = "idle";
+        st.comboStep = 1;
+        st.comboActive = false;
+        st.chargeTime = 0.0;
+        st.dashTimer = 0.0;
+        st.lockedTarget = null;
+        st.isAerialCombo = false;
+        st.aerialTarget = null;
+        st.aerialBaseRadius = null;
+        st.stopForwardMove = false;
+        st.hitEntities = null;
+        st.impactPlayed = false;
+        st.visualSpinYaw = 0.0;
+        st.visualAirLift = 0.0;
+        st.postGraceTimer = 0.0;
+        st.slotIndex = -1;
+      }
+
+      function _startMeleeChargeSkillCommon(st, item, slotIndex, validNames, resetPostGrace) {
+        if (!item || validNames.indexOf(item.name) === -1) return false;
+        if ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof activeRidingMech !== "undefined" && activeRidingMech)) return false;
+        if (typeof ragdollEnabled !== "undefined" && ragdollEnabled) return false;
+        if (!st || st.mode === "charging" || st.mode === "dashing") return false;
+
+        const _lockDist = window.getUnifiedMeleeReach();
+        const target = (typeof window.findTantoBestTarget === "function") ? window.findTantoBestTarget(_lockDist) : null;
+        st.lockedTarget = target;
+        if (target && typeof activeTargetNPC !== "undefined") {
+          activeTargetNPC = target;
+        }
+        st.mode = "charging";
+        st.comboStep = 1;
+        st.comboActive = false;
+        st.chargeTime = 0.0;
+        st.stopForwardMove = false;
+        st.hitEntities = null;
+        st.impactPlayed = false;
+        st.visualSpinYaw = 0.0;
+        st.visualAirLift = 0.0;
+        if (resetPostGrace) st.postGraceTimer = 0.0;
+        st.slotIndex = (typeof slotIndex === "number") ? slotIndex : -1;
+        if (typeof playSwordDrawSound === "function") playSwordDrawSound();
+        return true;
+      }
+
+      function _releaseMeleeChargeSkillCommon(st, execFn) {
+        if (!st || st.mode !== "charging") return;
+        if (st.chargeTime < st.holdThreshold) {
+          st.comboActive = false;
+          execFn(1, false);
+        } else {
+          const curHunger = (typeof playerHunger === "number")
+            ? playerHunger
+            : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
+          if (curHunger >= 1) {
+            st.comboActive = true;
+            execFn(1, true);
+          } else {
+            st.comboActive = false;
+            execFn(1, false);
           }
         }
       }
+
+      function _executeUnifiedMeleeSkillStep(st, step, startComboCycle, cfg) {
+        if (!st) return false;
+        const stepNum = Math.max(1, Math.min(4, step || 1));
+
+        if (startComboCycle) {
+          const curHunger = (typeof playerHunger === "number")
+            ? playerHunger
+            : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
+          if (curHunger < 1) {
+            return false;
+          }
+          // Deduct 1 hunger slot per full 4-skill combo cycle
+          const nextHunger = Math.max(0, curHunger - 1);
+          if (typeof playerHunger !== "undefined") playerHunger = nextHunger;
+          window.playerHunger = nextHunger;
+          if (typeof playerHungerTimer !== "undefined") playerHungerTimer = 0.0;
+          if (typeof updatePlayerHPUI === "function") updatePlayerHPUI();
+          if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
+          if (typeof showNotice === "function") {
+            const maxH = (typeof playerMaxHunger === "number") ? playerMaxHunger : 5;
+            showNotice(cfg.comboNotice(nextHunger, maxH));
+          }
+        } else if (stepNum === 1 && !st.comboActive) {
+          if (typeof showNotice === "function") {
+            showNotice(cfg.singleNotice);
+          }
+        }
+
+        // Refresh / acquire locked target on step start using unified melee reach
+        const _lockDist = window.getUnifiedMeleeReach();
+        let target = st.lockedTarget;
+        if (!target || target.ragdollEnabled || (target.hp !== undefined && target.hp <= 0)) {
+          target = (typeof window.findTantoBestTarget === "function") ? window.findTantoBestTarget(_lockDist) : null;
+          st.lockedTarget = target;
+        }
+        if (target && typeof activeTargetNPC !== "undefined") {
+          activeTargetNPC = target;
+        }
+
+        const sinT = Math.sin(charTheta), cosT = Math.cos(charTheta);
+        const sinP = Math.sin(charPhi), cosP = Math.cos(charPhi);
+        const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+        const North = [-cosT * cosP, sinT, -cosT * sinP];
+        const East = [-sinP, 0, cosP];
+        const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+        const curHgt = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
+        const pScale = (typeof playerScale === "number") ? playerScale : 0.1;
+        const minGroundR = RADIUS + curHgt * HEIGHT_SCALE + 0.46 * pScale;
+        const curPlayerR = (typeof playerCenterRadius === "number" && playerCenterRadius !== null) ? playerCenterRadius : minGroundR;
+
+        // Default heading toward camera look in TPS/FPS
+        if (typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && typeof rotationY === "number") {
+          if (typeof charHeading !== "undefined") charHeading = rotationY;
+        }
+
+        let targetHorizDist = null;
+        if (target && target.position) {
+          const tPos = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(target) : null) || target.position;
+          const dx = tPos[0] - curPlayerR * nx;
+          const dy = tPos[1] - curPlayerR * ny;
+          const dz = tPos[2] - curPlayerR * nz;
+          const tN = dx * North[0] + dy * North[1] + dz * North[2];
+          const tE = dx * East[0] + dy * East[1] + dz * East[2];
+          targetHorizDist = Math.hypot(tN, tE);
+          if (targetHorizDist > 0.05) {
+            const aimH = Math.atan2(tE, tN);
+            if (typeof charHeading !== "undefined") charHeading = aimH;
+          }
+          const npcR = Math.hypot(tPos[0], tPos[1], tPos[2]);
+          if (stepNum === 1) {
+            if (npcR > minGroundR + 0.14 || curPlayerR > minGroundR + 0.10) {
+              st.isAerialCombo = true;
+              st.aerialTarget = target;
+              st.aerialBaseRadius = Math.max(curPlayerR, npcR);
+            } else {
+              st.isAerialCombo = false;
+              st.aerialTarget = null;
+              st.aerialBaseRadius = null;
+            }
+          }
+        } else if (stepNum === 1) {
+          if (curPlayerR > minGroundR + 0.10) {
+            st.isAerialCombo = true;
+            st.aerialTarget = null;
+            st.aerialBaseRadius = curPlayerR;
+          } else {
+            st.isAerialCombo = false;
+            st.aerialTarget = null;
+            st.aerialBaseRadius = null;
+          }
+        }
+
+        const h = (typeof charHeading === "number") ? charHeading : 0.0;
+        st.dashDirNorth = Math.cos(h);
+        st.dashDirEast = Math.sin(h);
+        st.mode = "dashing";
+        st.comboStep = stepNum;
+        st.hitEntities = new Set();
+        st.impactPlayed = false;
+        st.stopForwardMove = false;
+        if (cfg.alwaysClearAirLift || stepNum !== 4) {
+          st.visualAirLift = 0.0;
+        }
+        st.visualSpinYaw = 0.0;
+        if (cfg.clearPostGrace) {
+          st.postGraceTimer = 0.0;
+        }
+
+        st.dashDuration = cfg.durations[stepNum - 1];
+        if (stepNum === 1) {
+          // Gap-close cleanly toward target distance without blasting way past
+          if (targetHorizDist !== null && targetHorizDist <= 0.45) {
+            st.dashSpeed = 0.006;
+          } else if (targetHorizDist !== null && targetHorizDist < 2.2) {
+            st.dashSpeed = Math.max(0.014, Math.min(cfg.step1MaxSpeed, targetHorizDist * cfg.step1DistMul));
+          } else {
+            st.dashSpeed = 0.023;
+          }
+        } else {
+          const idx = stepNum - 2;
+          st.dashSpeed = st.isAerialCombo ? cfg.aerialSpeeds[idx] : cfg.groundSpeeds[idx];
+        }
+        st.dashTimer = st.dashDuration;
+
+        if (cfg.playDrawOnStep1Single && stepNum === 1 && !st.comboActive && typeof playSwordDrawSound === "function") {
+          playSwordDrawSound();
+        }
+        if (typeof playSwordSlashSound === "function") {
+          playSwordSlashSound(cfg.mapSlashSound ? cfg.mapSlashSound(stepNum) : stepNum);
+        } else if (typeof playChopSound === "function") {
+          playChopSound();
+        }
+        return true;
+      }
+
+      const _SHIRASAYA_SKILL_CFG = {
+        comboNotice: (nextHunger, maxH) => `⚡🗡️ คอมโบชิราซายะ 4 ท่า! (-1 ความหิว | เหลือ ${nextHunger}/${maxH})`,
+        singleNotice: "🗡️💨 พุ่งฟันชิราซายะ! (คลิกเดียว: ดาเมจ 1 HP | ไม่เสียความหิว)",
+        alwaysClearAirLift: false,
+        clearPostGrace: false,
+        durations: [0.27, 0.34, 0.40, 0.38],
+        step1MaxSpeed: 0.032,
+        step1DistMul: 0.022,
+        aerialSpeeds: [0.008, 0.006, 0.006],
+        groundSpeeds: [0.013, 0.010, 0.008],
+        playDrawOnStep1Single: false,
+        mapSlashSound: null
+      };
+
+      const _AEGIS_SKILL_CFG = {
+        comboNotice: (nextHunger, maxH) => `⚡⚔️ คอมโบดาบใหญ่ Aegis-Shift 4 ท่า! (ท่าละ 2 DMG | -1 ความหิว | เหลือ ${nextHunger}/${maxH})`,
+        singleNotice: "⚔️⚡ Aegis-Shift: แปลงเป็นดาบใหญ่พุ่งฟัน! (คลิกเดียว: 2 HP | ไม่เสียความหิว)",
+        alwaysClearAirLift: true,
+        clearPostGrace: true,
+        durations: [0.38, 0.36, 0.38, 0.44],
+        step1MaxSpeed: 0.030,
+        step1DistMul: 0.021,
+        aerialSpeeds: [0.007, 0.006, 0.006],
+        groundSpeeds: [0.012, 0.010, 0.009],
+        playDrawOnStep1Single: true,
+        mapSlashSound: (stepNum) => (stepNum === 1 ? 4 : stepNum)
+      };
+
+      window.resetTantoShirasayaState = function() {
+        _resetMeleeSkillStateCommon(window.tantoShirasayaState);
+      };
+
+      window.executeTantoSkillStep = function(step, startComboCycle = false) {
+        return _executeUnifiedMeleeSkillStep(window.tantoShirasayaState, step, startComboCycle, _SHIRASAYA_SKILL_CFG);
+      };
+
+      window.executeTantoShirasayaDash = function() {
+        return window.executeTantoSkillStep(1, true);
+      };
+
+      window.startTantoChargeSkill = function(item, slotIndex) {
+        return _startMeleeChargeSkillCommon(window.tantoShirasayaState, item, slotIndex, ["TANTO", "tanto"], false);
+      };
+
+      window.releaseTantoChargeSkill = function() {
+        _releaseMeleeChargeSkillCommon(window.tantoShirasayaState, window.executeTantoSkillStep);
+      };
+
+      window.aegisShiftState = {
+        mode: "idle", // "idle" | "charging" | "dashing" | "post_skill"
+        comboStep: 1, // 1 = Dash Cleave, 2 = Rising Diagonal Slash, 3 = Horizontal Waist Cleave, 4 = Overhead Vertical Slam
+        comboActive: false,
+        chargeTime: 0.0,
+        holdThreshold: 0.15,
+        comboChargeTrigger: 0.22,
+        toolMode: "pickaxe", // "pickaxe" | "axe"
+        toolModeTimer: 0.0,
+        dashTimer: 0.0,
+        dashDuration: 0.38,
+        dashSpeed: 0.023,
+        dashDirNorth: 0.0,
+        dashDirEast: 0.0,
+        lockedTarget: null,
+        isAerialCombo: false,
+        aerialTarget: null,
+        aerialBaseRadius: null,
+        stopForwardMove: false,
+        hitEntities: null,
+        impactPlayed: false,
+        visualSpinYaw: 0.0,
+        visualAirLift: 0.0,
+        postGraceTimer: 0.0,
+        slotIndex: -1
+      };
+
+      window.resetAegisShiftState = function() {
+        _resetMeleeSkillStateCommon(window.aegisShiftState);
+      };
+
+      window.executeAegisSkillStep = function(step, startComboCycle = false) {
+        return _executeUnifiedMeleeSkillStep(window.aegisShiftState, step, startComboCycle, _AEGIS_SKILL_CFG);
+      };
+
+      window.startAegisShiftDashSkill = function(item, slotIndex) {
+        return _startMeleeChargeSkillCommon(window.aegisShiftState, item, slotIndex, ["AEGIS_SHIFT", "aegis_shift"], true);
+      };
+      window.startAegisChargeSkill = window.startAegisShiftDashSkill;
+
+      window.releaseAegisChargeSkill = function() {
+        _releaseMeleeChargeSkillCommon(window.aegisShiftState, window.executeAegisSkillStep);
+      };
 
       function performSmashActionLogic() {
         checkMeleeHit("HAND");
@@ -4297,6 +4684,7 @@ function cancelFloorPlacement() {
         if (!item) return false;
         if (item.name === targetName || item.label === targetName) return true;
         if ((targetName === "COTTON" || targetName === "COTTON_PLANT") && (item.name === "COTTON_PLANT" || item.name === "COTTON" || item.label === "COTTON_PLANT" || item.label === "COTTON")) return true;
+        if (targetName === "OBSIDIAN_CUBE" && (item.name === "obsidian_cube_item" || item.name === "obsidian_cube" || item.label === "obsidian_cube_item" || item.label === "obsidian_cube")) return true;
         return false;
       }
 
@@ -4845,6 +5233,24 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "OBSIDIAN_CUBE", icon: "🔶", count: 1, label: "ศิลาออบซิเดียน (OBSIDIAN CUBE)" },
               { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง (GLOWING ORE)" }
+            ]
+          },
+          {
+            id: "tanto",
+            output: { name: "TANTO", icon: "🗡️", count: 1, label: "มีดตันโตะ (TANTO) x1" },
+            ingredients: [
+              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 1, label: "ศิลาออบซิเดียน (OBSIDIAN CUBE)" },
+              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง (GLOWING ORE)" },
+              { name: "IRON_ORE", icon: "🟥", count: 1, label: "แร่เหล็ก (IRON ORE)" }
+            ]
+          },
+          {
+            id: "aegis_shift",
+            output: { name: "AEGIS_SHIFT", icon: "⛏️⚔️", count: 1, label: "อีเตอร์ดาบใหญ่ (Aegis-Shift) x1" },
+            ingredients: [
+              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 3, label: "ศิลาออบซิเดียน (OBSIDIAN CUBE)" },
+              { name: "IRON_ORE", icon: "🟥", count: 3, label: "แร่เหล็ก (IRON ORE)" },
+              { name: "GLOW_ORE", icon: "✨", count: 3, label: "แร่หินเรืองแสง (GLOWING ORE)" }
             ]
           }
         ];
@@ -5431,6 +5837,24 @@ function cancelFloorPlacement() {
             ingredients: [
               { name: "OBSIDIAN_CUBE", count: 1 },
               { name: "GLOW_ORE", count: 1 }
+            ]
+          },
+          {
+            id: "tanto",
+            output: { name: "TANTO", icon: "🗡️", count: 1 },
+            ingredients: [
+              { name: "OBSIDIAN_CUBE", count: 1 },
+              { name: "GLOW_ORE", count: 1 },
+              { name: "IRON_ORE", count: 1 }
+            ]
+          },
+          {
+            id: "aegis_shift",
+            output: { name: "AEGIS_SHIFT", icon: "⛏️⚔️", count: 1 },
+            ingredients: [
+              { name: "OBSIDIAN_CUBE", count: 3 },
+              { name: "IRON_ORE", count: 3 },
+              { name: "GLOW_ORE", count: 3 }
             ]
           }
         ];

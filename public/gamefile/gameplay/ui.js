@@ -253,8 +253,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
 
     <!-- Compass HUD -->
-    <div id="compassContainer" class="game-ui visible" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 240px)); min-width: 180px; max-width: 90vw; height: 56px; z-index: 10000; pointer-events: none; display: flex; align-items: center; justify-content: center; user-select: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border: none; box-shadow: none; clip-path: none;">
-      <canvas id="compassCanvas" width="1120" height="112" style="width: 100%; height: auto; max-height: 56px; display: block; background: transparent;"></canvas>
+    <div id="compassContainer" class="game-ui visible" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%) scale(var(--ui-hud-scale, 1)); transform-origin: top center; width: 400px; height: 48px; z-index: 10000; pointer-events: none; display: flex; align-items: center; justify-content: center; user-select: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border: none; box-shadow: none; clip-path: none;">
+      <canvas id="compassCanvas" width="1120" height="112" style="width: 100%; height: 100%; display: block; background: transparent;"></canvas>
     </div>
 
     <!-- เมนูซ้ายบน -->
@@ -341,7 +341,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         align-items: center;
         justify-content: center;
         user-select: none;
-        transition: background 0.2s, border-color 0.2s, transform 0.15s;
+        transform: scale(var(--ui-hud-scale, 1));
+        transform-origin: top right;
+        transition: background 0.2s, border-color 0.2s;
       "
       onmouseover="this.style.background='rgba(223, 183, 108, 0.25)'; this.style.borderColor='rgba(223, 183, 108, 0.8)';"
       onmouseout="this.style.background='rgba(10, 10, 15, 0.85)'; this.style.borderColor='rgba(223, 183, 108, 0.4)';"
@@ -870,6 +872,34 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             />
           </div>
 
+          <!-- สเกล UI เกม (UI Scale) -->
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                font-family: 'Google Sans', sans-serif;
+              "
+            >
+              <span data-i18n="ui_scale">สเกล UI เกม (UI Scale)</span>
+              <span
+                id="uiScaleVal"
+                style="color: #dfb76c; font-weight: bold"
+                >100%</span
+              >
+            </div>
+            <input
+              type="range"
+              id="uiScaleSlider"
+              min="50"
+              max="150"
+              step="5"
+              value="100"
+              style="width: 100%; cursor: pointer; accent-color: #dfb76c"
+            />
+          </div>
+
           <!-- ระยะเรนเดอร์ LOD (LOD Distance) -->
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div
@@ -1150,6 +1180,48 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   cursor: pointer;
                   transition: all 0.2s;">
                 ปิด
+              </button>
+            </div>
+          </div>
+
+          <!-- การตั้งค่าโหมดตาบอดสี (Colorblind Mode) -->
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span data-i18n="colorblind_mode" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+                >โหมดตาบอดสี</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center; height: 32px;">
+              <button
+                id="cbNoneBtn"
+                data-i18n="cb_none"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);"
+              >
+                ปิด
+              </button>
+              <button
+                id="cbProtanopiaBtn"
+                data-i18n="cb_protanopia"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+              >
+                ตาบอดสีแดง
+              </button>
+              <button
+                id="cbDeuteranopiaBtn"
+                data-i18n="cb_deuteranopia"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+              >
+                ตาบอดสีเขียว
+              </button>
+              <button
+                id="cbTritanopiaBtn"
+                data-i18n="cb_tritanopia"
+                class="game-ui"
+                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+              >
+                น้ำเงิน-เหลือง
               </button>
             </div>
           </div>
@@ -1880,8 +1952,14 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <label style="margin-top: 5px;">⚡ ดีเลย์ Spam Click (วินาที) <span id="bowSpamClickDelayLabel">0.5</span></label>
         <input type="range" id="bowSpamClickDelaySlider" min="0.0" max="3.0" step="0.1" value="0.5" />
         
-        <label style="margin-top: 5px;">🎯 ระยะเล็งล็อกเป้า (เมตร/หน่วย) <span id="bowLockDistanceLabel">3.0</span></label>
+        <label style="margin-top: 5px;">🎯 ระยะเล็งล็อกเป้าระยะไกล - ธนู/ปืน (เมตร/หน่วย) <span id="bowLockDistanceLabel">3.0</span></label>
         <input type="range" id="bowLockDistanceSlider" min="2.0" max="20.0" step="0.5" value="3.0" />
+      </div>
+
+      <div class="control-group">
+        <label>⚔️ <b>ตั้งค่าเป้าระยะประชิด (Melee Lock Settings)</b></label>
+        <label style="margin-top: 5px;">🗡️ ระยะล็อกเป้าระยะประชิด - มีด/ชิราซายะ/อีเตอร์/ดาบใหญ่ <span id="meleeLockDistanceLabel">0.25</span></label>
+        <input type="range" id="meleeLockDistanceSlider" min="0.10" max="2.50" step="0.05" value="0.25" />
       </div>
 
       <div class="control-group" id="devSpawnItemContainer">
@@ -1933,8 +2011,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <button class="btn-random" id="devCharModelClassicBtn" style="background-image: linear-gradient(135deg, #0288d1, #29b6f6); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
             🧑 Classic (Base)
           </button>
-          <button class="btn-random" id="devCharModelChibiBtn" style="background-image: linear-gradient(135deg, #43a047, #66bb6a); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
-            ✨ Chibi White (GLB)
+          <button class="btn-random" id="devCharModelChibiBtn" disabled style="background-image: linear-gradient(135deg, #424242, #616161); opacity: 0.45; cursor: not-allowed; flex: 1; margin: 0; padding: 0 4px; font-size: 11px;" title="ปิดใช้งานโมเดล GLB ชั่วคราว">
+            ✨ Chibi White (GLB - ปิด)
           </button>
         </div>
 
@@ -2405,18 +2483,20 @@ window.addEventListener("keyup", (e) => {
         const rect = joystickBase.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
+        const baseWidth = joystickBase.offsetWidth || 130;
+        const hudScaleFactor = rect.width > 0 ? rect.width / baseWidth : 1;
         const radius = rect.width / 2;
 
         let dx = clientX - centerX;
         let dy = clientY - centerY;
 
-        const deadZone = 8;
+        const deadZone = 8 * hudScaleFactor;
         const distance = Math.sqrt(dx * dx + dy * dy);
         if (distance < deadZone) {
           return { x: 0, y: 0, dx: 0, dy: 0 };
         }
 
-        const maxDist = radius - 25;
+        const maxDist = Math.max(10, radius - 25 * hudScaleFactor);
         let clampedDx = dx;
         let clampedDy = dy;
         if (distance > maxDist) {
@@ -2427,7 +2507,12 @@ window.addEventListener("keyup", (e) => {
         const normX = clampedDx / maxDist;
         const normY = -clampedDy / maxDist;
 
-        return { x: normX, y: normY, dx: clampedDx, dy: clampedDy };
+        return {
+          x: normX,
+          y: normY,
+          dx: clampedDx / hudScaleFactor,
+          dy: clampedDy / hudScaleFactor,
+        };
       }
 
       function updateJoystick(clientX, clientY) {
@@ -2436,9 +2521,6 @@ window.addEventListener("keyup", (e) => {
         joystickY = pos.y;
 
         if (joystickThumb) {
-          const rect = joystickBase.getBoundingClientRect();
-          const radius = rect.width / 2;
-          const maxDist = radius - 25;
           const thumbX = pos.dx;
           const thumbY = pos.dy;
           joystickThumb.style.transform = `translate(calc(-50% + ${thumbX}px), calc(-50% + ${thumbY}px))`;
@@ -2633,13 +2715,33 @@ window.addEventListener("keyup", (e) => {
       let devInputMode = "auto"; // "auto", "touch", "keyboard"
       window.devInputMode = devInputMode;
 
+      function isElectronApp() {
+        return !!(
+          (typeof window !== "undefined" && window.electronAPI && window.electronAPI.isDesktop) ||
+          (typeof navigator !== "undefined" && /Electron/i.test(navigator.userAgent || "")) ||
+          (typeof window !== "undefined" && window.process && window.process.versions && window.process.versions.electron)
+        );
+      }
+      window.isElectronApp = isElectronApp;
+      if (isElectronApp()) {
+        document.body.classList.add("electron-mode");
+      }
+
       function updateFullscreenBtnByInput(isTouch) {
         const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
         if (gameplayFullscreenBtn) {
-          if (isTouch) {
+          if (isTouch || isElectronApp()) {
             gameplayFullscreenBtn.style.setProperty("display", "none", "important");
           } else {
             gameplayFullscreenBtn.style.setProperty("display", "flex", "important");
+          }
+        }
+        const screenModeContainer = document.getElementById("screenModeSettingContainer");
+        if (screenModeContainer) {
+          if (isElectronApp()) {
+            screenModeContainer.style.setProperty("display", "flex", "important");
+          } else {
+            screenModeContainer.style.setProperty("display", "none", "important");
           }
         }
       }
@@ -3219,7 +3321,11 @@ window.addEventListener("keyup", (e) => {
           else if (typeof window.renderCooking === "function") window.renderCooking();
         }
 
-        setTimeout(updateActionSlotsPosition, 0);
+        if (typeof updateActionSlotsPosition === "function") {
+          setTimeout(updateActionSlotsPosition, 0);
+        } else if (typeof window.updateActionSlotsPosition === "function") {
+          setTimeout(window.updateActionSlotsPosition, 0);
+        }
         if (typeof window.updateResponsiveUIScale === "function") window.updateResponsiveUIScale();
         if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
@@ -3278,6 +3384,12 @@ window.addEventListener("keyup", (e) => {
 
       // Screen Mode selection
       function enterFullscreen() {
+        if (window.electronAPI && typeof window.electronAPI.setFullscreen === "function") {
+          window.electronAPI.setFullscreen(true).then(() => {
+            setTimeout(syncScreenModeUI, 50);
+          }).catch((err) => console.error("Electron setFullscreen true failed", err));
+          return;
+        }
         const tWindow = getTauriWindow();
         if (tWindow && typeof tWindow.setFullscreen === "function") {
           tWindow.setFullscreen(true).then(() => {
@@ -3345,6 +3457,12 @@ window.addEventListener("keyup", (e) => {
       }
 
       function exitFullscreen() {
+        if (window.electronAPI && typeof window.electronAPI.setFullscreen === "function") {
+          window.electronAPI.setFullscreen(false).then(() => {
+            setTimeout(syncScreenModeUI, 50);
+          }).catch((err) => console.error("Electron setFullscreen false failed", err));
+          return;
+        }
         const tWindow = getTauriWindow();
         if (tWindow && typeof tWindow.setFullscreen === "function") {
           tWindow.setFullscreen(false).then(() => {
@@ -3401,7 +3519,11 @@ window.addEventListener("keyup", (e) => {
       window.syncScreenModeUI = async function() {
         const screenModeContainer = document.getElementById("screenModeSettingContainer");
         if (screenModeContainer) {
-          screenModeContainer.style.setProperty("display", "none", "important");
+          if (isElectronApp()) {
+            screenModeContainer.style.setProperty("display", "flex", "important");
+          } else {
+            screenModeContainer.style.setProperty("display", "none", "important");
+          }
         }
 
         let isFullscreen = !!(
@@ -3410,6 +3532,15 @@ window.addEventListener("keyup", (e) => {
           document.webkitFullscreenElement ||
           document.msFullscreenElement
         );
+
+        if (window.electronAPI && typeof window.electronAPI.isFullscreen === "function") {
+          try {
+            const electronFull = await window.electronAPI.isFullscreen();
+            isFullscreen = isFullscreen || !!electronFull;
+          } catch (e) {
+            console.warn("Electron isFullscreen check failed", e);
+          }
+        }
 
         const tWindow = getTauriWindow();
         if (tWindow && typeof tWindow.isFullscreen === "function") {
@@ -3453,7 +3584,7 @@ window.addEventListener("keyup", (e) => {
         isCurrentFullscreen = isFullscreen;
         const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
         if (gameplayFullscreenBtn) {
-          if (isMobileOrTouchDevice()) {
+          if (isMobileOrTouchDevice() || isElectronApp()) {
             gameplayFullscreenBtn.style.setProperty("display", "none", "important");
           } else {
             gameplayFullscreenBtn.innerHTML = isFullscreen
@@ -3470,6 +3601,11 @@ window.addEventListener("keyup", (e) => {
       document.addEventListener("webkitfullscreenchange", syncScreenModeUI);
       document.addEventListener("mozfullscreenchange", syncScreenModeUI);
       document.addEventListener("MSFullscreenChange", syncScreenModeUI);
+      window.addEventListener("resize", () => {
+        if (isElectronApp()) {
+          syncScreenModeUI();
+        }
+      });
 
       window.updateFpsLimitUI = function() {
         const btn30 = document.getElementById("fps30Btn");
@@ -3863,9 +3999,129 @@ window.addEventListener("keyup", (e) => {
         }
       });
 
+      // === ระบบโหมดตาบอดสี (Colorblind Daltonization Filter & UI) ===
+      function ensureColorblindSvgFilters() {
+        if (document.getElementById("colorblindSvgFilters")) return;
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("id", "colorblindSvgFilters");
+        svg.setAttribute("aria-hidden", "true");
+        svg.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;";
+        svg.innerHTML = `
+          <defs>
+            <filter id="cb-filter-protanopia" color-interpolation-filters="sRGB">
+              <feColorMatrix type="matrix" values="
+                0.696 0.304 0.000 0 0
+                0.000 1.000 0.000 0 0
+                0.303 -0.303 1.000 0 0
+                0.000 0.000 0.000 1 0" />
+            </filter>
+            <filter id="cb-filter-deuteranopia" color-interpolation-filters="sRGB">
+              <feColorMatrix type="matrix" values="
+                1.000 0.000 0.000 0 0
+                0.262 0.738 0.000 0 0
+                -0.375 0.375 1.000 0 0
+                0.000 0.000 0.000 1 0" />
+            </filter>
+            <filter id="cb-filter-tritanopia" color-interpolation-filters="sRGB">
+              <feColorMatrix type="matrix" values="
+                1.000 0.127 -0.127 0 0
+                0.000 0.873 0.127 0 0
+                0.000 0.000 1.000 0 0
+                0.000 0.000 0.000 1 0" />
+            </filter>
+          </defs>
+        `;
+        document.body.appendChild(svg);
+      }
+
+      window.updateColorblindUI = function() {
+        ensureColorblindSvgFilters();
+        const curMode = (typeof window.colorblindMode === "string" && ["none", "protanopia", "deuteranopia", "tritanopia"].includes(window.colorblindMode))
+          ? window.colorblindMode
+          : ((typeof colorblindMode === "string" && ["none", "protanopia", "deuteranopia", "tritanopia"].includes(colorblindMode)) ? colorblindMode : "none");
+
+        if (document.body) {
+          if (curMode === "none") {
+            document.body.removeAttribute("data-colorblind-mode");
+          } else {
+            document.body.setAttribute("data-colorblind-mode", curMode);
+          }
+        }
+
+        const btnMap = {
+          none: document.getElementById("cbNoneBtn"),
+          protanopia: document.getElementById("cbProtanopiaBtn"),
+          deuteranopia: document.getElementById("cbDeuteranopiaBtn"),
+          tritanopia: document.getElementById("cbTritanopiaBtn")
+        };
+
+        Object.entries(btnMap).forEach(([modeKey, btn]) => {
+          if (!btn) return;
+          if (modeKey === curMode) {
+            btn.style.background = "rgba(223, 183, 108, 0.15)";
+            btn.style.borderColor = "#dfb76c";
+            btn.style.color = "#dfb76c";
+            btn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+          } else {
+            btn.style.background = "rgba(255, 255, 255, 0.05)";
+            btn.style.borderColor = "rgba(255, 255, 255, 0.2)";
+            btn.style.color = "rgba(255, 255, 255, 0.6)";
+            btn.style.textShadow = "none";
+          }
+        });
+      };
+
+      window.applyColorblindMode = function(mode) {
+        const validMode = ["none", "protanopia", "deuteranopia", "tritanopia"].includes(mode) ? mode : "none";
+        if (typeof colorblindMode !== "undefined") colorblindMode = validMode;
+        window.colorblindMode = validMode;
+        try {
+          const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
+          opt.colorblindMode = validMode;
+          localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
+        } catch (err) {}
+        if (typeof window.updateColorblindUI === "function") window.updateColorblindUI();
+        if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
+        else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
+      };
+
+      setTimeout(() => {
+        if (typeof window.updateColorblindUI === "function") window.updateColorblindUI();
+      }, 0);
+
+      document.addEventListener("click", (e) => {
+        if (!e.target || !e.target.closest) return;
+        const cbMap = [
+          ["#cbNoneBtn", "none"],
+          ["#cbProtanopiaBtn", "protanopia"],
+          ["#cbDeuteranopiaBtn", "deuteranopia"],
+          ["#cbTritanopiaBtn", "tritanopia"]
+        ];
+        for (const [sel, mode] of cbMap) {
+          if (e.target.closest(sel)) {
+            if (typeof initAudio === "function") initAudio();
+            window.applyColorblindMode(mode);
+            return;
+          }
+        }
+      });
+
 
       // ฟังก์ชันระบบเต็มจอแบบครอบคลุมรอบด้าน
       function toggleFullscreen() {
+        if (window.electronAPI && typeof window.electronAPI.isFullscreen === "function" && typeof window.electronAPI.setFullscreen === "function") {
+          window.electronAPI.isFullscreen()
+            .then((isFull) => {
+              window.electronAPI.setFullscreen(!isFull).then(() => {
+                setTimeout(syncScreenModeUI, 50);
+              });
+            })
+            .catch((err) => {
+              console.warn("Electron Fullscreen error:", err);
+            });
+          return;
+        }
         const tWindow = getTauriWindow();
         if (tWindow && typeof tWindow.isFullscreen === "function" && typeof tWindow.setFullscreen === "function") {
           tWindow.isFullscreen()
@@ -3971,6 +4227,8 @@ window.addEventListener("keyup", (e) => {
           const isAltAction = (e.button === 2);
           if (e.button === 0) {
               isActionDown = true;
+          } else if (e.button === 2) {
+              window.isAltActionDown = true;
           }
           const holdingShovelOrPickaxe = (selectedActionSlotIndex !== -1 && actionSlotsItems[selectedActionSlotIndex] && (actionSlotsItems[selectedActionSlotIndex].name === "SHOVEL" || actionSlotsItems[selectedActionSlotIndex].name === "PICKAXE"));
           
@@ -4009,6 +4267,14 @@ window.addEventListener("keyup", (e) => {
                  if (item.name === "WOODEN_ARM_CANNON" || item.name === "ARM_CANNON") {
                    if (typeof switchCannonAmmo === "function") switchCannonAmmo();
                    else if (typeof window.switchCannonAmmo === "function") window.switchCannonAmmo();
+                 } else if (item.name === "TANTO" || item.name === "tanto") {
+                   if (typeof window.startTantoChargeSkill === "function") {
+                     window.startTantoChargeSkill(item, selectedActionSlotIndex);
+                   }
+                 } else if (item.name === "AEGIS_SHIFT" || item.name === "aegis_shift") {
+                   if (typeof window.startAegisShiftDashSkill === "function") {
+                     window.startAegisShiftDashSkill(item, selectedActionSlotIndex);
+                   }
                  } else if (item.name !== "SHOVEL" && item.name !== "PICKAXE") {
                    // Do nothing for other items on right click
                  } else {
@@ -4105,12 +4371,24 @@ window.addEventListener("keyup", (e) => {
             isSmashing = false;
             activeItem = originalItem;
           }
+        } else if (e.button === 2) {
+          window.isAltActionDown = false;
+          if (typeof window.releaseTantoChargeSkill === "function") {
+            window.releaseTantoChargeSkill();
+          }
+          if (typeof window.releaseAegisChargeSkill === "function") {
+            window.releaseAegisChargeSkill();
+          }
         }
         isDragging = false;
         window.isCameraDragging = false;
         if (typeof window.updateVirtualCursorVisibility === "function") {
           window.updateVirtualCursorVisibility();
         }
+      });
+
+      window.addEventListener("blur", () => {
+        window.isAltActionDown = false;
       });
 
 
@@ -4490,6 +4768,8 @@ window.addEventListener("keyup", (e) => {
       const bowSpamClickDelayLabel = document.getElementById("bowSpamClickDelayLabel");
       const bowLockDistanceSlider = document.getElementById("bowLockDistanceSlider");
       const bowLockDistanceLabel = document.getElementById("bowLockDistanceLabel");
+      const meleeLockDistanceSlider = document.getElementById("meleeLockDistanceSlider");
+      const meleeLockDistanceLabel = document.getElementById("meleeLockDistanceLabel");
       const woodFloorHeightSlider = document.getElementById("woodFloorHeightSlider");
       const woodFloorHeightLabel = document.getElementById("woodFloorHeightLabel");
       const campfireSizeSlider = document.getElementById("campfireSizeSlider");
@@ -5064,7 +5344,7 @@ window.addEventListener("keyup", (e) => {
           if (devByNskLink) { devByNskLink.style.bottom = margin + "px"; devByNskLink.style.right = margin + "px"; }
           if (compassContainer) { compassContainer.style.top = (margin + 10) + "px"; }
           if (gameplayFullscreenBtn) {
-            if (isMobileOrTouchDevice()) {
+            if (isMobileOrTouchDevice() || isElectronApp()) {
               gameplayFullscreenBtn.style.setProperty("display", "none", "important");
             } else {
               gameplayFullscreenBtn.style.setProperty("display", "flex", "important");
@@ -5126,6 +5406,13 @@ window.addEventListener("keyup", (e) => {
         bowLockDistanceSlider?.addEventListener("input", () => {
           bowLockDistance = parseFloat(bowLockDistanceSlider.value);
           if (bowLockDistanceLabel) bowLockDistanceLabel.textContent = bowLockDistance.toFixed(1);
+        });
+      }
+
+      if (meleeLockDistanceSlider) {
+        meleeLockDistanceSlider?.addEventListener("input", () => {
+          meleeLockDistance = parseFloat(meleeLockDistanceSlider.value);
+          if (meleeLockDistanceLabel) meleeLockDistanceLabel.textContent = meleeLockDistance.toFixed(2);
         });
       }
 
@@ -5294,7 +5581,11 @@ window.addEventListener("keyup", (e) => {
       }
       setupDragToScroll();
 
-      // === Responsive Modal & HUD Scaling for Small Screens ===
+      // === Unified Responsive Modal & HUD Scaling for Small & Large Screens ===
+      function calcResponsiveFitScale(availW, availH, baseW, baseH) {
+        return Math.min(availW / baseW, availH / baseH);
+      }
+
       function updateResponsiveUIScale() {
         const vw = window.innerWidth || document.documentElement.clientWidth || 800;
         const vh = window.innerHeight || document.documentElement.clientHeight || 600;
@@ -5302,69 +5593,50 @@ window.addEventListener("keyup", (e) => {
         const padY = Math.max(12, Math.min(28, vh * 0.04));
         const availW = Math.max(180, vw - padX);
         const availH = Math.max(140, vh - padY);
-        const isCompactH = vh < 540;
 
-        // Compact vertical spacing inside Inventory Panel on short screens so all 4 rows of slots + bottom buttons fit without clipping
+        const rawUserUiScale =
+          typeof window.uiScale === "number"
+            ? window.uiScale
+            : (typeof uiScale === "number" ? uiScale : 100);
+        const userUiScale = Math.max(0.5, Math.min(1.5, rawUserUiScale / 100));
+
+        // Compact vertical spacing inside Inventory Panel on all screens so layout & margins match small-screen layout
         const mainLayout = document.getElementById("inventoryMainLayout");
         if (mainLayout) {
-          mainLayout.style.margin = isCompactH ? "10px auto 4px auto" : "16px auto";
+          mainLayout.style.margin = "10px auto 4px auto";
           mainLayout.style.paddingTop = "12px";
         }
         const bottomBtns = document.getElementById("inventoryBottomButtons");
         if (bottomBtns) {
-          bottomBtns.style.marginTop = isCompactH ? "6px" : "12px";
+          bottomBtns.style.marginTop = "6px";
         }
 
-        // 1. Inventory Panel (#inventoryOverlay)
-        const invPanel = document.querySelector("#inventoryOverlay .inventory-panel");
-        if (invPanel) {
-          const baseW = 684;
-          const baseH = isCompactH ? 464 : 520;
-          invPanel.style.setProperty("--panel-base-h", `${baseH}px`);
-          invPanel.style.setProperty("--panel-pad-y", isCompactH ? "16px" : "24px");
-          invPanel.style.setProperty("--panel-pad-x", isCompactH ? "24px" : "28px");
-          const scale = Math.min(1, availW / baseW, availH / baseH);
-          invPanel.style.setProperty("--ui-panel-scale", scale.toFixed(4));
+        // Apply the exact same fit-to-viewport formula across all modal panels & HUD
+        const panelConfigs = [
+          { selector: "#inventoryOverlay .inventory-panel", baseW: 684, baseH: 464, padY: "16px", padX: "24px" },
+          { selector: "#chestOverlay .inventory-panel", baseW: 860, baseH: 428, padY: "18px", padX: "24px" },
+          { selector: "#saveSelectOverlay .inventory-panel", baseW: 520, baseH: 420, padY: "18px" },
+          { selector: "#warpOverlay .inventory-panel", baseW: 448, baseH: 428, padY: "18px" },
+        ];
+
+        panelConfigs.forEach((cfg) => {
+          const panel = document.querySelector(cfg.selector);
+          if (!panel) return;
+          panel.style.setProperty("--panel-base-h", `${cfg.baseH}px`);
+          if (cfg.padY) panel.style.setProperty("--panel-pad-y", cfg.padY);
+          if (cfg.padX) panel.style.setProperty("--panel-pad-x", cfg.padX);
+          const fitScale = calcResponsiveFitScale(availW, availH, cfg.baseW, cfg.baseH);
+          panel.style.setProperty("--ui-panel-scale", fitScale.toFixed(4));
+        });
+
+        // HUD uses the exact same calcResponsiveFitScale formula against a 940x540 reference canvas + user UI scale
+        const hudFitScale = calcResponsiveFitScale(availW, availH, 940, 540);
+        const hudScale = Math.max(0.25, hudFitScale * userUiScale);
+        document.documentElement.style.setProperty("--ui-hud-scale", hudScale.toFixed(4));
+
+        if (typeof window.updateActionSlotsPosition === "function") {
+          window.updateActionSlotsPosition();
         }
-
-        // 2. Chest Panel (#chestOverlay)
-        const chestPanel = document.querySelector("#chestOverlay .inventory-panel");
-        if (chestPanel) {
-          const baseW = 860;
-          const baseH = isCompactH ? 428 : 520;
-          chestPanel.style.setProperty("--panel-base-h", `${baseH}px`);
-          chestPanel.style.setProperty("--panel-pad-y", isCompactH ? "18px" : "24px");
-          chestPanel.style.setProperty("--panel-pad-x", isCompactH ? "24px" : "28px");
-          const scale = Math.min(1, availW / baseW, availH / baseH);
-          chestPanel.style.setProperty("--ui-panel-scale", scale.toFixed(4));
-        }
-
-        // 3. Save Select Panel (#saveSelectOverlay)
-        const savePanel = document.querySelector("#saveSelectOverlay .inventory-panel");
-        if (savePanel) {
-          const baseW = 520;
-          const baseH = isCompactH ? 420 : 480;
-          savePanel.style.setProperty("--panel-base-h", `${baseH}px`);
-          savePanel.style.setProperty("--panel-pad-y", isCompactH ? "18px" : "24px");
-          const scale = Math.min(1, availW / baseW, availH / baseH);
-          savePanel.style.setProperty("--ui-panel-scale", scale.toFixed(4));
-        }
-
-        // 4. Warp Panel (#warpOverlay)
-        const warpPanel = document.querySelector("#warpOverlay .inventory-panel");
-        if (warpPanel) {
-          const baseW = 448;
-          const baseH = isCompactH ? 428 : 520;
-          warpPanel.style.setProperty("--panel-base-h", `${baseH}px`);
-          warpPanel.style.setProperty("--panel-pad-y", isCompactH ? "18px" : "24px");
-          const scale = Math.min(1, availW / baseW, availH / baseH);
-          warpPanel.style.setProperty("--ui-panel-scale", scale.toFixed(4));
-        }
-
-        // 5. HUD scale for small viewports
-        const hudScale = Math.max(0.65, Math.min(1, Math.min(vw / 640, vh / 480)));
-        document.documentElement.style.setProperty("--ui-hud-scale", hudScale.toFixed(3));
-
         if (typeof window.updateCustomScrollbar === "function") {
           setTimeout(window.updateCustomScrollbar, 20);
         }

@@ -1233,7 +1233,11 @@ if (gl) {
       resizeCanvas();
       window.addEventListener("resize", () => {
         resizeCanvas();
-        updateActionSlotsPosition();
+        if (typeof updateActionSlotsPosition === "function") {
+          updateActionSlotsPosition();
+        } else if (typeof window !== "undefined" && typeof window.updateActionSlotsPosition === "function") {
+          window.updateActionSlotsPosition();
+        }
       });
 
 
@@ -2259,6 +2263,7 @@ window.cloud3DProgram = cloud3DProgram;
           basePos[2] + N[2] * upH + F[2] * fwdH
         ];
       }
+      window.getNPCTargetPoint = getNPCTargetPoint;
 
 
       // ============================================
@@ -3075,6 +3080,257 @@ window.cloud3DProgram = cloud3DProgram;
         moveForwardInput = Math.max(-1, Math.min(1, moveForwardInput));
         moveSidewaysInput = Math.max(-1, Math.min(1, moveSidewaysInput));
 
+        if (window.tantoShirasayaState || window.aegisShiftState) {
+          const heldSlotItem = (typeof selectedActionSlotIndex !== "undefined" && selectedActionSlotIndex !== -1 && typeof actionSlotsItems !== "undefined" && actionSlotsItems)
+            ? actionSlotsItems[selectedActionSlotIndex]
+            : null;
+          const heldItemName = heldSlotItem ? heldSlotItem.name : "";
+          const isVehicleOrRag = isRidingBoat || (typeof activeRidingMech !== "undefined" && !!activeRidingMech) || (typeof ragdollEnabled !== "undefined" && !!ragdollEnabled);
+
+          const _finishMeleeComboOrStep = (st) => {
+            if (st.isAerialCombo) {
+              window._shiraLandSafeTimer = 2.5;
+              window._playerHighestAirRadius = null;
+            }
+            st.mode = "post_skill";
+            st.comboActive = false;
+            st.comboStep = 1;
+            st.isAerialCombo = false;
+            st.aerialTarget = null;
+            st.aerialBaseRadius = null;
+            st.dashTimer = 0.0;
+            st.postGraceTimer = 0.14;
+          };
+
+          const _updateUnifiedMeleeSkillTick = (st, isHoldingWeapon, cfg) => {
+            if (!st) return;
+            if (!isHoldingWeapon || isUIOpen || isVehicleOrRag) {
+              if (st.mode !== "idle" && typeof cfg.resetFn === "function") {
+                cfg.resetFn();
+              }
+              return;
+            }
+            if (st.mode === "charging") {
+              st.chargeTime += dt;
+              const _sinT = Math.sin(charTheta), _cosT = Math.cos(charTheta);
+              const _sinP = Math.sin(charPhi), _cosP = Math.cos(charPhi);
+              const _nx = _sinT * _cosP, _ny = _cosT, _nz = _sinT * _sinP;
+              const _N = [-_cosT * _cosP, _sinT, -_cosT * _sinP];
+              const _E = [-_sinP, 0, _cosP];
+              const _pRad = playerCenterRadius || RADIUS;
+              if (st.lockedTarget && !st.lockedTarget.ragdollEnabled && (st.lockedTarget.hp === undefined || st.lockedTarget.hp > 0) && st.lockedTarget.position) {
+                const tp = getNPCTargetPoint(st.lockedTarget) || st.lockedTarget.position;
+                const dx = tp[0] - _pRad * _nx, dy = tp[1] - _pRad * _ny, dz = tp[2] - _pRad * _nz;
+                const tN = dx * _N[0] + dy * _N[1] + dz * _N[2];
+                const tE = dx * _E[0] + dy * _E[1] + dz * _E[2];
+                if (Math.hypot(tN, tE) > 0.06) {
+                  const aimH = Math.atan2(tE, tN);
+                  const hDiff = Math.atan2(Math.sin(aimH - charHeading), Math.cos(aimH - charHeading));
+                  charHeading += hDiff * Math.min(1.0, dt * 14.0);
+                }
+              } else if (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") {
+                charHeading = rotationY;
+              }
+              if (st.chargeTime >= st.comboChargeTrigger && window.isAltActionDown) {
+                const curH = (typeof playerHunger === "number")
+                  ? playerHunger
+                  : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
+                if (curH >= 1 && typeof cfg.execFn === "function") {
+                  st.comboActive = true;
+                  cfg.execFn(1, true);
+                } else if (typeof cfg.execFn === "function") {
+                  st.comboActive = false;
+                  if (typeof showNotice === "function") {
+                    showNotice(cfg.lowHungerComboNotice);
+                  }
+                  cfg.execFn(1, false);
+                }
+              } else if (!window.isAltActionDown && st.chargeTime > 0.03 && typeof cfg.releaseFn === "function") {
+                cfg.releaseFn();
+              }
+            } else if (st.mode === "dashing") {
+              st.dashTimer -= dt;
+              const dur = Math.max(0.01, st.dashDuration || cfg.defaultDur);
+              const prog = 1.0 - Math.max(0.0, Math.min(1.0, st.dashTimer / dur));
+              const step = st.comboStep || 1;
+
+              if (typeof window.updateUnifiedMeleeDashTracking === "function") {
+                window.updateUnifiedMeleeDashTracking(st, step, prog, dt, { turnStopBeforeEnd: cfg.turnStop, turnSpeed: cfg.turnSpeed });
+              }
+
+              cfg.onDashFrame(st, step, prog);
+
+              if (cfg.canHit(step, prog) && typeof window.performUnifiedMeleeSkillHit === "function") {
+                window.performUnifiedMeleeSkillHit(cfg.dmg, cfg.labelMap[step] || cfg.fallbackLabel, {
+                  hitSet: st.hitEntities,
+                  omni: !!(cfg.omniStep3 && step === 3),
+                  coneCos: cfg.coneMap[step] !== undefined ? cfg.coneMap[step] : cfg.defaultCone,
+                  maxVert: cfg.vertMap[step] || cfg.defaultVert,
+                  lockedTarget: st.lockedTarget
+                });
+              }
+
+              if (st.dashTimer <= 0) {
+                st.visualSpinYaw = 0.0;
+                st.stopForwardMove = false;
+                st.visualAirLift = (cfg.keepLiftOnStep3End && st.comboActive && step === 3 && !st.isAerialCombo) ? 0.16 : 0.0;
+                if (st.comboActive && step < 4 && typeof cfg.execFn === "function") {
+                  cfg.execFn(step + 1, false);
+                } else if (st.comboActive && step === 4) {
+                  const curH = (typeof playerHunger === "number")
+                    ? playerHunger
+                    : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
+                  if (window.isAltActionDown && curH >= 1 && typeof cfg.execFn === "function") {
+                    cfg.execFn(1, true);
+                  } else {
+                    if (window.isAltActionDown && curH < 1 && typeof showNotice === "function") {
+                      showNotice(cfg.outOfHungerNotice);
+                    }
+                    _finishMeleeComboOrStep(st);
+                  }
+                } else {
+                  _finishMeleeComboOrStep(st);
+                }
+              }
+            } else if (st.mode === "post_skill") {
+              st.postGraceTimer = Math.max(0.0, st.postGraceTimer - dt);
+              if (st.postGraceTimer <= 0 && (Math.abs(moveForwardInput) > 0.05 || Math.abs(moveSidewaysInput) > 0.05)) {
+                if (typeof cfg.resetFn === "function") {
+                  cfg.resetFn();
+                }
+              }
+            }
+          };
+
+          if (typeof window.tantoShirasayaState === "object" && window.tantoShirasayaState) {
+            _updateUnifiedMeleeSkillTick(
+              window.tantoShirasayaState,
+              (heldItemName === "TANTO" || heldItemName === "tanto"),
+              {
+                resetFn: window.resetTantoShirasayaState,
+                execFn: window.executeTantoSkillStep,
+                releaseFn: window.releaseTantoChargeSkill,
+                defaultDur: 0.27,
+                turnStop: 0.32,
+                turnSpeed: 16.0,
+                dmg: 1,
+                omniStep3: true,
+                coneMap: { 1: 0.48, 2: 0.12, 3: null, 4: 0.42 },
+                defaultCone: null,
+                vertMap: { 1: 0.65, 2: 0.55, 3: 0.72, 4: 0.75 },
+                defaultVert: 0.65,
+                labelMap: {
+                  1: "⚡🗡️ ชิราซายะ [1/4: พุ่งฟัน]",
+                  2: "⚡🗡️ ชิราซายะ [2/4: ตวัดล่าง]",
+                  3: "🌪️🗡️ ชิราซายะ [3/4: หมุนกลางอากาศ]",
+                  4: "💥🗡️ ชิราซายะ [4/4: ฟันกระแทกพื้น]"
+                },
+                fallbackLabel: "⚡🗡️ ชิราซายะ",
+                lowHungerComboNotice: "⚠️ ความหิวไม่พอสำหรับคอมโบ! ใช้เฉพาะสกิลพุ่ง (1 HP)",
+                outOfHungerNotice: "⚠️ ความหิวหมดแล้ว! จบคอมโบชิราซายะ",
+                keepLiftOnStep3End: true,
+                canHit: (step, prog) => (step !== 4 || prog >= 0.25),
+                onDashFrame: (st, step, prog) => {
+                  if (step === 1) {
+                    st.visualAirLift = 0.0;
+                    st.visualSpinYaw = 0.0;
+                  } else if (step === 2) {
+                    st.visualAirLift = 0.0;
+                    st.visualSpinYaw = Math.sin(Math.min(1.0, prog / 0.55) * Math.PI) * 0.38;
+                  } else if (step === 3) {
+                    const spinE = prog * prog * (3.0 - 2.0 * prog);
+                    const endLift = st.comboActive ? 0.16 : 0.0;
+                    st.visualAirLift = st.isAerialCombo
+                      ? (Math.sin(prog * Math.PI) * 0.16)
+                      : (Math.sin(prog * Math.PI) * 0.54 * (1.0 - 0.18 * prog) + endLift * (prog * prog));
+                    st.visualSpinYaw = spinE * Math.PI * 2.0;
+                  } else {
+                    const dropT = Math.min(1.0, prog / 0.30);
+                    const dropE = dropT * dropT * (3.0 - 2.0 * dropT);
+                    st.visualAirLift = st.isAerialCombo ? 0.0 : Math.max(0.0, 0.16 * (1.0 - dropE));
+                    st.visualSpinYaw = 0.0;
+                    if (prog >= 0.35 && !st.impactPlayed) {
+                      st.impactPlayed = true;
+                      if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
+                      else if (typeof playChopSound === "function") playChopSound();
+                    }
+                  }
+                }
+              }
+            );
+          }
+
+          if (typeof window.aegisShiftState === "object" && window.aegisShiftState) {
+            const smA = (a, b, x) => {
+              const t = Math.max(0.0, Math.min(1.0, (x - a) / Math.max(1e-4, b - a)));
+              return t * t * (3.0 - 2.0 * t);
+            };
+            _updateUnifiedMeleeSkillTick(
+              window.aegisShiftState,
+              (heldItemName === "AEGIS_SHIFT" || heldItemName === "aegis_shift"),
+              {
+                resetFn: window.resetAegisShiftState,
+                execFn: window.executeAegisSkillStep,
+                releaseFn: window.releaseAegisChargeSkill,
+                defaultDur: 0.38,
+                turnStop: 0.36,
+                turnSpeed: 15.0,
+                dmg: 2,
+                omniStep3: false,
+                coneMap: { 1: 0.25, 2: 0.20, 3: -0.15, 4: 0.22 },
+                defaultCone: 0.25,
+                vertMap: { 1: 0.72, 2: 0.78, 3: 0.72, 4: 0.85 },
+                defaultVert: 0.72,
+                labelMap: {
+                  1: "⚔️⚡ Aegis-Shift [1/4: พุ่งฟัน]",
+                  2: "⚔️🔥 Aegis-Shift [2/4: ฟันเสยเฉียง]",
+                  3: "⚔️💨 Aegis-Shift [3/4: กวาดแนวขวาง]",
+                  4: "⚔️💥 Aegis-Shift [4/4: ผ่าปฐพี]"
+                },
+                fallbackLabel: "⚔️⚡ ดาบใหญ่ Aegis-Shift",
+                lowHungerComboNotice: "⚠️ ความหิวไม่พอสำหรับคอมโบ! ใช้เฉพาะสกิลพุ่ง (2 HP)",
+                outOfHungerNotice: "⚠️ ความหิวหมดแล้ว! จบคอมโบดาบใหญ่ Aegis-Shift",
+                keepLiftOnStep3End: false,
+                canHit: (step, prog) => (step === 1 ? prog >= 0.20 : (step === 4 ? prog >= 0.28 : prog >= 0.16)),
+                onDashFrame: (aSt, step, prog) => {
+                  if (step === 1) {
+                    const windTwist = smA(0.0, 0.18, prog);
+                    const cleaveTwist = smA(0.16, 0.54, prog);
+                    const settleTwist = smA(0.64, 1.0, prog);
+                    aSt.visualSpinYaw = (-0.26 * windTwist * (1.0 - cleaveTwist) + 0.30 * cleaveTwist) * (1.0 - settleTwist);
+                    aSt.visualAirLift = 0.0;
+                    if (prog >= 0.34 && !aSt.impactPlayed) {
+                      aSt.impactPlayed = true;
+                      if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
+                    }
+                  } else if (step === 2) {
+                    const wind2 = smA(0.0, 0.16, prog);
+                    const slash2 = smA(0.14, 0.56, prog);
+                    const settle2 = smA(0.72, 1.0, prog);
+                    aSt.visualSpinYaw = (-0.24 * wind2 * (1.0 - slash2) + 0.24 * slash2) * (1.0 - settle2);
+                    aSt.visualAirLift = 0.0;
+                  } else if (step === 3) {
+                    const wind3 = smA(0.0, 0.16, prog);
+                    const slash3 = smA(0.14, 0.58, prog);
+                    const settle3 = smA(0.76, 1.0, prog);
+                    aSt.visualSpinYaw = (0.22 * wind3 * (1.0 - slash3) - 0.30 * slash3) * (1.0 - settle3);
+                    aSt.visualAirLift = 0.0;
+                  } else {
+                    const lift4 = Math.sin(Math.min(1.0, prog / 0.38) * Math.PI);
+                    aSt.visualAirLift = aSt.isAerialCombo ? 0.0 : (lift4 * 0.09);
+                    aSt.visualSpinYaw = 0.0;
+                    if (prog >= 0.38 && !aSt.impactPlayed) {
+                      aSt.impactPlayed = true;
+                      if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
+                      else if (typeof playChopSound === "function") playChopSound();
+                    }
+                  }
+                }
+              }
+            );
+          }
+        }
+
         // Gamepad Right Stick Camera Look / Rotate
         if (!isUIOpen && typeof window.GamepadController !== "undefined" && typeof window.GamepadController.getLook === "function") {
           const gpLook = window.GamepadController.getLook(dt);
@@ -3355,119 +3611,167 @@ window.cloud3DProgram = cloud3DProgram;
             const minGroundRadius = (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel)
               ? (caveData.ground + 0.46 * charScale)
               : standGroundRadius;
+            const _shiraStAir = (typeof window.tantoShirasayaState === "object" && window.tantoShirasayaState && window.tantoShirasayaState.isAerialCombo && (window.tantoShirasayaState.mode === "dashing" || window.tantoShirasayaState.mode === "charging"))
+              ? window.tantoShirasayaState
+              : ((typeof window.aegisShiftState === "object" && window.aegisShiftState && window.aegisShiftState.isAerialCombo && (window.aegisShiftState.mode === "dashing" || window.aegisShiftState.mode === "charging"))
+                  ? window.aegisShiftState
+                  : null);
+            const _isShiraAerialActive = !!_shiraStAir;
 
-            // Ground snapping: allow smooth steps on slopes/stairs (up to 0.15 * charScale, ~3.3cm)
-            const groundSnapThreshold = 0.15 * charScale;
-            const diffFromGround = playerCenterRadius - minGroundRadius;
-            if (isPlayerGrounded && playerVerticalVel <= 0.0 && diffFromGround >= -0.02 && diffFromGround <= groundSnapThreshold) {
-              playerCenterRadius = minGroundRadius;
-              playerVerticalVel = 0.0;
-              window._playerHighestAirRadius = null;
-            } else {
-              // Track highest point during airborne phase
-              if (window._playerHighestAirRadius === null || typeof window._playerHighestAirRadius === "undefined") {
-                window._playerHighestAirRadius = playerCenterRadius;
-              } else if (playerCenterRadius > window._playerHighestAirRadius) {
-                window._playerHighestAirRadius = playerCenterRadius;
+            if (typeof window._shiraLandSafeTimer === "number" && window._shiraLandSafeTimer > 0) {
+              window._shiraLandSafeTimer = Math.max(0.0, window._shiraLandSafeTimer - dt);
+            }
+
+            if (_isShiraAerialActive) {
+              // Aerial dash/combo: launch upward to flying target's altitude and suspend gravity mid-combo
+              let targetAirR = (typeof _shiraStAir.aerialBaseRadius === "number") ? _shiraStAir.aerialBaseRadius : playerCenterRadius;
+              const aTgt = _shiraStAir.aerialTarget || _shiraStAir.lockedTarget;
+              if (aTgt && !aTgt.ragdollEnabled && aTgt.position) {
+                const tp = getNPCTargetPoint(aTgt) || aTgt.position;
+                const npcR = Math.hypot(tp[0], tp[1], tp[2]);
+                if (npcR > minGroundRadius + 0.06) {
+                  targetAirR = npcR - 0.02;
+                  _shiraStAir.aerialBaseRadius = targetAirR;
+                }
               }
-
-              // Air physics - apply gravity
-              playerVerticalVel = Physics.applyVerticalGravity(playerVerticalVel, 1.0, Physics.gravityAccel);
-              playerCenterRadius += playerVerticalVel;
-
-              // Overhead 2nd-floor / structure ceiling collision (head bump from below)
+              const _dDur = Math.max(0.01, _shiraStAir.dashDuration || 0.27);
+              const _dProg = 1.0 - Math.max(0.0, Math.min(1.0, _shiraStAir.dashTimer / _dDur));
+              let desiredAirR = Math.max(minGroundRadius, targetAirR);
+              if (_shiraStAir.mode === "dashing") {
+                if (_shiraStAir.comboStep === 3) {
+                  desiredAirR += Math.sin(_dProg * Math.PI) * 0.10;
+                } else if (_shiraStAir.comboStep === 4) {
+                  desiredAirR = Math.max(minGroundRadius, desiredAirR - _dProg * 0.08);
+                }
+              }
               const maxStructureCenter = (floorCeilingRad !== Infinity) ? (floorCeilingRad - 0.46 * charScale) : Infinity;
               if (maxStructureCenter !== Infinity) {
-                const ceilingLimitCenter = Math.max(minGroundRadius, maxStructureCenter);
-                if (playerCenterRadius > ceilingLimitCenter) {
-                  playerCenterRadius = ceilingLimitCenter;
-                  playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2);
-                }
+                desiredAirR = Math.min(desiredAirR, Math.max(minGroundRadius, maxStructureCenter));
               }
-
-              const minFallHeightForRagdoll = 1.8 * (charScale / 0.22);
-              const currentFallDist = (window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
-                ? Math.max(0, window._playerHighestAirRadius - playerCenterRadius)
-                : 0;
-
-              // GTA IV Mid-Air Euphoria Freefall Ragdoll:
-              // If the player has already fallen a significant height (>= minFallHeightForRagdoll) in mid-air,
-              // transition into active freefall ragdoll BEFORE hitting the ground so they tumble & flail in the air!
-              if (
-                !ragdollEnabled &&
-                playerCenterRadius > minGroundRadius + 0.22 * charScale &&
-                currentFallDist >= minFallHeightForRagdoll &&
-                playerVerticalVel <= -0.026 &&
-                (typeof currentSwimFactor === "undefined" || currentSwimFactor <= 0.3)
-              ) {
-                window._midAirFallRagdollActive = true;
-                window._ragdollHighestAirRadius = window._playerHighestAirRadius;
-                window._ragdollInitialVerticalVel = playerVerticalVel;
-                if (typeof setRagdoll === "function") {
-                  setRagdoll(true);
-                }
-              } else if (playerCenterRadius <= minGroundRadius) {
-                const impactVelocity = -playerVerticalVel;
-                const fallDistance = (window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
-                  ? Math.max(0, window._playerHighestAirRadius - minGroundRadius)
-                  : 0;
-                window._playerHighestAirRadius = null;
-
+              if (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel && caveData.ceiling !== Infinity) {
+                desiredAirR = Math.min(desiredAirR, caveData.ceiling - 0.46 * charScale);
+              }
+              playerCenterRadius += (desiredAirR - playerCenterRadius) * Math.min(1.0, dt * 13.0);
+              playerVerticalVel = 0.0;
+              isPlayerGrounded = (playerCenterRadius <= minGroundRadius + 0.01);
+              window._playerHighestAirRadius = null;
+              window._shiraLandSafeTimer = 2.5;
+            } else {
+              // Ground snapping: allow smooth steps on slopes/stairs (up to 0.15 * charScale, ~3.3cm)
+              const groundSnapThreshold = 0.15 * charScale;
+              const diffFromGround = playerCenterRadius - minGroundRadius;
+              if (isPlayerGrounded && playerVerticalVel <= 0.0 && diffFromGround >= -0.02 && diffFromGround <= groundSnapThreshold) {
                 playerCenterRadius = minGroundRadius;
                 playerVerticalVel = 0.0;
-                isPlayerGrounded = true;
-
-                // High fall check & Fall Damage:
-                // Only trigger Fall Damage and Ragdoll if the character genuinely fell from a significant height:
-                // at least 1.8 units (~8-9 times the player's height) AND impactVelocity >= 0.030.
-                // Low drops (< 1.8 units, like jumping off a rock or running down a slope) will NEVER trigger Ragdoll or Damage!
-                if (fallDistance >= minFallHeightForRagdoll && impactVelocity >= 0.030) {
-                  const isInWater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.3);
-                  if (!isInWater) {
-                    // Fall Damage scaling based on height fallen:
-                    // 1.8 - 3.0 units: 1 DMG (ตกจากที่สูงเล็กน้อย)
-                    // 3.0 - 5.0 units: 2 DMG (ตกจากที่สูงปานกลาง)
-                    // 5.0 - 7.5 units: 3 DMG (ตกจากหน้าผา/ยอดไม้สูง)
-                    // >= 7.5 units: 5 DMG (ตกจากที่สูงมาก/ยานบินบนฟ้าจนหมดสติ)
-                    let fallDamage = 1;
-                    const scaleRatio = (charScale / 0.22);
-                    if (fallDistance >= 7.5 * scaleRatio) {
-                      fallDamage = 5;
-                    } else if (fallDistance >= 5.0 * scaleRatio) {
-                      fallDamage = 3;
-                    } else if (fallDistance >= 3.0 * scaleRatio) {
-                      fallDamage = 2;
-                    }
-
-                    if (typeof applyPlayerFallDamage === "function") {
-                      applyPlayerFallDamage(fallDamage, fallDistance);
-                    } else if (typeof window.applyPlayerFallDamage === "function") {
-                      window.applyPlayerFallDamage(fallDamage, fallDistance);
-                    } else if (typeof damagePlayer === "function") {
-                      damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
-                    } else if (typeof window.damagePlayer === "function") {
-                      window.damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
-                    }
-
-                    // Preserve downward impact velocity so initRagdoll slams & buckles into the ground!
-                    window._ragdollInitialVerticalVel = -impactVelocity;
-                    const ragDuration = fallDamage >= 3 ? 2200 : 1500;
-                    if (typeof triggerFallRagdoll === "function") {
-                      triggerFallRagdoll(ragDuration);
-                    } else {
-                      setRagdoll(true);
-                    }
-                  }
-
-                  if (typeof playSplashSound === "function") {
-                    playSplashSound(0.5);
+                window._playerHighestAirRadius = null;
+                window._shiraLandSafeTimer = 0.0;
+              } else {
+                const _inShiraSafeLanding = !!(typeof window._shiraLandSafeTimer === "number" && window._shiraLandSafeTimer > 0);
+                if (_inShiraSafeLanding) {
+                  window._playerHighestAirRadius = null;
+                } else {
+                  // Track highest point during airborne phase
+                  if (window._playerHighestAirRadius === null || typeof window._playerHighestAirRadius === "undefined") {
+                    window._playerHighestAirRadius = playerCenterRadius;
+                  } else if (playerCenterRadius > window._playerHighestAirRadius) {
+                    window._playerHighestAirRadius = playerCenterRadius;
                   }
                 }
-              } else if (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel && caveData.ceiling !== Infinity && playerCenterRadius > (caveData.ceiling - 0.46 * charScale)) {
-                playerCenterRadius = caveData.ceiling - 0.46 * charScale;
-                playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2); // Ceiling bump bounce
-              } else {
-                isPlayerGrounded = false;
+
+                // Air physics - apply gravity
+                playerVerticalVel = Physics.applyVerticalGravity(playerVerticalVel, 1.0, Physics.gravityAccel);
+                playerCenterRadius += playerVerticalVel;
+
+                // Overhead 2nd-floor / structure ceiling collision (head bump from below)
+                const maxStructureCenter = (floorCeilingRad !== Infinity) ? (floorCeilingRad - 0.46 * charScale) : Infinity;
+                if (maxStructureCenter !== Infinity) {
+                  const ceilingLimitCenter = Math.max(minGroundRadius, maxStructureCenter);
+                  if (playerCenterRadius > ceilingLimitCenter) {
+                    playerCenterRadius = ceilingLimitCenter;
+                    playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2);
+                  }
+                }
+
+                const minFallHeightForRagdoll = 1.8 * (charScale / 0.22);
+                const currentFallDist = (!_inShiraSafeLanding && window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
+                  ? Math.max(0, window._playerHighestAirRadius - playerCenterRadius)
+                  : 0;
+
+                // GTA IV Mid-Air Euphoria Freefall Ragdoll:
+                // If the player has already fallen a significant height (>= minFallHeightForRagdoll) in mid-air,
+                // transition into active freefall ragdoll BEFORE hitting the ground so they tumble & flail in the air!
+                if (
+                  !_inShiraSafeLanding &&
+                  !ragdollEnabled &&
+                  playerCenterRadius > minGroundRadius + 0.22 * charScale &&
+                  currentFallDist >= minFallHeightForRagdoll &&
+                  playerVerticalVel <= -0.026 &&
+                  (typeof currentSwimFactor === "undefined" || currentSwimFactor <= 0.3)
+                ) {
+                  window._midAirFallRagdollActive = true;
+                  window._ragdollHighestAirRadius = window._playerHighestAirRadius;
+                  window._ragdollInitialVerticalVel = playerVerticalVel;
+                  if (typeof setRagdoll === "function") {
+                    setRagdoll(true);
+                  }
+                } else if (playerCenterRadius <= minGroundRadius) {
+                  const impactVelocity = -playerVerticalVel;
+                  const fallDistance = (!_inShiraSafeLanding && window._playerHighestAirRadius !== null && typeof window._playerHighestAirRadius !== "undefined")
+                    ? Math.max(0, window._playerHighestAirRadius - minGroundRadius)
+                    : 0;
+                  window._playerHighestAirRadius = null;
+                  window._shiraLandSafeTimer = 0.0;
+
+                  playerCenterRadius = minGroundRadius;
+                  playerVerticalVel = 0.0;
+                  isPlayerGrounded = true;
+
+                  // High fall check & Fall Damage:
+                  // Only trigger Fall Damage and Ragdoll if the character genuinely fell from a significant height:
+                  // at least 1.8 units (~8-9 times the player's height) AND impactVelocity >= 0.030.
+                  // Low drops (< 1.8 units, like jumping off a rock or running down a slope) will NEVER trigger Ragdoll or Damage!
+                  if (!_inShiraSafeLanding && fallDistance >= minFallHeightForRagdoll && impactVelocity >= 0.030) {
+                    const isInWater = (typeof currentSwimFactor !== "undefined" && currentSwimFactor > 0.3);
+                    if (!isInWater) {
+                      let fallDamage = 1;
+                      const scaleRatio = (charScale / 0.22);
+                      if (fallDistance >= 7.5 * scaleRatio) {
+                        fallDamage = 5;
+                      } else if (fallDistance >= 5.0 * scaleRatio) {
+                        fallDamage = 3;
+                      } else if (fallDistance >= 3.0 * scaleRatio) {
+                        fallDamage = 2;
+                      }
+
+                      if (typeof applyPlayerFallDamage === "function") {
+                        applyPlayerFallDamage(fallDamage, fallDistance);
+                      } else if (typeof window.applyPlayerFallDamage === "function") {
+                        window.applyPlayerFallDamage(fallDamage, fallDistance);
+                      } else if (typeof damagePlayer === "function") {
+                        damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
+                      } else if (typeof window.damagePlayer === "function") {
+                        window.damagePlayer(fallDamage, `⚠️ ตกจากที่สูง! (-${fallDamage} HP)`);
+                      }
+
+                      window._ragdollInitialVerticalVel = -impactVelocity;
+                      const ragDuration = fallDamage >= 3 ? 2200 : 1500;
+                      if (typeof triggerFallRagdoll === "function") {
+                        triggerFallRagdoll(ragDuration);
+                      } else {
+                        setRagdoll(true);
+                      }
+                    }
+
+                    if (typeof playSplashSound === "function") {
+                      playSplashSound(0.5);
+                    }
+                  }
+                } else if (typeof caveData !== 'undefined' && caveData && caveData.insideTunnel && caveData.ceiling !== Infinity && playerCenterRadius > (caveData.ceiling - 0.46 * charScale)) {
+                  playerCenterRadius = caveData.ceiling - 0.46 * charScale;
+                  playerVerticalVel = Math.min(0.0, -playerVerticalVel * 0.2); // Ceiling bump bounce
+                } else {
+                  isPlayerGrounded = false;
+                }
               }
             }
           }
@@ -3694,6 +3998,30 @@ window.cloud3DProgram = cloud3DProgram;
               activeRidingMech._nearbyStand = closestStand;
             }
           }
+        } else if (
+          (window.tantoShirasayaState && (window.tantoShirasayaState.mode === "charging" || window.tantoShirasayaState.mode === "dashing")) ||
+          (window.aegisShiftState && (window.aegisShiftState.mode === "charging" || window.aegisShiftState.mode === "dashing"))
+        ) {
+          const activeMeleeSt = (window.aegisShiftState && (window.aegisShiftState.mode === "charging" || window.aegisShiftState.mode === "dashing"))
+            ? window.aegisShiftState
+            : window.tantoShirasayaState;
+          if (activeMeleeSt.mode === "charging") {
+            moveNorthFactor = 0;
+            moveEastFactor = 0;
+          } else {
+            const dDur = Math.max(0.01, activeMeleeSt.dashDuration || 0.24);
+            const dProg = 1.0 - Math.max(0.0, Math.min(1.0, activeMeleeSt.dashTimer / dDur));
+            const isAegisDash = (activeMeleeSt === window.aegisShiftState);
+            const mStep = activeMeleeSt.comboStep || 1;
+            const stopDash = activeMeleeSt.stopForwardMove || (isAegisDash ? (mStep === 1 ? dProg >= 0.50 : (mStep === 4 && dProg >= 0.44)) : (mStep === 4 && dProg >= 0.38));
+            if (stopDash) {
+              moveNorthFactor = 0;
+              moveEastFactor = 0;
+            } else {
+              moveNorthFactor = activeMeleeSt.dashDirNorth;
+              moveEastFactor = activeMeleeSt.dashDirEast;
+            }
+          }
         } else if (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") {
           moveNorthFactor = Math.cos(rotationY) * moveForwardInput + Math.sin(rotationY) * moveSidewaysInput;
           moveEastFactor  = Math.sin(rotationY) * moveForwardInput - Math.cos(rotationY) * moveSidewaysInput;
@@ -3712,7 +4040,30 @@ window.cloud3DProgram = cloud3DProgram;
           const currentRadius = RADIUS + charHeight * HEIGHT_SCALE;
           let pSpeed = typeof playerSpeed !== "undefined" ? playerSpeed : 0.005;
           let currentSpeedVal = pSpeed * (1.0 - 0.4 * currentSwimFactor);
-          if (activeRidingBoat) {
+          const _shirasayaDashSt = (window.aegisShiftState && window.aegisShiftState.mode === "dashing")
+            ? window.aegisShiftState
+            : ((window.tantoShirasayaState && window.tantoShirasayaState.mode === "dashing") ? window.tantoShirasayaState : null);
+          const _isShirasayaDashing = !!_shirasayaDashSt;
+          if (_isShirasayaDashing) {
+            const dRem = Math.max(0.0, Math.min(1.0, _shirasayaDashSt.dashTimer / Math.max(0.01, _shirasayaDashSt.dashDuration)));
+            const dProgPos = 1.0 - dRem;
+            const cStep = _shirasayaDashSt.comboStep || 1;
+            const _smoothDec = (startP, spanP) => {
+              const dec = Math.max(0.0, Math.min(1.0, (dProgPos - startP) / spanP));
+              return dec * dec * (3.0 - 2.0 * dec);
+            };
+            let velCurve = 1.0;
+            if (_shirasayaDashSt === window.aegisShiftState) {
+              if (cStep === 1) velCurve = 1.15 * (1.0 - _smoothDec(0.22, 0.28));
+              else if (cStep === 4) velCurve = 1.0 - _smoothDec(0.20, 0.24);
+              else velCurve = 0.35 + 0.90 * Math.sin(dProgPos * Math.PI);
+            } else if (cStep === 4) {
+              velCurve = 1.0 - _smoothDec(0.14, 0.24);
+            } else {
+              velCurve = 0.32 + 1.05 * Math.sin(dProgPos * Math.PI);
+            }
+            currentSpeedVal = _shirasayaDashSt.dashSpeed * Math.max(0.0, velCurve) * (typeof timeScale === "number" ? timeScale : 1.0);
+          } else if (activeRidingBoat) {
             if (boatControlResult && typeof boatControlResult.currentSpeedVal === "number") {
               currentSpeedVal = boatControlResult.currentSpeedVal;
             } else {
@@ -3868,12 +4219,12 @@ window.cloud3DProgram = cloud3DProgram;
             let isAimingBow = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
             if (typeof window !== "undefined") window.isAimingBow = isAimingBow;
             
-            if (!activeRidingBoat && !isAimingBow) {
+            if (!activeRidingBoat && !isAimingBow && !_isShirasayaDashing) {
               charHeading += diffHeading * 0.22 * timeScale;
             }
 
-            isWalking = !activeRidingBoat;
-            if (!activeRidingBoat) {
+            isWalking = !activeRidingBoat && !_isShirasayaDashing;
+            if (!activeRidingBoat && !_isShirasayaDashing) {
               const walkSpeed = activeRidingMech ? 0.12 : 0.24;
               walkPhase += walkSpeed * timeScale;
             }
@@ -4057,7 +4408,20 @@ window.cloud3DProgram = cloud3DProgram;
           }
         }
         
-        if ((cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON")) {
+        const _isTpsOrFpsCam = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps");
+        const _isAimingRangedCam = _isTpsOrFpsCam && isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
+        const _shiraStCam = (typeof window.tantoShirasayaState === "object") ? window.tantoShirasayaState : null;
+        const _aegisStCam = (typeof window.aegisShiftState === "object") ? window.aegisShiftState : null;
+        const _isUsingMeleeCam = _isTpsOrFpsCam && !isUIOpen && !isRidingBoat &&
+          !(typeof activeRidingMech !== "undefined" && activeRidingMech) &&
+          !(typeof ragdollEnabled !== "undefined" && ragdollEnabled) &&
+          (!!(_shiraStCam && (_shiraStCam.mode === "charging" || _shiraStCam.mode === "dashing")) ||
+           !!(_aegisStCam && (_aegisStCam.mode === "charging" || _aegisStCam.mode === "dashing")) ||
+           !!(isUsingItem && activeItem && (activeItem.name === "TANTO" || activeItem.name === "tanto" || activeItem.name === "PICKAXE" || activeItem.name === "pickaxe" || activeItem.name === "AEGIS_SHIFT" || activeItem.name === "aegis_shift")));
+
+        const _isDashingSkillCam = !!((_shiraStCam && _shiraStCam.mode === "dashing") || (_aegisStCam && _aegisStCam.mode === "dashing"));
+
+        if (_isAimingRangedCam || (_isUsingMeleeCam && (activeTargetNPC || _isDashingSkillCam))) {
           let targetHeading = rotationY;
           if (activeTargetNPC) {
               const target_world = window.currentAimTargetPos || getNPCTargetPoint(activeTargetNPC);
@@ -4091,14 +4455,14 @@ window.cloud3DProgram = cloud3DProgram;
           let diffHeading = targetHeading - charHeading;
           while (diffHeading < -Math.PI) diffHeading += Math.PI * 2;
           while (diffHeading > Math.PI) diffHeading -= Math.PI * 2;
-          // When aiming, character quickly turns to face target
+          // When aiming / using skill, character turns to face target
           charHeading += diffHeading * 0.4 * timeScale;
         } else {
             activeTargetNPC = null;
         }
 
         if (activeRidingBoat) {
-            const wRadius = RADIUS + waterLevel * 0.15;
+            const wRadius = waterRadius;
             let height = getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
             let feetBeforeBoat = activeRidingBoat.currentRadius || (playerCenterRadius ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + height * HEIGHT_SCALE));
             const caveDataBoat = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetBeforeBoat) : { ground: RADIUS + height * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
@@ -4746,30 +5110,31 @@ window.cloud3DProgram = cloud3DProgram;
             jumpBlend = Math.max(0.0, jumpBlend - 15.0 * dt);
         }
         
+        // Update independent player clones AI BEFORE rebuilding character meshes so pose/boat/tool syncs this frame
+        if (typeof window.updatePlayerClones === "function") {
+          window.updatePlayerClones(dt);
+        }
+
         if (needsEveryFrame || timestamp - lastCharAnimTime >= charInterval) {
           updateCharacterMesh(walkPhase);
           if (typeof window.playerClonesState !== "undefined" && window.playerClonesState && window.playerClonesState.length > 0) {
-              const clonePhase = window.performance.now() * 0.005;
-              let anyCloneSwim = 0.0;
-              let anyCloneSwimMove = 0.0;
               for (let ci = 0; ci < window.playerClonesState.length; ci++) {
                 const cs = window.playerClonesState[ci];
-                if (cs && (cs.currentSwimFactor || 0) > anyCloneSwim) {
-                  anyCloneSwim = cs.currentSwimFactor || 0.0;
-                  anyCloneSwimMove = cs.swimMovementFactor || 0.0;
-                }
+                if (!cs) continue;
+                updateCharacterMesh(
+                  cs.animPhase || 0.0,
+                  true,
+                  cs.walkBlend || 0.0,
+                  cs.currentSwimFactor || 0.0,
+                  cs.swimMovementFactor || 0.0,
+                  cs
+                );
               }
-              updateCharacterMesh(clonePhase, true, 1.0, anyCloneSwim, anyCloneSwimMove);
           }
           if (!needsEveryFrame) {
             lastCharAnimTime =
               timestamp - ((timestamp - lastCharAnimTime) % charInterval);
           }
-        }
-
-        // Update independent player clones wandering AI and face signs
-        if (typeof window.updatePlayerClones === "function") {
-          window.updatePlayerClones(dt);
         }
 
         let eyePos;
@@ -5343,10 +5708,16 @@ if (prompt._lastHTML !== _newHtml_2) {
               let rLen = Math.sqrt(activeRidingBoat.position[0]**2 + activeRidingBoat.position[1]**2 + activeRidingBoat.position[2]**2) || 1;
               let bTheta = Math.acos(Math.max(-1, Math.min(1, activeRidingBoat.position[1] / rLen)));
               let bPhi = Math.atan2(activeRidingBoat.position[2], activeRidingBoat.position[0]);
-              let bHeight = getHeightOnSphere(bTheta, bPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-              let bTerrainRadius = RADIUS + bHeight * HEIGHT_SCALE;
-              const bWaterRadius = RADIUS + waterLevel * 0.15;
-              const bDepth = bWaterRadius - bTerrainRadius;
+              const seedVal = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+              const boatRadRef = (typeof activeRidingBoat.currentRadius === "number" && !Number.isNaN(activeRidingBoat.currentRadius) && activeRidingBoat.currentRadius > 0.001) ? activeRidingBoat.currentRadius : rLen;
+              const boatSurf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
+                ? Physics.resolveEntitySurfaceAndWater({ theta: bTheta, phi: bPhi, feetRadius: boatRadRef, planetRadius: RADIUS, heightScale: HEIGHT_SCALE, seed: seedVal })
+                : null;
+              const bWaterRadius = boatSurf
+                ? (boatSurf.wRadiusLocal > 0 ? boatSurf.wRadiusLocal : boatSurf.waterRadius)
+                : (RADIUS + waterLevel * (HEIGHT_SCALE * 0.25));
+              const bTerrainRadius = boatSurf ? boatSurf.terrainRad : (RADIUS + getHeightOnSphere(bTheta, bPhi, seedVal) * HEIGHT_SCALE);
+              const bDepth = boatSurf ? boatSurf.waterDepth : (bWaterRadius - bTerrainRadius);
               const hasWheels = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
               const canRideBoat = (waterEnabled && bDepth > 0.48 * playerScale) || hasWheels;
 
@@ -6058,10 +6429,16 @@ if (prompt._lastHTML !== _newHtml_6) {
                 let rLen = Math.sqrt(closestBoat.position[0]**2 + closestBoat.position[1]**2 + closestBoat.position[2]**2) || 1;
                 let bTheta = Math.acos(Math.max(-1, Math.min(1, closestBoat.position[1] / rLen)));
                 let bPhi = Math.atan2(closestBoat.position[2], closestBoat.position[0]);
-                let bHeight = getHeightOnSphere(bTheta, bPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-                let bTerrainRadius = RADIUS + bHeight * HEIGHT_SCALE;
-                const bWaterRadius = RADIUS + waterLevel * 0.15;
-                const bDepth = bWaterRadius - bTerrainRadius;
+                const seedVal = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+                const boatRadRef = (typeof closestBoat.currentRadius === "number" && !Number.isNaN(closestBoat.currentRadius) && closestBoat.currentRadius > 0.001) ? closestBoat.currentRadius : rLen;
+                const boatSurf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
+                  ? Physics.resolveEntitySurfaceAndWater({ theta: bTheta, phi: bPhi, feetRadius: boatRadRef, planetRadius: RADIUS, heightScale: HEIGHT_SCALE, seed: seedVal })
+                  : null;
+                const bWaterRadius = boatSurf
+                  ? (boatSurf.wRadiusLocal > 0 ? boatSurf.wRadiusLocal : boatSurf.waterRadius)
+                  : (RADIUS + waterLevel * (HEIGHT_SCALE * 0.25));
+                const bTerrainRadius = boatSurf ? boatSurf.terrainRad : (RADIUS + getHeightOnSphere(bTheta, bPhi, seedVal) * HEIGHT_SCALE);
+                const bDepth = boatSurf ? boatSurf.waterDepth : (bWaterRadius - bTerrainRadius);
                 const canRideBoat = (waterEnabled && bDepth > 0.48 * playerScale) || closestBoat.hasWheel || closestBoat.hasWheels;
 
                 const isInteractHeld = keysPressed[currentKeyBindings.interact] || keysPressed["KeyE"];
@@ -6566,14 +6943,30 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
         }
 
-        // Update Bow / Arm Cannon 3D Aiming & Target Lock via World3DUI
+        // Update Bow / Arm Cannon (long-range bowLockDistance) & Melee (Tanto/Shirasaya/Pickaxe/Aegis-Shift short meleeLockDistance) 3D Target Lock
         const isAimingRanged = (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") &&
           isUsingItem && activeItem && (activeItem.name === "BOW" || activeItem.name === "WOODEN_ARM_CANNON" || activeItem.name === "ARM_CANNON");
 
-        if (isAimingRanged) {
+        const _shiraReticleSt = (typeof window.tantoShirasayaState === "object") ? window.tantoShirasayaState : null;
+        const _aegisReticleSt = (typeof window.aegisShiftState === "object") ? window.aegisShiftState : null;
+        const isUsingMeleeReticle = !isAimingRanged &&
+          (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") &&
+          !isUIOpen && !isRidingBoat &&
+          !(typeof activeRidingMech !== "undefined" && activeRidingMech) &&
+          !(typeof ragdollEnabled !== "undefined" && ragdollEnabled) &&
+          (!!(_shiraReticleSt && (_shiraReticleSt.mode === "charging" || _shiraReticleSt.mode === "dashing")) ||
+           !!(_aegisReticleSt && (_aegisReticleSt.mode === "charging" || _aegisReticleSt.mode === "dashing")) ||
+           !!(isUsingItem && activeItem && (activeItem.name === "TANTO" || activeItem.name === "tanto" || activeItem.name === "PICKAXE" || activeItem.name === "pickaxe" || activeItem.name === "AEGIS_SHIFT" || activeItem.name === "aegis_shift")));
+
+        if (isAimingRanged || isUsingMeleeReticle) {
             const p_x = playerCenterRadius * nx;
             const p_y = playerCenterRadius * ny;
             const p_z = playerCenterRadius * nz;
+            const lockRange = isAimingRanged
+              ? (typeof bowLockDistance === "number" ? bowLockDistance : 3.0)
+              : ((typeof window.getUnifiedMeleeReach === "function")
+                ? window.getUnifiedMeleeReach()
+                : (typeof meleeLockDistance === "number" ? meleeLockDistance : 0.25));
 
             let currentTargetStillValid = false;
 
@@ -6581,14 +6974,16 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             if (activeTargetNPC) {
                 const npc = activeTargetNPC;
                 const exists = typeof amphibians !== 'undefined' && amphibians.includes(npc);
-                if (exists && !npc.ragdollEnabled && npc.position) {
+                const alive = (npc.hp === undefined || npc.hp > 0);
+                if (exists && !npc.ragdollEnabled && alive && npc.position) {
                     const tPos = getNPCTargetPoint(npc);
                     const dx = p_x - tPos[0];
                     const dy = p_y - tPos[1];
                     const dz = p_z - tPos[2];
                     const distSq = dx * dx + dy * dy + dz * dz;
 
-                    const maxBreakDist = bowLockDistance * 1.15;
+                    const npcRad = (!isAimingRanged && typeof window.getMeleeEntityRadius === "function") ? window.getMeleeEntityRadius(npc) : 0;
+                    const maxBreakDist = (lockRange + npcRad) * 1.15;
                     const isWithinRange = distSq < maxBreakDist * maxBreakDist;
                     const isOccluded = typeof checkPlanetOcclusion === "function" && checkPlanetOcclusion(eyePos, tPos, RADIUS);
 
@@ -6611,7 +7006,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 const maxScreenRadius = Math.min(window.innerWidth, window.innerHeight) * 0.45;
 
                 for (let npc of amphibians) {
-                    if (npc.ragdollEnabled || !npc.position) continue;
+                    if (npc.ragdollEnabled || (npc.hp !== undefined && npc.hp <= 0) || !npc.position) continue;
 
                     const tPos = getNPCTargetPoint(npc);
                     const dx = p_x - tPos[0];
@@ -6619,7 +7014,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                     const dz = p_z - tPos[2];
                     const distSq = dx * dx + dy * dy + dz * dz;
 
-                    if (distSq < bowLockDistance * bowLockDistance) {
+                    const npcRad = (!isAimingRanged && typeof window.getMeleeEntityRadius === "function") ? window.getMeleeEntityRadius(npc) : 0;
+                    const maxAcquireDist = lockRange + npcRad;
+                    if (distSq < maxAcquireDist * maxAcquireDist) {
                         if (typeof checkPlanetOcclusion === "function" && checkPlanetOcclusion(eyePos, tPos, RADIUS)) {
                             continue;
                         }
@@ -6644,15 +7041,22 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 activeTargetNPC = closest;
             }
 
-            // 3. Compute 3D target point in world space
+            if (isUsingMeleeReticle && _shiraReticleSt && (_shiraReticleSt.mode === "charging" || _shiraReticleSt.mode === "dashing")) {
+                _shiraReticleSt.lockedTarget = activeTargetNPC;
+            }
+            if (isUsingMeleeReticle && _aegisReticleSt && (_aegisReticleSt.mode === "charging" || _aegisReticleSt.mode === "dashing")) {
+                _aegisReticleSt.lockedTarget = activeTargetNPC;
+            }
+
+            // 3. Compute 3D target point in world space (melee skills only lock onto actual NPCs, never empty air)
             let aimTargetWorld = null;
             let isLocked = false;
 
             if (activeTargetNPC) {
                 aimTargetWorld = getNPCTargetPoint(activeTargetNPC);
                 isLocked = true;
-            } else {
-                // Free aim: raymarch forward along camera look vector to find terrain hit point
+            } else if (isAimingRanged) {
+                // Free aim: raymarch forward along camera look vector to find terrain hit point (ranged weapons only)
                 const camLookDir = [-viewMatrix[2], -viewMatrix[6], -viewMatrix[10]];
                 let curD = 0.5;
                 const maxD = 40.0;
@@ -6689,17 +7093,25 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 isLocked = false;
             }
 
-            window.currentAimTargetPos = aimTargetWorld;
-            window.isAimTargetLocked = isLocked;
+            if (aimTargetWorld) {
+                window.currentAimTargetPos = aimTargetWorld;
+                window.isAimTargetLocked = isLocked;
 
-            // Update Genuine 3D Target Reticle in World3DUI (3d_ui.js)
-            if (typeof World3DUI !== "undefined") {
-                World3DUI.updateAimReticle({
-                    targetPos: aimTargetWorld,
-                    isLocked: isLocked,
-                    cameraPos: eyePos,
-                    cameraUp: [viewMatrix[1], viewMatrix[5], viewMatrix[9]]
-                });
+                // Update Genuine 3D Target Reticle in World3DUI (3d_ui.js)
+                if (typeof World3DUI !== "undefined") {
+                    World3DUI.updateAimReticle({
+                        targetPos: aimTargetWorld,
+                        isLocked: isLocked,
+                        cameraPos: eyePos,
+                        cameraUp: [viewMatrix[1], viewMatrix[5], viewMatrix[9]]
+                    });
+                }
+            } else {
+                window.currentAimTargetPos = null;
+                window.isAimTargetLocked = false;
+                if (!isDemolishModeEnabled && typeof World3DUI !== "undefined") {
+                    World3DUI.hideAimReticle();
+                }
             }
 
             // Hide legacy 2D HTML target elements
@@ -8337,14 +8749,14 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             } else if (charUseFaceTexLoc) {
               gl.uniform1f(charUseFaceTexLoc, 0.0);
             }
-            if (window.characterModel === "chibi") {
+            if (!window.GLB_DISABLED && window.characterModel === "chibi") {
               if ((!window.chibiGlbTexture || typeof window.chibiGlbTexture === "undefined") && typeof window.createChibiGlbTexture === "function") {
                 window.createChibiGlbTexture(gl);
               }
             }
             const isDevColorOrBone = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
             const isGlbSource = !!(typeof charColorBuffer !== "undefined" && charColorBuffer && charColorBuffer._sourceType === "chibi");
-            if (window.characterModel === "chibi" && isGlbSource && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBone) {
+            if (!window.GLB_DISABLED && window.characterModel === "chibi" && isGlbSource && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBone) {
               gl.activeTexture(gl.TEXTURE5);
               gl.bindTexture(gl.TEXTURE_2D, window.chibiGlbTexture);
               gl.uniform1i(charMainTexLoc, 5);
@@ -8598,14 +9010,14 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 if (charUseFaceTexLoc) {
               gl.uniform1f(charUseFaceTexLoc, 0.0);
             }
-            if (window.characterModel === "chibi") {
+            if (!window.GLB_DISABLED && window.characterModel === "chibi") {
               if ((!window.chibiGlbTexture || typeof window.chibiGlbTexture === "undefined") && typeof window.createChibiGlbTexture === "function") {
                 window.createChibiGlbTexture(gl);
               }
             }
             const isDevColorOrBoneRefl = !!(typeof window !== "undefined" && (window.devColorByParts || window.devSelectedBone));
             const isGlbSourceRefl = !!(typeof charColorBuffer !== "undefined" && charColorBuffer && charColorBuffer._sourceType === "chibi");
-            if (window.characterModel === "chibi" && isGlbSourceRefl && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBoneRefl) {
+            if (!window.GLB_DISABLED && window.characterModel === "chibi" && isGlbSourceRefl && typeof window.chibiGlbTexture !== "undefined" && window.chibiGlbTexture && !isDevColorOrBoneRefl) {
               gl.activeTexture(gl.TEXTURE5);
               gl.bindTexture(gl.TEXTURE_2D, window.chibiGlbTexture);
               gl.uniform1i(charMainTexLoc, 5);

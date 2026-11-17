@@ -15,6 +15,7 @@ let isCurrentFullscreen = false;
 const isAndroidProfile = /Android/i.test(navigator.userAgent);
 let showScreenModeUI = !isAndroidProfile;
 let renderScale = isAndroidProfile ? 0.25 : 1.0;
+let uiScale = 100;
 let mouseSensitivity = 1.0;
 let uiMargin = 10;
 let showFps = true;
@@ -28,6 +29,7 @@ let ssrQuality = isMobileSSRProfile ? 1 : 2;
 let antialiasEnabled = false;
 let fxaaEnabled = true;
 let taauEnabled = fxaaEnabled;
+let colorblindMode = "none";
 
 // Pre-load from localStorage immediately so they are available for WebGL initialization
 try {
@@ -52,6 +54,12 @@ try {
         fxaaEnabled = parsedOptions.taauEnabled;
         taauEnabled = fxaaEnabled;
       }
+      if (typeof parsedOptions.colorblindMode === "string" && ["none", "protanopia", "deuteranopia", "tritanopia"].includes(parsedOptions.colorblindMode)) {
+        colorblindMode = parsedOptions.colorblindMode;
+      }
+      if (typeof parsedOptions.uiScale === "number") {
+        uiScale = Math.max(50, Math.min(150, Math.round(parsedOptions.uiScale)));
+      }
     }
   } else {
     const savedSettings = localStorage.getItem("seedplanet_settings");
@@ -75,6 +83,12 @@ try {
           fxaaEnabled = parsedSettings.taauEnabled;
           taauEnabled = fxaaEnabled;
         }
+        if (typeof parsedSettings.colorblindMode === "string" && ["none", "protanopia", "deuteranopia", "tritanopia"].includes(parsedSettings.colorblindMode)) {
+          colorblindMode = parsedSettings.colorblindMode;
+        }
+        if (typeof parsedSettings.uiScale === "number") {
+          uiScale = Math.max(50, Math.min(150, Math.round(parsedSettings.uiScale)));
+        }
       }
     }
   }
@@ -88,6 +102,24 @@ window.ssrQuality = ssrQuality;
 window.fxaaEnabled = fxaaEnabled;
 window.taauEnabled = fxaaEnabled;
 window.antialiasEnabled = antialiasEnabled;
+window.uiScale = uiScale;
+
+function applyUIScale(scalePercent) {
+  const parsed = parseInt(scalePercent, 10);
+  const pct = Math.max(50, Math.min(150, isNaN(parsed) ? 100 : parsed));
+  uiScale = pct;
+  if (typeof window !== "undefined") {
+    window.uiScale = pct;
+  }
+  const slider = document.getElementById("uiScaleSlider");
+  if (slider && parseInt(slider.value, 10) !== pct) slider.value = pct;
+  const label = document.getElementById("uiScaleVal");
+  if (label) label.textContent = `${pct}%`;
+  if (typeof window.updateResponsiveUIScale === "function") {
+    window.updateResponsiveUIScale();
+  }
+}
+window.applyUIScale = applyUIScale;
 
 let cameraMode = "tps";
 var zoomLimitEnabled = true;
@@ -598,6 +630,16 @@ function syncInventorySettingsUI() {
     scaleVal.textContent = Math.round(renderScale * 100) + "%";
   }
 
+  const curUiScale = typeof uiScale === "number" ? uiScale : (typeof window !== "undefined" && typeof window.uiScale === "number" ? window.uiScale : 100);
+  const uiScaleSliderEl = document.getElementById("uiScaleSlider");
+  const uiScaleValEl = document.getElementById("uiScaleVal");
+  if (uiScaleSliderEl && parseInt(uiScaleSliderEl.value, 10) !== curUiScale) {
+    uiScaleSliderEl.value = curUiScale;
+  }
+  if (uiScaleValEl) {
+    uiScaleValEl.textContent = `${curUiScale}%`;
+  }
+
   const sensSlider = document.getElementById("mouseSensitivitySlider");
   const sensVal = document.getElementById("mouseSensitivityVal");
   if (sensSlider && sensVal) {
@@ -652,6 +694,7 @@ function syncInventorySettingsUI() {
   if (typeof window.updateSSRQualityUI === 'function') window.updateSSRQualityUI();
   if (typeof updateAntialiasUI === 'function') updateAntialiasUI();
   updateFxaaUI();
+  if (typeof window.updateColorblindUI === 'function') window.updateColorblindUI();
 
   renderKeyBindingsUI();
   if (typeof window.updateCustomScrollbar === "function") setTimeout(window.updateCustomScrollbar, 30);
@@ -726,6 +769,15 @@ function initSettingsEventListeners() {
       if (typeof resizeCanvas === 'function') {
         resizeCanvas();
       }
+    });
+  }
+
+  const uiScaleSlider = document.getElementById("uiScaleSlider");
+  if (uiScaleSlider) {
+    uiScaleSlider.addEventListener("input", (e) => {
+      applyUIScale(parseInt(e.target.value, 10));
+      if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
+      else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
     });
   }
 

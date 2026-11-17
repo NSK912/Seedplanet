@@ -173,6 +173,9 @@ function startGameWithSlot(loadedData, devMode = false) {
     for (let i = 0; i < TOTAL_SLOTS; i++) {
       inventory.push(null);
     }
+    inventory[0] = { name: "DOUBLE_BREASTED_SUIT", icon: "🧥", label: "DOUBLE_BREASTED_SUIT", count: 1 };
+    inventory[1] = { name: "BLACK_SLACKS", icon: "👖", label: "BLACK_SLACKS", count: 1 };
+    inventory[2] = { name: "OPERA_CAPE", icon: "🧛", label: "OPERA_CAPE", count: 1 };
     window.inventory = inventory;
     actionSlotsItems = new Array(8).fill(null);
     actionSlotsItems[0] = { name: "WOODEN_ARM_CANNON", icon: "🪵🦾", label: "WOODEN_ARM_CANNON", count: 1 };

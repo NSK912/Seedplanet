@@ -25,10 +25,24 @@
     const cNz = cSinT * cSinP;
 
     const heightScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
-    const cHeight = (typeof getVisualHeightOnSphere === "function")
-      ? getVisualHeightOnSphere(cState.theta, cState.phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0))
-      : 0;
-    const terrainRad = planetRadius + cHeight * heightScale;
+    const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+    const cloneFeetRadInit = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
+      ? (cState.centerRadius - 0.46 * charScale)
+      : null;
+    const surf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
+      ? Physics.resolveEntitySurfaceAndWater({
+          theta: cState.theta,
+          phi: cState.phi,
+          nx: cNx,
+          ny: cNy,
+          nz: cNz,
+          feetRadius: cloneFeetRadInit,
+          planetRadius,
+          heightScale,
+          seed
+        })
+      : null;
+    const terrainRad = surf ? surf.terrainRad : (planetRadius + ((typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(cState.theta, cState.phi, seed) : 0) * heightScale);
     const isSwimming = (cState.currentSwimFactor || 0) > 0.0;
 
     const cloneFeetRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
@@ -66,7 +80,9 @@
     let finalF = [cF[0], cF[1], cF[2]];
 
     if (isSwimming && typeof window.computeSwimmingTransform === "function") {
-      const waterRadius = planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * 0.15;
+      const waterRadius = surf
+        ? (surf.wRadiusLocal > 0 ? surf.wRadiusLocal : surf.waterRadius)
+        : (planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * (heightScale * 0.25));
       const swimRes = window.computeSwimmingTransform({
         swimFactor: cState.currentSwimFactor,
         swimMovementFactor: cState.swimMovementFactor || 0.0,
@@ -82,19 +98,37 @@
         baseGroundRadius: terrainRad + 0.46 * charScale
       });
       finalGroundRad = swimRes.groundRadius;
+      if (surf && surf.caveData) {
+        if (surf.caveData.insideTunnel) {
+          const minCenter = surf.caveData.ground + 0.46 * charScale;
+          const maxCenter = (surf.caveData.ceiling !== Infinity) ? (surf.caveData.ceiling - 0.46 * charScale) : Infinity;
+          if (finalGroundRad < minCenter) finalGroundRad = minCenter;
+          if (finalGroundRad > maxCenter) finalGroundRad = maxCenter;
+        } else {
+          const minCenter = terrainRad + 0.46 * charScale;
+          if (finalGroundRad < minCenter) finalGroundRad = minCenter;
+        }
+      }
       cN = swimRes.finalN;
       finalF = swimRes.finalF;
       finalR = swimRes.finalR;
     }
 
     let finalCPos = [finalGroundRad * cNx, finalGroundRad * cNy, finalGroundRad * cNz];
-    if (cState.ridingBoat && cState.ridingBoat.position && cState.ridingBoat.active) {
-      const bp = cState.ridingBoat.position;
-      const bn = cState.ridingBoat.normal || cN;
+    if (cState.ridingBoat && cState.ridingBoat.active && cState.ridingBoat.position) {
+      const boat = cState.ridingBoat;
+      if (boat.normal && boat.F && boat.R) {
+        cN = [boat.normal[0], boat.normal[1], boat.normal[2]];
+        finalF = [boat.F[0], boat.F[1], boat.F[2]];
+        finalR = [boat.R[0], boat.R[1], boat.R[2]];
+      }
+      const bp = boat.position;
+      const bn = boat.normal || cN;
+      // Match player's exact seat offset from player.js: bp + finalN * 0.46 * charScale
       finalCPos = [
-        bp[0] + bn[0] * (0.04 + 0.12 * charScale),
-        bp[1] + bn[1] * (0.04 + 0.12 * charScale),
-        bp[2] + bn[2] * (0.04 + 0.12 * charScale)
+        bp[0] + bn[0] * (0.46 * charScale),
+        bp[1] + bn[1] * (0.46 * charScale),
+        bp[2] + bn[2] * (0.46 * charScale)
       ];
     }
 
@@ -208,6 +242,10 @@
   let lastTrackedHousesCount = -1;
 
   function getResourceIcon(name) {
+    if (typeof window !== "undefined" && typeof window.getItemDefinition === "function") {
+      const def = window.getItemDefinition(name);
+      if (def && def.icon) return def.icon;
+    }
     if (name === "AXE") return "🪓";
     if (name === "PICKAXE") return "⛏️";
     if (name === "WOOD_BOAT") return "🛶";
@@ -225,7 +263,11 @@
   }
 
   function getCloneItemCount(cState, itemName) {
-    if (!cState || !cState.inventory) return 0;
+    if (!cState) return 0;
+    if (typeof window !== "undefined" && window.ActorCore) {
+      return window.ActorCore.wrapCloneActor(cState).getItemCount(itemName);
+    }
+    if (!cState.inventory) return 0;
     let count = 0;
     for (let i = 0; i < cState.inventory.length; i++) {
       const it = cState.inventory[i];
@@ -237,7 +279,11 @@
   }
 
   function removeCloneItem(cState, itemName, removeCount) {
-    if (!cState || !cState.inventory) return false;
+    if (!cState) return false;
+    if (typeof window !== "undefined" && window.ActorCore) {
+      return window.ActorCore.wrapCloneActor(cState).consumeItem(itemName, removeCount);
+    }
+    if (!cState.inventory) return false;
     let needed = removeCount;
     for (let i = 0; i < cState.inventory.length && needed > 0; i++) {
       const it = cState.inventory[i];
@@ -258,6 +304,10 @@
 
   function addCloneItem(cState, name, icon, count = 1) {
     if (!cState) return;
+    if (typeof window !== "undefined" && window.ActorCore) {
+      window.ActorCore.wrapCloneActor(cState).addItem({ name, icon: icon || getResourceIcon(name), count });
+      return;
+    }
     if (!cState.inventory) cState.inventory = [];
     for (let i = 0; i < cState.inventory.length; i++) {
       const it = cState.inventory[i];
@@ -267,6 +317,25 @@
       }
     }
     cState.inventory.push({ name, icon: icon || getResourceIcon(name), count });
+  }
+
+  function tryCloneConsumeFood(cState) {
+    if (!cState || !Array.isArray(cState.inventory) || typeof window.useEntityItem !== "function") return false;
+    const maxHp = (typeof cState.maxHp === "number") ? cState.maxHp : 5;
+    const maxHunger = (typeof cState.maxHunger === "number") ? cState.maxHunger : 5;
+    const curHp = (typeof cState.hp === "number") ? cState.hp : maxHp;
+    const curHunger = (typeof cState.hunger === "number") ? cState.hunger : maxHunger;
+    if (curHp >= maxHp && curHunger >= maxHunger) return false;
+
+    for (let i = 0; i < cState.inventory.length; i++) {
+      const it = cState.inventory[i];
+      if (!it) continue;
+      const def = (typeof window.getItemDefinition === "function") ? window.getItemDefinition(it) : null;
+      if (def && def.actionType === "CONSUMABLE_FOOD") {
+        return !!window.useEntityItem(cState, it, { index: i, source: "inventory" });
+      }
+    }
+    return false;
   }
 
   // Ensures every procedural house has a wood_chest inside for clone storage,
@@ -494,73 +563,79 @@
   }
 }
 
-// Spawns a plain, unequipped boat in water near the clone's house
-function spawnPlainBoatNearHouse(hIdx, planetRadius) {
-    const houses = (typeof window !== "undefined" && window.placedHouses) ? window.placedHouses : [];
-    const house = houses[hIdx];
-    if (!house) return null;
+  // Places a boat from the clone's inventory onto the current water/ground position (100% shared via ActorCore / ITEM_DEFINITIONS)
+  function placeCloneBoatFromInventory(cState, planetRadius) {
+    if (!cState) return null;
+    if (typeof window !== "undefined" && typeof window.useEntityItem === "function") {
+      if (window.useEntityItem(cState, { name: "WOOD_BOAT" }, { planetRadius })) {
+        return cState.ownedBoat || null;
+      }
+      return null;
+    }
+    if (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.deployBoatFromActor === "function") {
+      return window.ActorCore.deployBoatFromActor(cState, { planetRadius });
+    }
+    return null;
+  }
 
-    const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles))
-      ? collectibles
-      : ((typeof window !== "undefined" && window.collectibles) ? window.collectibles : []);
+  // Demolishes a boat back into the clone's inventory (100% shared via ActorCore.dismantleBoatToActor)
+  function demolishCloneBoatToInventory(cState, boat) {
+    if (!cState || !boat || boat.type !== "wood_boat") return false;
+    if (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.dismantleBoatToActor === "function") {
+      return window.ActorCore.dismantleBoatToActor(cState, boat);
+    }
+    return false;
+  }
 
-    const hTheta = Math.acos(Math.max(-1, Math.min(1, house.y / (planetRadius || 8.0))));
-    const hPhi = Math.atan2(house.z, house.x);
-    const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
-    const heightScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
-    const wLevel = (typeof waterLevel !== "undefined") ? waterLevel : 1.0;
-    const waterRadius = planetRadius + wLevel * (heightScale * 0.25);
+  function selectCloneCombatWeapon(cState) {
+    if (!cState) return "AXE";
+    const actor = (typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.resolveActor(cState) : null;
+    const hasAmmo = actor ? !!actor.findAmmo() : (getCloneItemCount(cState, "IRON_BULLET") + getCloneItemCount(cState, "ARROW") > 0);
+    const defs = (typeof window !== "undefined" && window.ITEM_DEFINITIONS) ? window.ITEM_DEFINITIONS : null;
 
-    let boatTheta = hTheta, boatPhi = hPhi;
-    for (let ang = 0; ang < Math.PI * 2; ang += Math.PI / 4) {
-      const candT = Math.max(0.1, Math.min(Math.PI - 0.1, hTheta + Math.cos(ang) * (0.8 / planetRadius)));
-      const candP = hPhi + Math.sin(ang) * (0.8 / (planetRadius * Math.sin(hTheta)));
-      const h = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(candT, candP, seed) : 0;
-      const gRad = planetRadius + h * heightScale;
-      if (gRad < waterRadius - 0.02) {
-        boatTheta = candT;
-        boatPhi = candP;
-        break;
+    if (hasAmmo) {
+      if (getCloneItemCount(cState, "WOODEN_ARM_CANNON") > 0 || getCloneItemCount(cState, "ARM_CANNON") > 0) {
+        return "WOODEN_ARM_CANNON";
+      }
+      if (defs) {
+        const inv = Array.isArray(cState.inventory) ? cState.inventory : [];
+        for (let i = 0; i < inv.length; i++) {
+          const it = inv[i];
+          if (!it) continue;
+          const d = (typeof window.getItemDefinition === "function") ? window.getItemDefinition(it) : defs[(it.name || it.label || "").toUpperCase()];
+          if (d && d.actionType === "WEAPON_RANGED" && !d.isDisabled) {
+            return d.id;
+          }
+        }
       }
     }
 
-    const sinT = Math.sin(boatTheta), cosT = Math.cos(boatTheta);
-    const sinP = Math.sin(boatPhi), cosP = Math.cos(boatPhi);
-    const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
-    const pos = [waterRadius * nx, waterRadius * ny, waterRadius * nz];
-    const east = [-sinP, 0, cosP];
-    const north = [-cosT * cosP, sinT, -cosT * sinP];
-
-    // Plain empty boat: NO wheels, NO wings, NO engines
-    const boat = {
-      type: "wood_boat",
-      position: pos,
-      normal: [nx, ny, nz],
-      R: east,
-      F: north,
-      active: true,
-      isDynamic: true,
-      hasWheel: false,
-      hasWheels: false,
-      wheelCount: 0,
-      hasWing: false,
-      hasWings: false,
-      wingCount: 0,
-      hasEngine: false,
-      isCloneCrafted: true,
-      houseIndex: hIdx
-    };
-
-    colList.push(boat);
-    if (typeof window !== "undefined") {
-      window.pendingDynamicCollectibleRefresh = true;
+    const meleePriority = ["AEGIS_SHIFT", "TANTO", "AXE"];
+    for (let i = 0; i < meleePriority.length; i++) {
+      if (getCloneItemCount(cState, meleePriority[i]) > 0) return meleePriority[i];
     }
-    return boat;
+    if (defs) {
+      let bestId = null;
+      let bestDmg = -1;
+      const inv = Array.isArray(cState.inventory) ? cState.inventory : [];
+      for (let i = 0; i < inv.length; i++) {
+        const it = inv[i];
+        if (!it) continue;
+        const d = (typeof window.getItemDefinition === "function") ? window.getItemDefinition(it) : defs[(it.name || it.label || "").toUpperCase()];
+        if (d && (d.actionType === "WEAPON_MELEE" || (d.npcHitConfig && !d.isDisabled)) && (d.damage || 1) > bestDmg) {
+          bestDmg = d.damage || 1;
+          bestId = d.id;
+        }
+      }
+      if (bestId) return bestId;
+    }
+    if (getCloneItemCount(cState, "BRANCH") > 0) return "BRANCH";
+    return "AXE";
   }
 
   // =========================================================================
   // AUTONOMOUS CRAFTING SYSTEM:
-  // Clones craft tools, boats, wheels, electric engines, and batteries!
+  // Clones craft tools, boats, wheels, electric engines, and batteries into their inventory!
   // =========================================================================
   function tryCloneCrafting(cState, planetRadius) {
     if (!cState) return null;
@@ -608,47 +683,47 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
     }
 
-    // 4. Plain Boat (เรือไม้): 3 Log
+    // 4. Plain Boat (เรือไม้): 3 Log -> Keep in clone's inventory until entering water (same as player!)
     const logCount = getCloneItemCount(cState, "LOG");
-    if (logCount >= 3 && (!cState.ownedBoat || !cState.ownedBoat.active)) {
+    const hasBoat = getCloneItemCount(cState, "WOOD_BOAT") > 0 || (cState.ownedBoat && cState.ownedBoat.active);
+    if (!hasBoat && logCount >= 3) {
       if (removeCloneItem(cState, "LOG", 3)) {
-        const newBoat = spawnPlainBoatNearHouse(cState.houseIndex, planetRadius);
-        if (newBoat) {
-          cState.ownedBoat = newBoat;
-          setCloneExpression(cState, "(^o^)");
-          return "wood_boat";
-        }
+        addCloneItem(cState, "WOOD_BOAT", "🛶", 1);
+        setCloneExpression(cState, "(^o^)");
+        return "wood_boat";
       }
     }
 
     // 5. Wood Wheels (ล้อไม้ติดเรือ): 4 Log + 5 Iron Ore
     const ironCount = getCloneItemCount(cState, "IRON_ORE");
-    if (cState.ownedBoat && cState.ownedBoat.active && !cState.ownedBoat.hasWheel && !cState.ownedBoat.hasWheels) {
-      if (logCount >= 4 && ironCount >= 5) {
-        if (removeCloneItem(cState, "LOG", 4) && removeCloneItem(cState, "IRON_ORE", 5)) {
+    const hasWheels = getCloneItemCount(cState, "WOOD_WHEEL") > 0 || (cState.ownedBoat && cState.ownedBoat.active && (cState.ownedBoat.hasWheel || cState.ownedBoat.hasWheels));
+    if (hasBoat && !hasWheels && logCount >= 4 && ironCount >= 5) {
+      if (removeCloneItem(cState, "LOG", 4) && removeCloneItem(cState, "IRON_ORE", 5)) {
+        if (cState.ownedBoat && cState.ownedBoat.active) {
           cState.ownedBoat.hasWheel = true;
           cState.ownedBoat.hasWheels = true;
           cState.ownedBoat.wheelCount = 4;
-          setCloneExpression(cState, "(🛞‿🛞)");
-          if (typeof window !== "undefined") {
-            window.pendingDynamicCollectibleRefresh = true;
-          }
-          return "wood_wheel";
+          if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
+        } else {
+          addCloneItem(cState, "WOOD_WHEEL", "🛞", 1);
         }
+        setCloneExpression(cState, "(🛞‿🛞)");
+        return "wood_wheel";
       }
     }
 
     // 6. Electric Engine (เครื่องยนต์ไฟฟ้าติดเรือ): 10 Iron Ore
-    if (cState.ownedBoat && cState.ownedBoat.active && !cState.ownedBoat.hasEngine) {
-      if (ironCount >= 10) {
-        if (removeCloneItem(cState, "IRON_ORE", 10)) {
+    const hasEngine = getCloneItemCount(cState, "ELECTRIC_ENGINE") > 0 || (cState.ownedBoat && cState.ownedBoat.active && cState.ownedBoat.hasEngine);
+    if (hasBoat && !hasEngine && ironCount >= 10) {
+      if (removeCloneItem(cState, "IRON_ORE", 10)) {
+        if (cState.ownedBoat && cState.ownedBoat.active) {
           cState.ownedBoat.hasEngine = true;
-          setCloneExpression(cState, "(⚙️‿⚙️)");
-          if (typeof window !== "undefined") {
-            window.pendingDynamicCollectibleRefresh = true;
-          }
-          return "electric_engine";
+          if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
+        } else {
+          addCloneItem(cState, "ELECTRIC_ENGINE", "🔋", 1);
         }
+        setCloneExpression(cState, "(⚙️‿⚙️)");
+        return "electric_engine";
       }
     }
 
@@ -690,19 +765,33 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
   // - Plain boat: MUST be in Water to drive
   // - Winged boat: Prohibited for clones (Clone-specific AI restriction)
   // =========================================================================
-  function checkCloneBoatWaterContact(theta, phi, planetRadius) {
+  function checkCloneBoatWaterContact(theta, phi, planetRadius, feetRadius = null) {
+    if (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.checkWaterContact === "function") {
+      return window.ActorCore.checkWaterContact(theta, phi, feetRadius, planetRadius, 0.35);
+    }
     if (typeof waterEnabled !== "undefined" && !waterEnabled) return false;
-    const wl = (typeof waterLevel !== "undefined") ? waterLevel : 0.0;
-    const waterRad = (typeof minDryRadius !== "undefined") ? minDryRadius : (planetRadius + wl * 0.15);
-    const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+    const pRad = planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
     const hs = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
-    const bHeight = (typeof getVisualHeightOnSphere === "function")
-      ? getVisualHeightOnSphere(theta, phi, seed)
-      : 0;
-    const terrainRad = planetRadius + bHeight * hs;
-    const depth = waterRad - terrainRad;
+    const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
     const pScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
-    return depth > 0.35 * pScale;
+
+    if (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function") {
+      const surf = Physics.resolveEntitySurfaceAndWater({
+        theta,
+        phi,
+        feetRadius,
+        planetRadius: pRad,
+        heightScale: hs,
+        seed
+      });
+      return !!(surf.isWaterPresent && surf.waterDepth > 0.35 * pScale);
+    }
+
+    const wl = (typeof waterLevel !== "undefined") ? waterLevel : 0.0;
+    const waterRad = pRad + wl * (hs * 0.25);
+    const bHeight = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(theta, phi, seed) : 0;
+    const terrainRad = pRad + bHeight * hs;
+    return (waterRad - terrainRad) > 0.35 * pScale;
   }
 
   function isBoatUsableByClone(b, planetRadius, cState) {
@@ -726,7 +815,10 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       const rLen = Math.sqrt(b.position[0]**2 + b.position[1]**2 + b.position[2]**2) || 1;
       const bTheta = Math.acos(Math.max(-1, Math.min(1, b.position[1] / rLen)));
       const bPhi = Math.atan2(b.position[2], b.position[0]);
-      inWater = checkCloneBoatWaterContact(bTheta, bPhi, pRad);
+      const boatRadiusRef = (typeof b.currentRadius === "number" && !Number.isNaN(b.currentRadius) && b.currentRadius > 0.001)
+        ? b.currentRadius
+        : rLen;
+      inWater = checkCloneBoatWaterContact(bTheta, bPhi, pRad, boatRadiusRef);
     }
 
     const hasWheels = !!(b.hasWheel || b.hasWheels || (b.wheelCount && b.wheelCount > 0));
@@ -752,8 +844,19 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     for (let i = 0; i < cState.inventory.length; i++) {
       const it = cState.inventory[i];
       if (!it) continue;
-      // Keep working tools (AXE, PICKAXE) and weapons/ammo (WOODEN_ARM_CANNON, ARROW, IRON_BULLET) equipped
-      if (it.name === "AXE" || it.name === "PICKAXE" || it.name === "WOODEN_ARM_CANNON" || it.name === "ARM_CANNON" || it.name === "ARROW" || it.name === "IRON_BULLET") continue;
+      // Keep working tools, weapons/ammo, and personal vehicle/parts in clone's backpack
+      if (
+        it.name === "AXE" ||
+        it.name === "PICKAXE" ||
+        it.name === "WOODEN_ARM_CANNON" ||
+        it.name === "ARM_CANNON" ||
+        it.name === "ARROW" ||
+        it.name === "IRON_BULLET" ||
+        it.name === "WOOD_BOAT" ||
+        it.name === "WOOD_WHEEL" ||
+        it.name === "ELECTRIC_ENGINE" ||
+        it.name === "GLOW_BATTERY"
+      ) continue;
 
       const itemName = it.name;
       const count = it.count || 1;
@@ -1066,9 +1169,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     const glowCount = getCloneItemCount(cState, "GLOW_ORE");
     const batteryCount = getCloneItemCount(cState, "GLOW_BATTERY");
 
-    const hasOwnedBoat = !!(cState.ownedBoat && cState.ownedBoat.active);
-    const boatHasWheels = hasOwnedBoat && !!(cState.ownedBoat.hasWheel || cState.ownedBoat.hasWheels);
-    const boatHasEngine = hasOwnedBoat && !!cState.ownedBoat.hasEngine;
+    const hasOwnedBoat = getCloneItemCount(cState, "WOOD_BOAT") > 0 || !!(cState.ownedBoat && cState.ownedBoat.active);
+    const boatHasWheels = getCloneItemCount(cState, "WOOD_WHEEL") > 0 || !!(cState.ownedBoat && cState.ownedBoat.active && (cState.ownedBoat.hasWheel || cState.ownedBoat.hasWheels));
+    const boatHasEngine = getCloneItemCount(cState, "ELECTRIC_ENGINE") > 0 || !!(cState.ownedBoat && cState.ownedBoat.active && cState.ownedBoat.hasEngine);
     const hasBattery = batteryCount > 0;
 
     // Missing needs:
@@ -1082,7 +1185,19 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     // 1. เห็นหีบของบ้านตัวเอง (House Chest) เมื่อมีไอเทมจากการทำงาน
     const house = (houses && houses[cState.houseIndex]) ? houses[cState.houseIndex] : null;
     const chest = (house && house.chest && house.chest.active) ? house.chest : null;
-    const hasFarmedLoot = cState.inventory && cState.inventory.some(it => it && it.name !== "AXE" && it.name !== "PICKAXE" && it.name !== "GLOW_BATTERY");
+    const hasFarmedLoot = cState.inventory && cState.inventory.some(it =>
+      it &&
+      it.name !== "AXE" &&
+      it.name !== "PICKAXE" &&
+      it.name !== "WOODEN_ARM_CANNON" &&
+      it.name !== "ARM_CANNON" &&
+      it.name !== "ARROW" &&
+      it.name !== "IRON_BULLET" &&
+      it.name !== "WOOD_BOAT" &&
+      it.name !== "WOOD_WHEEL" &&
+      it.name !== "ELECTRIC_ENGINE" &&
+      it.name !== "GLOW_BATTERY"
+    );
     if (hasFarmedLoot && chest && chest.position) {
       const invCount = cState.inventory.length;
       const workCycles = cState.workCycles || 0;
@@ -1116,7 +1231,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     let driveWeight = 0.38;
     if (isFullyUpgraded) {
       driveWeight = 1.6; // High urge to enjoy driving fully completed motorized vehicle!
-    } else if (hasOwnedBoat && isBoatUsableByClone(cState.ownedBoat, planetRadius, cState)) {
+    } else if (cState.ownedBoat && isBoatUsableByClone(cState.ownedBoat, planetRadius, cState)) {
       driveWeight = 0.85;
     }
 
@@ -1126,6 +1241,16 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         action: "STEAL_BOAT",
         target: boat,
         weight: driveWeight
+      });
+    } else if (
+      isFullyUpgraded &&
+      getCloneItemCount(cState, "WOOD_BOAT") > 0 &&
+      (!house || !isCloneStrictlyInsideHouse(cState, house, planetRadius))
+    ) {
+      candidates.push({
+        action: "DEPLOY_WHEELED_BOAT",
+        target: null,
+        weight: 1.35
       });
     }
 
@@ -1236,6 +1361,21 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       setCloneTargetPos(cState, chosen.target.position[0], chosen.target.position[1], chosen.target.position[2], planetRadius);
       setCloneExpression(cState, "(ʘ‿ʘ)");
       cState.timer = 8.0;
+    } else if (chosen.action === "DEPLOY_WHEELED_BOAT") {
+      const deployedBoat = placeCloneBoatFromInventory(cState, planetRadius);
+      if (deployedBoat && isBoatUsableByClone(deployedBoat, planetRadius, cState)) {
+        cState.ridingBoat = deployedBoat;
+        cState.resumeActivityAfterBoat = "WANDER";
+        cState.currentActivity = "DRIVE_BOAT";
+        cState.boatDriveTimer = 16.0 + Math.random() * 8.0;
+        cState.boatBlockedTimer = 0.0;
+        cState.equippedTool = null;
+        setCloneExpression(cState, "(¬‿¬)");
+      } else if (deployedBoat) {
+        demolishCloneBoatToInventory(cState, deployedBoat);
+        cState.currentActivity = "WANDER";
+        cState.timer = 2.5;
+      }
     } else if (chosen.action === "STEAL_BOAT") {
       cState.currentActivity = "STEAL_BOAT";
       cState.targetBoat = chosen.target;
@@ -1263,8 +1403,8 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       let aPos = chosen.target.position;
       if (chosen.target.ragdollPos && chosen.target.ragdollInitialized) aPos = chosen.target.ragdollPos;
       if (aPos) setCloneTargetPos(cState, aPos[0], aPos[1], aPos[2], planetRadius);
-      cState.equippedTool = "AXE";
-      setCloneExpression(cState, "(•̀ᴗ•́)");
+      cState.equippedTool = selectCloneCombatWeapon(cState);
+      setCloneExpression(cState, (cState.equippedTool === "WOODEN_ARM_CANNON") ? "(🪵🦾‿🦾)" : "(•̀ᴗ•́)");
       cState.timer = 7.0;
     } else {
       // WANDER (Stroll around assigned house yard)
@@ -1444,8 +1584,12 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         // LIFE SYSTEM ATTRIBUTES:
         hp: 5,
         maxHp: 5,
+        hunger: 5,
+        maxHunger: 5,
         inventory: [],
         equippedTool: null, // "AXE", "PICKAXE"
+        activeItem: null,
+        isUsingItem: false,
         currentActivity: "WANDER",
         activityTimer: 2.0 + Math.random() * 3.0,
         actionAnim: 0.0,
@@ -1540,20 +1684,38 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     const cNy = cCosT;
     const cNz = cSinT * cSinP;
 
-    const cHeight = (typeof getVisualHeightOnSphere === "function")
-      ? getVisualHeightOnSphere(cState.theta, cState.phi, seed)
-      : 0;
-    const terrainRad = planetRadius + cHeight * heightScale;
+    const feetRadBefore = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
+      ? (cState.centerRadius - 0.46 * charScale)
+      : null;
+
+    const surf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
+      ? Physics.resolveEntitySurfaceAndWater({
+          theta: cState.theta,
+          phi: cState.phi,
+          nx: cNx,
+          ny: cNy,
+          nz: cNz,
+          feetRadius: feetRadBefore,
+          planetRadius,
+          heightScale,
+          seed
+        })
+      : null;
+    const terrainRad = surf
+      ? surf.terrainRad
+      : (planetRadius + ((typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(cState.theta, cState.phi, seed) : 0) * heightScale);
+    const cWaterRad = surf
+      ? surf.waterRadius
+      : (planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * (heightScale * 0.25));
+    const wRadiusLocal = surf
+      ? surf.wRadiusLocal
+      : ((typeof getWaterRadiusAt === "function") ? getWaterRadiusAt(cNx * (feetRadBefore || terrainRad), cNy * (feetRadBefore || terrainRad), cNz * (feetRadBefore || terrainRad)) : cWaterRad);
 
     if (typeof cState.isGrounded !== "boolean") cState.isGrounded = true;
     if (typeof cState.verticalVel !== "number" || Number.isNaN(cState.verticalVel)) cState.verticalVel = 0;
 
-    const feetRadBefore = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
-      ? (cState.centerRadius - 0.46 * charScale)
-      : terrainRad;
-
     const rawSupportRad = (typeof getFloorTopRadiusAt === "function")
-      ? getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, feetRadBefore, !cState.isGrounded, cState.verticalVel || 0)
+      ? getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, feetRadBefore !== null ? feetRadBefore : terrainRad, !cState.isGrounded, cState.verticalVel || 0)
       : terrainRad;
     const currentSupportRad = clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, rawSupportRad, planetRadius, !!cState.isTraversingDoor);
     const targetGroundCenterRad = currentSupportRad + 0.46 * charScale;
@@ -1564,23 +1726,60 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       cState.isGrounded = true;
     }
 
-    const isSwimming = (cState.currentSwimFactor || 0) > 0.1;
+    const swimFactor = cState.currentSwimFactor || 0;
+    const isSwimming = swimFactor > 0.0;
     const isRiding = !!(cState.ridingBoat && cState.ridingBoat.active);
 
     if (isSwimming || isRiding) {
-      cState.centerRadius = targetGroundCenterRad;
+      if (!isRiding) {
+        const effWaterRad = wRadiusLocal > 0 ? wRadiusLocal : cWaterRad;
+        const wTime = (typeof waterAnimTime !== "undefined") ? waterAnimTime : (window.performance.now() * 0.001);
+        let swimCenterRad = targetGroundCenterRad;
+        if (typeof window !== "undefined" && typeof window.computeSwimmingTransform === "function") {
+          const swimRes = window.computeSwimmingTransform({
+            swimFactor,
+            swimMovementFactor: cState.swimMovementFactor || 0,
+            diveDepth: cState.diveDepth || 0,
+            waterRadius: effWaterRad,
+            terrainRadius: terrainRad,
+            charScale,
+            isWalking: !cState.isIdle,
+            waterTime: wTime,
+            baseGroundRadius: targetGroundCenterRad
+          });
+          swimCenterRad = swimRes.groundRadius;
+        } else {
+          const targetSwimRadius = effWaterRad + (-0.22 + (cState.swimMovementFactor || 0) * 0.27) * charScale;
+          const subSwimRadius = targetSwimRadius - (cState.diveDepth || 0);
+          swimCenterRad = targetGroundCenterRad * (1.0 - swimFactor) + subSwimRadius * swimFactor;
+        }
+        if (surf && surf.caveData) {
+          if (surf.caveData.insideTunnel) {
+            const minCenter = surf.caveData.ground + 0.46 * charScale;
+            const maxCenter = (surf.caveData.ceiling !== Infinity) ? (surf.caveData.ceiling - 0.46 * charScale) : Infinity;
+            if (swimCenterRad < minCenter) swimCenterRad = minCenter;
+            if (swimCenterRad > maxCenter) swimCenterRad = maxCenter;
+          } else {
+            const minCenter = terrainRad + 0.46 * charScale;
+            if (swimCenterRad < minCenter) swimCenterRad = minCenter;
+          }
+        } else if (swimCenterRad < targetGroundCenterRad) {
+          swimCenterRad = targetGroundCenterRad;
+        }
+        cState.centerRadius = swimCenterRad;
+      }
       cState.verticalVel = 0;
       cState.isGrounded = true;
       cState.jumpY = 0;
       cState.jumpVy = 0;
-      return { terrainRad, currentSupportRad, cNx, cNy, cNz };
+      return { terrainRad, currentSupportRad, cNx, cNy, cNz, cWaterRad, wRadiusLocal };
     }
 
     const minGroundRadius = targetGroundCenterRad;
     const groundSnapThreshold = 0.15 * charScale;
     const diffFromGround = cState.centerRadius - minGroundRadius;
 
-    if (cState.isGrounded && cState.verticalVel <= 0.0 && diffFromGround >= -0.05 && diffFromGround <= groundSnapThreshold) {
+    if (cState.isGrounded && cState.verticalVel <= 0.0 && diffFromGround >= -0.02 && diffFromGround <= groundSnapThreshold) {
       cState.centerRadius = minGroundRadius;
       cState.verticalVel = 0.0;
     } else if (cState.centerRadius <= minGroundRadius) {
@@ -1589,20 +1788,23 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       cState.isGrounded = true;
     } else {
       cState.isGrounded = false;
-      cState.verticalVel -= 9.8 * charScale * dtClamped;
+      const gScale = dtClamped * 60.0;
+      if (typeof Physics !== "undefined" && typeof Physics.applyVerticalGravity === "function") {
+        cState.verticalVel = Physics.applyVerticalGravity(cState.verticalVel, gScale, Physics.gravityAccel);
+      } else {
+        cState.verticalVel -= 0.00015 * gScale;
+      }
       const prevCenterRad = cState.centerRadius;
-      cState.centerRadius += cState.verticalVel * dtClamped;
+      cState.centerRadius += cState.verticalVel * gScale;
 
       if (cState.verticalVel > 0 && typeof getFloorCeilingRadiusAt === "function") {
-        const charHeadOffset = 0.88 * charScale;
         const currentFeetRad = prevCenterRad - 0.46 * charScale;
-        const nextFeetRad = cState.centerRadius - 0.46 * charScale;
-        const ceilingBottomRad = getFloorCeilingRadiusAt(cNx, cNy, cNz, terrainRad, currentFeetRad, nextFeetRad, charHeadOffset);
+        const ceilingBottomRad = getFloorCeilingRadiusAt(cNx, cNy, cNz, currentSupportRad, currentFeetRad);
         if (ceilingBottomRad < Infinity) {
-          const maxCenterRad = ceilingBottomRad + 0.46 * charScale - charHeadOffset - 0.004;
+          const maxCenterRad = Math.max(minGroundRadius, ceilingBottomRad - 0.46 * charScale);
           if (cState.centerRadius > maxCenterRad) {
             cState.centerRadius = Math.max(prevCenterRad, maxCenterRad);
-            cState.verticalVel = 0;
+            cState.verticalVel = Math.min(0.0, -cState.verticalVel * 0.2);
           }
         }
       }
@@ -1616,7 +1818,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
     cState.jumpY = 0;
     cState.jumpVy = 0;
-    return { terrainRad, currentSupportRad, cNx, cNy, cNz };
+    return { terrainRad, currentSupportRad, cNx, cNy, cNz, cWaterRad, wRadiusLocal };
   }
 
   function findHouseDoorCollectible(house, houseIndex) {
@@ -1840,51 +2042,11 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
   }
 
   function stepCloneWithSharedCollision(cState, moveNorth, moveEast, planetRadius, charScale, isBoatDriving, wRadiusLocal, cHeight) {
-    const sinT = Math.sin(cState.theta);
-    const cosT = Math.cos(cState.theta);
-    const sinP = Math.sin(cState.phi);
-    const cosP = Math.cos(cState.phi);
-
-    // Unit sphere normal (exact same convention as P_curr in renderer.js)
-    const P_curr = [sinT * cosP, cosT, sinT * sinP];
-    const East = [-sinP, 0, cosP];
-    const North = [-cosT * cosP, sinT, -cosT * sinP];
-
-    const cosH = Math.cos(cState.heading);
-    const sinH = Math.sin(cState.heading);
-    const F_3d = [
-      North[0] * cosH + East[0] * sinH,
-      North[1] * cosH + East[1] * sinH,
-      North[2] * cosH + East[2] * sinH
-    ];
-
-    const centerRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
+    let activeCenterRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius))
       ? cState.centerRadius
       : (planetRadius + 0.46 * charScale);
 
-    const M_vec = [
-      North[0] * moveNorth + East[0] * moveEast,
-      North[1] * moveNorth + East[1] * moveEast,
-      North[2] * moveNorth + East[2] * moveEast
-    ];
-    const moveLen = Math.hypot(M_vec[0], M_vec[1], M_vec[2]);
-    if (moveLen <= 0.00001) {
-      return { actualMoveDist: 0, blockedRatio: 0 };
-    }
-
-    // Candidate unit vector on sphere before collision
-    let P_new = [
-      P_curr[0] + M_vec[0] / planetRadius,
-      P_curr[1] + M_vec[1] / planetRadius,
-      P_curr[2] + M_vec[2] / planetRadius
-    ];
-    const pNewLen = Math.hypot(P_new[0], P_new[1], P_new[2]) || 1;
-    P_new[0] /= pNewLen;
-    P_new[1] /= pNewLen;
-    P_new[2] /= pNewLen;
-
     // If actively traversing a house doorway on a slope, ensure centerRadius can step smoothly onto the doorway floor threshold
-    let activeCenterRad = centerRad;
     if (cState.isTraversingDoor && typeof cState.doorFloorRadius === "number") {
       const doorCenterRad = cState.doorFloorRadius + 0.46 * charScale;
       if (activeCenterRad < doorCenterRad) {
@@ -1895,130 +2057,22 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
     }
 
-    // 1. Structure Collisions FIRST (Wood Walls, Windows, Doors, Roofs) - identical order to player in renderer.js
-    const resolveStructFn = (typeof CollisionCore !== "undefined" && typeof CollisionCore.resolveStructureCollisions === "function")
-      ? CollisionCore.resolveStructureCollisions
-      : null;
-
-    if (resolveStructFn) {
-      const allCollectibles = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []);
-      resolveStructFn({
-        P_new,
-        P_curr,
-        groundRadius: activeCenterRad,
-        playerScale: charScale,
-        activeRidingBoat: isBoatDriving ? cState.ridingBoat : null,
-        collectibles: allCollectibles,
-        F_3d,
-        East,
-        North,
-        charTheta: cState.theta,
-        charPhi: cState.phi,
-        charHeading: cState.heading
+    if (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.stepActorMovement === "function") {
+      return window.ActorCore.stepActorMovement(cState, {
+        moveNorth,
+        moveEast,
+        planetRadius,
+        charScale,
+        ridingBoat: isBoatDriving ? cState.ridingBoat : null,
+        wRadiusLocal,
+        terrainHeight: cHeight,
+        preCollisionCenterRadius: activeCenterRad,
+        clampFloorHook: (nx, ny, nz, nextNatRad, curFeet) =>
+          clampCloneExteriorHouseFloor(nx, ny, nz, nextNatRad, curFeet, planetRadius, !!cState.isTraversingDoor)
       });
     }
 
-    // 2. Fast bounding-sphere push against nearby trees/rocks (avoids per-triangle mesh math)
-    if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
-      const testX = P_new[0] * planetRadius;
-      const testY = P_new[1] * planetRadius;
-      const testZ = P_new[2] * planetRadius;
-      const nearObs = SpatialGrid.queryRadius(testX, testY, testZ, 0.75, null);
-      const cloneRad = (isBoatDriving ? 0.16 : (0.28 * charScale));
-      for (let i = 0; i < nearObs.length; i++) {
-        const obs = nearObs[i];
-        if (!obs || !obs.active || obs.isPreview || !obs.position) continue;
-        if (obs.type !== "tree" && obs.type !== "big_rock" && obs.type !== "glow_rock" && obs.type !== "iron_rock") continue;
-        const ox = testX - obs.position[0];
-        const oy = testY - obs.position[1];
-        const oz = testZ - obs.position[2];
-        const minR = cloneRad + (obs.type === "tree" ? 0.08 : 0.14);
-        const dSq = ox * ox + oy * oy + oz * oz;
-        if (dSq < minR * minR && dSq > 1e-6) {
-          const d = Math.sqrt(dSq);
-          const push = (minR - d) / planetRadius;
-          P_new[0] += (ox / d) * push;
-          P_new[1] += (oy / d) * push;
-          P_new[2] += (oz / d) * push;
-        }
-      }
-      const nLen = Math.hypot(P_new[0], P_new[1], P_new[2]) || 1;
-      P_new[0] /= nLen;
-      P_new[1] /= nLen;
-      P_new[2] /= nLen;
-    }
-
-    // 3. Exact Shared Terrain & Cave Collision with Auto Step-Up (Identical to Player renderer.js:5791)
-    if (typeof CollisionCore !== "undefined" && typeof CollisionCore.checkCaveAndTerrainCollision === "function") {
-      const collisionResult = CollisionCore.checkCaveAndTerrainCollision(
-        P_new,
-        P_curr,
-        activeCenterRad,
-        charScale,
-        cState.currentSwimFactor || 0,
-        wRadiusLocal,
-        0,
-        0,
-        cHeight,
-        { ridingBoat: isBoatDriving ? cState.ridingBoat : null }
-      );
-      if (collisionResult && collisionResult.P_new) {
-        P_new = collisionResult.P_new;
-        if (typeof collisionResult.playerCenterRadius === "number" && !Number.isNaN(collisionResult.playerCenterRadius)) {
-          cState.centerRadius = collisionResult.playerCenterRadius;
-          cState.isGrounded = true;
-          cState.verticalVel = 0;
-        }
-      }
-    }
-
-    const seedVal = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
-    const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
-    const candTheta = Math.acos(Math.max(-1.0, Math.min(1.0, P_new[1])));
-    const candPhi = Math.atan2(P_new[2], P_new[0]);
-    const nextH = (typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(candTheta, candPhi, seedVal) : 0;
-    const nextNatRad = planetRadius + nextH * hScale;
-
-    if (!isBoatDriving && typeof cState.centerRadius === "number") {
-      const curFeet = cState.centerRadius - 0.46 * charScale;
-      const clampedFloor = clampCloneExteriorHouseFloor(P_new[0], P_new[1], P_new[2], nextNatRad, curFeet, planetRadius, !!cState.isTraversingDoor);
-      if (clampedFloor < curFeet - 0.001) {
-        cState.centerRadius = clampedFloor + 0.46 * charScale;
-      }
-    }
-
-    // 4. Roof / ceiling headroom clamp (Identical to Player renderer.js:5814-5826)
-    if (!isBoatDriving && typeof getFloorCeilingRadiusAt === "function") {
-      const charHeadOffset = 0.88 * charScale;
-      const prevFeet = activeCenterRad - 0.46 * charScale;
-      const curFeet = (cState.centerRadius || activeCenterRad) - 0.46 * charScale;
-      const ceilingRad = getFloorCeilingRadiusAt(P_new[0], P_new[1], P_new[2], nextNatRad, prevFeet, curFeet, charHeadOffset);
-      if (ceilingRad < Infinity) {
-        const maxCenterRad = ceilingRad + 0.46 * charScale - charHeadOffset - 0.004;
-        if (cState.centerRadius > maxCenterRad) {
-          cState.centerRadius = Math.max(nextNatRad + 0.46 * charScale, maxCenterRad);
-        }
-      }
-    }
-
-    const candLen = Math.hypot(P_new[0], P_new[1], P_new[2]) || 1;
-    const finalNx = P_new[0] / candLen;
-    const finalNy = P_new[1] / candLen;
-    const finalNz = P_new[2] / candLen;
-
-    cState.theta = Math.max(0.08, Math.min(Math.PI - 0.08, Math.acos(Math.max(-1.0, Math.min(1.0, finalNy)))));
-    let newPhi = Math.atan2(finalNz, finalNx);
-    if (newPhi < 0) newPhi += Math.PI * 2;
-    cState.phi = newPhi;
-
-    const actualMoveDist = Math.hypot(
-      (finalNx - P_curr[0]) * planetRadius,
-      (finalNy - P_curr[1]) * planetRadius,
-      (finalNz - P_curr[2]) * planetRadius
-    );
-    const blockedRatio = moveLen > 0.0001 ? Math.max(0, 1.0 - actualMoveDist / moveLen) : 0;
-
-    return { actualMoveDist, blockedRatio };
+    return { actualMoveDist: 0, blockedRatio: 0 };
   }
 
   let _chestEnsureTimer = 0;
@@ -2052,14 +2106,27 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         cState.speedInitialized = true;
       }
 
-      // Update action swing animation timer
-      if (cState.actionAnim > 0) {
-        cState.actionAnim = Math.max(0, cState.actionAnim - dtClamped * 2.5);
+      // Update action swing / recoil animation timer (shared 1.0/s curve via ActorCore.stepActorAnimState)
+      if (typeof window.ActorCore !== "undefined" && typeof window.ActorCore.stepActorAnimState === "function") {
+        window.ActorCore.stepActorAnimState(cState, dtClamped, { timerOnly: true });
+      } else if (cState.actionAnim > 0) {
+        cState.actionAnim = Math.max(0, cState.actionAnim - dtClamped);
+        if (cState.actionAnim <= 0) {
+          cState.isUsingItem = false;
+          cState.arrowShotInCurrentAnim = false;
+        }
       }
 
-      // Check Crafting periodically (every 1.0s instead of every frame)
+      // Check Crafting & Consumables periodically (every 1.0s instead of every frame)
       cState._craftCheckTimer = (cState._craftCheckTimer || 0) - dtClamped;
       if (cState._craftCheckTimer <= 0) {
+        // Pack any unmounted owned boat that cannot currently be driven back into clone's inventory
+        if (cState.ownedBoat && cState.ownedBoat.active && cState.ridingBoat !== cState.ownedBoat) {
+          if (!isBoatUsableByClone(cState.ownedBoat, planetRadius, cState)) {
+            demolishCloneBoatToInventory(cState, cState.ownedBoat);
+          }
+        }
+        tryCloneConsumeFood(cState);
         tryCloneCrafting(cState, planetRadius);
         cState._craftCheckTimer = 1.0;
       }
@@ -2074,11 +2141,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       const cNy = vertInfo.cNy;
       const cNz = vertInfo.cNz;
 
-      const cWaterRad = planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * 0.15;
+      const cWaterRad = vertInfo.cWaterRad;
       const cFeetRad = cState.centerRadius ? (cState.centerRadius - 0.46 * charScale) : terrainRad;
-      const wRadiusLocal = (typeof getWaterRadiusAt === "function")
-        ? getWaterRadiusAt(cNx * cFeetRad, cNy * cFeetRad, cNz * cFeetRad)
-        : cWaterRad;
+      const wRadiusLocal = vertInfo.wRadiusLocal;
 
       const isRiding = !!(cState.ridingBoat && cState.ridingBoat.active);
       const isMovingInput = !cState.isIdle ? 1.0 : 0.0;
@@ -2098,6 +2163,27 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         );
       }
 
+      // If clone enters water while not riding a boat and has WOOD_BOAT in inventory, deploy & ride it (same as player!)
+      const cloneInWaterNow = ((cState.currentSwimFactor || 0) > 0.1) || checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, cFeetRad);
+      if (!isRiding && cloneInWaterNow) {
+        if (getCloneItemCount(cState, "WOOD_BOAT") > 0 && checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, cFeetRad)) {
+          const deployedBoat = placeCloneBoatFromInventory(cState, planetRadius);
+          if (deployedBoat && isBoatUsableByClone(deployedBoat, planetRadius, cState)) {
+            cState.ridingBoat = deployedBoat;
+            if (cState.currentActivity !== "DRIVE_BOAT" && cState.currentActivity !== "STEAL_BOAT") {
+              cState.resumeActivityAfterBoat = cState.currentActivity || "WANDER";
+            }
+            cState.currentActivity = "DRIVE_BOAT";
+            cState.boatDriveTimer = 18.0 + Math.random() * 8.0;
+            cState.boatBlockedTimer = 0.0;
+            cState.isIdle = false;
+            cState.currentSwimFactor = 0.0;
+          } else if (deployedBoat) {
+            demolishCloneBoatToInventory(cState, deployedBoat);
+          }
+        }
+      }
+
       // If swimming, cancel airborne jump velocity
       if ((cState.currentSwimFactor || 0) > 0.1) {
         cState.jumpY = 0;
@@ -2110,6 +2196,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
 
       // =========================================================================
       // STATE 1: DRIVING / RIDING A BOAT (PLAIN OR WHEELED)
+      // If unable to continue driving, demolish boat back into inventory first, then continue walking!
       // =========================================================================
       if (cState.currentActivity === "DRIVE_BOAT" && cState.ridingBoat && cState.ridingBoat.active) {
         const boat = cState.ridingBoat;
@@ -2117,86 +2204,164 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         // Shared Vehicle Driveability Check (Identical to player rules)
         const canDrive = isBoatUsableByClone(boat, planetRadius, cState);
         if (!canDrive) {
-          cState.ridingBoat = null;
-          cState.currentActivity = "WANDER";
-          cState.timer = 1.0;
-          cState.thinkTimer = 0.0;
+          demolishCloneBoatToInventory(cState, boat);
+          cState.currentActivity = cState.resumeActivityAfterBoat || "WANDER";
+          cState.resumeActivityAfterBoat = null;
+          cState.timer = Math.max(cState.timer || 0, 3.0);
+          cState.thinkTimer = 0.5;
           cState.faceText = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? (cState.emojiFaceText || "(•‿•)") : "traveler";
           continue;
         }
 
         cState.boatDriveTimer -= dtClamped;
-
-        // Clone drives the boat forward smoothly using shared collision system
-        const boatSpeed = boat.hasEngine ? 1.4 : 0.95;
-        cState.walkBlend = 0.0;
         cState.isIdle = false;
-        setCloneExpression(cState, "(¬‿¬)"); // Cheeky grin while joyriding!
+        cState.equippedTool = null;
+        cState.activeItem = null;
+        setCloneExpression(cState, "(¬‿¬)"); // Cheeky grin while driving!
 
-        const step = boatSpeed * dtClamped;
+        const isWheeled = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
+        const timeScale = dtClamped * 60.0;
+        if (cState._boatAvoidTimer > 0) {
+          cState._boatAvoidTimer = Math.max(0, cState._boatAvoidTimer - dtClamped);
+        }
 
-        // Cruise around and turn smoothly
-        cState.heading += Math.sin(cState.animPhase * 0.5) * 0.4 * dtClamped;
-        const moveNorth = Math.cos(cState.heading) * step;
-        const moveEast = Math.sin(cState.heading) * step;
+        // Determine desired steering heading
+        let desiredHeading = cState.heading || 0;
+        let arrivedAtWaterGoal = false;
+        if (cState.resumeActivityAfterBoat && cState.resumeActivityAfterBoat !== "WANDER" && typeof cState.targetTheta === "number" && typeof cState.targetPhi === "number") {
+          const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
+          const sinCurT = Math.max(0.05, Math.sin(cState.theta));
+          let dPhi = cState.targetPhi - cState.phi;
+          while (dPhi > Math.PI) dPhi -= Math.PI * 2;
+          while (dPhi < -Math.PI) dPhi += Math.PI * 2;
+          const dEast = dPhi * (planetRadius * sinCurT);
+          const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
+          if (distToTarget <= 0.65) {
+            arrivedAtWaterGoal = true;
+          } else {
+            desiredHeading = Math.atan2(dEast, dNorth);
+          }
+        } else {
+          desiredHeading = (cState.heading || 0) + Math.sin((cState.animPhase || 0) * 0.5) * 0.35;
+        }
+
+        if (arrivedAtWaterGoal) {
+          demolishCloneBoatToInventory(cState, boat);
+          cState.currentActivity = cState.resumeActivityAfterBoat;
+          cState.resumeActivityAfterBoat = null;
+          continue;
+        }
+
+        if (cState._boatAvoidTimer > 0) {
+          desiredHeading += (i % 2 === 0 ? 1 : -1) * 1.1;
+        }
+
+        let headingDiff = desiredHeading - (cState.heading || 0);
+        while (headingDiff > Math.PI) headingDiff -= Math.PI * 2;
+        while (headingDiff < -Math.PI) headingDiff += Math.PI * 2;
+        // Negative moveSidewaysInput steers left (+heading), positive steers right (-heading)
+        const moveSidewaysInput = Math.max(-1.0, Math.min(1.0, -headingDiff * 2.5));
+
+        const isBoatInWaterNow = !!(boat.isInWater || checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, cFeetRad));
+        const pSpeed = (typeof playerSpeed !== "undefined") ? playerSpeed : 0.005;
+        let moveNorth = 0;
+        let moveEast = 0;
+        let step = 0;
+
+        if (typeof window !== "undefined" && typeof window.updateWheeledBoatControls === "function") {
+          const boatCtrl = window.updateWheeledBoatControls(boat, {
+            moveForwardInput: 1.0,
+            moveSidewaysInput,
+            isShiftHeld: false,
+            isHandbrake: false,
+            playerSpeed: pSpeed,
+            isInWater: isBoatInWaterNow,
+            waterEnabled: (typeof waterEnabled !== "undefined" ? waterEnabled : true),
+            charScale,
+            charHeading: cState.heading || 0,
+            pitchGrade: boat.pitchGrade || 0,
+            hasBattery: getCloneItemCount(cState, "GLOW_BATTERY") > 0,
+            silentNotice: true,
+            consumeBattery: false
+          }, timeScale);
+          if (boatCtrl) {
+            cState.heading = boatCtrl.heading;
+            step = boatCtrl.currentSpeedVal * timeScale;
+            moveNorth = boatCtrl.moveNorthFactor * step;
+            moveEast = boatCtrl.moveEastFactor * step;
+          }
+        } else {
+          const fallbackSpeed = boat.hasEngine ? 1.4 : 0.95;
+          step = fallbackSpeed * dtClamped;
+          cState.heading = desiredHeading;
+          moveNorth = Math.cos(cState.heading) * step;
+          moveEast = Math.sin(cState.heading) * step;
+          if (isWheeled) {
+            boat.spinAngle = (boat.spinAngle || 0) + (step / 0.16);
+          }
+        }
+
+        if (typeof window.ActorCore !== "undefined" && typeof window.ActorCore.stepActorAnimState === "function") {
+          window.ActorCore.stepActorAnimState(cState, dtClamped, { phaseOnly: true, boatStep: step });
+        } else {
+          cState.walkBlend = 0.0;
+          if (!boat.hasEngine && !isWheeled) {
+            cState.boatRowTimer = (cState.boatRowTimer || 0) + step * 15.0;
+          }
+        }
+
         const cHeightEst = (terrainRad - planetRadius) / (heightScale || 1.0);
         const boatStepRes = stepCloneWithSharedCollision(cState, moveNorth, moveEast, planetRadius, charScale, true, wRadiusLocal, cHeightEst);
-        if (boatStepRes.blockedRatio > 0.55) {
-          // Steer away if boat hits coastline, rock, or wall
-          cState.heading += (i % 2 === 0 ? 1 : -1) * 2.2 * dtClamped;
+
+        // Check if vehicle can no longer continue driving (e.g. plain boat reaches shore/dry land or gets blocked)
+        const postFeetRad = cState.centerRadius ? (cState.centerRadius - 0.46 * charScale) : cFeetRad;
+        let cannotContinueDriving = false;
+        if (!isWheeled && !checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, postFeetRad)) {
+          // Plain boat reached dry land / shallow shore -> cannot drive further on land
+          cannotContinueDriving = true;
+        } else if (step > 0.001 && boatStepRes.blockedRatio > 0.55) {
+          cState.boatBlockedTimer = (cState.boatBlockedTimer || 0) + dtClamped;
+          cState._boatAvoidTimer = 0.45;
+          if (cState.boatBlockedTimer > 0.45) {
+            cannotContinueDriving = true;
+          }
+        } else if (step > 0.001) {
+          cState.boatBlockedTimer = 0.0;
         }
 
-        // Update boat transformation directly on water/terrain surface (same as player)
-        const nSinT = Math.sin(cState.theta);
-        const nCosT = Math.cos(cState.theta);
-        const nSinP = Math.sin(cState.phi);
-        const nCosP = Math.cos(cState.phi);
-
-        const bNx = nSinT * nCosP;
-        const bNy = nCosT;
-        const bNz = nSinT * nSinP;
-
-        const bHeight = (typeof getVisualHeightOnSphere === "function")
-          ? getVisualHeightOnSphere(cState.theta, cState.phi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0))
-          : 0;
-        const hs = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
-        const minWaterRad = (typeof minDryRadius !== "undefined") ? minDryRadius : planetRadius;
-        const isWheeled = !!(boat.hasWheel || boat.hasWheels);
-        const bRadius = isWheeled ? (planetRadius + bHeight * hs) : Math.max(minWaterRad, planetRadius + bHeight * hs);
-
-        const bEast = [-nSinP, 0, nCosP];
-        const bNorth = [-nCosT * nCosP, nSinT, -nCosT * nSinP];
-        const cosH = Math.cos(cState.heading);
-        const sinH = Math.sin(cState.heading);
-
-        boat.position = [bRadius * bNx, bRadius * bNy, bRadius * bNz];
-        boat.normal = [bNx, bNy, bNz];
-        boat.R = [
-          bEast[0] * cosH - bNorth[0] * sinH,
-          bEast[1] * cosH - bNorth[1] * sinH,
-          bEast[2] * cosH - bNorth[2] * sinH
-        ];
-        boat.F = [
-          bNorth[0] * cosH + bEast[0] * sinH,
-          bNorth[1] * cosH + bEast[1] * sinH,
-          bNorth[2] * cosH + bEast[2] * sinH
-        ];
-        boat.isDynamic = true;
-
-        if (boat.hasWheel || boat.hasWheels) {
-          boat.spinAngle = (boat.spinAngle || 0) + (step / 0.16);
+        if (cannotContinueDriving || cState.boatDriveTimer <= 0) {
+          // Demolish/pack boat back into clone's inventory first, then continue walking!
+          demolishCloneBoatToInventory(cState, boat);
+          cState.currentActivity = cState.resumeActivityAfterBoat || "WANDER";
+          cState.resumeActivityAfterBoat = null;
+          cState.timer = Math.max(cState.timer || 0, 3.0);
+          cState.thinkTimer = 0.5;
+          cState.faceText = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? (cState.emojiFaceText || "(•‿•)") : "traveler";
+          continue;
         }
+
+        // Update boat transformation using shared Physics.stepDrivenBoatOnSurface (100% same submersion, waves & wheel alignment as Player)
+        if (typeof Physics !== "undefined" && typeof Physics.stepDrivenBoatOnSurface === "function") {
+          const boatRes = Physics.stepDrivenBoatOnSurface({
+            boat,
+            theta: cState.theta,
+            phi: cState.phi,
+            heading: cState.heading,
+            charScale,
+            planetRadius,
+            heightScale,
+            seed,
+            wEnabled: (typeof waterEnabled !== "undefined" ? waterEnabled : true),
+            wLevel: (typeof waterLevel !== "undefined" ? waterLevel : 0.0),
+            wAnimTime: (typeof waterAnimTime !== "undefined" ? waterAnimTime : 0.0),
+            wStrength: (typeof waveStrength !== "undefined" ? waveStrength : 0.0),
+            timeScale
+          });
+          cState.centerRadius = boatRes.centerRadius;
+        }
+
         if (typeof window !== "undefined") {
           window.pendingDynamicCollectibleRefresh = true;
-        }
-
-        // Time to park at home coast and disembark?
-        if (cState.boatDriveTimer <= 0) {
-          cState.ridingBoat = null;
-          cState.currentActivity = "WANDER";
-          cState.timer = 1.0;
-          cState.thinkTimer = 0.0;
-          cState.faceText = (typeof window !== "undefined" && window.cloneFaceStyle === "emoji") ? (cState.emojiFaceText || "(•‿•)") : "traveler";
         }
         continue;
       }
@@ -2222,14 +2387,16 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
-          const boatReach = checkClonePlayerReach3D(cState, targetBoat.position, 0.22, charScale, planetRadius, 0.08);
+          const boatReach = checkClonePlayerReach3D(cState, targetBoat.position, 0.45, charScale, planetRadius, 0.35);
 
-          if (boatReach.valid) {
-            // Successfully board and steal the boat at player [E] reach!
+          if (boatReach.valid || distToTarget <= 0.42) {
+            // Successfully board and drive the boat!
             if (isBoatUsableByClone(targetBoat, planetRadius, cState)) {
               cState.ridingBoat = targetBoat;
+              cState.theta = cState.targetTheta;
+              cState.phi = cState.targetPhi;
               cState.currentActivity = "DRIVE_BOAT";
-              cState.boatDriveTimer = 16.0 + Math.random() * 8.0;
+              cState.boatDriveTimer = 18.0 + Math.random() * 10.0;
             }
             cState.targetBoat = null;
             continue;
@@ -2238,7 +2405,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
 
       // =========================================================================
-      // STATE 3: CHOPPING TREES (WOOD GATHERING)
+      // STATE 3: CHOPPING TREES (WOOD GATHERING - SHARED WITH PLAYER)
       // =========================================================================
       if (cState.currentActivity === "CHOP_WOOD") {
         const tree = cState.targetObstacle;
@@ -2261,55 +2428,24 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
           if (distToTarget <= 0.75) {
-            // At tree: chop repeatedly
             cState.walkBlend = 0.0;
-            cState.actionAnim = 0.6;
+            cState.heading = Math.atan2(dEast, dNorth);
+            if (!cState.actionAnim || cState.actionAnim <= 0.05) {
+              cState.actionAnim = 1.0;
+            }
             cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
 
             if (cState.actionSwingTimer >= 0.75) {
               cState.actionSwingTimer = 0.0;
-              tree.hits = (tree.hits || 0) + 1;
-              if (typeof playChopSound === "function") playChopSound(tree.position);
-
-              // Use shared code with Player to detach dragon fruits on hit
-              if (tree.isWhiteRedTree && typeof window.detachTreeAttachedFruits === "function") {
-                window.detachTreeAttachedFruits(tree);
+              if (typeof window.useEntityItem === "function") {
+                window.useEntityItem(cState, { name: "AXE" }, {
+                  targetEntity: tree,
+                  targetPos: tree.position,
+                  reachOverride: 0.9
+                });
               }
 
-              if (tree.hits >= 3) {
-                // Ensure any remaining attached dragon fruits are detached when tree is felled
-                if (tree.isWhiteRedTree && typeof window.detachTreeAttachedFruits === "function") {
-                  window.detachTreeAttachedFruits(tree);
-                }
-                if (tree.fruitPositions) tree.fruitPositions = [];
-
-                if (tree.id !== undefined) {
-                  if (typeof choppedTrees !== "undefined" && Array.isArray(choppedTrees)) {
-                    if (!choppedTrees.includes(tree.id)) choppedTrees.push(tree.id);
-                  } else if (typeof window !== "undefined" && Array.isArray(window.choppedTrees)) {
-                    if (!window.choppedTrees.includes(tree.id)) window.choppedTrees.push(tree.id);
-                  }
-                }
-
-                // Tree felled! Clone acquires logs and branches
-                addCloneItem(cState, "LOG", "🪵", 2);
-                addCloneItem(cState, "BRANCH", "🌿", 2 + Math.floor(Math.random() * 2));
-
-                const hitIdx = natureObs.indexOf(tree);
-                if (hitIdx !== -1) natureObs.splice(hitIdx, 1);
-
-                if (tree.meshStart !== undefined && tree.meshEnd !== undefined) {
-                  const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : window.natureRawVertices;
-                  const vBuf = (typeof natureVertexBuffer !== "undefined") ? natureVertexBuffer : window.natureVertexBuffer;
-                  if (rawVerts && vBuf && typeof gl !== "undefined" && gl) {
-                    const startF = tree.meshStart * 3;
-                    const endF = tree.meshEnd * 3;
-                    for (let j = startF; j < endF; j++) rawVerts[j] = 0;
-                    gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
-                    gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, new Float32Array(rawVerts.slice(startF, endF)));
-                  }
-                }
-
+              if (!natureObs.includes(tree)) {
                 setCloneExpression(cState, "(^o^)");
                 cState.targetObstacle = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
@@ -2322,7 +2458,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
 
       // =========================================================================
-      // STATE 4: MINING ORE & ROCKS
+      // STATE 4: MINING ORE & ROCKS (SHARED WITH PLAYER)
       // =========================================================================
       if (cState.currentActivity === "MINE_ORE") {
         const ore = cState.targetObstacle;
@@ -2345,47 +2481,24 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
           if (distToTarget <= 0.75) {
-            // At ore/rock: mine repeatedly
             cState.walkBlend = 0.0;
-            cState.actionAnim = 0.6;
+            cState.heading = Math.atan2(dEast, dNorth);
+            if (!cState.actionAnim || cState.actionAnim <= 0.05) {
+              cState.actionAnim = 1.0;
+            }
             cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
 
             if (cState.actionSwingTimer >= 0.75) {
               cState.actionSwingTimer = 0.0;
-              ore.hits = (ore.hits || 0) + 1;
-              if (typeof playRockHitSound === "function") playRockHitSound(ore.position);
-              else if (typeof playPlaceSound === "function") playPlaceSound(ore.position);
+              if (typeof window.useEntityItem === "function") {
+                window.useEntityItem(cState, { name: "PICKAXE" }, {
+                  targetEntity: ore,
+                  targetPos: ore.position,
+                  reachOverride: 0.9
+                });
+              }
 
-              if (ore.hits >= 3) {
-                // Rock/ore broken! Drops gathered
-                if (ore.type === "iron_ore") {
-                  addCloneItem(cState, "IRON_ORE", "🟥", 2 + Math.floor(Math.random() * 2));
-                  addCloneItem(cState, "ROCK", "🪨", 1);
-                } else if (ore.type === "gold_ore") {
-                  addCloneItem(cState, "GOLD_ORE", "🪙", 2);
-                  addCloneItem(cState, "ROCK", "🪨", 1);
-                } else if (ore.type === "glow_ore") {
-                  addCloneItem(cState, "GLOW_ORE", "✨", 2);
-                  addCloneItem(cState, "ROCK", "🪨", 1);
-                } else {
-                  addCloneItem(cState, "ROCK", "🪨", 2);
-                }
-
-                const hitIdx = natureObs.indexOf(ore);
-                if (hitIdx !== -1) natureObs.splice(hitIdx, 1);
-
-                if (ore.meshStart !== undefined && ore.meshEnd !== undefined) {
-                  const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : window.natureRawVertices;
-                  const vBuf = (typeof natureVertexBuffer !== "undefined") ? natureVertexBuffer : window.natureVertexBuffer;
-                  if (rawVerts && vBuf && typeof gl !== "undefined" && gl) {
-                    const startF = ore.meshStart * 3;
-                    const endF = ore.meshEnd * 3;
-                    for (let j = startF; j < endF; j++) rawVerts[j] = 0;
-                    gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
-                    gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, new Float32Array(rawVerts.slice(startF, endF)));
-                  }
-                }
-
+              if (!natureObs.includes(ore)) {
                 setCloneExpression(cState, "(★‿★)");
                 cState.targetObstacle = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
@@ -2398,11 +2511,18 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
 
       // =========================================================================
-      // STATE 5: HUNTING ANIMALS (ISOPOD, MEGANEURA, AMPHIBIANS)
+      // STATE 5: HUNTING ANIMALS (SHARED MELEE & RANGED SYSTEM WITH PLAYER)
       // =========================================================================
       if (cState.currentActivity === "HUNT_ANIMAL") {
         const animal = cState.targetAnimal;
         if (!animal || animal.ragdollEnabled || (animal.hp !== undefined && animal.hp <= 0)) {
+          if (animal && (animal.ragdollEnabled || (animal.hp !== undefined && animal.hp <= 0))) {
+            if (!animal._cloneLooted && typeof window.grantNpcKillLootToActor === "function") {
+              window.grantNpcKillLootToActor(cState, animal);
+            }
+            setCloneExpression(cState, "(^o^)");
+            cState.workCycles = (cState.workCycles || 0) + 1;
+          }
           cState.targetAnimal = null;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
@@ -2411,16 +2531,12 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           if (aPos) {
             setCloneTargetPos(cState, aPos[0], aPos[1], aPos[2], planetRadius);
           }
-          
-          const hasCannon = getCloneItemCount(cState, "WOODEN_ARM_CANNON") > 0 || getCloneItemCount(cState, "ARM_CANNON") > 0;
-          const arrowCount = getCloneItemCount(cState, "ARROW") + getCloneItemCount(cState, "IRON_BULLET");
-          if (hasCannon && arrowCount > 0) {
-            cState.equippedTool = "WOODEN_ARM_CANNON";
-            setCloneExpression(cState, "(🪵🦾‿🦾)");
-          } else {
-            cState.equippedTool = "AXE";
-            setCloneExpression(cState, "(•̀ᴗ•́)");
-          }
+
+          const weaponId = selectCloneCombatWeapon(cState);
+          const weaponDef = (typeof window.getItemDefinition === "function") ? window.getItemDefinition(weaponId) : null;
+          const isRanged = !!(weaponDef && weaponDef.actionType === "WEAPON_RANGED");
+          cState.equippedTool = weaponId;
+          setCloneExpression(cState, isRanged ? "(🪵🦾‿🦾)" : "(•̀ᴗ•́)");
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
           const sinT = Math.max(0.05, Math.sin(cState.theta));
@@ -2430,99 +2546,51 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
 
-          // Ranged cannon attack from distance (<= 3.2m) or melee attack (<= 0.8m)
-          if (cState.equippedTool === "WOODEN_ARM_CANNON" && distToTarget <= 3.2 && arrowCount > 0) {
-            cState.actionAnim = 0.6;
+          const aimPos = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(animal) : null) || aPos;
+          const arrowCount = getCloneItemCount(cState, "ARROW") + getCloneItemCount(cState, "IRON_BULLET");
+
+          // Ranged weapon attack from distance (<= 3.2m) or melee attack (<= 0.8m) via shared useEntityItem
+          if (isRanged && distToTarget <= 3.2 && arrowCount > 0) {
+            cState.walkBlend = 0.0;
+            cState.heading = Math.atan2(dEast, dNorth);
+            if ((!cState.actionAnim || cState.actionAnim <= 0.05) && !cState.arrowShotInCurrentAnim) {
+              cState.actionAnim = (weaponDef && typeof weaponDef.animDuration === "number") ? weaponDef.animDuration : 1.07;
+              cState.isUsingItem = true;
+            }
             cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
 
             if (cState.actionSwingTimer >= 0.75) {
               cState.actionSwingTimer = 0.0;
-              if (getCloneItemCount(cState, "ARROW") > 0) {
-                removeCloneItem(cState, "ARROW", 1);
-              } else {
-                removeCloneItem(cState, "IRON_BULLET", 1);
-              }
-              if (typeof playPlaceSound === "function") playPlaceSound();
-
-              // Spawn arrow projectile from clone towards animal
-              const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
-              const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
-              const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
-              if (aPos) {
-                const aDir = [aPos[0] - cPos[0], aPos[1] - cPos[1], aPos[2] - cPos[2]];
-                const aDist = Math.hypot(aDir[0], aDir[1], aDir[2]) || 1;
-                aDir[0] /= aDist; aDir[1] /= aDist; aDir[2] /= aDist;
-                const spd = 1.15 * (typeof playerScale !== "undefined" ? playerScale : 0.1);
-                const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : [];
-                colList.push({
-                  type: "arrow",
-                  position: [cPos[0] + aDir[0] * 0.1, cPos[1] + aDir[1] * 0.1, cPos[2] + aDir[2] * 0.1],
-                  vel: [aDir[0] * spd, aDir[1] * spd, aDir[2] * spd],
-                  F: aDir,
-                  R: [1, 0, 0],
-                  normal: [0, 1, 0],
-                  color: [0.62, 0.44, 0.26],
-                  size: 0.1,
-                  active: true,
-                  isDynamic: true,
-                  sourceWeapon: "WOODEN_ARM_CANNON",
-                  isCannonShot: true,
-                  animPhaseActive: true,
-                  animElapsed: 0,
-                  animMaxTime: 0.25,
-                  animOrigin: [cPos[0] + aDir[0] * 0.1, cPos[1] + aDir[1] * 0.1, cPos[2] + aDir[2] * 0.1],
-                  animDir: aDir,
-                  animSpeed: spd,
-                  ignorePlayer: true
+              if (typeof window.useEntityItem === "function") {
+                window.useEntityItem(cState, { name: weaponId }, {
+                  targetEntity: animal,
+                  targetPos: aimPos,
+                  targetIsNpc: true,
+                  immediateFire: true
                 });
-                if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
-              }
-
-              const dmg = 1;
-              if (animal.hp === undefined) {
-                const regHp = (window.NpcRegistry && window.NpcRegistry[animal.type]) ? window.NpcRegistry[animal.type].maxHp : 2;
-                animal.hp = regHp;
-              }
-              animal.hp -= dmg;
-              if (animal.hp <= 0) {
-                animal.hp = 0;
-                animal.ragdollEnabled = true;
-                if (animal.type === "isopod") addCloneItem(cState, "ISOPOD", "🦐", 1);
-                else if (animal.type === "meganeura") addCloneItem(cState, "MEGANEURA", "🦟", 1);
-                else addCloneItem(cState, "ISOPOD", "🦐", 1);
-                setCloneExpression(cState, "(^o^)");
-                cState.targetAnimal = null;
-                cState.workCycles = (cState.workCycles || 0) + 1;
-                executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
               }
             }
-          } else if (distToTarget <= 0.8) {
-            // Attack animal!
-            cState.actionAnim = 0.6;
+          } else if (!isRanged && distToTarget <= 0.8) {
+            cState.walkBlend = 0.0;
+            cState.heading = Math.atan2(dEast, dNorth);
+            if (!cState.actionAnim || cState.actionAnim <= 0.05) {
+              cState.actionAnim = 1.0;
+            }
             cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
 
             if (cState.actionSwingTimer >= 0.65) {
               cState.actionSwingTimer = 0.0;
-              const dmg = (cState.equippedTool === "AXE") ? 2 : 1;
-              if (animal.hp === undefined) {
-                const regHp = (window.NpcRegistry && window.NpcRegistry[animal.type]) ? window.NpcRegistry[animal.type].maxHp : 2;
-                animal.hp = regHp;
+              if (typeof window.useEntityItem === "function") {
+                window.useEntityItem(cState, { name: weaponId }, {
+                  targetEntity: animal,
+                  targetPos: aimPos,
+                  targetIsNpc: true,
+                  preferNpc: true,
+                  reachOverride: 0.95
+                });
               }
-              animal.hp -= dmg;
-              if (typeof playChopSound === "function") playChopSound();
 
-              if (animal.hp <= 0) {
-                animal.hp = 0;
-                animal.ragdollEnabled = true;
-
-                if (animal.type === "isopod") {
-                  addCloneItem(cState, "ISOPOD", "🦐", 1);
-                } else if (animal.type === "meganeura") {
-                  addCloneItem(cState, "MEGANEURA", "🦟", 1);
-                } else {
-                  addCloneItem(cState, "ISOPOD", "🦐", 1);
-                }
-
+              if (animal.hp <= 0 || animal.ragdollEnabled) {
                 setCloneExpression(cState, "(^o^)");
                 cState.targetAnimal = null;
                 cState.workCycles = (cState.workCycles || 0) + 1;
@@ -2543,6 +2611,8 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
           setCloneTargetPos(cState, drop.position[0], drop.position[1], drop.position[2], planetRadius);
+          cState.equippedTool = null;
+          cState.activeItem = null;
           setCloneExpression(cState, "(ʘ‿ʘ)");
 
           const dNorth = -(cState.targetTheta - cState.theta) * planetRadius;
@@ -2650,15 +2720,28 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         cState.thinkTimer -= dtClamped;
       }
 
+      if (cState.currentActivity === "WANDER" || cState.currentActivity === "IDLE") {
+        cState.equippedTool = null;
+        cState.activeItem = null;
+      }
+
       if (cState.isIdle) {
-        cState.walkBlend = Math.max(0.0, cState.walkBlend - dtClamped * 4.0);
+        if (typeof window.ActorCore !== "undefined" && typeof window.ActorCore.stepActorAnimState === "function") {
+          window.ActorCore.stepActorAnimState(cState, dtClamped, { phaseOnly: true, isWalking: false });
+        } else {
+          cState.walkBlend = Math.max(0.0, cState.walkBlend - dtClamped * 4.0);
+        }
         if (cState.timer <= 0 || cState.thinkTimer <= 0) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         }
       } else if (!cState.isUsingChest) {
         // Walking towards current waypoint / target (with house doorway routing & shared wall collision)
-        cState.walkBlend = Math.min(1.0, cState.walkBlend + dtClamped * 4.0);
-        cState.animPhase += dtClamped * 5.0;
+        if (typeof window.ActorCore !== "undefined" && typeof window.ActorCore.stepActorAnimState === "function") {
+          window.ActorCore.stepActorAnimState(cState, dtClamped, { phaseOnly: true, isWalking: true });
+        } else {
+          cState.walkBlend = Math.min(1.0, cState.walkBlend + dtClamped * 4.0);
+          cState.animPhase += dtClamped * 14.4;
+        }
 
         const navTarget = resolveCloneDoorwayWaypoint(cState, planetRadius, houses);
         const dNorth = -(navTarget.navTheta - cState.theta) * planetRadius;
@@ -2824,17 +2907,8 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       const cState = window.playerClonesState[i];
       ensureCloneAppearance(cState);
       const { cPos, cR, cF, cN } = getCloneVectors(cState, charScale, planetRadius);
-
-      const actionBob = (cState.actionAnim && cState.actionAnim > 0)
-        ? Math.sin(cState.actionAnim * Math.PI * 6) * 0.015 * charScale
-        : 0;
-      const walkBob = Math.sin(cState.animPhase) * 0.010 * cState.walkBlend * charScale;
-      const idleBob = Math.sin((cState.timer || 0) * 2.5) * 0.003 * (1.0 - cState.walkBlend) * charScale;
-      const finalPos = [
-        cPos[0] + (walkBob + idleBob + actionBob) * cN[0],
-        cPos[1] + (walkBob + idleBob + actionBob) * cN[1],
-        cPos[2] + (walkBob + idleBob + actionBob) * cN[2]
-      ];
+      // Grounded position matches Player's getCharacterMatrix (breathing offset bOffset is handled inside updateCharacterMesh)
+      const finalPos = cPos;
 
       if (eyePos) {
         const dx = finalPos[0] - eyePos[0];
@@ -2875,11 +2949,13 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         gl.uniform1f(charUseFaceTexLoc, 1.0);
       }
 
-      // 1. Draw clone body + hoodie (open or closed variant)
+      // 1. Draw clone body + hoodie + held tool (per-clone animated buffers from shared updateCharacterMesh)
       if (useCloneBuffers) {
-        const activeBodyBuf = (cState.hoodOpen && window.cloneOpenHoodieMeshBuffers && window.cloneOpenHoodieMeshBuffers.vertexBuffer)
-          ? window.cloneOpenHoodieMeshBuffers
-          : window.cloneMeshBuffers;
+        const activeBodyBuf = (cState._meshBuffers && cState._meshBuffers.vertexBuffer)
+          ? cState._meshBuffers
+          : ((cState.hoodOpen && window.cloneOpenHoodieMeshBuffers && window.cloneOpenHoodieMeshBuffers.vertexBuffer)
+              ? window.cloneOpenHoodieMeshBuffers
+              : window.cloneMeshBuffers);
         bindCloneBufferSet(activeBodyBuf);
         currentIndicesLen = activeBodyBuf.indicesLength;
       }
@@ -2890,9 +2966,9 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
         gl.drawElements(gl.TRIANGLES, currentIndicesLen, gl.UNSIGNED_SHORT, 0);
       }
 
-      // 2. Draw clone's randomized 3D anime hair
+      // 2. Draw clone's randomized 3D anime hair (tracking per-clone head position)
       if (typeof window.getCloneHairBuffers === "function") {
-        const hairBuf = window.getCloneHairBuffers(gl, cState.hairStyle, cState.hairColorIdx, !!cState.hoodOpen);
+        const hairBuf = window.getCloneHairBuffers(gl, cState.hairStyle, cState.hairColorIdx, !!cState.hoodOpen, cState);
         if (hairBuf && hairBuf.vertexBuffer && hairBuf.indicesLength > 0) {
           bindCloneBufferSet(hairBuf);
           if (hairBuf.indicesLength > 65535) {
@@ -2962,17 +3038,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       const cState = window.playerClonesState[i];
       ensureCloneAppearance(cState);
       const { cPos, cR, cF, cN } = getCloneVectors(cState, charScale, planetRadius);
-
-      const actionBob = (cState.actionAnim && cState.actionAnim > 0)
-        ? Math.sin(cState.actionAnim * Math.PI * 6) * 0.015 * charScale
-        : 0;
-      const walkBob = Math.sin(cState.animPhase) * 0.010 * cState.walkBlend * charScale;
-      const idleBob = Math.sin((cState.timer || 0) * 2.5) * 0.003 * (1.0 - cState.walkBlend) * charScale;
-      const finalPos = [
-        cPos[0] + (walkBob + idleBob + actionBob) * cN[0],
-        cPos[1] + (walkBob + idleBob + actionBob) * cN[1],
-        cPos[2] + (walkBob + idleBob + actionBob) * cN[2]
-      ];
+      const finalPos = cPos;
 
       f32_cloneModel[0] = cR[0] * charScale; f32_cloneModel[1] = cR[1] * charScale; f32_cloneModel[2] = cR[2] * charScale; f32_cloneModel[3] = 0;
       f32_cloneModel[4] = cN[0] * charScale; f32_cloneModel[5] = cN[1] * charScale; f32_cloneModel[6] = cN[2] * charScale; f32_cloneModel[7] = 0;
@@ -2982,9 +3048,11 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       gl.uniformMatrix4fv(depthModelLoc, false, f32_cloneModel);
 
       if (useCloneBuffers) {
-        const activeBodyBuf = (cState.hoodOpen && window.cloneOpenHoodieMeshBuffers && window.cloneOpenHoodieMeshBuffers.vertexBuffer)
-          ? window.cloneOpenHoodieMeshBuffers
-          : window.cloneMeshBuffers;
+        const activeBodyBuf = (cState._meshBuffers && cState._meshBuffers.vertexBuffer)
+          ? cState._meshBuffers
+          : ((cState.hoodOpen && window.cloneOpenHoodieMeshBuffers && window.cloneOpenHoodieMeshBuffers.vertexBuffer)
+              ? window.cloneOpenHoodieMeshBuffers
+              : window.cloneMeshBuffers);
         if (typeof depthPosLoc !== "undefined" && depthPosLoc !== -1) {
           gl.bindBuffer(gl.ARRAY_BUFFER, activeBodyBuf.vertexBuffer);
           gl.vertexAttribPointer(depthPosLoc, 3, gl.FLOAT, false, 0, 0);
@@ -3000,7 +3068,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
       }
 
       if (typeof window.getCloneHairBuffers === "function") {
-        const hairBuf = window.getCloneHairBuffers(gl, cState.hairStyle, cState.hairColorIdx, !!cState.hoodOpen);
+        const hairBuf = window.getCloneHairBuffers(gl, cState.hairStyle, cState.hairColorIdx, !!cState.hoodOpen, cState);
         if (hairBuf && hairBuf.vertexBuffer && hairBuf.indicesLength > 0) {
           if (typeof depthPosLoc !== "undefined" && depthPosLoc !== -1) {
             gl.bindBuffer(gl.ARRAY_BUFFER, hairBuf.vertexBuffer);
@@ -3027,6 +3095,15 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     }
   };
 
+  window.isBoatRiddenByAnyClone = function(b) {
+    if (!b || !window.playerClonesState) return false;
+    for (let i = 0; i < window.playerClonesState.length; i++) {
+      const cl = window.playerClonesState[i];
+      if (cl && cl.ridingBoat === b && cl.ridingBoat.active) return true;
+    }
+    return false;
+  };
+
   // Expose PlayerClones namespace object
   window.PlayerClones = {
     getVectors: getCloneVectors,
@@ -3037,6 +3114,7 @@ function spawnPlainBoatNearHouse(hIdx, planetRadius) {
     update: window.updatePlayerClones,
     render: window.renderPlayerClones,
     renderShadow: window.renderPlayerClonesShadow,
+    isBoatRiddenByAnyClone: window.isBoatRiddenByAnyClone,
     EMOJI_FACES: CLONE_EMOJI_FACES
   };
 })();

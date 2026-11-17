@@ -2110,12 +2110,16 @@ function buildCollectibles(count, seed) {
         const charScale = (typeof inputState.charScale === "number") ? inputState.charScale : 1.0;
         let heading = (typeof inputState.charHeading === "number") ? inputState.charHeading : 0;
         const pitchGrade = (typeof inputState.pitchGrade === "number") ? inputState.pitchGrade : (boat.pitchGrade || 0);
+        const allowHudNotice = inputState.silentNotice !== true;
+        const shouldConsumeBattery = inputState.consumeBattery !== false;
 
         const hasWing = !!(boat.hasWing || boat.hasWings);
         const hasWheels = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
         const isLandBoat = hasWheels || hasWing;
         const hasEngine = !!boat.hasEngine;
-        const hasBattery = typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery();
+        const hasBattery = (typeof inputState.hasBattery === "boolean")
+          ? inputState.hasBattery
+          : (typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery());
         const isAirborne = !!(boat.isAirborne && !isInWater);
         const isControlledFlight = !!(boat.isFlying && hasWing);
 
@@ -2149,20 +2153,22 @@ function buildCollectibles(count, seed) {
             const canAccelerate = (hasEngine && hasBattery) || (!hasWheels && isInWater && !hasEngine);
 
             // Feedback notices
-            if (!hasEngine && hasWheels && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
-                const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-                if (typeof showNotice === "function" && (!boat._lastEngineNotice || nowTime - boat._lastEngineNotice > 3000)) {
-                    boat._lastEngineNotice = nowTime;
-                    showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
-                }
-            } else if (hasEngine && !hasBattery && (Math.abs(moveForwardInput) > 0.1 || (boat.isFlying && isShiftHeld))) {
-                if (typeof window.BatterySystem !== "undefined") {
-                    window.BatterySystem.showEmptyNotice();
+            if (allowHudNotice) {
+                if (!hasEngine && hasWheels && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
+                    const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+                    if (typeof showNotice === "function" && (!boat._lastEngineNotice || nowTime - boat._lastEngineNotice > 3000)) {
+                        boat._lastEngineNotice = nowTime;
+                        showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
+                    }
+                } else if (hasEngine && !hasBattery && (Math.abs(moveForwardInput) > 0.1 || (boat.isFlying && isShiftHeld))) {
+                    if (typeof window.BatterySystem !== "undefined") {
+                        window.BatterySystem.showEmptyNotice();
+                    }
                 }
             }
 
             const isUsingPower = Math.abs(moveForwardInput) > 0.1 || (boat.isFlying && isShiftHeld);
-            if (hasEngine && hasBattery && isUsingPower) {
+            if (shouldConsumeBattery && hasEngine && hasBattery && isUsingPower) {
                 if (typeof window.BatterySystem !== "undefined") {
                     window.BatterySystem.consumePower(dt);
                 }
@@ -2275,7 +2281,7 @@ function buildCollectibles(count, seed) {
                 moveNorthFactor = 0;
                 moveEastFactor = 0;
                 currentSpeedVal = 0;
-                if (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1) {
+                if (allowHudNotice && (Math.abs(moveForwardInput) > 0.1 || Math.abs(moveSidewaysInput) > 0.1)) {
                     const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
                     if (typeof showNotice === "function" && (!boat._lastLandNotice || nowTime - boat._lastLandNotice > 3000)) {
                         boat._lastLandNotice = nowTime;
@@ -5413,6 +5419,7 @@ function buildCollectibles(count, seed) {
           }
 
           if ((typeof activeRidingBoat !== "undefined" && c === activeRidingBoat) || 
+              (typeof window !== "undefined" && typeof window.isBoatRiddenByAnyClone === "function" && window.isBoatRiddenByAnyClone(c)) ||
               (typeof activeRidingMech !== "undefined" && activeRidingMech && (c === activeRidingMech || (activeRidingMech.attachedParts && activeRidingMech.attachedParts.some(ep => ep.item === c))))) {
             isOutOfRenderDist = false;
             c.vel = [0, 0, 0];
@@ -5616,10 +5623,11 @@ function buildCollectibles(count, seed) {
                      if (distSq <= hitRadius * hitRadius) {
                          c.animPhaseActive = false;
                          const isIronBullet = (c.ammoType === "IRON_BULLET");
+                         const isOwnerPlayer = !c.ownerActor || c.ownerActor.isPlayer !== false;
                          // Arrow Immunity Check: Arrows cannot damage obsidian_cube, but Spherical Iron Bullet CAN damage obsidian_cube!
                          const isImmuneToArrows = (!isIronBullet) && ((npc.type === "obsidian_cube") || (npc.immuneToArrows) || (window.NpcRegistry && window.NpcRegistry[npc.type] && window.NpcRegistry[npc.type].immuneToArrows));
                          if (isImmuneToArrows) {
-                             if (typeof showNotice === "function") {
+                             if (isOwnerPlayer && typeof showNotice === "function") {
                                  showNotice("🛡️ ลูกธนูเด้งสะท้อน! ศิลาออบซิเดียนทนทานต่อธนู 100% (Immune to arrows!)");
                              }
                              c.vel[0] = -c.vel[0] * 0.45 + (Math.random() - 0.5) * 0.04;
@@ -5644,15 +5652,24 @@ function buildCollectibles(count, seed) {
                                  hpHearts += i < npc.hp ? "🔴" : "⚪";
                              }
                              const weaponName = false ? "⚫ ลูกบอลออบซิเดียน" : (isIronBullet ? "⚪ กระสุนเหล็กทรงกลม" : ((c.isCannonShot || c.sourceWeapon === "WOODEN_ARM_CANNON") ? "🪵🦾 ปืนไม้ติดแขน" : "🏹 ลูกธนู"));
-                             showNotice("🎯 " + weaponName + " ยิงเข้าเป้า! ลดดาเมจ -" + damage + " " + hpHearts + " [HP: " + npc.hp + "/" + npc.maxHp + "]");
+                             if (isOwnerPlayer && typeof showNotice === "function") {
+                                 showNotice("🎯 " + weaponName + " ยิงเข้าเป้า! ลดดาเมจ -" + damage + " " + hpHearts + " [HP: " + npc.hp + "/" + npc.maxHp + "]");
+                             }
                              
                              if (npc.hp <= 0) {
                                  npc.ragdollEnabled = true;
-                                 showNotice("💀 กำจัดเป้าหมายสำเร็จ! (Target eliminated!)");
+                                 if (!isOwnerPlayer && !npc._cloneLooted && typeof window.grantNpcKillLootToActor === "function") {
+                                     window.grantNpcKillLootToActor(c.ownerActor, npc);
+                                 }
+                                 if (isOwnerPlayer && typeof showNotice === "function") {
+                                     showNotice("💀 กำจัดเป้าหมายสำเร็จ! (Target eliminated!)");
+                                 }
                              }
                          } else {
                              const weaponName = false ? "ลูกบอลออบซิเดียน" : (isIronBullet ? "กระสุนเหล็ก" : "ลูกธนู");
-                             showNotice("🎯 " + weaponName + "ปักโดนร่างเป้าหมาย!");
+                             if (isOwnerPlayer && typeof showNotice === "function") {
+                                 showNotice("🎯 " + weaponName + "ปักโดนร่างเป้าหมาย!");
+                             }
                          }
                          
                          if (npc.ragdollEnabled && npc.ragdollVel) {
@@ -5926,7 +5943,9 @@ function buildCollectibles(count, seed) {
             let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
             let caveDataForCol = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(c.position[0]/(r||1), c.position[1]/(r||1), c.position[2]/(r||1), r) : null;
             let terrainRadius = caveDataForCol ? caveDataForCol.ground : (RADIUS + height * HEIGHT_SCALE);
-            const waterRadius = RADIUS + waterLevel * 0.15;
+            const waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
+              ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
+              : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
             
             let inWater = false;
             if (waterEnabled && terrainRadius < waterRadius) {
@@ -6077,7 +6096,9 @@ function buildCollectibles(count, seed) {
             terrainRadius = RADIUS + height * HEIGHT_SCALE;
           }
           
-          const waterRadius = RADIUS + waterLevel * 0.15;
+          const waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
+            ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
+            : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
           
           let groundRadius = terrainRadius;
           let isInWater = false;
@@ -6724,6 +6745,9 @@ function buildCollectibles(count, seed) {
           name_en: "Axe",
           icon: "🪓",
           actionType: "TOOL_CHOP",
+          toolType: "AXE",
+          targetTypes: ["tree"],
+          animDuration: 1.0,
           damage: 2,
           usage_th: "ถือในมือ คลิกซ้ายใช้ตัดต้นไม้เพื่อเก็บท่อนไม้ และใช้โจมตีทำดาเมจ 2 จุด",
           usage_en: "Hold in hand. Left-click to chop trees for logs and attack for 2 DMG.",
@@ -6736,9 +6760,35 @@ function buildCollectibles(count, seed) {
           name_en: "Pickaxe",
           icon: "⛏️",
           actionType: "TOOL_MINE",
+          toolType: "PICKAXE",
+          targetTypes: ["rock", "iron_ore", "gold_ore", "glow_ore"],
+          animDuration: 1.0,
           damage: 2,
           usage_th: "ถือในมือ คลิกซ้ายใช้ขุดเจาะหินและแร่ธาตุ และใช้โจมตีทำดาเมจ 2 จุด",
           usage_en: "Hold in hand. Left-click to mine rocks and ores, and attack for 2 DMG.",
+          maxStack: 1
+        },
+        "AEGIS_SHIFT": {
+          id: "AEGIS_SHIFT",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "อีเตอร์ดาบใหญ่ (Aegis-Shift)",
+          name_en: "Aegis-Shift",
+          name_ja: "イージスシフト",
+          icon: "⛏️⚔️",
+          actionType: "TOOL_MULTI",
+          toolType: "AEGIS_SHIFT",
+          targetTypes: ["tree", "rock", "iron_ore", "gold_ore", "glow_ore"],
+          animDuration: 1.0,
+          damage: 2,
+          npcHitConfig: {
+            dmg: 2,
+            label: "⛏️⚡ ฟาดด้วย Aegis-Shift!",
+            useUnifiedMeleeReach: true,
+            coneCos: 0.45,
+            maxVert: 0.65
+          },
+          usage_th: "คลิกซ้ายใช้ขุดหิน/แร่ (อีเตอร์) หรือตัดต้นไม้ (พับคมด้านหนึ่งเป็นขวานอัตโนมัติ) คลิกขวาแปลงเป็นดาบใหญ่พุ่งฟันทำดาเมจ 2 HP (ไม่เสียความหิว) แล้วแบกบนบ่าจนกว่าจะเดิน",
+          usage_en: "Left-click auto-shifts between Pickaxe (rocks/ores) and folded-blade Axe (trees). Right-click shifts to Greatsword dash slash for 2 DMG (0 hunger) and rests on shoulder until walking.",
           maxStack: 1
         },
         "SHOVEL": {
@@ -6748,7 +6798,14 @@ function buildCollectibles(count, seed) {
           name_en: "Shovel",
           icon: "🥄",
           actionType: "TOOL_DIG",
+          toolType: "SHOVEL",
+          animDuration: 1.0,
           damage: 1,
+          digConfig: {
+            delta: -0.35,
+            altRadius: 0.05,
+            dropItem: { name: "DIRT", icon: "🟫", count: 1, label: "DIRT" }
+          },
           usage_th: "ถือในมือ คลิกซ้ายขุดปรับแต่งระดับภูมิประเทศหลุม/คูน้ำ และใช้โจมตีทำดาเมจ 1 จุด",
           usage_en: "Hold in hand. Left-click to dig/terraform terrain and attack for 1 DMG.",
           maxStack: 1
@@ -6784,7 +6841,11 @@ function buildCollectibles(count, seed) {
           name_en: "Bow",
           icon: "🏹",
           actionType: "WEAPON_RANGED",
+          toolType: "BOW",
+          animDuration: 1.4,
           damage: 1.5,
+          isDisabled: true,
+          disabledNotice: "🚫 คันธนูถูกปิดใช้งาน กรุณาใช้ปืนไม้ติดแขน (ARM CANNON) แทน!",
           usage_th: "ถือในมือ เล็งและคลิกซ้ายยิงลูกธนูระยะไกล (ต้องมีลูกธนู ARROW ในกระเป๋า)",
           usage_en: "Hold in hand. Aim and left-click to shoot arrows (requires ARROW in inventory).",
           maxStack: 1
@@ -6796,6 +6857,10 @@ function buildCollectibles(count, seed) {
           name_en: "Wooden Arm Cannon",
           icon: "🪵🦾",
           actionType: "WEAPON_RANGED",
+          toolType: "WOODEN_ARM_CANNON",
+          animDuration: 1.07,
+          ammoTypes: ["IRON_BULLET", "ARROW"],
+          noAmmoNotice: "🚫 ไม่พบกระสุนในกระเป๋า! กรุณาคราฟ ลูกธนู หรือ กระสุนเหล็ก ทรงกลม",
           damage: 2.5,
           usage_th: "สวมครอบแขน เล็งและคลิกซ้ายยิงลูกธนูพลังสูง (ต้องมีลูกธนู ARROW ในกระเป๋า)",
           usage_en: "Mounted on arm. Aim and left-click to shoot high-velocity arrows (requires ARROW in inventory).",
@@ -6808,6 +6873,10 @@ function buildCollectibles(count, seed) {
           name_en: "Wooden Arm Cannon",
           icon: "🪵🦾",
           actionType: "WEAPON_RANGED",
+          toolType: "WOODEN_ARM_CANNON",
+          animDuration: 1.07,
+          ammoTypes: ["IRON_BULLET", "ARROW"],
+          noAmmoNotice: "🚫 ไม่พบกระสุนในกระเป๋า! กรุณาคราฟ ลูกธนู หรือ กระสุนเหล็ก ทรงกลม",
           damage: 2.5,
           usage_th: "สวมครอบแขน เล็งและคลิกซ้ายยิงลูกธนูพลังสูง (ต้องมีลูกธนู ARROW ในกระเป๋า)",
           usage_en: "Mounted on arm. Aim and left-click to shoot high-velocity arrows (requires ARROW in inventory).",
@@ -6820,10 +6889,37 @@ function buildCollectibles(count, seed) {
           name_en: "Branch",
           icon: "🌿",
           actionType: "WEAPON_MELEE",
+          toolType: "BRANCH",
+          animDuration: 1.0,
           damage: 1,
+          consumeOnNpcHit: true,
+          breakNotice: "🌿 กิ่งไม้ฟาดโดนเป้าหมายจนหักพังแล้ว! (Branch hit target and broke!)",
           usage_th: "ถือในมือ ใช้ฟาดโจมตีระยะประชิด ทำดาเมจ 1 จุด (กิ่งไม้จะหักเมื่อฟาดโดนเป้าหมาย)",
           usage_en: "Hold in hand. Swing to melee attack for 1 DMG (breaks upon successful hit).",
           maxStack: 99
+        },
+        "TANTO": {
+          id: "TANTO",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          name_th: "มีดตันโตะ (Tanto)",
+          name_en: "Tanto Knife",
+          name_ja: "タントウ (短刀)",
+          icon: "🗡️",
+          actionType: "WEAPON_MELEE",
+          toolType: "TANTO",
+          targetTypes: ["tree"],
+          animDuration: 1.0,
+          damage: 3,
+          npcHitConfig: {
+            dmg: 3,
+            label: "🗡️💥 ฟันด้วยมีดตันโตะ!",
+            useUnifiedMeleeReach: true,
+            coneCos: 0.45,
+            maxVert: 0.65
+          },
+          usage_th: "มีดตันโตะออบซิเดียนเรืองแสง ใช้งานเป็นมีดทั่วไปสำหรับฟันโจมตีระยะประชิด (3 DMG) และตัดฟันเก็บเกี่ยวทั่วไปโดยไม่พัง (คราฟต์จาก ศิลาออบซิเดียน 1, แร่หินเรืองแสง 1, แร่เหล็ก 1)",
+          usage_en: "Glowing obsidian tanto knife. General knife for melee slashing (3 DMG) and everyday cutting without breaking (crafted from 1 Obsidian Cube, 1 Glow Ore, 1 Iron Ore).",
+          maxStack: 1
         },
         "FRIED_BUG": {
           id: "FRIED_BUG",
@@ -6832,9 +6928,11 @@ function buildCollectibles(count, seed) {
           name_en: "Fried Bug",
           icon: "🍤",
           actionType: "CONSUMABLE_FOOD",
-          healHP: 5,
-          usage_th: "ถือในมือ/คลิกใช้ รับประทานเพื่อฟื้นฟูพลังชีวิตผู้เล่น HP +5 ช่อง",
-          usage_en: "Hold or use to eat and restore 5 Player HP points.",
+          restoreHunger: 3,
+          healHP: 2,
+          eatNotice: "กินแมลงทอด! ฟื้นฟูความหิว +3 ช่อง และ HP +2 ช่อง (Ate fried bug! Hunger +3, HP +2)",
+          usage_th: "ถือในมือ/คลิกใช้ รับประทานเพื่อฟื้นฟูความหิว +3 และพลังชีวิต HP +2 ช่อง",
+          usage_en: "Hold or use to eat and restore Hunger +3 and HP +2.",
           maxStack: 99
         },
         "DRAGON_FRUIT": {
@@ -6844,9 +6942,11 @@ function buildCollectibles(count, seed) {
           name_en: "Dragon Fruit",
           icon: "🐉",
           actionType: "CONSUMABLE_FOOD",
-          healHP: 4,
-          usage_th: "รับประทานฟื้นฟู HP +4 หรือถือในมือเพื่อนำไปปลูกในกล่องไม้ใส่ดิน (WOOD PLANTER BOX) ได้ต้นไม้ใบขาวแดง/ขาวทอง",
-          usage_en: "Eat to restore 4 HP or hold to plant inside a Wooden Planter Box to grow a white-and-red leaved tree.",
+          restoreHunger: 2,
+          healHP: 1,
+          eatNotice: "กินแก้วมังกร! ฟื้นฟูความหิว +2 ช่อง และ HP +1 ช่อง (Ate dragon fruit! Hunger +2, HP +1)",
+          usage_th: "รับประทานฟื้นฟูความหิว +2 และ HP +1 หรือถือในมือเพื่อนำไปปลูกในกล่องไม้ใส่ดิน (WOOD PLANTER BOX) ได้ต้นไม้ใบขาวแดง/ขาวทอง",
+          usage_en: "Eat to restore Hunger +2 and HP +1, or hold to plant inside a Wooden Planter Box to grow a white-and-red leaved tree.",
           maxStack: 99
         },
         "COTTON_PLANT": {
@@ -7077,6 +7177,42 @@ function buildCollectibles(count, seed) {
           usage_th: "กางเกงเลกกิ้งสีดำรัดรูปขายาวแบบแนบเนื้อ ใส่คู่กับกระโปรงหรือเสื้อได้หลายสไตล์ สวมใส่ในช่องของตกแต่ง (ของเสริม) ของตัวละคร",
           usage_en: "Matte black form-fitting full-length leggings. Equips in a character Accessory slot so it can be layered under skirts.",
           maxStack: 1
+        },
+        "DOUBLE_BREASTED_SUIT": {
+          id: "DOUBLE_BREASTED_SUIT",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "accessory",
+          name_th: "สูทกระดุมสองแถว",
+          name_en: "Double-Breasted Suit Jacket",
+          icon: "🧥",
+          actionType: "EQUIP_ACCESSORY",
+          usage_th: "เสื้อสูทกระดุมสองแถวสีเทาชาร์โคลลายทางแนวตั้งพร้อมปกแหลมและกระดุมสีอำพัน (เฉพาะตัวเสื้อสูท สวมใส่ในช่องของตกแต่ง และไม่สามารถใส่ทับพร้อมเสื้อฮูดผ้าคลุมได้)",
+          usage_en: "Charcoal pinstripe double-breasted suit jacket with wide peak lapels and tortoiseshell buttons (outer jacket only. Equips in an Accessory slot and cannot be worn simultaneously with the Traveler Hoodie).",
+          maxStack: 1
+        },
+        "BLACK_SLACKS": {
+          id: "BLACK_SLACKS",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "pants",
+          name_th: "กางเกงสแล็ค",
+          name_en: "Black Dress Slacks",
+          icon: "👖",
+          actionType: "EQUIP_PANTS",
+          usage_th: "กางเกงสแล็คขายาวทรงตรงสีกรมท่าเข้ม-ดำพร้อมขอบเอว หูเข็มขัด และรอยจีบหน้าขาแบบเนี้ยบ สวมใส่ในช่องกางเกง/กระโปรงของตัวละคร",
+          usage_en: "Tailored straight-leg dark charcoal-navy dress slacks with belt loops and crisp front press creases. Equips in the character Pants/Skirt slot.",
+          maxStack: 1
+        },
+        "OPERA_CAPE": {
+          id: "OPERA_CAPE",
+          category: ITEM_CATEGORIES.HOLDABLE,
+          equipSlot: "accessory",
+          name_th: "ผ้าคลุมไหล่ Opera Cape",
+          name_en: "Opera Cape",
+          icon: "🧛",
+          actionType: "EQUIP_ACCESSORY",
+          usage_th: "ผ้าคลุมไหล่ข้างเดียวสีดำสนิทซับในสีเขียวมรกตมืด พร้อมปกคอตั้ง สายรัดคอโลหะโค้ง และหัวเข็มขัดทรงโล่เงิน สวมใส่ในช่องของตกแต่งคู่กับเสื้อสูทได้",
+          usage_en: "Asymmetric one-shoulder jet-black Opera Cape with dark emerald-teal lining, standing collar, curved metallic collar strap, and silver shield clasp. Equips in a character Accessory slot and pairs with the Double-Breasted Suit.",
+          maxStack: 1
         }
       };
       window.ITEM_DEFINITIONS = ITEM_DEFINITIONS;
@@ -7138,7 +7274,7 @@ function buildCollectibles(count, seed) {
       };
       window.ItemRegistry["IRON_BULLET"] = window.ItemRegistry["iron_bullet"];
 
-      window.buildIronBucketModel = function(scale, centerPos, rVec, nVec, fVec, vertices, colors, indices, hasWater = false) {
+      window.buildIronBucketModel = function(scale, centerPos, rVec, nVec, fVec, vertices, colors, indices, hasWater = false, handleAngle = 0) {
         const s = scale || 0.35;
         const p = centerPos || [0, 0, 0];
         const r = rVec || [1, 0, 0];
@@ -7193,13 +7329,19 @@ function buildCollectibles(count, seed) {
         buildTaperedSegment(pt(-0.365, 0.21, 0), pt(-0.365, 0.32, 0), 0.042 * s, 0.036 * s, 5, ironLug, vertices, colors, indices, true);
         buildTaperedSegment(pt(0.365, 0.21, 0), pt(0.365, 0.32, 0), 0.042 * s, 0.036 * s, 5, ironLug, vertices, colors, indices, true);
 
-        // 8. Low-poly arched bail handle
-        const h0 = pt(-0.365, 0.30, 0);
-        const h1 = pt(-0.31, 0.47, 0);
-        const h2 = pt(-0.14, 0.58, 0);
-        const h3 = pt(0.14, 0.58, 0);
-        const h4 = pt(0.31, 0.47, 0);
-        const h5 = pt(0.365, 0.30, 0);
+        // 8. Low-poly arched bail handle (hinged around side lugs at ny = 0.28, fz = 0)
+        const cosH = Math.cos(handleAngle || 0);
+        const sinH = Math.sin(handleAngle || 0);
+        const ptHandle = (rx, ny) => {
+          const dy = ny - 0.28;
+          return pt(rx, 0.28 + dy * cosH, -dy * sinH);
+        };
+        const h0 = pt(-0.365, 0.28, 0);
+        const h1 = ptHandle(-0.31, 0.47);
+        const h2 = ptHandle(-0.14, 0.58);
+        const h3 = ptHandle(0.14, 0.58);
+        const h4 = ptHandle(0.31, 0.47);
+        const h5 = pt(0.365, 0.28, 0);
         const hRad = 0.022 * s;
         buildTaperedSegment(h0, h1, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
         buildTaperedSegment(h1, h2, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
@@ -7208,7 +7350,7 @@ function buildCollectibles(count, seed) {
         buildTaperedSegment(h4, h5, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
 
         // 9. Center wooden/forged grip sleeve at top of handle
-        buildTaperedSegment(pt(-0.10, 0.58, 0), pt(0.10, 0.58, 0), 0.036 * s, 0.036 * s, 6, gripColor, vertices, colors, indices, true);
+        buildTaperedSegment(ptHandle(-0.10, 0.58), ptHandle(0.10, 0.58), 0.036 * s, 0.036 * s, 6, gripColor, vertices, colors, indices, true);
       };
 
       window.ItemRegistry["iron_bucket"] = {
@@ -7235,6 +7377,536 @@ function buildCollectibles(count, seed) {
         }
       };
       window.ItemRegistry["WATER_BUCKET"] = window.ItemRegistry["water_bucket"];
+
+      window.buildTantoModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices) {
+        const s = scale || 0.35;
+        const p = basePos || [0, 0, 0];
+
+        const norm = (v, fb) => {
+          const l = v ? Math.hypot(v[0], v[1], v[2]) : 0;
+          return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+        };
+        const uAxis = norm(axisAlong, [0, 1, 0]);
+        let vAxis = norm(edgeUp, [1, 0, 0]);
+        const dotUV = uAxis[0] * vAxis[0] + uAxis[1] * vAxis[1] + uAxis[2] * vAxis[2];
+        vAxis = norm([vAxis[0] - uAxis[0] * dotUV, vAxis[1] - uAxis[1] * dotUV, vAxis[2] - uAxis[2] * dotUV], [1, 0, 0]);
+        let wAxis = norm(thickRight, [
+          uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1],
+          uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2],
+          uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]
+        ]);
+        const dotWU = uAxis[0] * wAxis[0] + uAxis[1] * wAxis[1] + uAxis[2] * wAxis[2];
+        const dotWV = vAxis[0] * wAxis[0] + vAxis[1] * wAxis[1] + vAxis[2] * wAxis[2];
+        wAxis = norm([
+          wAxis[0] - uAxis[0] * dotWU - vAxis[0] * dotWV,
+          wAxis[1] - uAxis[1] * dotWU - vAxis[1] * dotWV,
+          wAxis[2] - uAxis[2] * dotWU - vAxis[2] * dotWV
+        ], [0, 0, 1]);
+
+        const det = (uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1]) * wAxis[0] +
+                    (uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2]) * wAxis[1] +
+                    (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
+        const isFlipped = det < 0;
+
+        const pt = (a, u, t) => [
+          p[0] + (uAxis[0] * a + vAxis[0] * u + wAxis[0] * t) * s,
+          p[1] + (uAxis[1] * a + vAxis[1] * u + wAxis[1] * t) * s,
+          p[2] + (uAxis[2] * a + vAxis[2] * u + wAxis[2] * t) * s
+        ];
+
+        // Tapered hexhedron builder matching addBox winding rules
+        const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+          const verts = [
+            pt(a0, u0Min, -t0), // 0: bottom-back-left
+            pt(a1, u1Min, -t1), // 1: bottom-front-left
+            pt(a1, u1Min,  t1), // 2: bottom-front-right
+            pt(a0, u0Min,  t0), // 3: bottom-back-right
+            pt(a0, u0Max, -t0), // 4: top-back-left
+            pt(a1, u1Max, -t1), // 5: top-front-left
+            pt(a1, u1Max,  t1), // 6: top-front-right
+            pt(a0, u0Max,  t0)  // 7: top-back-right
+          ];
+          const baseIdx = vertices.length / 3;
+          for (let i = 0; i < 8; i++) {
+            vertices.push(verts[i][0], verts[i][1], verts[i][2]);
+            colors.push(col[0], col[1], col[2]);
+          }
+          const idxPattern = isFlipped ? [
+            0, 1, 2, 0, 2, 3,
+            4, 6, 5, 4, 7, 6,
+            0, 5, 1, 0, 4, 5,
+            2, 7, 3, 2, 6, 7,
+            0, 3, 7, 0, 7, 4,
+            1, 6, 2, 1, 5, 6
+          ] : [
+            0, 2, 1, 0, 3, 2,
+            4, 5, 6, 4, 6, 7,
+            0, 1, 5, 0, 5, 4,
+            2, 3, 7, 2, 7, 6,
+            0, 7, 3, 0, 4, 7,
+            1, 2, 6, 1, 6, 5
+          ];
+          for (let i = 0; i < idxPattern.length; i++) {
+            indices.push(baseIdx + idxPattern[i]);
+          }
+        };
+
+        const gripDark = [0.10, 0.11, 0.14];
+        const gripRib = [0.18, 0.20, 0.24];
+        const metalGuard = [0.26, 0.29, 0.34];
+        const habakiSteel = [0.34, 0.38, 0.44];
+        const obsidianBody = [0.11, 0.12, 0.16];
+        const spineSteel = [0.22, 0.25, 0.31];
+        const glowCyan = [0.22, 0.95, 0.88];
+        const glowCore = [0.58, 1.00, 0.96];
+
+        // 1. Pommel Butt Cap (gunmetal + dark inset)
+        addBox(pt(-0.24, 0.008, 0), 0.045 * s, 0.068 * s, 0.044 * s, metalGuard, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(-0.265, 0.008, 0), 0.014 * s, 0.052 * s, 0.032 * s, spineSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 2. Tactical Ribbed Grip (Tsuka) centered neatly in hand (-0.22 .. +0.10)
+        addBox(pt(-0.06, 0.008, 0), 0.32 * s, 0.064 * s, 0.040 * s, gripDark, uAxis, vAxis, wAxis, vertices, colors, indices);
+        // Segmented tactical grip ribs
+        for (let i = 0; i < 6; i++) {
+          const rx = -0.185 + i * 0.046;
+          addBox(pt(rx, 0.008, 0), 0.022 * s, 0.070 * s, 0.044 * s, gripRib, uAxis, vAxis, wAxis, vertices, colors, indices);
+        }
+        // Subtle cyan glowing energy node on upper grip near guard
+        addBox(pt(0.065, 0.010, 0), 0.028 * s, 0.022 * s, 0.046 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 3. Guard (Tsuba) oval-hex flanged collar (+0.105 .. +0.145)
+        addBox(pt(0.125, 0.012, 0), 0.040 * s, 0.112 * s, 0.076 * s, metalGuard, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.125, 0.068, 0), 0.026 * s, 0.012 * s, 0.040 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 4. Habaki (carved metallic blade collar) (+0.145 .. +0.215)
+        addBox(pt(0.180, 0.012, 0), 0.070 * s, 0.072 * s, 0.044 * s, habakiSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.180, 0.012, 0), 0.030 * s, 0.078 * s, 0.048 * s, spineSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 5. Straight Tanto Blade Spine & Main Obsidian Body (+0.215 .. +0.595)
+        // Upper/back straight spine (-u side)
+        addTaperedPrism(0.215, -0.024, -0.004, 0.018, 0.595, -0.020, -0.004, 0.014, spineSteel);
+        // Dark obsidian blade core
+        addTaperedPrism(0.215, -0.004,  0.036, 0.016, 0.595, -0.004,  0.034, 0.012, obsidianBody);
+        // Sharp glowing cyan-teal bevel cutting edge (+u side)
+        addTaperedPrism(0.215,  0.036,  0.049, 0.008, 0.595,  0.034,  0.046, 0.006, glowCyan);
+        addTaperedPrism(0.320,  0.046,  0.053, 0.004, 0.595,  0.044,  0.050, 0.003, glowCore);
+
+        // Glowing circuit trace lines etched on both blade faces (matching ref)
+        addBox(pt(0.295, 0.004, 0), 0.120 * s, 0.007 * s, 0.036 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.385, 0.020, 0), 0.070 * s, 0.006 * s, 0.034 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 6. Angled Tanto Point (Kissaki) (+0.595 .. +0.775)
+        // Straight spine continues to tip (-u), while cutting edge sweeps sharply back to the spine tip
+        addTaperedPrism(0.595, -0.020, -0.004, 0.014, 0.775, -0.020, -0.011, 0.003, spineSteel);
+        addTaperedPrism(0.595, -0.004,  0.034, 0.012, 0.775, -0.018, -0.009, 0.002, obsidianBody);
+        // Glowing cyan diagonal tantō cutting edge bevel sweeping cleanly to the razor tip
+        addTaperedPrism(0.595,  0.034,  0.046, 0.006, 0.775, -0.015, -0.007, 0.002, glowCyan);
+        addTaperedPrism(0.595,  0.044,  0.051, 0.003, 0.775, -0.012, -0.005, 0.0015, glowCore);
+      };
+
+      window.buildShirasayaModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices) {
+        const s = scale || 0.32;
+        const p = basePos || [0, 0, 0];
+
+        const norm = (v, fb) => {
+          const l = v ? Math.hypot(v[0], v[1], v[2]) : 0;
+          return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+        };
+        const uAxis = norm(axisAlong, [0, 1, 0]);
+        let vAxis = norm(edgeUp, [1, 0, 0]);
+        const dotUV = uAxis[0] * vAxis[0] + uAxis[1] * vAxis[1] + uAxis[2] * vAxis[2];
+        vAxis = norm([vAxis[0] - uAxis[0] * dotUV, vAxis[1] - uAxis[1] * dotUV, vAxis[2] - uAxis[2] * dotUV], [1, 0, 0]);
+        let wAxis = norm(thickRight, [
+          uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1],
+          uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2],
+          uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]
+        ]);
+        const dotWU = uAxis[0] * wAxis[0] + uAxis[1] * wAxis[1] + uAxis[2] * wAxis[2];
+        const dotWV = vAxis[0] * wAxis[0] + vAxis[1] * wAxis[1] + vAxis[2] * wAxis[2];
+        wAxis = norm([
+          wAxis[0] - uAxis[0] * dotWU - vAxis[0] * dotWV,
+          wAxis[1] - uAxis[1] * dotWU - vAxis[1] * dotWV,
+          wAxis[2] - uAxis[2] * dotWU - vAxis[2] * dotWV
+        ], [0, 0, 1]);
+
+        const det = (uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1]) * wAxis[0] +
+                    (uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2]) * wAxis[1] +
+                    (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
+        const isFlipped = det < 0;
+
+        const pt = (a, u, t) => [
+          p[0] + (uAxis[0] * a + vAxis[0] * u + wAxis[0] * t) * s,
+          p[1] + (uAxis[1] * a + vAxis[1] * u + wAxis[1] * t) * s,
+          p[2] + (uAxis[2] * a + vAxis[2] * u + wAxis[2] * t) * s
+        ];
+
+        const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+          const verts = [
+            pt(a0, u0Min, -t0),
+            pt(a1, u1Min, -t1),
+            pt(a1, u1Min,  t1),
+            pt(a0, u0Min,  t0),
+            pt(a0, u0Max, -t0),
+            pt(a1, u1Max, -t1),
+            pt(a1, u1Max,  t1),
+            pt(a0, u0Max,  t0)
+          ];
+          const baseIdx = vertices.length / 3;
+          for (let i = 0; i < 8; i++) {
+            vertices.push(verts[i][0], verts[i][1], verts[i][2]);
+            colors.push(col[0], col[1], col[2]);
+          }
+          const idxPattern = isFlipped ? [
+            0, 1, 2, 0, 2, 3,
+            4, 6, 5, 4, 7, 6,
+            0, 5, 1, 0, 4, 5,
+            2, 7, 3, 2, 6, 7,
+            0, 3, 7, 0, 7, 4,
+            1, 6, 2, 1, 5, 6
+          ] : [
+            0, 2, 1, 0, 3, 2,
+            4, 5, 6, 4, 6, 7,
+            0, 1, 5, 0, 5, 4,
+            2, 3, 7, 2, 7, 6,
+            0, 7, 3, 0, 4, 7,
+            1, 2, 6, 1, 6, 5
+          ];
+          for (let i = 0; i < idxPattern.length; i++) {
+            indices.push(baseIdx + idxPattern[i]);
+          }
+        };
+
+        const gripDark = [0.09, 0.10, 0.13];
+        const gripWrap = [0.16, 0.18, 0.22];
+        const kashiraMetal = [0.28, 0.31, 0.36];
+        const collarSteel = [0.36, 0.40, 0.46];
+        const obsidianBody = [0.10, 0.11, 0.15];
+        const spineSteel = [0.24, 0.28, 0.34];
+        const glowCyan = [0.22, 0.95, 0.88];
+        const glowCore = [0.64, 1.00, 0.97];
+
+        // 1. Long Katana / Shirasaya Tsuka Handle (-0.40 .. +0.16)
+        addBox(pt(-0.415, 0.006, 0), 0.032 * s, 0.062 * s, 0.042 * s, kashiraMetal, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(-0.12, 0.006, 0), 0.56 * s, 0.058 * s, 0.038 * s, gripDark, uAxis, vAxis, wAxis, vertices, colors, indices);
+        for (let i = 0; i < 10; i++) {
+          const rx = -0.365 + i * 0.052;
+          addBox(pt(rx, 0.006, 0), 0.024 * s, 0.064 * s, 0.042 * s, gripWrap, uAxis, vAxis, wAxis, vertices, colors, indices);
+        }
+
+        // 2. Clean Shirasaya Flush Guard / Habaki Collar (+0.16 .. +0.24)
+        addBox(pt(0.185, 0.008, 0), 0.050 * s, 0.072 * s, 0.044 * s, collarSteel, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.220, 0.008, 0), 0.022 * s, 0.068 * s, 0.042 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 3. Long Gently Curved Shirasaya Blade (+0.23 .. +1.28) with subtle katana sori curvature (-u arch)
+        const segs = [
+          { a0: 0.23, u0:  0.000, t0: 0.016, a1: 0.58, u1: -0.012, t1: 0.014 },
+          { a0: 0.58, u0: -0.012, t0: 0.014, a1: 0.94, u1: -0.034, t1: 0.012 },
+          { a0: 0.94, u0: -0.034, t0: 0.012, a1: 1.28, u1: -0.064, t1: 0.009 }
+        ];
+        for (let i = 0; i < segs.length; i++) {
+          const sg = segs[i];
+          // Spine (-u side)
+          addTaperedPrism(sg.a0, -0.024 + sg.u0, -0.005 + sg.u0, sg.t0, sg.a1, -0.022 + sg.u1, -0.005 + sg.u1, sg.t1, spineSteel);
+          // Dark obsidian fuller core
+          addTaperedPrism(sg.a0, -0.005 + sg.u0,  0.032 + sg.u0, sg.t0 * 0.9, sg.a1, -0.005 + sg.u1,  0.028 + sg.u1, sg.t1 * 0.9, obsidianBody);
+          // Glowing cyan razor cutting edge (+u side)
+          addTaperedPrism(sg.a0,  0.032 + sg.u0,  0.044 + sg.u0, sg.t0 * 0.5, sg.a1,  0.028 + sg.u1,  0.040 + sg.u1, sg.t1 * 0.5, glowCyan);
+          addTaperedPrism(sg.a0,  0.042 + sg.u0,  0.048 + sg.u0, sg.t0 * 0.25, sg.a1,  0.038 + sg.u1,  0.044 + sg.u1, sg.t1 * 0.25, glowCore);
+        }
+
+        // Etched glowing cyber-lines along lower blade face
+        addBox(pt(0.39, 0.002, 0), 0.220 * s, 0.006 * s, 0.032 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.72, -0.018, 0), 0.160 * s, 0.005 * s, 0.026 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 4. Swept Katana Kissaki Tip (+1.28 .. +1.48)
+        addTaperedPrism(1.28, -0.022 - 0.064, -0.005 - 0.064, 0.009, 1.48, -0.022 - 0.088, -0.014 - 0.088, 0.0025, spineSteel);
+        addTaperedPrism(1.28, -0.005 - 0.064,  0.028 - 0.064, 0.008, 1.48, -0.020 - 0.088, -0.011 - 0.088, 0.002, obsidianBody);
+        addTaperedPrism(1.28,  0.028 - 0.064,  0.040 - 0.064, 0.0045, 1.48, -0.017 - 0.088, -0.008 - 0.088, 0.0015, glowCyan);
+        addTaperedPrism(1.28,  0.038 - 0.064,  0.044 - 0.064, 0.0025, 1.48, -0.014 - 0.088, -0.006 - 0.088, 0.001, glowCore);
+      };
+
+      window.ItemRegistry["tanto"] = {
+        render: function(item, vertices, colors, indices, targetBuffer) {
+          const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
+          const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.4 : 0.45);
+          const p = (item && item.position) ? item.position : [0, 0, 0];
+          const r = (item && item.R) ? item.R : [1, 0, 0];
+          const n = (item && item.normal) ? item.normal : [0, 1, 0];
+          const f = (item && item.F) ? item.F : [0, 0, 1];
+          if (isIcon) {
+            // Slight 22-deg diagonal tilt so blade, circuit trace, and guard pop in 3D inventory cards
+            const ax = [r[0] * 0.37 + n[0] * 0.93, r[1] * 0.37 + n[1] * 0.93, r[2] * 0.37 + n[2] * 0.93];
+            const ed = [r[0] * 0.93 - n[0] * 0.37, r[1] * 0.93 - n[1] * 0.37, r[2] * 0.93 - n[2] * 0.37];
+            window.buildTantoModel(s, p, ax, ed, f, vertices, colors, indices);
+          } else {
+            // World drop: lay blade flat along R with cutting edge along F and thickness vertical along normal
+            window.buildTantoModel(s, p, r, f, n, vertices, colors, indices);
+          }
+        }
+      };
+      window.ItemRegistry["TANTO"] = window.ItemRegistry["tanto"];
+
+      window.buildAegisShiftModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices, mode = "pickaxe") {
+        const s = scale || 0.34;
+        const p = basePos || [0, 0, 0];
+
+        const norm = (v, fb) => {
+          const l = v ? Math.hypot(v[0], v[1], v[2]) : 0;
+          return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+        };
+        const uAxis = norm(axisAlong, [0, 1, 0]);
+        let vAxis = norm(edgeUp, [1, 0, 0]);
+        const dotUV = uAxis[0] * vAxis[0] + uAxis[1] * vAxis[1] + uAxis[2] * vAxis[2];
+        vAxis = norm([vAxis[0] - uAxis[0] * dotUV, vAxis[1] - uAxis[1] * dotUV, vAxis[2] - uAxis[2] * dotUV], [1, 0, 0]);
+        let wAxis = norm(thickRight, [
+          uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1],
+          uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2],
+          uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]
+        ]);
+        const dotWU = uAxis[0] * wAxis[0] + uAxis[1] * wAxis[1] + uAxis[2] * wAxis[2];
+        const dotWV = vAxis[0] * wAxis[0] + vAxis[1] * wAxis[1] + vAxis[2] * wAxis[2];
+        wAxis = norm([
+          wAxis[0] - uAxis[0] * dotWU - vAxis[0] * dotWV,
+          wAxis[1] - uAxis[1] * dotWU - vAxis[1] * dotWV,
+          wAxis[2] - uAxis[2] * dotWU - vAxis[2] * dotWV
+        ], [0, 0, 1]);
+
+        const det = (uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1]) * wAxis[0] +
+                    (uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2]) * wAxis[1] +
+                    (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
+        const isFlipped = det < 0;
+
+        const pt = (a, u, t) => [
+          p[0] + (uAxis[0] * a + vAxis[0] * u + wAxis[0] * t) * s,
+          p[1] + (uAxis[1] * a + vAxis[1] * u + wAxis[1] * t) * s,
+          p[2] + (uAxis[2] * a + vAxis[2] * u + wAxis[2] * t) * s
+        ];
+
+        const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+          const verts = [
+            pt(a0, u0Min, -t0),
+            pt(a1, u1Min, -t1),
+            pt(a1, u1Min,  t1),
+            pt(a0, u0Min,  t0),
+            pt(a0, u0Max, -t0),
+            pt(a1, u1Max, -t1),
+            pt(a1, u1Max,  t1),
+            pt(a0, u0Max,  t0)
+          ];
+          const baseIdx = vertices.length / 3;
+          for (let i = 0; i < 8; i++) {
+            vertices.push(verts[i][0], verts[i][1], verts[i][2]);
+            colors.push(col[0], col[1], col[2]);
+          }
+          const idxPattern = isFlipped ? [
+            0, 1, 2, 0, 2, 3,
+            4, 6, 5, 4, 7, 6,
+            0, 5, 1, 0, 4, 5,
+            2, 7, 3, 2, 6, 7,
+            0, 3, 7, 0, 7, 4,
+            1, 6, 2, 1, 5, 6
+          ] : [
+            0, 2, 1, 0, 3, 2,
+            4, 5, 6, 4, 6, 7,
+            0, 1, 5, 0, 5, 4,
+            2, 3, 7, 2, 7, 6,
+            0, 7, 3, 0, 4, 7,
+            1, 2, 6, 1, 6, 5
+          ];
+          for (let i = 0; i < idxPattern.length; i++) {
+            indices.push(baseIdx + idxPattern[i]);
+          }
+        };
+
+        const gripDark = [0.10, 0.11, 0.14];
+        const gripRib = [0.17, 0.19, 0.23];
+        const gunmetal = [0.22, 0.25, 0.30];
+        const steelSilver = [0.56, 0.60, 0.66];
+        const darkBlade = [0.14, 0.16, 0.21];
+        const glowCyan = [0.20, 0.94, 0.92];
+        const glowCore = [0.68, 1.00, 0.98];
+
+        // 1. Handle Power Buffer Pommel & Carbon-Fiber Ribbed Grip (-0.27 .. +0.16)
+        addBox(pt(-0.245, 0, 0), 0.042 * s, 0.068 * s, 0.056 * s, gunmetal, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(-0.270, 0, 0), 0.020 * s, 0.054 * s, 0.044 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(-0.252, 0, 0), 0.036 * s, 0.014 * s, 0.060 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        addBox(pt(-0.025, 0, 0), 0.39 * s, 0.054 * s, 0.044 * s, gripDark, uAxis, vAxis, wAxis, vertices, colors, indices);
+        for (let i = 0; i < 7; i++) {
+          const rx = -0.18 + i * 0.052;
+          addBox(pt(rx, 0, 0), 0.024 * s, 0.060 * s, 0.048 * s, gripRib, uAxis, vAxis, wAxis, vertices, colors, indices);
+        }
+
+        // 2. Stepped Neck Collar & Vertical Energy Channel (+0.16 .. +0.35)
+        addBox(pt(0.180, 0, 0), 0.044 * s, 0.094 * s, 0.064 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.265, 0, 0), 0.145 * s, 0.082 * s, 0.054 * s, gunmetal, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.250, 0, 0), 0.165 * s, 0.018 * s, 0.062 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        // 3. Central Magnetic Latching Hub (a = 0.37)
+        addBox(pt(0.370, 0, 0), 0.132 * s, 0.132 * s, 0.066 * s, gunmetal, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.370, 0, 0), 0.104 * s, 0.104 * s, 0.072 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.370, 0, 0), 0.076 * s, 0.076 * s, 0.078 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+        addBox(pt(0.370, 0, 0), 0.044 * s, 0.044 * s, 0.084 * s, glowCore, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+        const drawCurvedPickArm = (signU) => {
+          // Seg 1: Shoulder root near hub
+          const u1a = signU * 0.055, u1b = signU * 0.215;
+          addTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
+                          0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
+          addTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
+                          0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
+          // Seg 2: Arched dark armored arm + cyan rune inlay
+          const u2a = signU * 0.205, u2b = signU * 0.385;
+          addTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
+                          0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
+          addBox(pt(0.365, signU * 0.255, 0), 0.014 * s, 0.088 * s, 0.042 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+          // Seg 3: Curved tapered pick point arching downward
+          addTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
+                          0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
+          addTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
+                          0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
+        };
+
+        if (mode === "greatsword") {
+          // 4A. Greatsword Mode: Twin arms swept outward/upward-winged as crossguard + magnetic latch clamps + massive blade
+          for (let si = -1; si <= 1; si += 2) {
+            // Winged crossguard module arching from hub outward/upward
+            addTaperedPrism(0.325, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.022,
+                            0.380, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.014, gunmetal);
+            addTaperedPrism(0.345, Math.min(si * 0.21, si * 0.38), Math.max(si * 0.21, si * 0.38), 0.016,
+                            0.425, Math.min(si * 0.23, si * 0.42), Math.max(si * 0.23, si * 0.42), 0.009, darkBlade);
+            addTaperedPrism(0.390, Math.min(si * 0.36, si * 0.46), Math.max(si * 0.36, si * 0.46), 0.010,
+                            0.475, Math.min(si * 0.46, si * 0.48), Math.max(si * 0.46, si * 0.48), 0.002, steelSilver);
+            addBox(pt(0.375, si * 0.245, 0), 0.015 * s, 0.075 * s, 0.036 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+
+            // Precision magnetic latching hub clamps flanking the blade root
+            addBox(pt(0.475, si * 0.095, 0), 0.115 * s, 0.056 * s, 0.068 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+            addBox(pt(0.475, si * 0.078, 0), 0.090 * s, 0.018 * s, 0.074 * s, glowCyan, uAxis, vAxis, wAxis, vertices, colors, indices);
+          }
+
+          // Massive Broad Greatsword Blade (+0.41 .. +1.46)
+          // Inner gunmetal fuller body
+          addTaperedPrism(0.410, -0.066, 0.066, 0.022, 1.440, -0.056, 0.056, 0.017, gunmetal);
+          // Outer bright silver-steel beveled cutting edges (+u and -u)
+          addTaperedPrism(0.410,  0.066, 0.145, 0.014, 1.440,  0.056, 0.128, 0.007, steelSilver);
+          addTaperedPrism(0.410, -0.145,-0.066, 0.014, 1.440, -0.128,-0.056, 0.007, steelSilver);
+          // Razor glowing edge rim highlight
+          addTaperedPrism(0.430,  0.138, 0.152, 0.004, 1.440,  0.122, 0.135, 0.003, glowCore);
+          addTaperedPrism(0.430, -0.152,-0.138, 0.004, 1.440, -0.135,-0.122, 0.003, glowCore);
+          // Primary Cyan Energy Channel running straight up the center of the blade
+          addTaperedPrism(0.425, -0.018, 0.018, 0.025, 1.430, -0.013, 0.013, 0.020, glowCyan);
+          addTaperedPrism(0.435, -0.008, 0.008, 0.027, 1.410, -0.006, 0.006, 0.022, glowCore);
+
+          // Broad Spear-Point Greatsword Tip (+1.44 .. +1.73)
+          addTaperedPrism(1.440, -0.056, 0.056, 0.017, 1.725, -0.006, 0.006, 0.003, gunmetal);
+          addTaperedPrism(1.440,  0.056, 0.128, 0.007, 1.730,  0.000, 0.008, 0.002, steelSilver);
+          addTaperedPrism(1.440, -0.128,-0.056, 0.007, 1.730, -0.008, 0.000, 0.002, steelSilver);
+          addTaperedPrism(1.430, -0.013, 0.013, 0.020, 1.560, -0.004, 0.004, 0.008, glowCyan);
+        } else if (mode === "axe") {
+          // 4B. Axe Mode: Exact same pickaxe arms folded downward on both sides without altering model shape
+          const drawFoldedPickArm = (signU) => {
+            const pivotA = 0.355, pivotU = signU * 0.055;
+            const foldAngle = 1.18 * signU;
+            const cosF = Math.cos(foldAngle), sinF = Math.sin(foldAngle);
+            const rotPt = (a, u, t) => {
+              const da = a - pivotA;
+              const du = u - pivotU;
+              const aRot = pivotA + da * cosF - du * sinF;
+              const uRot = pivotU + du * cosF + da * sinF;
+              return pt(aRot, uRot, t);
+            };
+            const rotUAxis = [
+              uAxis[0] * cosF + vAxis[0] * sinF,
+              uAxis[1] * cosF + vAxis[1] * sinF,
+              uAxis[2] * cosF + vAxis[2] * sinF
+            ];
+            const rotVAxis = [
+              -uAxis[0] * sinF + vAxis[0] * cosF,
+              -uAxis[1] * sinF + vAxis[1] * cosF,
+              -uAxis[2] * sinF + vAxis[2] * cosF
+            ];
+            const addRotTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
+              const verts = [
+                rotPt(a0, u0Min, -t0),
+                rotPt(a1, u1Min, -t1),
+                rotPt(a1, u1Min,  t1),
+                rotPt(a0, u0Min,  t0),
+                rotPt(a0, u0Max, -t0),
+                rotPt(a1, u1Max, -t1),
+                rotPt(a1, u1Max,  t1),
+                rotPt(a0, u0Max,  t0)
+              ];
+              const baseIdx = vertices.length / 3;
+              for (let i = 0; i < 8; i++) {
+                vertices.push(verts[i][0], verts[i][1], verts[i][2]);
+                colors.push(col[0], col[1], col[2]);
+              }
+              const idxPattern = isFlipped ? [
+                0, 1, 2, 0, 2, 3,
+                4, 6, 5, 4, 7, 6,
+                0, 5, 1, 0, 4, 5,
+                2, 7, 3, 2, 6, 7,
+                0, 3, 7, 0, 7, 4,
+                1, 6, 2, 1, 5, 6
+              ] : [
+                0, 2, 1, 0, 3, 2,
+                4, 5, 6, 4, 6, 7,
+                0, 1, 5, 0, 5, 4,
+                2, 3, 7, 2, 7, 6,
+                0, 7, 3, 0, 4, 7,
+                1, 2, 6, 1, 6, 5
+              ];
+              for (let i = 0; i < idxPattern.length; i++) {
+                indices.push(baseIdx + idxPattern[i]);
+              }
+            };
+
+            // Exact same Seg 1, Seg 2, Seg 3 as drawCurvedPickArm
+            const u1a = signU * 0.055, u1b = signU * 0.215;
+            addRotTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
+                               0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
+            addRotTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
+                               0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
+            const u2a = signU * 0.205, u2b = signU * 0.385;
+            addRotTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
+                               0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
+            addBox(rotPt(0.365, signU * 0.255, 0), 0.014 * s, 0.088 * s, 0.042 * s, glowCyan, rotUAxis, rotVAxis, wAxis, vertices, colors, indices);
+            addRotTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
+                               0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
+            addRotTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
+                               0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
+          };
+          drawFoldedPickArm(1);
+          drawFoldedPickArm(-1);
+          addBox(pt(0.435, 0, 0), 0.032 * s, 0.125 * s, 0.048 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+        } else {
+          // 4C. Pickaxe Mode (default): Symmetrical twin curved pickaxe blades
+          drawCurvedPickArm(1);
+          drawCurvedPickArm(-1);
+          // Top central ridge cap above hub
+          addBox(pt(0.435, 0, 0), 0.032 * s, 0.125 * s, 0.048 * s, steelSilver, uAxis, vAxis, wAxis, vertices, colors, indices);
+        }
+      };
+
+      window.ItemRegistry["aegis_shift"] = {
+        render: function(item, vertices, colors, indices, targetBuffer) {
+          const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
+          const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.4 : 0.46);
+          const p = (item && item.position) ? item.position : [0, 0, 0];
+          const r = (item && item.R) ? item.R : [1, 0, 0];
+          const n = (item && item.normal) ? item.normal : [0, 1, 0];
+          const f = (item && item.F) ? item.F : [0, 0, 1];
+          const mode = (item && item.aegisMode) ? item.aegisMode : "pickaxe";
+          if (isIcon) {
+            const ax = [r[0] * 0.34 + n[0] * 0.94, r[1] * 0.34 + n[1] * 0.94, r[2] * 0.34 + n[2] * 0.94];
+            const ed = [r[0] * 0.94 - n[0] * 0.34, r[1] * 0.94 - n[1] * 0.34, r[2] * 0.94 - n[2] * 0.34];
+            window.buildAegisShiftModel(s, p, ax, ed, f, vertices, colors, indices, mode);
+          } else {
+            window.buildAegisShiftModel(s, p, r, f, n, vertices, colors, indices, mode);
+          }
+        }
+      };
+      window.ItemRegistry["AEGIS_SHIFT"] = window.ItemRegistry["aegis_shift"];
 
       window.buildWoodPlanterBoxModel = function(item, vertices, colors, indices) {
         const p = (item && item.position) ? item.position : [0, 0, 0];
@@ -7487,21 +8159,25 @@ function buildCollectibles(count, seed) {
       function getItemDefinition(itemOrName) {
         if (!itemOrName) return null;
         let key = typeof itemOrName === "string" ? itemOrName : (itemOrName.name || itemOrName.id || itemOrName.label || itemOrName.type || "");
-        key = key.toUpperCase();
+        key = String(key).toUpperCase();
         if (key === "CHEST") key = "WOOD_CHEST";
         if (key === "MEGANEURA_ITEM") key = "MEGANEURA";
         if (key === "ISOPOD_ITEM") key = "ISOPOD";
+        if (key === "DRAGONFRUIT") key = "DRAGON_FRUIT";
+        if (key === "OBSIDIAN_CUBE_ITEM") key = "OBSIDIAN_CUBE";
         return ITEM_DEFINITIONS[key] || null;
       }
       window.getItemDefinition = getItemDefinition;
 
-      function getItemCategory(itemOrName) {
+      function getItemCategory(itemOrName, actor = null) {
         const def = getItemDefinition(itemOrName);
         let cat = def ? def.category : ITEM_CATEGORIES.NONE;
         
         // ถ้ากำลังขับขี่ยานพาหนะ ไอเทมที่เป็น PRE_PLACE จะถูกปรับสภาพเป็น NONE ชั่วคราวทั้งหมด
-        const isRiding = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) ||
-                         (typeof activeRidingMech !== "undefined" && activeRidingMech);
+        const isRiding = actor
+          ? (typeof actor.isRiding === "function" ? actor.isRiding() : !!(actor.ridingBoat || actor.ridingMech))
+          : ((typeof activeRidingBoat !== "undefined" && activeRidingBoat) ||
+             (typeof activeRidingMech !== "undefined" && activeRidingMech));
                          
         if (isRiding) {
           const isPrePlace = Array.isArray(cat) ? cat.includes(ITEM_CATEGORIES.PRE_PLACE) : (cat === ITEM_CATEGORIES.PRE_PLACE);
@@ -7514,8 +8190,8 @@ function buildCollectibles(count, seed) {
       }
       window.getItemCategory = getItemCategory;
       
-      function hasItemCategory(itemOrName, targetCategory) {
-        const cat = getItemCategory(itemOrName);
+      function hasItemCategory(itemOrName, targetCategory, actor = null) {
+        const cat = getItemCategory(itemOrName, actor);
         if (Array.isArray(cat)) {
           return cat.includes(targetCategory);
         }
@@ -7523,18 +8199,18 @@ function buildCollectibles(count, seed) {
       }
       window.hasItemCategory = hasItemCategory;
 
-      function isPlaceableItem(itemOrName) {
-        return hasItemCategory(itemOrName, ITEM_CATEGORIES.PRE_PLACE);
+      function isPlaceableItem(itemOrName, actor = null) {
+        return hasItemCategory(itemOrName, ITEM_CATEGORIES.PRE_PLACE, actor);
       }
       window.isPlaceableItem = isPlaceableItem;
 
-      function isHoldableItem(itemOrName) {
-        return hasItemCategory(itemOrName, ITEM_CATEGORIES.HOLDABLE);
+      function isHoldableItem(itemOrName, actor = null) {
+        return hasItemCategory(itemOrName, ITEM_CATEGORIES.HOLDABLE, actor);
       }
       window.isHoldableItem = isHoldableItem;
 
-      function isNoneItem(itemOrName) {
-        return hasItemCategory(itemOrName, ITEM_CATEGORIES.NONE);
+      function isNoneItem(itemOrName, actor = null) {
+        return hasItemCategory(itemOrName, ITEM_CATEGORIES.NONE, actor);
       }
       window.isNoneItem = isNoneItem;
 
@@ -7590,3 +8266,22 @@ function buildCollectibles(count, seed) {
         return "";
       }
       window.getItemUsage = getItemUsage;
+
+      // Shared NPC kill loot helper for PlayerClones / ActorCore
+      window.grantNpcKillLootToActor = function(actorOrEntity, npc) {
+        if (!actorOrEntity || !npc || npc._cloneLooted) return false;
+        const actor = (typeof window.ActorCore !== "undefined") ? window.ActorCore.resolveActor(actorOrEntity) : null;
+        if (!actor || actor.isPlayer) return false;
+        npc._cloneLooted = true;
+        if (npc.type === "isopod") {
+          actor.addItem({ name: "ISOPOD", icon: "🦐", count: 1 }, false, false);
+        } else if (npc.type === "meganeura") {
+          actor.addItem({ name: "MEGANEURA", icon: "🦟", count: 1 }, false, false);
+        } else if (npc.type === "obsidian_cube") {
+          actor.addItem({ name: "OBSIDIAN_CUBE", icon: "🟪", count: 1 }, false, false);
+        } else {
+          actor.addItem({ name: "ISOPOD", icon: "🦐", count: 1 }, false, false);
+        }
+        actor.setExpression("(^o^)");
+        return true;
+      };

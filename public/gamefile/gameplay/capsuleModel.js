@@ -347,7 +347,8 @@
     axialSegments = 16,
     profileFn,
     skinGroup = 0,
-    cacheKey = null
+    cacheKey = null,
+    boneBasis = null
   ) {
     const totalSlices = axialSegments;
     const totalVerts = (totalSlices + 1) * (radialSegments + 1);
@@ -367,7 +368,28 @@
 
     let xAxis, yAxis;
     let latSign = 1.0;
-    if (Math.abs(zAxis[1]) > 0.95) {
+    if (boneBasis && boneBasis.xAxis && boneBasis.yAxis) {
+      // Standard Rig Bone Basis override: orthogonalize xAxis against zAxis so capsule roll/twist follows bone rotation 1:1
+      const bx = boneBasis.xAxis;
+      const dotXZ = bx[0] * zAxis[0] + bx[1] * zAxis[1] + bx[2] * zAxis[2];
+      let ox = bx[0] - zAxis[0] * dotXZ;
+      let oy = bx[1] - zAxis[1] * dotXZ;
+      let oz = bx[2] - zAxis[2] * dotXZ;
+      let oLen = Math.hypot(ox, oy, oz);
+      if (oLen > 1e-4) {
+        xAxis = [ox / oLen, oy / oLen, oz / oLen];
+      } else {
+        xAxis = [0, 0, 1];
+      }
+      yAxis = [
+        zAxis[1] * xAxis[2] - zAxis[2] * xAxis[1],
+        zAxis[2] * xAxis[0] - zAxis[0] * xAxis[2],
+        zAxis[0] * xAxis[1] - zAxis[1] * xAxis[0],
+      ];
+      const yLen = Math.hypot(yAxis[0], yAxis[1], yAxis[2]) || 1.0;
+      yAxis = [yAxis[0] / yLen, yAxis[1] / yLen, yAxis[2] / yLen];
+      latSign = typeof boneBasis.latSign === "number" ? boneBasis.latSign : (yAxis[0] >= 0 ? 1.0 : -1.0);
+    } else if (Math.abs(zAxis[1]) > 0.95) {
       if (zAxis[1] > 0) {
         xAxis = [0, 0, 1];
         yAxis = [1, 0, 0];
@@ -606,7 +628,7 @@
   // - Horizontal under-jaw (submandibular) plane sealing smoothly into the neck collar
   const _headTemplateCache = {};
 
-  function generateChibiHead(headP1, headP2, baseR, scaleFactor = 1.0) {
+  function generateChibiHead(headP1, headP2, baseR, scaleFactor = 1.0, headBasis = null) {
     const sf = scaleFactor;
     const r = (baseR / sf <= 0.200) ? (baseR / sf) : ((baseR / sf) * (0.192 / 0.240));
     const numRings = 24;
@@ -630,7 +652,11 @@
     let frontAxis = [0, 0, 1];
     let rightAxis = [1, 0, 0];
 
-    if (L > 0.0001) {
+    if (headBasis && headBasis.upAxis && headBasis.frontAxis && headBasis.rightAxis) {
+      upAxis = headBasis.upAxis;
+      frontAxis = headBasis.frontAxis;
+      rightAxis = headBasis.rightAxis;
+    } else if (L > 0.0001) {
       upAxis = [dx / L, dy / L, dz / L];
       const dot = frontAxis[0] * upAxis[0] + frontAxis[1] * upAxis[1] + frontAxis[2] * upAxis[2];
       frontAxis = [frontAxis[0] - upAxis[0] * dot, frontAxis[1] - upAxis[1] * dot, frontAxis[2] - upAxis[2] * dot];
@@ -953,7 +979,7 @@
   }
 
   // 2b. Sculpted 3D Anime Chibi Ear (Flush C-cup pinna with both ends & inner root anchored deep inside the skull!)
-  function generateChibiEar(earP1, earP2, isLeft = true, scaleFactor = 1.0) {
+  function generateChibiEar(earP1, earP2, isLeft = true, scaleFactor = 1.0, boneBasis = null) {
     const sf = scaleFactor;
     const side = isLeft ? -1.0 : 1.0;
     return generateSculptedCapsule(earP1, earP2, 16, 14, (u, angle, sinA, cosA, lat, ant, L) => {
@@ -989,7 +1015,7 @@
       const shade = 0.962 - conchaAO;
 
       return { zPos, rx, ry, cx, cy, shade };
-    }, 5, "ear_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000));
+    }, 5, "ear_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000), boneBasis);
   }
 
   // Helper to read active character clothing equipment state from window.equipSlotsItems
@@ -1003,7 +1029,10 @@
         wearShirt: false,
         wearSkirt: false,
         wearLeggings: false,
-        key: "1_1_1_1_0_0_0"
+        wearSuit: false,
+        wearSlacks: false,
+        wearOperaCape: false,
+        key: "1_1_1_1_0_0_0_0_0_0"
       };
     }
     let wearTop = false;
@@ -1013,6 +1042,9 @@
     let wearShirt = false;
     let wearSkirt = false;
     let wearLeggings = false;
+    let wearSuit = false;
+    let wearSlacks = false;
+    let wearOperaCape = false;
     const eq = (typeof window !== "undefined" && Array.isArray(window.equipSlotsItems)) ? window.equipSlotsItems : null;
     if (eq) {
       for (let i = 0; i < eq.length; i++) {
@@ -1026,12 +1058,19 @@
         else if (nm === "WHITE_SHIRT_SHORT") wearShirt = true;
         else if (nm === "BLACK_PLEATED_SKIRT") wearSkirt = true;
         else if (nm === "BLACK_LEGGINGS") wearLeggings = true;
+        else if (nm === "DOUBLE_BREASTED_SUIT") wearSuit = true;
+        else if (nm === "BLACK_SLACKS") wearSlacks = true;
+        else if (nm === "OPERA_CAPE") wearOperaCape = true;
       }
     }
-    // Built-in default bodysuit: worn automatically under outer clothes unless replaced by shirt (top) or leggings (bottom),
+    // Suit / Opera Cape and Traveler Hoodie are mutually exclusive with Traveler Hoodie
+    if ((wearSuit || wearOperaCape) && wearHoodie) {
+      wearHoodie = false;
+    }
+    // Built-in default bodysuit: worn automatically under outer clothes unless replaced by shirt/suit (top) or leggings/slacks (bottom),
     // without occupying any equipment slot or showing items in slots.
-    const effectiveWearTop = !wearShirt;
-    const effectiveWearShorts = !wearLeggings;
+    const effectiveWearTop = !(wearShirt || wearSuit);
+    const effectiveWearShorts = !(wearLeggings || wearSlacks);
     return {
       wearTop: effectiveWearTop,
       wearShorts: effectiveWearShorts,
@@ -1040,14 +1079,17 @@
       wearShirt,
       wearSkirt,
       wearLeggings,
-      key: `${effectiveWearTop ? 1 : 0}_${effectiveWearShorts ? 1 : 0}_${wearHoodie ? 1 : 0}_${wearBoots ? 1 : 0}_${wearShirt ? 1 : 0}_${wearSkirt ? 1 : 0}_${wearLeggings ? 1 : 0}`
+      wearSuit,
+      wearSlacks,
+      wearOperaCape,
+      key: `${effectiveWearTop ? 1 : 0}_${effectiveWearShorts ? 1 : 0}_${wearHoodie ? 1 : 0}_${wearBoots ? 1 : 0}_${wearShirt ? 1 : 0}_${wearSkirt ? 1 : 0}_${wearLeggings ? 1 : 0}_${wearSuit ? 1 : 0}_${wearSlacks ? 1 : 0}_${wearOperaCape ? 1 : 0}`
     };
   }
 
   // 3. Unified Sculpted Organic Chibi Torso + Collarbone + Neck:
   // Single continuous mesh from pelvic floor (u = 0.0) -> hips (u = 0.17) -> waist (u = 0.36) -> chest (u = 0.56) ->
   // shoulders (u = 0.68) -> concave trapezius/collarbone (u = 0.78) -> vertical neck column (u = 0.78..1.00) inside the head!
-  function generateChibiTorso(groinP, neckP, baseR, scaleFactor = 1.0, wearTopOverride = null, wearShortsOverride = null, wearShirtOverride = null, wearLeggingsOverride = null) {
+  function generateChibiTorso(groinP, neckP, baseR, scaleFactor = 1.0, wearTopOverride = null, wearShortsOverride = null, wearShirtOverride = null, wearLeggingsOverride = null, boneBasis = null) {
     const sf = scaleFactor;
     const hasOverride = (wearTopOverride !== null || wearShortsOverride !== null || wearShirtOverride !== null || wearLeggingsOverride !== null);
     const eqState = hasOverride
@@ -1056,7 +1098,9 @@
           wearShorts: !!wearShortsOverride,
           wearShirt: !!wearShirtOverride,
           wearLeggings: !!wearLeggingsOverride,
-          wearSkirt: false
+          wearSkirt: false,
+          wearSuit: false,
+          wearSlacks: false
         }
       : getCharacterEquippedClothingState(false);
     const wearTop = eqState.wearTop;
@@ -1064,7 +1108,9 @@
     const wearShirt = eqState.wearShirt;
     const wearLeggings = eqState.wearLeggings;
     const wearSkirt = !!eqState.wearSkirt;
-    const eqSuffix = `_${wearTop ? 1 : 0}_${wearShorts ? 1 : 0}_${wearShirt ? 1 : 0}_${wearLeggings ? 1 : 0}_${wearSkirt ? 1 : 0}`;
+    const wearSuit = !!eqState.wearSuit;
+    const wearSlacks = !!eqState.wearSlacks;
+    const eqSuffix = `_${wearTop ? 1 : 0}_${wearShorts ? 1 : 0}_${wearShirt ? 1 : 0}_${wearLeggings ? 1 : 0}_${wearSkirt ? 1 : 0}_${wearSuit ? 1 : 0}_${wearSlacks ? 1 : 0}`;
 
     return generateSculptedCapsule(groinP, neckP, 24, 28, (u, angle, sinA, cosA, lat, ant, L) => {
       // Map u in [0.00, 0.78] to the main torso body (h = 0.0 -> 1.0, zPos = 0 -> 0.96 * L),
@@ -1144,19 +1190,25 @@
 
         // =========================================================================
         // Layered Torso Clothing:
-        //   1) Matte Black High-Waisted Leggings (wearLeggings, +0.70mm)
+        //   1) Matte Black High-Waisted Leggings / Dark Slacks Under-layer
         //   2) Seamless White Bodysuit (wearTop / wearShorts, +0.85mm)
         //   3) Tailored White Short-Sleeve Button-Up Shirt (wearShirt, +1.45mm)
         // =========================================================================
         let legMix = 0.0;
         let legRGB = null;
-        if (wearLeggings && h <= 0.35) {
-          legMix = Math.max(0.0, Math.min(1.0, (0.35 - h) / 0.032));
+        if ((wearLeggings || wearSlacks) && h <= 0.39) {
+          const topCut = wearSlacks ? 0.39 : 0.35;
+          legMix = Math.max(0.0, Math.min(1.0, (topCut - h) / 0.032));
           if (legMix > 0.0001) {
-            const bandSeam = Math.exp(-Math.pow((h - 0.31) / 0.025, 2)) * 0.022;
+            const bandSeam = Math.exp(-Math.pow((h - (topCut - 0.04)) / 0.025, 2)) * 0.022;
             const legAO = Math.abs(lat) * 0.020 + (h < 0.12 ? ((0.12 - h) / 0.12) * 0.025 : 0.0) + buttCleft * 0.65;
-            const val = Math.max(0.055, 0.138 - legAO - bandSeam);
-            legRGB = [val, val * 1.02, val * 1.14];
+            if (wearSlacks) {
+              const sFactor = Math.max(0.58, 1.0 - legAO - bandSeam);
+              legRGB = [0.238 * sFactor, 0.246 * sFactor, 0.268 * sFactor];
+            } else {
+              const val = Math.max(0.055, 0.138 - legAO - bandSeam);
+              legRGB = [val, val * 1.02, val * 1.14];
+            }
           }
         }
 
@@ -1210,9 +1262,16 @@
 
         let shirtMix = 0.0;
         let shirtRGB = null;
-        const shirtMinH = wearSkirt ? 0.31 : 0.23;
+        const shirtMinH = wearSuit ? 0.52 : (wearSkirt ? 0.31 : 0.23);
         if (wearShirt && h >= shirtMinH) {
           shirtMix = Math.max(0.0, Math.min(1.0, (h - shirtMinH) / 0.030));
+          // When wearing the double-breasted suit over the shirt, only render the shirt inside the front V-neck lapel opening
+          // so the white shirt never pokes through the suit's back, shoulders, sides, or lower waist.
+          if (wearSuit) {
+            const frontMask = Math.max(0.0, Math.min(1.0, (ant - 0.38) / 0.18));
+            const latMask = Math.max(0.0, Math.min(1.0, (0.44 - Math.abs(lat)) / 0.10));
+            shirtMix *= frontMask * latMask;
+          }
           // Open tailored V-neck at upper front throat leaving bare skin visible inside the collar
           if (h > 0.83 && ant > 0.25) {
             const vWidth = 0.08 + ((h - 0.83) / 0.17) * 0.30;
@@ -1252,13 +1311,12 @@
           }
         }
 
-        // Resolve physical thickness & visible color strictly by outer layer order: Shirt > Shorts/Bodysuit > Leggings
+        // Resolve physical thickness & visible color strictly by outer layer order: Shirt > Shorts/Bodysuit > Leggings/Slacks
         if (shirtMix > 0.0001 || bodyMix > 0.0001 || legMix > 0.0001) {
-          const fabricBulge = Math.max(
-            shirtMix * 0.00145,
-            bodyMix * 0.00085,
-            legMix * 0.00070
-          ) * sf;
+          const shirtBulge = wearSuit ? 0.0 : (shirtMix * 0.00145);
+          const bodyBulge = wearSuit ? 0.0 : (bodyMix * 0.00085);
+          const legBulge = wearSlacks ? 0.0 : (legMix * 0.00070);
+          const fabricBulge = Math.max(shirtBulge, bodyBulge, legBulge) * sf;
           rx += fabricBulge;
           ry += fabricBulge;
 
@@ -1329,12 +1387,12 @@
       }
 
       return { zPos, rx, ry, cx: 0.0, cy, shade, clothMix, clothRGB };
-    }, 1, "torso_" + Math.round(sf * 1000) + eqSuffix);
+    }, 1, "torso_" + Math.round(sf * 1000) + eqSuffix, boneBasis);
   }
 
   // Backward-compatible delegator: generateChibiChest produces the unified sculpted torso
-  function generateChibiChest(chestP1, chestP2, baseR, scaleFactor = 1.0) {
-    return generateChibiTorso(chestP1, chestP2, baseR, scaleFactor);
+  function generateChibiChest(chestP1, chestP2, baseR, scaleFactor = 1.0, boneBasis = null) {
+    return generateChibiTorso(chestP1, chestP2, baseR, scaleFactor, null, null, null, null, boneBasis);
   }
 
   // Backward-compatible delegator: pelvis is now integral part of generateChibiTorso, so return shared frozen empty mesh
@@ -1343,13 +1401,15 @@
   }
 
   // 5. Sculpted Chibi Upper Arm (Seamless Shoulder Socket -> Continuous Shaft -> Exact Elbow Radius Match)
-  function generateChibiUpperArm(pShoulder, pElbow, isLeft, scaleFactor = 1.0, wearTopOverride = null, wearShirtOverride = null) {
+  function generateChibiUpperArm(pShoulder, pElbow, isLeft, scaleFactor = 1.0, wearTopOverride = null, wearShirtOverride = null, boneBasis = null) {
     const sf = scaleFactor;
     const eqState = (wearTopOverride !== null || wearShirtOverride !== null)
-      ? { wearTop: !!wearTopOverride, wearShirt: !!wearShirtOverride }
+      ? { wearTop: !!wearTopOverride, wearShirt: !!wearShirtOverride, wearSuit: false, wearHoodie: false }
       : getCharacterEquippedClothingState(false);
-    const wearTop = eqState.wearTop;
-    const wearShirt = eqState.wearShirt;
+    const wearOuterLongSleeve = !!(eqState.wearSuit || eqState.wearHoodie);
+    // Suppress short-sleeve puff/color under long-sleeve outer coats (Suit / Traveler Hoodie) so sleeves never clip
+    const wearTop = eqState.wearTop && !wearOuterLongSleeve;
+    const wearShirt = eqState.wearShirt && !wearOuterLongSleeve;
     const eqSuffix = `${wearTop ? "_top1" : "_top0"}${wearShirt ? "_shrt1" : "_shrt0"}`;
 
     return generateSculptedCapsule(pShoulder, pElbow, 16, 14, (u, angle, sinA, cosA, lat, ant, L) => {
@@ -1394,11 +1454,11 @@
       }
 
       return { zPos: loft.zPos, rx, ry, shade, clothMix, clothRGB };
-    }, 3, "uarm_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000) + eqSuffix);
+    }, 3, "uarm_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000) + eqSuffix, boneBasis);
   }
 
   // 6. Sculpted Chibi Forearm (1:1 Seamless Elbow Match -> Soft Forearm Taper -> 1:1 Wrist Match)
-  function generateChibiForeArm(pElbow, pHand, isLeft, scaleFactor = 1.0) {
+  function generateChibiForeArm(pElbow, pHand, isLeft, scaleFactor = 1.0, boneBasis = null) {
     const sf = scaleFactor;
     return generateSculptedCapsule(pElbow, pHand, 16, 14, (u, angle, sinA, cosA, lat, ant, L) => {
       const rElbow = 0.0355 * sf; // Matches UpperArm end radius 1:1!
@@ -1407,23 +1467,26 @@
       const h = loft.h;
       const forearmBell = Math.sin(Math.pow(h, 0.80) * Math.PI) * 0.0030 * sf;
       const baseR = (rElbow * (1.0 - h) + rWrist * h + forearmBell) * loft.capEnv;
-      const rx = baseR * 1.01;
-      const ry = baseR * 0.96;
+      // Smoothly transition elliptical aspect from elbow (rx=1.01, ry=0.96) to palm wrist orientation (rx=0.96 thickness, ry=1.01 knuckle width)
+      const wT = h * h * (3.0 - 2.0 * h);
+      const rx = baseR * (1.01 - 0.05 * wT);
+      const ry = baseR * (0.96 + 0.05 * wT);
       const innerSide = isLeft ? Math.max(0.0, lat) : Math.max(0.0, -lat);
-      const shade = 0.962 - innerSide * 0.012;
+      const shade = 0.962 - innerSide * (0.012 - 0.004 * wT);
       return { zPos: loft.zPos, rx, ry, shade };
-    }, 6, "farm_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000));
+    }, 6, "farm_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000), boneBasis);
   }
 
   // 7. Sculpted Chibi Upper Leg / Thigh (Flush Hip Socket -> Continuous Thigh Curve -> 1:1 Knee Match)
-  function generateChibiThigh(pHip, pKnee, isLeft, scaleFactor = 1.0, wearShortsOverride = null, wearLeggingsOverride = null) {
+  function generateChibiThigh(pHip, pKnee, isLeft, scaleFactor = 1.0, wearShortsOverride = null, wearLeggingsOverride = null, boneBasis = null) {
     const sf = scaleFactor;
     const eqState = (wearShortsOverride !== null || wearLeggingsOverride !== null)
-      ? { wearShorts: !!wearShortsOverride, wearLeggings: !!wearLeggingsOverride }
+      ? { wearShorts: !!wearShortsOverride, wearLeggings: !!wearLeggingsOverride, wearSlacks: false }
       : getCharacterEquippedClothingState(false);
     const wearShorts = eqState.wearShorts;
     const wearLeggings = eqState.wearLeggings;
-    const eqSuffix = `${wearShorts ? "_sh1" : "_sh0"}${wearLeggings ? "_leg1" : "_leg0"}`;
+    const wearSlacks = !!eqState.wearSlacks;
+    const eqSuffix = `${wearShorts ? "_sh1" : "_sh0"}${wearLeggings ? "_leg1" : "_leg0"}${wearSlacks ? "_slk1" : "_slk0"}`;
 
     return generateSculptedCapsule(pHip, pKnee, 18, 16, (u, angle, sinA, cosA, lat, ant, L) => {
       const rHip = 0.0545 * sf;
@@ -1449,12 +1512,17 @@
 
       let legMix = 0.0;
       let legRGB = null;
-      if (wearLeggings) {
+      if (wearLeggings || wearSlacks) {
         legMix = 1.0;
         const sideSeamAO = Math.exp(-Math.pow((1.0 - Math.abs(lat)) / 0.14, 2)) * 0.012;
         const legAO = innerThigh * 0.025 + sideSeamAO + (ant > 0.3 ? -0.012 * ant : 0.010);
-        const val = Math.max(0.060, 0.138 - legAO);
-        legRGB = [val, val * 1.02, val * 1.14];
+        if (wearSlacks) {
+          const sFactor = Math.max(0.58, 1.0 - legAO);
+          legRGB = [0.238 * sFactor, 0.246 * sFactor, 0.268 * sFactor];
+        } else {
+          const val = Math.max(0.060, 0.138 - legAO);
+          legRGB = [val, val * 1.02, val * 1.14];
+        }
       }
 
       let shortsMix = 0.0;
@@ -1473,7 +1541,8 @@
       let clothRGB = null;
       if (shortsMix > 0.0001 || legMix > 0.0001) {
         const hemLip = shortsMix > 0.0001 ? Math.exp(-Math.pow((h - 0.34) / 0.04, 2)) * 0.00075 * sf * shortsMix : 0.0;
-        const bulge = Math.max(shortsMix * 0.00095, legMix * 0.00070) * sf + hemLip;
+        const legBulge = wearSlacks ? 0.0 : (legMix * 0.00070);
+        const bulge = Math.max(shortsMix * 0.00095, legBulge) * sf + hemLip;
         rx += bulge;
         ry += bulge;
         if (shortsMix >= 0.999) {
@@ -1496,14 +1565,18 @@
       }
 
       return { zPos: loft.zPos, rx, ry, cx, cy, shade, clothMix, clothRGB };
-    }, 4, "thigh_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000) + eqSuffix);
+    }, 4, "thigh_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000) + eqSuffix, boneBasis);
   }
 
   // 8. Sculpted Chibi Lower Leg / Calf & Shin (1:1 Seamless Knee Match -> Rounded Calf -> 1:1 Ankle Match)
-  function generateChibiCalf(pKnee, pFoot, isLeft, scaleFactor = 1.0, wearLeggingsOverride = null) {
+  function generateChibiCalf(pKnee, pFoot, isLeft, scaleFactor = 1.0, wearLeggingsOverride = null, boneBasis = null) {
     const sf = scaleFactor;
-    const wearLeggings = (wearLeggingsOverride !== null) ? !!wearLeggingsOverride : getCharacterEquippedClothingState(false).wearLeggings;
-    const eqSuffix = wearLeggings ? "_leg1" : "_leg0";
+    const eqState = (wearLeggingsOverride !== null)
+      ? { wearLeggings: !!wearLeggingsOverride, wearSlacks: false }
+      : getCharacterEquippedClothingState(false);
+    const wearLeggings = eqState.wearLeggings;
+    const wearSlacks = !!eqState.wearSlacks;
+    const eqSuffix = `${wearLeggings ? "_leg1" : "_leg0"}${wearSlacks ? "_slk1" : "_slk0"}`;
 
     return generateSculptedCapsule(pKnee, pFoot, 18, 16, (u, angle, sinA, cosA, lat, ant, L) => {
       const rKnee = 0.0435 * sf; // Matches Thigh end radius 1:1!
@@ -1522,180 +1595,964 @@
 
       let clothMix = 0.0;
       let clothRGB = null;
-      if (wearLeggings && h <= 0.90) {
+      if ((wearLeggings || wearSlacks) && h <= 0.90) {
         clothMix = Math.max(0.0, Math.min(1.0, (0.90 - h) / 0.05));
-        const cuffLip = Math.exp(-Math.pow((h - 0.85) / 0.035, 2)) * 0.0005 * sf;
-        rx += (0.00070 * sf + cuffLip) * clothMix;
-        ry += (0.00070 * sf + cuffLip) * clothMix;
+        if (!wearSlacks) {
+          const cuffLip = Math.exp(-Math.pow((h - 0.85) / 0.035, 2)) * 0.0005 * sf;
+          rx += (0.00070 * sf + cuffLip) * clothMix;
+          ry += (0.00070 * sf + cuffLip) * clothMix;
+        }
         const sideSeamAO = Math.exp(-Math.pow((1.0 - Math.abs(lat)) / 0.14, 2)) * 0.012;
         const ankleCuffAO = Math.exp(-Math.pow((h - 0.86) / 0.03, 2)) * 0.025;
         const legAO = innerLeg * 0.025 + sideSeamAO + ankleCuffAO + (ant > 0.3 ? -0.012 * ant : 0.010);
-        const val = Math.max(0.055, 0.138 - legAO);
-        clothRGB = [val, val * 1.02, val * 1.14];
+        if (wearSlacks) {
+          const sFactor = Math.max(0.58, 1.0 - legAO);
+          clothRGB = [0.238 * sFactor, 0.246 * sFactor, 0.268 * sFactor];
+        } else {
+          const val = Math.max(0.055, 0.138 - legAO);
+          clothRGB = [val, val * 1.02, val * 1.14];
+        }
       }
 
       return { zPos: loft.zPos, rx, ry, cx: 0.0, cy, shade, clothMix, clothRGB };
-    }, 8, "calf_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000) + eqSuffix);
+    }, 8, "calf_" + (isLeft ? "L" : "R") + "_" + Math.round(sf * 1000) + eqSuffix, boneBasis);
   }
 
-  // --- 5. Detailed Sculpted Chibi Hands, Curved Fingers, Arched Feet, and Plump Toes ---
-  function buildHandAndFingers(pElbow, pHand, isLeft, scaleFactor) {
+  // --- 5. Standard Skeletal Bone Rig: Spine/Head, Arms/Wrists/Fingers, Legs/Ankles/Feet/Toes ---
+  function computeSpineHeadRig(chestP1, chestP2, headP1, headP2, pose = null) {
+    const norm3 = (v, fb) => {
+      if (!v) return fb;
+      const l = Math.hypot(v[0], v[1], v[2]);
+      return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+    };
+    const cross3 = (a, b) => [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+    const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const rotAxis = (v, ax, ang) => {
+      const c = Math.cos(ang), s = Math.sin(ang), d = dot3(v, ax);
+      const cr = cross3(ax, v);
+      return [
+        v[0] * c + ax[0] * d * (1.0 - c) + cr[0] * s,
+        v[1] * c + ax[1] * d * (1.0 - c) + cr[1] * s,
+        v[2] * c + ax[2] * d * (1.0 - c) + cr[2] * s,
+      ];
+    };
+
+    const p1 = chestP1 || [0, -0.09, 0];
+    const p2 = chestP2 || [0, 0.17, 0];
+    const spineUp = norm3([p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]], [0, 1, 0]);
+
+    const torsoYaw = (pose && typeof pose.torsoYaw === "number") ? pose.torsoYaw : 0.0;
+    const baseFwd = [Math.sin(torsoYaw), 0.0, Math.cos(torsoYaw)];
+    const dF = dot3(baseFwd, spineUp);
+    const torsoFwd = norm3([baseFwd[0] - spineUp[0] * dF, baseFwd[1] - spineUp[1] * dF, baseFwd[2] - spineUp[2] * dF], [0, 0, 1]);
+    const torsoRight = norm3(cross3(spineUp, torsoFwd), [1, 0, 0]);
+
+    const torsoBoneBasis = {
+      zAxis: spineUp,
+      xAxis: torsoFwd,
+      yAxis: torsoRight,
+      latSign: 1.0,
+    };
+
+    // Head Bone: inherits spine pitch/tilt by default, or explicit headPitch / headYaw / headRoll if provided
+    let headUp = spineUp;
+    let headFwd = torsoFwd;
+    let headRight = torsoRight;
+    if (pose && pose.lockHeadYaw) {
+      // When torso rotates sideways (e.g., archer stance), keep head looking forward along +Z with pitch
+      const hD = spineUp[2];
+      headFwd = norm3([-spineUp[0] * hD, -spineUp[1] * hD, 1.0 - spineUp[2] * hD], [0, 0, 1]);
+      headRight = norm3(cross3(headUp, headFwd), [1, 0, 0]);
+    }
+    if (pose) {
+      if (typeof pose.headYaw === "number" && Math.abs(pose.headYaw) > 1e-4) {
+        headFwd = norm3(rotAxis(headFwd, headUp, pose.headYaw), headFwd);
+        headRight = norm3(cross3(headUp, headFwd), headRight);
+      }
+      if (typeof pose.headPitch === "number" && Math.abs(pose.headPitch) > 1e-4) {
+        headUp = norm3(rotAxis(headUp, headRight, pose.headPitch), headUp);
+        headFwd = norm3(rotAxis(headFwd, headRight, pose.headPitch), headFwd);
+      }
+      if (typeof pose.headRoll === "number" && Math.abs(pose.headRoll) > 1e-4) {
+        headUp = norm3(rotAxis(headUp, headFwd, pose.headRoll), headUp);
+        headRight = norm3(rotAxis(headRight, headFwd, pose.headRoll), headRight);
+      }
+    }
+
+    const headBoneBasis = {
+      upAxis: headUp,
+      frontAxis: headFwd,
+      rightAxis: headRight,
+    };
+    const earBoneBasis = {
+      zAxis: headUp,
+      xAxis: headFwd,
+      yAxis: headRight,
+      latSign: 1.0,
+    };
+
+    return {
+      spineUp,
+      torsoFwd,
+      torsoRight,
+      torsoBoneBasis,
+      headBoneBasis,
+      leftEarBoneBasis: earBoneBasis,
+      rightEarBoneBasis: earBoneBasis,
+    };
+  }
+
+  function computeHandGripFrame(pElbow, pHand, isLeft, wristPose = null, pShoulder = null) {
     const dX = pHand[0] - pElbow[0];
     const dY = pHand[1] - pElbow[1];
     const dZ = pHand[2] - pElbow[2];
     const len = Math.sqrt(dX * dX + dY * dY + dZ * dZ);
-    const dArm = len > 1e-4 ? [dX / len, dY / len, dZ / len] : [0, -1, 0];
+    const dForearm = len > 1e-4 ? [dX / len, dY / len, dZ / len] : [0, -1, 0];
+    const norm3 = (v, fb) => {
+      if (!v) return fb;
+      const l = Math.hypot(v[0], v[1], v[2]);
+      return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+    };
+    const cross3 = (a, b) => [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+    const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const rotAxis = (v, ax, ang) => {
+      const c = Math.cos(ang), s = Math.sin(ang), d = dot3(v, ax);
+      const cr = cross3(ax, v);
+      return [
+        v[0] * c + ax[0] * d * (1.0 - c) + cr[0] * s,
+        v[1] * c + ax[1] * d * (1.0 - c) + cr[1] * s,
+        v[2] * c + ax[2] * d * (1.0 - c) + cr[2] * s,
+      ];
+    };
 
-    // Inside-palm vector (points inward toward the body's midline)
     const inSign = isLeft ? 1.0 : -1.0;
-    let palmIn = [inSign * 0.85, -0.15, -0.45];
-    // Orthogonalize palmIn against dArm
-    const dotIn = palmIn[0] * dArm[0] + palmIn[1] * dArm[1] + palmIn[2] * dArm[2];
-    palmIn = [
-      palmIn[0] - dArm[0] * dotIn,
-      palmIn[1] - dArm[1] * dotIn,
-      palmIn[2] - dArm[2] * dotIn,
-    ];
-    const inLen = Math.hypot(palmIn[0], palmIn[1], palmIn[2]) || 1.0;
-    palmIn = [palmIn[0] / inLen, palmIn[1] / inLen, palmIn[2] / inLen];
+    let dArm = dForearm;
+    let palmIn;
+    let rKnuckle;
 
-    // Thumb-side / anterior width axis across the knuckles: dArm x palmIn
-    let rKnuckle = [
-      dArm[1] * palmIn[2] - dArm[2] * palmIn[1],
-      dArm[2] * palmIn[0] - dArm[0] * palmIn[2],
-      dArm[0] * palmIn[1] - dArm[1] * palmIn[0],
-    ];
-    const rkLen = Math.hypot(rKnuckle[0], rKnuckle[1], rKnuckle[2]) || 1.0;
-    rKnuckle = [rKnuckle[0] / rkLen, rKnuckle[1] / rkLen, rKnuckle[2] / rkLen];
-    // Ensure rKnuckle points toward the front (+Z) where the thumb sits
-    if (rKnuckle[2] < 0) {
-      rKnuckle = [-rKnuckle[0], -rKnuckle[1], -rKnuckle[2]];
+    if (wristPose && (wristPose.bladeDir || wristPose.handDir || wristPose.palmHint || typeof wristPose.pitch === "number" || typeof wristPose.yaw === "number" || typeof wristPose.roll === "number")) {
+      if (typeof wristPose.pitch === "number" || typeof wristPose.yaw === "number" || typeof wristPose.roll === "number") {
+        // Standard 3-DOF Bone Joint Rotation on Wrist (Roll = forearm pronation/supination, Pitch = radial/ulnar flex, Yaw = palmar/dorsal flex)
+        let basePalm = [inSign * 0.85, -0.15, -0.45];
+        const dp0 = dot3(basePalm, dForearm);
+        basePalm = norm3([basePalm[0] - dForearm[0] * dp0, basePalm[1] - dForearm[1] * dp0, basePalm[2] - dForearm[2] * dp0], [inSign, 0, 0]);
+        let baseKnuckle = norm3(isLeft ? cross3(dForearm, basePalm) : cross3(basePalm, dForearm), [0, 0, 1]);
+        const roll = wristPose.roll || 0.0;
+        const pitch = wristPose.pitch || 0.0;
+        const yaw = wristPose.yaw || 0.0;
+        if (Math.abs(roll) > 1e-4) {
+          basePalm = norm3(rotAxis(basePalm, dForearm, roll), basePalm);
+          baseKnuckle = norm3(rotAxis(baseKnuckle, dForearm, roll), baseKnuckle);
+        }
+        dArm = dForearm;
+        if (Math.abs(pitch) > 1e-4) {
+          dArm = norm3(rotAxis(dArm, basePalm, isLeft ? -pitch : pitch), dArm);
+          baseKnuckle = norm3(rotAxis(baseKnuckle, basePalm, isLeft ? -pitch : pitch), baseKnuckle);
+        }
+        if (Math.abs(yaw) > 1e-4) {
+          dArm = norm3(rotAxis(dArm, baseKnuckle, isLeft ? yaw : -yaw), dArm);
+          basePalm = norm3(rotAxis(basePalm, baseKnuckle, isLeft ? yaw : -yaw), basePalm);
+        }
+        rKnuckle = baseKnuckle;
+        palmIn = norm3(isLeft ? cross3(rKnuckle, dArm) : cross3(dArm, rKnuckle), basePalm);
+      } else {
+        if (wristPose.handDir) {
+          const hd = norm3(wristPose.handDir, dForearm);
+          const hb = Math.max(0.0, Math.min(1.0, typeof wristPose.handBlend === "number" ? wristPose.handBlend : 0.65));
+          dArm = norm3([
+            dForearm[0] * (1.0 - hb) + hd[0] * hb,
+            dForearm[1] * (1.0 - hb) + hd[1] * hb,
+            dForearm[2] * (1.0 - hb) + hd[2] * hb,
+          ], dForearm);
+        }
+        if (wristPose.bladeDir) {
+          const gripMode = wristPose.gripMode || "normal";
+          const tb = norm3(wristPose.bladeDir, [0, 0, 1]);
+          rKnuckle = gripMode === "reverse" ? [-tb[0], -tb[1], -tb[2]] : [tb[0], tb[1], tb[2]];
+          const anatPalm = norm3(wristPose.palmHint, [inSign * 0.62, 0.42, 0.66]);
+          const anatDArm = norm3(
+            isLeft ? cross3(anatPalm, rKnuckle) : cross3(rKnuckle, anatPalm),
+            [0, -0.6, 0.8]
+          );
+          if (wristPose.edgeDir) {
+            const te = norm3(wristPose.edgeDir, anatDArm);
+            const rawK = gripMode === "reverse" ? [-te[0], -te[1], -te[2]] : te;
+            const dotKR = dot3(rawK, rKnuckle);
+            dArm = norm3([
+              rawK[0] - rKnuckle[0] * dotKR,
+              rawK[1] - rKnuckle[1] * dotKR,
+              rawK[2] - rKnuckle[2] * dotKR,
+            ], anatDArm);
+            const testPalm = norm3(
+              isLeft ? cross3(rKnuckle, dArm) : cross3(dArm, rKnuckle),
+              anatPalm
+            );
+            if (wristPose.palmHint && dot3(testPalm, anatPalm) < -0.10) {
+              dArm = anatDArm;
+            }
+          } else {
+            const dotDR = dot3(dArm, rKnuckle);
+            let perp = [
+              dArm[0] - rKnuckle[0] * dotDR,
+              dArm[1] - rKnuckle[1] * dotDR,
+              dArm[2] - rKnuckle[2] * dotDR,
+            ];
+            const pLen = Math.hypot(perp[0], perp[1], perp[2]);
+            if (pLen < 0.38 || dot3(perp, anatDArm) < 0.0) {
+              const wAnat = pLen < 0.38 ? (1.0 - pLen / 0.38) : 0.75;
+              const pNorm = pLen > 1e-4 ? [perp[0] / pLen, perp[1] / pLen, perp[2] / pLen] : anatDArm;
+              const alignedP = dot3(pNorm, anatDArm) < 0.0 ? anatDArm : pNorm;
+              dArm = norm3([
+                alignedP[0] * (1.0 - wAnat) + anatDArm[0] * wAnat,
+                alignedP[1] * (1.0 - wAnat) + anatDArm[1] * wAnat,
+                alignedP[2] * (1.0 - wAnat) + anatDArm[2] * wAnat,
+              ], anatDArm);
+              const dFix = dot3(dArm, rKnuckle);
+              dArm = norm3([
+                dArm[0] - rKnuckle[0] * dFix,
+                dArm[1] - rKnuckle[1] * dFix,
+                dArm[2] - rKnuckle[2] * dFix,
+              ], anatDArm);
+            } else {
+              dArm = [perp[0] / pLen, perp[1] / pLen, perp[2] / pLen];
+            }
+          }
+          palmIn = norm3(
+            isLeft ? cross3(rKnuckle, dArm) : cross3(dArm, rKnuckle),
+            anatPalm
+          );
+        } else {
+          const ph = norm3(wristPose.palmHint, [inSign * 0.85, -0.15, -0.45]);
+          const dotIn = dot3(ph, dArm);
+          palmIn = norm3([
+            ph[0] - dArm[0] * dotIn,
+            ph[1] - dArm[1] * dotIn,
+            ph[2] - dArm[2] * dotIn,
+          ], [inSign, 0, 0]);
+          rKnuckle = norm3(
+            isLeft ? cross3(dArm, palmIn) : cross3(palmIn, dArm),
+            [0, 0, 1]
+          );
+        }
+      }
+    } else {
+      palmIn = [inSign * 0.85, -0.15, -0.45];
+      const dotIn = dot3(palmIn, dArm);
+      palmIn = norm3([
+        palmIn[0] - dArm[0] * dotIn,
+        palmIn[1] - dArm[1] * dotIn,
+        palmIn[2] - dArm[2] * dotIn,
+      ], [inSign, 0, 0]);
+      rKnuckle = norm3(
+        isLeft ? cross3(dArm, palmIn) : cross3(palmIn, dArm),
+        [0, 0, 1]
+      );
     }
 
-    const sf = scaleFactor;
-    const palmTip = [
-      pHand[0] + dArm[0] * 0.026 * sf,
-      pHand[1] + dArm[1] * 0.026 * sf,
-      pHand[2] + dArm[2] * 0.026 * sf,
+    const gripCenter = [
+      pHand[0] + dArm[0] * 0.036 + palmIn[0] * 0.016,
+      pHand[1] + dArm[1] * 0.036 + palmIn[1] * 0.016,
+      pHand[2] + dArm[2] * 0.036 + palmIn[2] * 0.016,
     ];
 
-    // Sculpted chibi palm seamlessly continuing from the forearm wrist (rWrist = 0.0265 * sf)
+    // UpperArm Bone Basis (Shoulder -> Elbow) with continuous anterior axis (never gimbal-flips at |zAxis[1]| > 0.95)
+    let upperArmBoneBasis = null;
+    if (pShoulder) {
+      const dUpper = norm3([pElbow[0] - pShoulder[0], pElbow[1] - pShoulder[1], pElbow[2] - pShoulder[2]], [0, -1, 0]);
+      const uAntHint = norm3([rKnuckle[0] * 0.35, rKnuckle[1] * 0.35, rKnuckle[2] * 0.35 + 0.65], [0, 0, 1]);
+      const duA = dot3(uAntHint, dUpper);
+      const uX = norm3([uAntHint[0] - dUpper[0] * duA, uAntHint[1] - dUpper[1] * duA, uAntHint[2] - dUpper[2] * duA], [0, 0, 1]);
+      const uY = norm3(cross3(dUpper, uX), [-1, 0, 0]);
+      upperArmBoneBasis = { zAxis: dUpper, xAxis: uX, yAxis: uY, latSign: -1.0 };
+    }
+
+    // Forearm & Hand Bone Basis for generateSculptedCapsule (locked to rKnuckle so forearm and palm twist in the exact same anatomical plane)
+    const fAnt = norm3(rKnuckle, [0, 0, 1]);
+    const dfA = dot3(fAnt, dForearm);
+    const fX = norm3([fAnt[0] - dForearm[0] * dfA, fAnt[1] - dForearm[1] * dfA, fAnt[2] - dForearm[2] * dfA], [0, 0, 1]);
+    const fY = norm3(cross3(dForearm, fX), [-1, 0, 0]);
+    const forearmBoneBasis = { zAxis: dForearm, xAxis: fX, yAxis: fY, latSign: -1.0 };
+    const handBoneBasis = {
+      zAxis: dArm,
+      xAxis: rKnuckle,
+      yAxis: isLeft ? palmIn : [-palmIn[0], -palmIn[1], -palmIn[2]],
+      latSign: -1.0,
+    };
+
+    // Standard WeaponSocket Bone attached to Hand Bone:
+    // +axisAlong = blade tip direction (locked to +rKnuckle in normal grip, -rKnuckle in reverse grip)
+    // +edgeUp    = cutting edge direction (+vAxis in buildShirasayaModel = locked 1:1 to +dArm in normal grip, -dArm in reverse grip)
+    // +thickRight= flat side normal
+    const gripMode = (wristPose && wristPose.gripMode) ? wristPose.gripMode : "normal";
+    const socketAlong = gripMode === "reverse"
+      ? [-rKnuckle[0], -rKnuckle[1], -rKnuckle[2]]
+      : [rKnuckle[0], rKnuckle[1], rKnuckle[2]];
+    const socketEdge = gripMode === "reverse"
+      ? [-dArm[0], -dArm[1], -dArm[2]]
+      : [dArm[0], dArm[1], dArm[2]];
+    const socketThick = norm3(cross3(socketAlong, socketEdge), palmIn);
+
+    return {
+      dArm,
+      dForearm,
+      palmIn,
+      rKnuckle,
+      gripCenter,
+      upperArmBoneBasis,
+      forearmBoneBasis,
+      handBoneBasis,
+      weaponSocket: {
+        origin: gripCenter,
+        axisAlong: socketAlong,
+        edgeUp: socketEdge,
+        thickRight: socketThick,
+      },
+    };
+  }
+
+  const _fingerTubeTemplateCache = {};
+  const _flippedCapsuleIndexCache = {};
+
+  function getFlippedCapsuleIndices(radialSegments, axialSegments) {
+    const key = radialSegments + "_" + axialSegments;
+    if (_flippedCapsuleIndexCache[key]) return _flippedCapsuleIndexCache[key];
+    const src = getCapsuleIndices(radialSegments, axialSegments);
+    const flipped = new Uint16Array(src.length);
+    for (let i = 0; i < src.length; i += 3) {
+      flipped[i] = src[i];
+      flipped[i + 1] = src[i + 2];
+      flipped[i + 2] = src[i + 1];
+    }
+    _flippedCapsuleIndexCache[key] = flipped;
+    return flipped;
+  }
+
+  function buildContinuousFingerTube(
+    cacheKey,
+    localJoints,
+    radii,
+    radialSegs,
+    sf,
+    baseShade,
+    pHand,
+    dArm,
+    palmIn,
+    rKnuckle
+  ) {
+    let tpl = _fingerTubeTemplateCache[cacheKey];
+    if (!tpl) {
+      const n3 = (v, fb) => {
+        const l = Math.hypot(v[0], v[1], v[2]);
+        return l > 1e-6 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+      };
+      const c3 = (a, b) => [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+      ];
+      const d3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const mix3 = (a, b, t) => [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+      ];
+      const lerpVal = (a, b, t) => a + (b - a) * t;
+
+      const M = localJoints.length;
+      const samples = []; // { pos: [d,p,r], rad, uFrac, jointBump }
+
+      // Anchor root deeply inside the palm mesh so the finger/thumb emerges organically without any gap
+      const d0 = n3([
+        localJoints[1][0] - localJoints[0][0],
+        localJoints[1][1] - localJoints[0][1],
+        localJoints[1][2] - localJoints[0][2],
+      ], [1, 0, 0]);
+      const r0 = radii[0];
+      const sinkDist = 0.0055 * sf;
+      const pRoot = [
+        localJoints[0][0] - d0[0] * sinkDist,
+        localJoints[0][1] - d0[1] * sinkDist,
+        localJoints[0][2] - d0[2] * sinkDist,
+      ];
+      const pRootCap = [
+        pRoot[0] - d0[0] * r0 * 0.25,
+        pRoot[1] - d0[1] * r0 * 0.25,
+        pRoot[2] - d0[2] * r0 * 0.25,
+      ];
+
+      samples.push({ pos: pRootCap, rad: r0 * 0.14, uFrac: 0.0 });
+      samples.push({ pos: pRoot, rad: r0 * 1.12, uFrac: 0.03 });
+      samples.push({ pos: localJoints[0], rad: r0 * 1.02, uFrac: 0.08 });
+
+      let prevPos = localJoints[0];
+      let prevRad = r0;
+      const segSpan = 0.80 / Math.max(1, M - 1);
+
+      for (let k = 1; k < M - 1; k++) {
+        const currP = localJoints[k];
+        const prevP = localJoints[k - 1];
+        const nextP = localJoints[k + 1];
+        const currR = radii[k];
+        const nextR = radii[k + 1];
+
+        const vIn = [currP[0] - prevP[0], currP[1] - prevP[1], currP[2] - prevP[2]];
+        const vOut = [nextP[0] - currP[0], nextP[1] - currP[1], nextP[2] - currP[2]];
+        const lIn = Math.hypot(vIn[0], vIn[1], vIn[2]) || 1e-4;
+        const lOut = Math.hypot(vOut[0], vOut[1], vOut[2]) || 1e-4;
+        const uIn = [vIn[0] / lIn, vIn[1] / lIn, vIn[2] / lIn];
+        const uOut = [vOut[0] / lOut, vOut[1] / lOut, vOut[2] / lOut];
+
+        const trim = Math.min(lIn, lOut) * 0.36;
+        const tIn = Math.min(0.45, trim / lIn);
+        const tOut = Math.min(0.45, trim / lOut);
+
+        const qIn = [currP[0] - uIn[0] * trim, currP[1] - uIn[1] * trim, currP[2] - uIn[2] * trim];
+        const qOut = [currP[0] + uOut[0] * trim, currP[1] + uOut[1] * trim, currP[2] + uOut[2] * trim];
+        const rIn = lerpVal(currR, prevRad, tIn);
+        const rOut = lerpVal(currR, nextR, tOut);
+
+        const baseU = 0.08 + (k - 1) * segSpan;
+        // Mid-shaft sample only when straight span is long enough to avoid sliver rings
+        const distPrevQIn = Math.hypot(qIn[0] - prevPos[0], qIn[1] - prevPos[1], qIn[2] - prevPos[2]);
+        if (distPrevQIn > currR * 0.9) {
+          samples.push({
+            pos: mix3(prevPos, qIn, 0.5),
+            rad: lerpVal(prevRad, rIn, 0.5),
+            uFrac: baseU + segSpan * 0.30,
+          });
+        }
+
+        // Smooth quadratic Bezier arc around joint k (continuous tube with gentle joint pad fullness, zero ball-pinching)
+        const arcSteps = 3;
+        for (let s = 0; s <= arcSteps; s++) {
+          const bt = s / arcSteps;
+          const omt = 1.0 - bt;
+          const bPos = [
+            omt * omt * qIn[0] + 2.0 * omt * bt * currP[0] + bt * bt * qOut[0],
+            omt * omt * qIn[1] + 2.0 * omt * bt * currP[1] + bt * bt * qOut[1],
+            omt * omt * qIn[2] + 2.0 * omt * bt * currP[2] + bt * bt * qOut[2],
+          ];
+          const bRad = lerpVal(rIn, rOut, bt) * (1.0 + 0.032 * Math.sin(bt * Math.PI));
+          samples.push({
+            pos: bPos,
+            rad: bRad,
+            uFrac: baseU + segSpan * (0.60 + 0.40 * bt),
+          });
+        }
+
+        prevPos = qOut;
+        prevRad = rOut;
+      }
+
+      const tipBase = localJoints[M - 1];
+      const rTip = radii[M - 1];
+      const distPrevTip = Math.hypot(tipBase[0] - prevPos[0], tipBase[1] - prevPos[1], tipBase[2] - prevPos[2]);
+      if (distPrevTip > rTip * 0.9) {
+        samples.push({
+          pos: mix3(prevPos, tipBase, 0.52),
+          rad: lerpVal(prevRad, rTip, 0.52),
+          uFrac: 0.90,
+        });
+      }
+      samples.push({ pos: tipBase, rad: rTip, uFrac: 0.94 });
+
+      // Rounded Chibi fingertip dome
+      const endDir = n3([
+        tipBase[0] - prevPos[0],
+        tipBase[1] - prevPos[1],
+        tipBase[2] - prevPos[2],
+      ], d0);
+      const domeAngles = [0.42, 0.88, 1.28, Math.PI * 0.5];
+      for (let a = 0; a < domeAngles.length; a++) {
+        const ang = domeAngles[a];
+        const advance = Math.sin(ang) * rTip * 0.92;
+        const capR = Math.max(rTip * 0.025, Math.cos(ang) * rTip);
+        samples.push({
+          pos: [
+            tipBase[0] + endDir[0] * advance,
+            tipBase[1] + endDir[1] * advance,
+            tipBase[2] + endDir[2] * advance,
+          ],
+          rad: capR,
+          uFrac: 0.95 + 0.05 * ((a + 1) / domeAngles.length),
+        });
+      }
+
+      // Filter out overly tight interior sample clusters (< 0.42 * rad apart)
+      const filteredSamples = [samples[0], samples[1], samples[2]];
+      for (let i = 3; i < samples.length - 5; i++) {
+        const prevKept = filteredSamples[filteredSamples.length - 1];
+        const curS = samples[i];
+        const stepDist = Math.hypot(curS.pos[0] - prevKept.pos[0], curS.pos[1] - prevKept.pos[1], curS.pos[2] - prevKept.pos[2]);
+        if (stepDist >= Math.max(curS.rad, prevKept.rad) * 0.42) {
+          filteredSamples.push(curS);
+        }
+      }
+      for (let i = Math.max(3, samples.length - 5); i < samples.length; i++) {
+        const prevKept = filteredSamples[filteredSamples.length - 1];
+        const curS = samples[i];
+        const stepDist = Math.hypot(curS.pos[0] - prevKept.pos[0], curS.pos[1] - prevKept.pos[1], curS.pos[2] - prevKept.pos[2]);
+        if (stepDist > 1e-5) {
+          filteredSamples.push(curS);
+        }
+      }
+
+      const ringCount = filteredSamples.length;
+      const totalVerts = ringCount * (radialSegs + 1);
+      const localCoords = new Float32Array(totalVerts * 3);
+      const localNormals = new Float32Array(totalVerts * 3);
+      const colors = new Float32Array(totalVerts * 3);
+
+      // Compute tangents & parallel-transported cross-section frames (U = lateral knuckle axis, V = palmar-dorsal)
+      const T = new Array(ringCount);
+      for (let i = 0; i < ringCount; i++) {
+        const pPrev = filteredSamples[Math.max(0, i - 1)].pos;
+        const pNext = filteredSamples[Math.min(ringCount - 1, i + 1)].pos;
+        T[i] = n3([pNext[0] - pPrev[0], pNext[1] - pPrev[1], pNext[2] - pPrev[2]], d0);
+      }
+
+      let prevU = n3([
+        -T[0][0] * T[0][2],
+        -T[0][1] * T[0][2],
+        1.0 - T[0][2] * T[0][2],
+      ], null);
+      if (!prevU || Math.hypot(prevU[0], prevU[1], prevU[2]) < 1e-4) {
+        prevU = n3([
+          -T[0][0] * T[0][1],
+          1.0 - T[0][1] * T[0][1],
+          -T[0][2] * T[0][1],
+        ], [1, 0, 0]);
+      }
+
+      let vIdx = 0;
+      for (let i = 0; i < ringCount; i++) {
+        const ti = T[i];
+        const dotUT = prevU[0] * ti[0] + prevU[1] * ti[1] + prevU[2] * ti[2];
+        let ui = [prevU[0] - ti[0] * dotUT, prevU[1] - ti[1] * dotUT, prevU[2] - ti[2] * dotUT];
+        if (Math.hypot(ui[0], ui[1], ui[2]) < 1e-4) {
+          ui = n3([-ti[0] * ti[2], -ti[1] * ti[2], 1.0 - ti[2] * ti[2]], [1, 0, 0]);
+        } else {
+          ui = n3(ui, [0, 0, 1]);
+        }
+        prevU = ui;
+        const vi = n3(c3(ti, ui), [0, 1, 0]); // right-handed: V = T x U
+
+        const s = filteredSamples[i];
+        const rx = s.rad;
+        const ry = s.rad * 0.94; // Slight natural palmar-dorsal flatness
+        const tipGrad = Math.min(1.0, Math.max(0.0, s.uFrac));
+
+        // C1-smooth inner-bend modulation: scales inner side gently based on local curvature so flexed rings never self-intersect
+        let bendDir = null;
+        let innerScale = 1.0;
+        if (i > 0 && i < ringCount - 1) {
+          const tPrev = T[i - 1], tNext = T[i + 1];
+          const dtx = tNext[0] - tPrev[0], dty = tNext[1] - tPrev[1], dtz = tNext[2] - tPrev[2];
+          const dtLen = Math.hypot(dtx, dty, dtz);
+          if (dtLen > 0.05) {
+            bendDir = [dtx / dtLen, dty / dtLen, dtz / dtLen];
+            const pPrev = filteredSamples[i - 1].pos, pCurr = filteredSamples[i].pos, pNext = filteredSamples[i + 1].pos;
+            const stepPrev = Math.hypot(pCurr[0] - pPrev[0], pCurr[1] - pPrev[1], pCurr[2] - pPrev[2]);
+            const stepNext = Math.hypot(pNext[0] - pCurr[0], pNext[1] - pCurr[1], pNext[2] - pCurr[2]);
+            const rCurv = (2.0 * Math.min(stepPrev, stepNext)) / dtLen;
+            if (s.rad > 1e-5 && rCurv * 0.65 < s.rad) {
+              innerScale = Math.max(0.28, (rCurv * 0.65) / s.rad);
+            }
+          }
+        }
+
+        for (let j = 0; j <= radialSegs; j++) {
+          const phi = (j === radialSegs ? 0 : (j / radialSegs) * Math.PI * 2);
+          const cosP = Math.cos(phi);
+          const sinP = Math.sin(phi);
+
+          let offD = ui[0] * cosP * rx + vi[0] * sinP * ry;
+          let offP = ui[1] * cosP * rx + vi[1] * sinP * ry;
+          let offR = ui[2] * cosP * rx + vi[2] * sinP * ry;
+
+          if (bendDir && innerScale < 0.999) {
+            const radLen = Math.hypot(offD, offP, offR) || 1e-5;
+            const inAlign = (offD * bendDir[0] + offP * bendDir[1] + offR * bendDir[2]) / radLen;
+            const w = 0.5 + 0.5 * inAlign;
+            const mod = 1.0 - (1.0 - innerScale) * w * w;
+            offD *= mod;
+            offP *= mod;
+            offR *= mod;
+          }
+
+          localCoords[vIdx]     = s.pos[0] + offD;
+          localCoords[vIdx + 1] = s.pos[1] + offP;
+          localCoords[vIdx + 2] = s.pos[2] + offR;
+
+          // Match palm shading seamlessly: softer shade at palm root, gentle inner crease tint, brighter fingertip
+          const radN = n3([offD, offP, offR], ui);
+          const innerPalmBias = Math.max(0.0, radN[1]); // +p corresponds to palmIn side
+          const shade = baseShade - 0.008 * (1.0 - tipGrad) - innerPalmBias * 0.008 + tipGrad * 0.006;
+          const aoDepth = Math.max(0.0, 0.97 - shade);
+          colors[vIdx]     = Math.min(1.0, shade * 1.025 + aoDepth * 0.12);
+          colors[vIdx + 1] = Math.min(1.0, shade * 0.910 - aoDepth * 0.08);
+          colors[vIdx + 2] = Math.min(1.0, shade * 0.845 - aoDepth * 0.14);
+
+          localNormals[vIdx] = 0.0;
+          localNormals[vIdx + 1] = 0.0;
+          localNormals[vIdx + 2] = 0.0;
+          vIdx += 3;
+        }
+      }
+
+      const baseIndices = getCapsuleIndices(radialSegs, ringCount - 1);
+      for (let k = 0; k < baseIndices.length; k += 3) {
+        const i0 = baseIndices[k] * 3;
+        const i1 = baseIndices[k + 1] * 3;
+        const i2 = baseIndices[k + 2] * 3;
+
+        const ux = localCoords[i1] - localCoords[i0];
+        const uy = localCoords[i1 + 1] - localCoords[i0 + 1];
+        const uz = localCoords[i1 + 2] - localCoords[i0 + 2];
+
+        const vx = localCoords[i2] - localCoords[i0];
+        const vy = localCoords[i2 + 1] - localCoords[i0 + 1];
+        const vz = localCoords[i2 + 2] - localCoords[i0 + 2];
+
+        const nx = uy * vz - uz * vy;
+        const ny = uz * vx - ux * vz;
+        const nz = ux * vy - uy * vx;
+
+        localNormals[i0] += nx; localNormals[i0 + 1] += ny; localNormals[i0 + 2] += nz;
+        localNormals[i1] += nx; localNormals[i1 + 1] += ny; localNormals[i1 + 2] += nz;
+        localNormals[i2] += nx; localNormals[i2 + 1] += ny; localNormals[i2 + 2] += nz;
+      }
+
+      const stride = radialSegs + 1;
+      for (let i = 0; i < ringCount; i++) {
+        // Weld radial seam normals between j=0 and j=radialSegs
+        const b0 = (i * stride) * 3;
+        const bN = (i * stride + radialSegs) * 3;
+        const sx = localNormals[b0] + localNormals[bN];
+        const sy = localNormals[b0 + 1] + localNormals[bN + 1];
+        const sz = localNormals[b0 + 2] + localNormals[bN + 2];
+        localNormals[b0] = localNormals[bN] = sx;
+        localNormals[b0 + 1] = localNormals[bN + 1] = sy;
+        localNormals[b0 + 2] = localNormals[bN + 2] = sz;
+      }
+
+      // Clean axial pole normals at root cap and fingertip apex
+      const tEnd = T[ringCount - 1];
+      const tStart = T[0];
+      for (let j = 0; j <= radialSegs; j++) {
+        const idx0 = j * 3;
+        localNormals[idx0] = -tStart[0];
+        localNormals[idx0 + 1] = -tStart[1];
+        localNormals[idx0 + 2] = -tStart[2];
+
+        const idxE = ((ringCount - 1) * stride + j) * 3;
+        localNormals[idxE] = tEnd[0];
+        localNormals[idxE + 1] = tEnd[1];
+        localNormals[idxE + 2] = tEnd[2];
+      }
+
+      for (let k = 0; k < totalVerts * 3; k += 3) {
+        const nl = Math.hypot(localNormals[k], localNormals[k + 1], localNormals[k + 2]);
+        if (nl > 1e-6) {
+          localNormals[k] /= nl;
+          localNormals[k + 1] /= nl;
+          localNormals[k + 2] /= nl;
+        } else {
+          localNormals[k] = 1.0;
+        }
+      }
+
+      tpl = { ringCount, localCoords, localNormals, colors };
+      _fingerTubeTemplateCache[cacheKey] = tpl;
+    }
+
+    const totalVerts = tpl.ringCount * (radialSegs + 1);
+    const pooled = getPooledCapsuleBuffers(totalVerts);
+    const vertices = pooled.vertices.subarray(0, totalVerts * 3);
+    const normals = pooled.normals.subarray(0, totalVerts * 3);
+
+    const lCoords = tpl.localCoords;
+    const lNorms = tpl.localNormals;
+    const phx = pHand[0], phy = pHand[1], phz = pHand[2];
+    const dx = dArm[0], dy = dArm[1], dz = dArm[2];
+    const px = palmIn[0], py = palmIn[1], pz = palmIn[2];
+    const rx = rKnuckle[0], ry = rKnuckle[1], rz = rKnuckle[2];
+
+    const len3 = totalVerts * 3;
+    for (let k = 0; k < len3; k += 3) {
+      const ld = lCoords[k];
+      const lp = lCoords[k + 1];
+      const lr = lCoords[k + 2];
+      vertices[k]     = phx + dx * ld + px * lp + rx * lr;
+      vertices[k + 1] = phy + dy * ld + py * lp + ry * lr;
+      vertices[k + 2] = phz + dz * ld + pz * lp + rz * lr;
+
+      const nd = lNorms[k];
+      const np = lNorms[k + 1];
+      const nr = lNorms[k + 2];
+      normals[k]     = dx * nd + px * np + rx * nr;
+      normals[k + 1] = dy * nd + py * np + ry * nr;
+      normals[k + 2] = dz * nd + pz * np + rz * nr;
+    }
+
+    // Account for mirrored right-hand [dArm, palmIn, rKnuckle] basis (det < 0) so triangle winding stays strictly CCW outward
+    const crossDPx = dy * pz - dz * py;
+    const crossDPy = dz * px - dx * pz;
+    const crossDPz = dx * py - dy * px;
+    const basisDet = crossDPx * rx + crossDPy * ry + crossDPz * rz;
+    const indices = basisDet < 0.0
+      ? getFlippedCapsuleIndices(radialSegs, tpl.ringCount - 1)
+      : getCapsuleIndices(radialSegs, tpl.ringCount - 1);
+
+    return { vertices, normals, colors: tpl.colors, indices, skinGroup: 7 };
+  }
+
+  function buildHandAndFingers(pElbow, pHand, isLeft, scaleFactor, gripAmount = 0, wristPose = null, pShoulder = null) {
+    const { dArm, palmIn, rKnuckle, handBoneBasis } = computeHandGripFrame(pElbow, pHand, isLeft, wristPose, pShoulder);
+
+    const g = Math.max(0.0, Math.min(1.0, typeof gripAmount === "number" ? gripAmount : 0.0));
+    const gKey = "_g" + Math.round(g * 100);
+    const sf = scaleFactor;
+    const toLocalPt = (dOff, pOff, rOff) => [
+      pHand[0] + dArm[0] * dOff * sf + palmIn[0] * pOff * sf + rKnuckle[0] * rOff * sf,
+      pHand[1] + dArm[1] * dOff * sf + palmIn[1] * pOff * sf + rKnuckle[1] * rOff * sf,
+      pHand[2] + dArm[2] * dOff * sf + palmIn[2] * pOff * sf + rKnuckle[2] * rOff * sf,
+    ];
+    const lerp = (a, b, t) => a + (b - a) * t;
+
+    const palmTip = toLocalPt(0.025, 0.0, 0.0);
+
+    // Sculpted chibi palm: 16 radial segments matching forearm 1:1, continuous wrist shade & seamless knuckle seating
     const sfKey = Math.round(sf * 1000);
     const sideStr = isLeft ? "L" : "R";
-    const palm = generateSculptedCapsule(pHand, palmTip, 12, 10, (u, angle, sinA, cosA, lat, ant, L) => {
-      const loft = loftSeamlessJointShaft(u, L, 0.0265 * sf, 0.022 * sf);
+    const palm = generateSculptedCapsule(pHand, palmTip, 16, 12, (u, angle, sinA, cosA, lat, ant, L) => {
+      const loft = loftSeamlessJointShaft(u, L, 0.0265 * sf, 0.0245 * sf);
       const h = loft.h;
-      const flare = 0.94 + 0.12 * Math.sin(h * Math.PI * 0.65);
-      const rx = 0.022 * sf * flare * loft.capEnv;
-      const ry = 0.026 * sf * flare * loft.capEnv;
-      const innerPalmAO = (isLeft ? lat > 0.1 : lat < -0.1) ? 0.016 : 0.0;
+      const widthBell = Math.sin(h * Math.PI * 0.78) * 0.0032 * sf;
+      const rx = (0.0254 * (1.0 - h) + 0.0205 * h) * sf * loft.capEnv;
+      const ry = ((0.0268 * (1.0 - h) + 0.0300 * h) * sf + widthBell) * loft.capEnv;
+      const innerSide = isLeft ? Math.max(0.0, lat) : Math.max(0.0, -lat);
+      const palmShadeFade = Math.max(0.0, Math.min(1.0, (h - 0.16) / 0.55));
+      const innerPalmAO = innerSide * (0.008 + 0.010 * palmShadeFade);
       return { zPos: loft.zPos, rx, ry, shade: 0.962 - innerPalmAO };
-    }, 7, "palm_" + sideStr + "_" + sfKey);
+    }, 7, "palm_" + sideStr + "_" + sfKey, handBoneBasis);
     const parts = [palm];
 
-    // 1. Opposable Chibi Thumb (2 segments angled forward & slightly inward like the reference image)
-    const thumbBase = [
-      pHand[0] + dArm[0] * 0.010 * sf + rKnuckle[0] * 0.018 * sf + palmIn[0] * 0.005 * sf,
-      pHand[1] + dArm[1] * 0.010 * sf + rKnuckle[1] * 0.018 * sf + palmIn[1] * 0.005 * sf,
-      pHand[2] + dArm[2] * 0.010 * sf + rKnuckle[2] * 0.018 * sf + palmIn[2] * 0.005 * sf,
-    ];
-    const thumbMid = [
-      thumbBase[0] + (dArm[0] * 0.78 + rKnuckle[0] * 0.58 + palmIn[0] * 0.22) * 0.014 * sf,
-      thumbBase[1] + (dArm[1] * 0.78 + rKnuckle[1] * 0.58 + palmIn[1] * 0.22) * 0.014 * sf,
-      thumbBase[2] + (dArm[2] * 0.78 + rKnuckle[2] * 0.58 + palmIn[2] * 0.22) * 0.014 * sf,
-    ];
-    const thumbTip = [
-      thumbMid[0] + (dArm[0] * 0.88 + rKnuckle[0] * 0.15 + palmIn[0] * 0.45) * 0.012 * sf,
-      thumbMid[1] + (dArm[1] * 0.88 + rKnuckle[1] * 0.15 + palmIn[1] * 0.45) * 0.012 * sf,
-      thumbMid[2] + (dArm[2] * 0.88 + rKnuckle[2] * 0.15 + palmIn[2] * 0.45) * 0.012 * sf,
+    // 1. Continuous Opposable Chibi Thumb (blends smoothly from relaxed open pose into closed grip over the index/middle fingers)
+    const thumbJoints = [
+      [0.011 * sf, 0.007 * sf, 0.018 * sf],
+      [lerp(0.0250, 0.025, g) * sf, lerp(0.0117, 0.029, g) * sf, lerp(0.0301, 0.021, g) * sf],
+      [lerp(0.0391, 0.041, g) * sf, lerp(0.0187, 0.029, g) * sf, lerp(0.0330, 0.010, g) * sf],
     ];
     parts.push(
-      generateSculptedCapsule(thumbBase, thumbMid, 8, 6, (u, angle, sinA, cosA, lat, ant, L) => {
-        const r = (0.0088 - 0.0010 * u) * sf;
-        return { zPos: sinA < 0 ? sinA * r : L + sinA * r, rx: r * cosA, ry: r * cosA, shade: 0.955 };
-      }, 0, "th1_" + sfKey),
-      generateSculptedCapsule(thumbMid, thumbTip, 8, 6, (u, angle, sinA, cosA, lat, ant, L) => {
-        const r = (0.0078 - 0.0012 * u) * sf;
-        return { zPos: sinA < 0 ? sinA * r : L + sinA * r, rx: r * cosA, ry: r * cosA, shade: 0.96 };
-      }, 0, "th2_" + sfKey)
+      buildContinuousFingerTube(
+        "ftube_th" + gKey + "_" + sfKey,
+        thumbJoints,
+        [0.0108 * sf, 0.0097 * sf, 0.0080 * sf],
+        10,
+        sf,
+        0.958,
+        pHand,
+        dArm,
+        palmIn,
+        rKnuckle
+      )
     );
 
-    // 2. 4 Gently Curved / Cupped Chibi Fingers (Index, Middle, Ring, Pinky)
-    const fingerKnuckleSpread = [0.014, 0.005, -0.004, -0.013];
-    const fingerLengths = [0.020, 0.023, 0.021, 0.016];
-    const fingerRadii = [0.0074, 0.0076, 0.0072, 0.0062];
+    // 2. 4 Continuous Sculpted Chibi Fingers (zero segmented sausage capsules; blends smoothly from open curl to full handle wrap)
+    const fingerKnuckleSpread = [0.0175, 0.0062, -0.0055, -0.0172];
+    const fingerLengths = [0.028, 0.032, 0.029, 0.023];
+    const fingerRadii = [0.0094, 0.0098, 0.0093, 0.0082];
+    const degToRad = Math.PI / 180.0;
 
     for (let f = 0; f < 4; f++) {
-      const kOff = fingerKnuckleSpread[f] * sf;
-      const fLen = fingerLengths[f] * sf;
+      const kOff = fingerKnuckleSpread[f];
+      const fLen = fingerLengths[f];
       const fRad = fingerRadii[f] * sf;
-      const archDrop = (f === 1 ? 0.002 : (f === 3 ? -0.003 : 0.0)) * sf;
+      const archDrop = (f === 1 ? 0.001 : (f === 3 ? -0.004 : -0.001));
 
-      const fKnuckle = [
-        palmTip[0] + rKnuckle[0] * kOff + dArm[0] * archDrop,
-        palmTip[1] + rKnuckle[1] * kOff + dArm[1] * archDrop,
-        palmTip[2] + rKnuckle[2] * kOff + dArm[2] * archDrop,
-      ];
-      const fMid = [
-        fKnuckle[0] + (dArm[0] * 0.94 + palmIn[0] * 0.34) * (fLen * 0.54),
-        fKnuckle[1] + (dArm[1] * 0.94 + palmIn[1] * 0.34) * (fLen * 0.54),
-        fKnuckle[2] + (dArm[2] * 0.94 + palmIn[2] * 0.34) * (fLen * 0.54),
-      ];
-      const fTip = [
-        fMid[0] + (dArm[0] * 0.76 + palmIn[0] * 0.65) * (fLen * 0.48),
-        fMid[1] + (dArm[1] * 0.76 + palmIn[1] * 0.65) * (fLen * 0.48),
-        fMid[2] + (dArm[2] * 0.76 + palmIn[2] * 0.65) * (fLen * 0.48),
+      const kD = 0.025 + archDrop;
+      const kP = 0.0;
+
+      // Open hand trajectory
+      const openMidD = kD + 0.96 * (fLen * 0.54);
+      const openMidP = kP + 0.28 * (fLen * 0.54);
+      const openTipD = openMidD + 0.83 * (fLen * 0.48);
+      const openTipP = openMidP + 0.55 * (fLen * 0.48);
+
+      const openJ1D = lerp(kD, openMidD, 0.70);
+      const openJ1P = lerp(kP, openMidP, 0.70);
+      const openJ2D = lerp(openMidD, openTipD, 0.45);
+      const openJ2P = lerp(openMidP, openTipP, 0.45);
+
+      // Closed grip circular arc around handle center (d=0.036, p=0.016)
+      const wrapR = 0.0185 + (f === 1 ? 0.001 : (f === 3 ? -0.001 : 0));
+      const gripJ1D = 0.036 + Math.cos(-50 * degToRad) * wrapR;
+      const gripJ1P = 0.016 + Math.sin(-50 * degToRad) * wrapR;
+      const gripJ2D = 0.036 + Math.cos(30 * degToRad) * wrapR;
+      const gripJ2P = 0.016 + Math.sin(30 * degToRad) * wrapR;
+      const gripTipD = 0.036 + Math.cos(115 * degToRad) * wrapR;
+      const gripTipP = 0.016 + Math.sin(115 * degToRad) * wrapR;
+
+      const fingerJoints = [
+        [kD * sf, kP * sf, kOff * sf],
+        [lerp(openJ1D, gripJ1D, g) * sf, lerp(openJ1P, gripJ1P, g) * sf, kOff * sf],
+        [lerp(openJ2D, gripJ2D, g) * sf, lerp(openJ2P, gripJ2P, g) * sf, kOff * sf],
+        [lerp(openTipD, gripTipD, g) * sf, lerp(openTipP, gripTipP, g) * sf, kOff * sf],
       ];
 
       parts.push(
-        generateSculptedCapsule(fKnuckle, fMid, 8, 6, (u, angle, sinA, cosA, lat, ant, L) => {
-          const r = fRad * (1.0 - 0.08 * u);
-          return {
-            zPos: sinA < 0 ? sinA * r : L + sinA * r,
-            rx: r * cosA,
-            ry: r * cosA,
-            shade: 0.95 + 0.01 * u,
-          };
-        }, 0, "fg1_" + f + "_" + sfKey),
-        generateSculptedCapsule(fMid, fTip, 8, 6, (u, angle, sinA, cosA, lat, ant, L) => {
-          const r = fRad * (0.92 - 0.14 * u);
-          return {
-            zPos: sinA < 0 ? sinA * r : L + sinA * r,
-            rx: r * cosA,
-            ry: r * cosA,
-            shade: 0.955 + 0.005 * u,
-          };
-        }, 0, "fg2_" + f + "_" + sfKey)
+        buildContinuousFingerTube(
+          "ftube_f" + f + gKey + "_" + sfKey,
+          fingerJoints,
+          [fRad, fRad * 0.96, fRad * 0.89, fRad * 0.77],
+          10,
+          sf,
+          0.956,
+          pHand,
+          dArm,
+          palmIn,
+          rKnuckle
+        )
       );
     }
     return parts;
   }
 
-  function buildFootAnkleToes(pKnee, pFoot, isLeft, scaleFactor) {
+  // Standard Leg, Ankle & Foot Skeletal Bone Rig (Hip -> Thigh -> Knee -> Calf -> Ankle -> Foot -> 5 Toes)
+  function computeLegRigFrame(pHip, pKnee, pFoot, isLeft, anklePose = null) {
+    const norm3 = (v, fb) => {
+      if (!v) return fb;
+      const l = Math.hypot(v[0], v[1], v[2]);
+      return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+    };
+    const cross3 = (a, b) => [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+    const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+    const footPt = pFoot || [isLeft ? -0.052 : 0.052, -0.42, 0];
+    const kneePt = pKnee || [footPt[0], footPt[1] + 0.174, footPt[2] + 0.01];
+    const hipPt = pHip || [kneePt[0], kneePt[1] + 0.178, kneePt[2] - 0.01];
+
+    const dThigh = norm3([kneePt[0] - hipPt[0], kneePt[1] - hipPt[1], kneePt[2] - hipPt[2]], [0, -1, 0]);
+    const dCalf = norm3([footPt[0] - kneePt[0], footPt[1] - kneePt[1], footPt[2] - kneePt[2]], [0, -1, 0]);
+    const uShin = [-dCalf[0], -dCalf[1], -dCalf[2]]; // points from ankle up toward knee
+
+    // Anterior direction of thigh & calf (tracks leg swing without gimbal flip when leg kicks high)
+    const antRef = [0, 0, 1];
+    const dtA = dot3(antRef, dThigh);
+    const tX = norm3([antRef[0] - dThigh[0] * dtA, antRef[1] - dThigh[1] * dtA, antRef[2] - dThigh[2] * dtA], [0, 1, 0]);
+    const tY = norm3(cross3(dThigh, tX), [-1, 0, 0]);
+    const thighBoneBasis = { zAxis: dThigh, xAxis: tX, yAxis: tY, latSign: -1.0 };
+
+    const dcA = dot3(antRef, dCalf);
+    const cX = norm3([antRef[0] - dCalf[0] * dcA, antRef[1] - dCalf[1] * dcA, antRef[2] - dCalf[2] * dcA], [0, 1, 0]);
+    const cY = norm3(cross3(dCalf, cX), [-1, 0, 0]);
+    const calfBoneBasis = { zAxis: dCalf, xAxis: cX, yAxis: cY, latSign: -1.0 };
+
+    // Ankle & Foot Bone Basis:
+    // Smoothly couples foot orientation to the shin bone (uShin) so high knee bends, jumps, swimming kicks,
+    // boat sitting, and skill dashes tilt the foot naturally with the leg instead of locking to world +Z!
+    const shinTilt = Math.acos(Math.max(-1.0, Math.min(1.0, uShin[1])));
+    const defaultFollow = shinTilt > 0.22
+      ? Math.min(0.72, 0.26 + (shinTilt - 0.22) * 0.48)
+      : 0.26;
+    const followBlend = (anklePose && typeof anklePose.shinFollow === "number")
+      ? anklePose.shinFollow
+      : defaultFollow;
+
+    const footUp = norm3([
+      uShin[0] * followBlend,
+      (1.0 - followBlend) + uShin[1] * followBlend,
+      uShin[2] * followBlend,
+    ], [0, 1, 0]);
+    const yawHint = (anklePose && typeof anklePose.yaw === "number") ? anklePose.yaw : 0.0;
+    const rawFwd = [Math.sin(yawHint), 0, Math.cos(yawHint)];
+    const dfU = dot3(rawFwd, footUp);
+    let footFwd = norm3([rawFwd[0] - footUp[0] * dfU, rawFwd[1] - footUp[1] * dfU, rawFwd[2] - footUp[2] * dfU], [0, 0, 1]);
+    let footRight = norm3(cross3(footUp, footFwd), [1, 0, 0]);
+
+    if (anklePose && typeof anklePose.pitch === "number" && Math.abs(anklePose.pitch) > 1e-4) {
+      const cp = Math.cos(anklePose.pitch), sp = Math.sin(anklePose.pitch);
+      const nUp = norm3([footUp[0] * cp - footFwd[0] * sp, footUp[1] * cp - footFwd[1] * sp, footUp[2] * cp - footFwd[2] * sp], footUp);
+      const nFwd = norm3([footUp[0] * sp + footFwd[0] * cp, footUp[1] * sp + footFwd[1] * cp, footUp[2] * sp + footFwd[2] * cp], footFwd);
+      footFwd = nFwd;
+      footRight = norm3(cross3(nUp, footFwd), footRight);
+    }
+
+    const ankleBoneBasis = {
+      zAxis: [-footUp[0], -footUp[1], -footUp[2]],
+      xAxis: footFwd,
+      yAxis: [-footRight[0], -footRight[1], -footRight[2]],
+      latSign: -1.0,
+    };
+    const footShaftBasis = {
+      zAxis: footFwd,
+      xAxis: footUp,
+      yAxis: [-footRight[0], -footRight[1], -footRight[2]],
+      latSign: -1.0,
+    };
+
+    return {
+      dThigh,
+      dCalf,
+      uShin,
+      thighBoneBasis,
+      calfBoneBasis,
+      footBoneBasis: {
+        upAxis: footUp,
+        fwdAxis: footFwd,
+        rightAxis: footRight,
+        ankleBoneBasis,
+        footShaftBasis,
+      },
+    };
+  }
+
+  function buildFootAnkleToes(pKnee, pFoot, isLeft, scaleFactor, legRig = null) {
     const sf = scaleFactor;
     const sfKey = Math.round(sf * 1000);
+    const rig = legRig || computeLegRigFrame(null, pKnee, pFoot, isLeft);
+    const fb = rig.footBoneBasis;
+    const fRight = fb.rightAxis;
+    const fUp = fb.upAxis;
+    const fFwd = fb.fwdAxis;
+
+    const toFootPt = (rx, uy, fz) => [
+      pFoot[0] + (fRight[0] * rx + fUp[0] * uy + fFwd[0] * fz) * sf,
+      pFoot[1] + (fRight[1] * rx + fUp[1] * uy + fFwd[1] * fz) * sf,
+      pFoot[2] + (fRight[2] * rx + fUp[2] * uy + fFwd[2] * fz) * sf,
+    ];
+
     // 1. Sculpted Ankle & Heel Bridge (matches Calf end radius rAnkle = 0.0355 * sf seamlessly!)
-    const heelBase = [pFoot[0], pFoot[1] - 0.012 * sf, pFoot[2] - 0.004 * sf];
+    const heelBase = toFootPt(0.0, -0.012, -0.004);
     const ankle = generateSculptedCapsule(pFoot, heelBase, 14, 10, (u, angle, sinA, cosA, lat, ant, L) => {
       const loft = loftSeamlessJointShaft(u, L, 0.0355 * sf, 0.033 * sf);
       const r = (0.0355 - 0.0020 * loft.h) * sf * loft.capEnv;
       return { zPos: loft.zPos, rx: r * 1.02, ry: r * 1.00, shade: 0.962 };
-    }, 9, "ankle_" + sfKey);
+    }, 9, "ankle_" + sfKey, fb.ankleBoneBasis);
 
     // 2. Sculpted Arched Chibi Foot Body (Heel -> Instep Bridge -> Widened Forefoot with Flat Sole)
-    const footStart = [pFoot[0], pFoot[1] - 0.011 * sf, pFoot[2] - 0.006 * sf];
-    const footTip = [
-      pFoot[0] + (isLeft ? -0.002 : 0.002) * sf,
-      pFoot[1] - 0.015 * sf,
-      pFoot[2] + 0.042 * sf,
-    ];
+    const footStart = toFootPt(0.0, -0.011, -0.006);
+    const footTip = toFootPt(isLeft ? -0.002 : 0.002, -0.015, 0.042);
     const footBody = generateSculptedCapsule(footStart, footTip, 14, 10, (u, angle, sinA, cosA, lat, ant, L) => {
       const loft = loftSeamlessJointShaft(u, L, 0.029 * sf, 0.031 * sf);
       const h = loft.h;
       const rx = (0.028 + 0.007 * Math.pow(h, 0.8)) * sf * loft.capEnv;
       const ry = (0.024 - 0.005 * Math.pow(h, 0.9)) * sf * loft.capEnv;
       return { zPos: loft.zPos, rx, ry, shade: 0.962 };
-    }, 9, "foot_" + sfKey);
+    }, 9, "foot_" + sfKey, fb.footShaftBasis);
 
     const parts = [ankle, footBody];
 
@@ -1708,17 +2565,16 @@
     const toeRadii = [0.0086, 0.0072, 0.0068, 0.0062, 0.0054];
 
     for (let t = 0; t < 5; t++) {
-      const tx = toeXOffsets[t] * sf;
-      const tz = toeZArc[t] * sf;
-      const tlen = toeLengths[t] * sf;
+      const tx = toeXOffsets[t];
+      const tz = toeZArc[t];
+      const tlen = toeLengths[t];
       const trad = toeRadii[t] * sf;
 
-      const tBase = [footTip[0] + tx, footTip[1] - 0.001 * sf, footTip[2] + tz];
-      const tTip = [
-        tBase[0] + tx * 0.08,
-        tBase[1] - 0.0025 * sf,
-        tBase[2] + tlen,
-      ];
+      const tipRx = (isLeft ? -0.002 : 0.002) + tx;
+      const tipUy = -0.016;
+      const tipFz = 0.042 + tz;
+      const tBase = toFootPt(tipRx, tipUy, tipFz);
+      const tTip = toFootPt(tipRx + tx * 0.08, tipUy - 0.0025, tipFz + tlen);
       parts.push(
         generateSculptedCapsule(tBase, tTip, 8, 6, (u, angle, sinA, cosA, lat, ant, L) => {
           const r = trad * (0.94 + 0.10 * Math.sin(u * Math.PI));
@@ -1730,10 +2586,26 @@
             ry: r * cosA * 0.88,
             shade: 0.96 - baseCrease,
           };
-        }, 0, "toe_" + t + "_" + sfKey)
+        }, 0, "toe_" + t + "_" + sfKey, fb.footShaftBasis)
       );
     }
     return parts;
+  }
+
+  // Unified Full-Body Skeletal Rig Solver (Spine/Head + Left/Right Arms/Hands + Left/Right Legs/Feet)
+  function computeFullBodyRig(cfg) {
+    const spineHead = computeSpineHeadRig(cfg.chestP1, cfg.chestP2, cfg.headP1, cfg.headP2, cfg.spinePose || null);
+    const leftArm = computeHandGripFrame(cfg.leftElbowRot, cfg.leftHandRot, true, cfg.leftWristPose || null, cfg.leftArmPivot);
+    const rightArm = computeHandGripFrame(cfg.rightElbowRot, cfg.rightHandRot, false, cfg.rightWristPose || null, cfg.rightArmPivot);
+    const leftLeg = computeLegRigFrame(cfg.leftLegPivot, cfg.leftKneeRot, cfg.leftFootRot, true, cfg.leftAnklePose || null);
+    const rightLeg = computeLegRigFrame(cfg.rightLegPivot, cfg.rightKneeRot, cfg.rightFootRot, false, cfg.rightAnklePose || null);
+    return {
+      spineHead,
+      leftArm,
+      rightArm,
+      leftLeg,
+      rightLeg,
+    };
   }
 
   // --- 6. Full Body Capsule Character Assembler (Used by Player & Clones) ---
@@ -1751,31 +2623,36 @@
       rightLegPivot, rightKneeRot, rightFootRot,
       bRadius = 0.0,
       scaleFactor = 1.0,
+      leftHandGrip = 0.0,
+      rightHandGrip = 0.0,
     } = cfg;
 
-    const chest = generateChibiChest(chestP1, chestP2, (0.09 + bRadius) * scaleFactor, scaleFactor);
+    const fullRig = computeFullBodyRig(cfg);
+
+    const chest = generateChibiChest(chestP1, chestP2, (0.09 + bRadius) * scaleFactor, scaleFactor, fullRig.spineHead.torsoBoneBasis);
     const pelvis = generateChibiPelvis(pelvisP1, pelvisP2, (0.085 + bRadius) * scaleFactor, scaleFactor);
     const neck = generateChibiNeck(neckP1, neckP2, 0.048 * scaleFactor, scaleFactor);
-    const head = generateChibiHead(headP1, headP2, 0.192 * scaleFactor, scaleFactor);
-    const leftEar = generateChibiEar(leftEarP1, leftEarP2, true, scaleFactor);
-    const rightEar = generateChibiEar(rightEarP1, rightEarP2, false, scaleFactor);
+    const head = generateChibiHead(headP1, headP2, 0.192 * scaleFactor, scaleFactor, fullRig.spineHead.headBoneBasis);
+    const leftEar = generateChibiEar(leftEarP1, leftEarP2, true, scaleFactor, fullRig.spineHead.leftEarBoneBasis);
+    const rightEar = generateChibiEar(rightEarP1, rightEarP2, false, scaleFactor, fullRig.spineHead.rightEarBoneBasis);
 
-    const leftArmUpper = generateChibiUpperArm(leftArmPivot, leftElbowRot, true, scaleFactor);
-    const leftArmLower = generateChibiForeArm(leftElbowRot, leftHandRot, true, scaleFactor);
-    const rightArmUpper = generateChibiUpperArm(rightArmPivot, rightElbowRot, false, scaleFactor);
-    const rightArmLower = generateChibiForeArm(rightElbowRot, rightHandRot, false, scaleFactor);
+    const leftArmUpper = generateChibiUpperArm(leftArmPivot, leftElbowRot, true, scaleFactor, null, null, fullRig.leftArm.upperArmBoneBasis);
+    const leftArmLower = generateChibiForeArm(leftElbowRot, leftHandRot, true, scaleFactor, fullRig.leftArm.forearmBoneBasis);
+    const rightArmUpper = generateChibiUpperArm(rightArmPivot, rightElbowRot, false, scaleFactor, null, null, fullRig.rightArm.upperArmBoneBasis);
+    const rightArmLower = generateChibiForeArm(rightElbowRot, rightHandRot, false, scaleFactor, fullRig.rightArm.forearmBoneBasis);
 
-    const leftLegUpper = generateChibiThigh(leftLegPivot, leftKneeRot, true, scaleFactor);
-    const leftLegLower = generateChibiCalf(leftKneeRot, leftFootRot, true, scaleFactor);
-    const rightLegUpper = generateChibiThigh(rightLegPivot, rightKneeRot, false, scaleFactor);
-    const rightLegLower = generateChibiCalf(rightKneeRot, rightFootRot, false, scaleFactor);
+    const leftLegUpper = generateChibiThigh(leftLegPivot, leftKneeRot, true, scaleFactor, null, null, fullRig.leftLeg.thighBoneBasis);
+    const leftLegLower = generateChibiCalf(leftKneeRot, leftFootRot, true, scaleFactor, null, fullRig.leftLeg.calfBoneBasis);
+    const rightLegUpper = generateChibiThigh(rightLegPivot, rightKneeRot, false, scaleFactor, null, null, fullRig.rightLeg.thighBoneBasis);
+    const rightLegLower = generateChibiCalf(rightKneeRot, rightFootRot, false, scaleFactor, null, fullRig.rightLeg.calfBoneBasis);
 
-    const leftHandParts = buildHandAndFingers(leftElbowRot, leftHandRot, true, scaleFactor);
-    const rightHandParts = buildHandAndFingers(rightElbowRot, rightHandRot, false, scaleFactor);
-    const leftFootParts = buildFootAnkleToes(leftKneeRot, leftFootRot, true, scaleFactor);
-    const rightFootParts = buildFootAnkleToes(rightKneeRot, rightFootRot, false, scaleFactor);
+    const leftHandParts = buildHandAndFingers(leftElbowRot, leftHandRot, true, scaleFactor, leftHandGrip, cfg.leftWristPose || null, leftArmPivot);
+    const rightHandParts = buildHandAndFingers(rightElbowRot, rightHandRot, false, scaleFactor, rightHandGrip, cfg.rightWristPose || null, rightArmPivot);
+    const leftFootParts = buildFootAnkleToes(leftKneeRot, leftFootRot, true, scaleFactor, fullRig.leftLeg);
+    const rightFootParts = buildFootAnkleToes(rightKneeRot, rightFootRot, false, scaleFactor, fullRig.rightLeg);
 
     return {
+      fullRig,
       chest,
       pelvis,
       neck,
@@ -1831,7 +2708,7 @@
   // Prevents hair strands (all 9 hairstyles, both static & dynamic physics)
   // from ever sinking or clipping into generateChibiHead or the neck column.
   // =========================================================================
-  function evalUnitChibiHeadHull(sinLat, sinP, cosP) {
+  function _evalUnitChibiHeadHullTo(sinLat, sinP, cosP, out) {
     const sLat = Math.max(-0.998, Math.min(0.998, sinLat));
     const cLat = Math.sqrt(Math.max(0.0, 1.0 - sLat * sLat));
 
@@ -1910,11 +2787,17 @@
     const chinTipBell = Math.exp(-Math.pow((sLat - (-0.70)) / 0.075, 2));
     const mouthChinConvex = 0.020 * mouthMoundBell * centerFront + 0.028 * chinTipBell * uChinFront;
 
-    const lx = craniumR * sinP * widthRatio * (1.0 + cheekBulge) * uCheekFill * uCornerRound * throatTaper;
-    const lz = craniumShiftZ + craniumR * flatUFrontCosP * depthRatio * throatTaper + noseCheekOutward + lowerChinSupport + mouthChinConvex;
-
-    return [lx, ly, lz];
+    out[0] = craniumR * sinP * widthRatio * (1.0 + cheekBulge) * uCheekFill * uCornerRound * throatTaper;
+    out[1] = ly;
+    out[2] = craniumShiftZ + craniumR * flatUFrontCosP * depthRatio * throatTaper + noseCheekOutward + lowerChinSupport + mouthChinConvex;
+    return out;
   }
+
+  function evalUnitChibiHeadHull(sinLat, sinP, cosP) {
+    return _evalUnitChibiHeadHullTo(sinLat, sinP, cosP, [0, 0, 0]);
+  }
+
+  const _hullScratch = [0, 0, 0];
 
   function clampPointOutsideChibiHead(x, y, z, headRadius = 0.192, clearance = 0.0035, skipTorsoCone = false) {
     const r = headRadius > 0.0001 ? headRadius : 0.192;
@@ -1944,13 +2827,13 @@
         const sinP = hLen > 1e-6 ? ex / hLen : 0.0;
         const cosP = hLen > 1e-6 ? ez / hLen : 1.0;
 
-        const S0 = evalUnitChibiHeadHull(sinLat, sinP, cosP);
-        const d0 = Math.hypot(S0[0] - Cx, S0[1] - Cy, S0[2] - Cz) || 1.0;
-        const errY = (vy / dist) - ((S0[1] - Cy) / d0);
+        _evalUnitChibiHeadHullTo(sinLat, sinP, cosP, _hullScratch);
+        const d0 = Math.hypot(_hullScratch[0] - Cx, _hullScratch[1] - Cy, _hullScratch[2] - Cz) || 1.0;
+        const errY = (vy / dist) - ((_hullScratch[1] - Cy) / d0);
         sinLat = Math.max(-0.998, Math.min(0.998, sinLat + errY * 1.08));
 
-        const S = evalUnitChibiHeadHull(sinLat, sinP, cosP);
-        const rHead = Math.hypot(S[0] - Cx, S[1] - Cy, S[2] - Cz);
+        _evalUnitChibiHeadHullTo(sinLat, sinP, cosP, _hullScratch);
+        const rHead = Math.hypot(_hullScratch[0] - Cx, _hullScratch[1] - Cy, _hullScratch[2] - Cz);
         const minDist = rHead + uClear;
 
         if (dist < minDist) {
@@ -2048,6 +2931,49 @@
     return [px, py, pz];
   }
 
+  function _getCachedTorsoFrame(bodyData) {
+    const p1 = bodyData.chestP1;
+    const p2 = bodyData.chestP2;
+    if (!p1 || !p2) return null;
+    const c = bodyData._torsoCache;
+    if (
+      c &&
+      c.p1x === p1[0] && c.p1y === p1[1] && c.p1z === p1[2] &&
+      c.p2x === p2[0] && c.p2y === p2[1] && c.p2z === p2[2]
+    ) {
+      return c;
+    }
+    const ax = p2[0] - p1[0];
+    const ay = p2[1] - p1[1];
+    const az = p2[2] - p1[2];
+    const L = Math.hypot(ax, ay, az);
+    if (L <= 1e-5) return null;
+    const dAxis = [ax / L, ay / L, az / L];
+    const fDot = dAxis[2];
+    let frontAxis = [-dAxis[0] * fDot, -dAxis[1] * fDot, 1.0 - dAxis[2] * fDot];
+    const fLen = Math.hypot(frontAxis[0], frontAxis[1], frontAxis[2]);
+    if (fLen < 1e-4) {
+      frontAxis = [0, 0, 1];
+    } else {
+      frontAxis = [frontAxis[0] / fLen, frontAxis[1] / fLen, frontAxis[2] / fLen];
+    }
+    const rightAxis = [
+      frontAxis[1] * dAxis[2] - frontAxis[2] * dAxis[1],
+      frontAxis[2] * dAxis[0] - frontAxis[0] * dAxis[2],
+      frontAxis[0] * dAxis[1] - frontAxis[1] * dAxis[0]
+    ];
+    const cache = {
+      p1x: p1[0], p1y: p1[1], p1z: p1[2],
+      p2x: p2[0], p2y: p2[1], p2z: p2[2],
+      L,
+      dAxis,
+      frontAxis,
+      rightAxis
+    };
+    bodyData._torsoCache = cache;
+    return cache;
+  }
+
   function clampPointOutsideChibiBodyForCloth(px, py, pz, bodyData, clearance = 0.008, includeArms = true, pushHint = null) {
     if (!bodyData) return [px, py, pz];
     const s = bodyData.scale || 1.0;
@@ -2069,127 +2995,100 @@
     }
 
     // 2. Sculpted Chibi Torso Ellipse (chest, belly, waist, hips, glutes, shoulders)
-    if (bodyData.chestP1 && bodyData.chestP2) {
+    const torsoFrame = _getCachedTorsoFrame(bodyData);
+    if (torsoFrame) {
       const p1 = bodyData.chestP1;
-      const p2 = bodyData.chestP2;
-      const ax = p2[0] - p1[0];
-      const ay = p2[1] - p1[1];
-      const az = p2[2] - p1[2];
-      const L = Math.hypot(ax, ay, az);
-      if (L > 1e-5) {
-        const dAxis = [ax / L, ay / L, az / L];
-        const proj = (x - p1[0]) * dAxis[0] + (y - p1[1]) * dAxis[1] + (z - p1[2]) * dAxis[2];
-        const hRaw = proj / (0.96 * L);
-        if (hRaw >= -0.06 && hRaw <= 1.06) {
-          const h = Math.max(0.0, Math.min(1.0, hRaw));
-          const hipBell = Math.exp(-Math.pow((h - 0.20) / 0.18, 2));
-          const waistTaper = Math.exp(-Math.pow((h - 0.46) / 0.15, 2));
-          const shoulderBell = Math.exp(-Math.pow((h - 0.84) / 0.13, 2));
-          let rx = (0.081 + 0.024 * hipBell - 0.013 * waistTaper + 0.023 * shoulderBell) * s;
-          if (h > 0.86) {
-            const collarT = (h - 0.86) / 0.14;
-            const sCollar = collarT * collarT * (3.0 - 2.0 * collarT);
-            rx = rx * (1.0 - sCollar) + (0.058 * s) * sCollar;
-          }
+      const { L, dAxis, frontAxis, rightAxis } = torsoFrame;
+      const proj = (x - p1[0]) * dAxis[0] + (y - p1[1]) * dAxis[1] + (z - p1[2]) * dAxis[2];
+      const hRaw = proj / (0.96 * L);
+      if (hRaw >= -0.06 && hRaw <= 1.06) {
+        const h = Math.max(0.0, Math.min(1.0, hRaw));
+        const hipBell = Math.exp(-Math.pow((h - 0.20) / 0.18, 2));
+        const waistTaper = Math.exp(-Math.pow((h - 0.46) / 0.15, 2));
+        const shoulderBell = Math.exp(-Math.pow((h - 0.84) / 0.13, 2));
+        let rx = (0.081 + 0.024 * hipBell - 0.013 * waistTaper + 0.023 * shoulderBell) * s;
+        if (h > 0.86) {
+          const collarT = (h - 0.86) / 0.14;
+          const sCollar = collarT * collarT * (3.0 - 2.0 * collarT);
+          rx = rx * (1.0 - sCollar) + (0.058 * s) * sCollar;
+        }
 
-          // Build local basis (rightAxis, frontAxis) orthogonal to torso axis
-          const refFwd = [0, 0, 1];
-          const fDot = refFwd[0] * dAxis[0] + refFwd[1] * dAxis[1] + refFwd[2] * dAxis[2];
-          let frontAxis = [refFwd[0] - dAxis[0] * fDot, refFwd[1] - dAxis[1] * fDot, refFwd[2] - dAxis[2] * fDot];
-          let fLen = Math.hypot(frontAxis[0], frontAxis[1], frontAxis[2]);
-          if (fLen < 1e-4) {
-            frontAxis = [0, 0, 1];
-          } else {
-            frontAxis = [frontAxis[0] / fLen, frontAxis[1] / fLen, frontAxis[2] / fLen];
-          }
-          const rightAxis = [
-            frontAxis[1] * dAxis[2] - frontAxis[2] * dAxis[1],
-            frontAxis[2] * dAxis[0] - frontAxis[0] * dAxis[2],
-            frontAxis[0] * dAxis[1] - frontAxis[1] * dAxis[0]
-          ];
+        const relX = x - (p1[0] + dAxis[0] * proj);
+        const relY = y - (p1[1] + dAxis[1] * proj);
+        const relZ = z - (p1[2] + dAxis[2] * proj);
+        const uLat = relX * rightAxis[0] + relY * rightAxis[1] + relZ * rightAxis[2];
+        const uAnt = relX * frontAxis[0] + relY * frontAxis[1] + relZ * frontAxis[2];
+        const rad2D = Math.hypot(uLat, uAnt);
+        const antNorm = rad2D > 1e-5 ? (uAnt / rad2D) : 0.0;
+        const latNorm = rad2D > 1e-5 ? (uLat / rad2D) : 1.0;
 
-          const relX = x - (p1[0] + dAxis[0] * proj);
-          const relY = y - (p1[1] + dAxis[1] * proj);
-          const relZ = z - (p1[2] + dAxis[2] * proj);
-          const uLat = relX * rightAxis[0] + relY * rightAxis[1] + relZ * rightAxis[2];
-          const uAnt = relX * frontAxis[0] + relY * frontAxis[1] + relZ * frontAxis[2];
-          const rad2D = Math.hypot(uLat, uAnt);
-          const antNorm = rad2D > 1e-5 ? (uAnt / rad2D) : 0.0;
-          const latNorm = rad2D > 1e-5 ? (uLat / rad2D) : 1.0;
+        const wFront = Math.max(0.0, antNorm);
+        const wBack = Math.max(0.0, -antNorm);
+        const frontChestPuff = Math.exp(-Math.pow((h - 0.72) / 0.16, 2)) * 0.015 * s;
+        const frontTummyPuff = Math.exp(-Math.pow((h - 0.36) / 0.18, 2)) * 0.008 * s;
+        const hipSocketFrontFill = Math.exp(-Math.pow((h - 0.14) / 0.14, 2)) * (0.006 + 0.006 * Math.abs(latNorm)) * s;
+        const frontDepth = (0.059 + frontChestPuff + frontTummyPuff + hipSocketFrontFill - 0.005 * waistTaper) * s;
 
-          const wFront = Math.max(0.0, antNorm);
-          const wBack = Math.max(0.0, -antNorm);
-          const frontChestPuff = Math.exp(-Math.pow((h - 0.72) / 0.16, 2)) * 0.015 * s;
-          const frontTummyPuff = Math.exp(-Math.pow((h - 0.36) / 0.18, 2)) * 0.008 * s;
-          const hipSocketFrontFill = Math.exp(-Math.pow((h - 0.14) / 0.14, 2)) * (0.006 + 0.006 * Math.abs(latNorm)) * s;
-          const frontDepth = (0.059 + frontChestPuff + frontTummyPuff + hipSocketFrontFill - 0.005 * waistTaper) * s;
+        const backUpperFlat = Math.exp(-Math.pow((h - 0.72) / 0.18, 2)) * 0.006 * s;
+        const backLumbarArch = Math.exp(-Math.pow((h - 0.46) / 0.14, 2)) * 0.007 * s;
+        const backGluteSwell = Math.exp(-Math.pow((h - 0.20) / 0.16, 2)) * (0.022 + 0.005 * Math.abs(latNorm)) * s;
+        const backDepth = (0.059 - backUpperFlat - backLumbarArch + backGluteSwell - 0.004 * waistTaper) * s;
 
-          const backUpperFlat = Math.exp(-Math.pow((h - 0.72) / 0.18, 2)) * 0.006 * s;
-          const backLumbarArch = Math.exp(-Math.pow((h - 0.46) / 0.14, 2)) * 0.007 * s;
-          const backGluteSwell = Math.exp(-Math.pow((h - 0.20) / 0.16, 2)) * (0.022 + 0.005 * Math.abs(latNorm)) * s;
-          const backDepth = (0.059 - backUpperFlat - backLumbarArch + backGluteSwell - 0.004 * waistTaper) * s;
+        let ry = frontDepth * wFront + backDepth * wBack + (0.059 - 0.005 * waistTaper) * s * (1.0 - wFront - wBack);
+        if (h > 0.86) {
+          const collarT = (h - 0.86) / 0.14;
+          const sCollar = collarT * collarT * (3.0 - 2.0 * collarT);
+          ry = ry * (1.0 - sCollar) + (0.052 * s) * sCollar;
+        }
+        const cyOff = wFront * (frontTummyPuff * 0.28) - wBack * (backGluteSwell * 0.32 + backLumbarArch * 0.22);
 
-          let ry = frontDepth * wFront + backDepth * wBack + (0.059 - 0.005 * waistTaper) * s * (1.0 - wFront - wBack);
-          if (h > 0.86) {
-            const collarT = (h - 0.86) / 0.14;
-            const sCollar = collarT * collarT * (3.0 - 2.0 * collarT);
-            ry = ry * (1.0 - sCollar) + (0.052 * s) * sCollar;
-          }
-          const cyOff = wFront * (frontTummyPuff * 0.28) - wBack * (backGluteSwell * 0.32 + backLumbarArch * 0.22);
-
-          const rxPad = rx + clearance * s;
-          const ryPad = ry + clearance * s;
-          const ex = uLat / rxPad;
-          const ey = (uAnt - cyOff) / ryPad;
-          const eDist = Math.hypot(ex, ey);
-          if (eDist < 1.0) {
-            const invE = eDist > 1e-5 ? (1.0 / eDist) : 1.0;
-            const pushLat = (eDist > 1e-5 ? ex * invE : 0.0) * rxPad;
-            const pushAnt = cyOff + (eDist > 1e-5 ? ey * invE : -1.0) * ryPad;
-            x = p1[0] + dAxis[0] * proj + rightAxis[0] * pushLat + frontAxis[0] * pushAnt;
-            y = p1[1] + dAxis[1] * proj + rightAxis[1] * pushLat + frontAxis[1] * pushAnt;
-            z = p1[2] + dAxis[2] * proj + rightAxis[2] * pushLat + frontAxis[2] * pushAnt;
-          }
+        const rxPad = rx + clearance * s;
+        const ryPad = ry + clearance * s;
+        const ex = uLat / rxPad;
+        const ey = (uAnt - cyOff) / ryPad;
+        const eDist = Math.hypot(ex, ey);
+        if (eDist < 1.0) {
+          const invE = eDist > 1e-5 ? (1.0 / eDist) : 1.0;
+          const pushLat = (eDist > 1e-5 ? ex * invE : 0.0) * rxPad;
+          const pushAnt = cyOff + (eDist > 1e-5 ? ey * invE : -1.0) * ryPad;
+          x = p1[0] + dAxis[0] * proj + rightAxis[0] * pushLat + frontAxis[0] * pushAnt;
+          y = p1[1] + dAxis[1] * proj + rightAxis[1] * pushLat + frontAxis[1] * pushAnt;
+          z = p1[2] + dAxis[2] * proj + rightAxis[2] * pushLat + frontAxis[2] * pushAnt;
         }
       }
     }
 
     // 3. Arms & Forearms Capsule Pushout
     if (includeArms) {
-      if (bodyData.leftArmPivot && bodyData.leftElbowRot) {
-        const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.leftArmPivot, bodyData.leftElbowRot, 0.044 * s, 0.037 * s, clearance * s);
-        x = res[0]; y = res[1]; z = res[2];
-      }
-      if (bodyData.leftElbowRot && bodyData.leftHandRot) {
-        const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.leftElbowRot, bodyData.leftHandRot, 0.037 * s, 0.028 * s, clearance * s);
-        x = res[0]; y = res[1]; z = res[2];
-      }
-      if (bodyData.rightArmPivot && bodyData.rightElbowRot) {
-        const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.rightArmPivot, bodyData.rightElbowRot, 0.044 * s, 0.037 * s, clearance * s);
-        x = res[0]; y = res[1]; z = res[2];
-      }
-      if (bodyData.rightElbowRot && bodyData.rightHandRot) {
-        const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.rightElbowRot, bodyData.rightHandRot, 0.037 * s, 0.028 * s, clearance * s);
-        x = res[0]; y = res[1]; z = res[2];
+      const arms = [
+        [bodyData.leftArmPivot, bodyData.leftElbowRot, 0.043 * s, 0.036 * s],
+        [bodyData.leftElbowRot, bodyData.leftHandRot, 0.036 * s, 0.027 * s],
+        [bodyData.rightArmPivot, bodyData.rightElbowRot, 0.043 * s, 0.036 * s],
+        [bodyData.rightElbowRot, bodyData.rightHandRot, 0.036 * s, 0.027 * s]
+      ];
+      for (let i = 0; i < arms.length; i++) {
+        const seg = arms[i];
+        if (seg[0] && seg[1]) {
+          const c = clampPointOutsideSegmentCapsule(x, y, z, seg[0], seg[1], seg[2], seg[3], clearance * s, pushHint);
+          x = c[0]; y = c[1]; z = c[2];
+        }
       }
     }
 
-    // 4. Thighs & Calves Capsule Pushout (matches generateChibiThigh/Calf envelope with outward skirt hint)
-    if (bodyData.leftLegPivot && bodyData.leftKneeRot) {
-      const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.leftLegPivot, bodyData.leftKneeRot, 0.061 * s, 0.049 * s, clearance * s, pushHint);
-      x = res[0]; y = res[1]; z = res[2];
-    }
-    if (bodyData.leftKneeRot && bodyData.leftFootRot) {
-      const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.leftKneeRot, bodyData.leftFootRot, 0.049 * s, 0.040 * s, clearance * s, pushHint);
-      x = res[0]; y = res[1]; z = res[2];
-    }
-    if (bodyData.rightLegPivot && bodyData.rightKneeRot) {
-      const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.rightLegPivot, bodyData.rightKneeRot, 0.061 * s, 0.049 * s, clearance * s, pushHint);
-      x = res[0]; y = res[1]; z = res[2];
-    }
-    if (bodyData.rightKneeRot && bodyData.rightFootRot) {
-      const res = clampPointOutsideSegmentCapsule(x, y, z, bodyData.rightKneeRot, bodyData.rightFootRot, 0.049 * s, 0.040 * s, clearance * s, pushHint);
-      x = res[0]; y = res[1]; z = res[2];
+    // 4. Thighs & Calves Capsule Pushout
+    const legBoost = (bodyData.legRadiusBoost || 0.0) * s;
+    const legs = [
+      [bodyData.leftLegPivot, bodyData.leftKneeRot, 0.056 * s + legBoost, 0.0445 * s + legBoost * 0.85],
+      [bodyData.leftKneeRot, bodyData.leftFootRot, 0.0445 * s + legBoost * 0.85, 0.0365 * s + legBoost * 0.70],
+      [bodyData.rightLegPivot, bodyData.rightKneeRot, 0.056 * s + legBoost, 0.0445 * s + legBoost * 0.85],
+      [bodyData.rightKneeRot, bodyData.rightFootRot, 0.0445 * s + legBoost * 0.85, 0.0365 * s + legBoost * 0.70]
+    ];
+    for (let i = 0; i < legs.length; i++) {
+      const seg = legs[i];
+      if (seg[0] && seg[1]) {
+        const c = clampPointOutsideSegmentCapsule(x, y, z, seg[0], seg[1], seg[2], seg[3], clearance * s, pushHint);
+        x = c[0]; y = c[1]; z = c[2];
+      }
     }
 
     return [x, y, z];
@@ -4613,7 +5512,9 @@
 
   function updateChibiHoodiePhysics(isMovingActive, isSprintingActive, phase, currentHeading, physContext = null) {
     const isCloneEntity = !!(physContext && physContext.isClone);
-    const hoodiePhys = isCloneEntity ? chibiCloneHoodiePhysics : chibiHoodiePhysics;
+    const hoodiePhys = (physContext && physContext.hoodiePhysics)
+      ? physContext.hoodiePhysics
+      : (isCloneEntity ? chibiCloneHoodiePhysics : chibiHoodiePhysics);
     if (!hoodiePhys.enabled) {
       hoodiePhys.pitch = 0.0; hoodiePhys.yaw = 0.0; hoodiePhys.roll = 0.0;
       hoodiePhys.yawLag = 0.0; hoodiePhys.vYaw = 0.0;
@@ -4932,6 +5833,137 @@
     });
   }
 
+  function _computeGarmentLegStride(src, torsoRight, torsoFwd, footWeight, enabled = true) {
+    if (!enabled || !src) {
+      return { lFwd: 0.0, lBack: 0.0, lOut: 0.0, rFwd: 0.0, rBack: 0.0, rOut: 0.0 };
+    }
+    const dotFwd = (p, q) => (p[0] - q[0]) * torsoFwd[0] + (p[1] - q[1]) * torsoFwd[1] + (p[2] - q[2]) * torsoFwd[2];
+    const dotLat = (p, q) => (p[0] - q[0]) * torsoRight[0] + (p[1] - q[1]) * torsoRight[1] + (p[2] - q[2]) * torsoRight[2];
+    const lHipP = src.leftLegPivot;
+    const lKneeP = src.leftKneeRot;
+    const lFootP = src.leftFootRot;
+    const rHipP = src.rightLegPivot;
+    const rKneeP = src.rightKneeRot;
+    const rFootP = src.rightFootRot;
+
+    return {
+      lFwd: (lHipP && lKneeP) ? Math.max(0.0, dotFwd(lKneeP, lHipP), lFootP ? dotFwd(lFootP, lHipP) * footWeight : 0.0) : 0.0,
+      lBack: (lHipP && lKneeP) ? Math.max(0.0, -dotFwd(lKneeP, lHipP), lFootP ? -dotFwd(lFootP, lHipP) * footWeight : 0.0) : 0.0,
+      lOut: (lHipP && lKneeP) ? Math.max(0.0, -dotLat(lKneeP, lHipP)) : 0.0,
+      rFwd: (rHipP && rKneeP) ? Math.max(0.0, dotFwd(rKneeP, rHipP), rFootP ? dotFwd(rFootP, rHipP) * footWeight : 0.0) : 0.0,
+      rBack: (rHipP && rKneeP) ? Math.max(0.0, -dotFwd(rKneeP, rHipP), rFootP ? -dotFwd(rFootP, rHipP) * footWeight : 0.0) : 0.0,
+      rOut: (rHipP && rKneeP) ? Math.max(0.0, dotLat(rKneeP, rHipP)) : 0.0
+    };
+  }
+
+  function _computeSkirtVertexDisplacement(sinA, cosA, w, skirtStartW, s, bDisp, stride, windShieldDenom, ripplePhase, rippleScale, tentFwdMul, tentBackMul, sideFwdMul, sideBackMul, sideOutMul) {
+    const skirtW = Math.max(0.0, (w - skirtStartW) / (1.0 - skirtStartW));
+    const wLeft = Math.max(0.0, -sinA);
+    const wRight = Math.max(0.0, sinA);
+    const wFront = Math.max(0.0, cosA);
+    const wBack = Math.max(0.0, -cosA);
+    const legFrontTent = (wLeft * stride.lFwd + wRight * stride.rFwd) * (tentFwdMul + (1.0 - tentFwdMul) * wFront) * skirtW;
+    const legBackTent = (wLeft * stride.lBack + wRight * stride.rBack) * (tentBackMul + (1.0 - tentBackMul) * wBack) * skirtW;
+    const legSidePush = (
+      wRight * (stride.rFwd * sideFwdMul + stride.rBack * sideBackMul + stride.rOut * sideOutMul) -
+      wLeft  * (stride.lFwd * sideFwdMul + stride.lBack * sideBackMul + stride.lOut * sideOutMul)
+    ) * skirtW;
+    const dragShield = Math.min(1.0, ((wLeft * stride.lFwd + wRight * stride.rFwd) * (0.35 + 0.65 * wFront)) / (windShieldDenom * s));
+    const effDispZ = (bDisp[2] < 0.0) ? (bDisp[2] * (1.0 - 0.80 * dragShield)) : bDisp[2];
+    const rippleY = (w < 0.05 || rippleScale === 0.0) ? 0.0 : (Math.sin(ripplePhase * 2.2 + Math.atan2(sinA, cosA) * 3.0) * rippleScale * w * s);
+    return { legFrontTent, legBackTent, legSidePush, effDispZ, rippleY };
+  }
+
+  function _buildSkirtEnvelopeClampFn(worldRings, collarBaseX, collarBaseY, collarBaseZ, torsoRight, torsoUp, torsoFwd, s) {
+    const skRingSamples = [];
+    let skTopY = -Infinity;
+    let skBotY = Infinity;
+    for (let sr = 0; sr < worldRings.length; sr++) {
+      const pts = worldRings[sr];
+      const ringCrests = new Array(pts.length);
+      let ringYAvg = 0.0;
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i];
+        const dxC = pt[0] - collarBaseX;
+        const dyC = pt[1] - collarBaseY;
+        const dzC = pt[2] - collarBaseZ;
+        const tx = dxC * torsoRight[0] + dyC * torsoRight[1] + dzC * torsoRight[2];
+        const ty = dxC * torsoUp[0]    + dyC * torsoUp[1]    + dzC * torsoUp[2];
+        const tz = dxC * torsoFwd[0]   + dyC * torsoFwd[1]   + dzC * torsoFwd[2];
+        ringYAvg += ty;
+        ringCrests[i] = { ang: Math.atan2(tx, tz), r: Math.hypot(tx, tz), tx, ty, tz };
+      }
+      ringYAvg /= pts.length;
+      if (ringYAvg > skTopY) skTopY = ringYAvg;
+      if (ringYAvg < skBotY) skBotY = ringYAvg;
+      skRingSamples.push({ y: ringYAvg, crests: ringCrests });
+    }
+
+    const maxCrestRAtAngle = (ringSamples, ang, halfWin = 0.28) => {
+      let maxR = 0.0;
+      const crests = ringSamples.crests;
+      const sA = Math.sin(ang);
+      const cA = Math.cos(ang);
+      for (let i = 0; i < crests.length; i++) {
+        let dA = crests[i].ang - ang;
+        while (dA > Math.PI) dA -= Math.PI * 2;
+        while (dA < -Math.PI) dA += Math.PI * 2;
+        if (Math.abs(dA) <= halfWin) {
+          const proj = crests[i].tx * sA + crests[i].tz * cA;
+          if (proj > maxR) maxR = proj;
+        }
+      }
+      return maxR;
+    };
+
+    return (pos, extraClearance) => {
+      const dxC = pos[0] - collarBaseX;
+      const dyC = pos[1] - collarBaseY;
+      const dzC = pos[2] - collarBaseZ;
+      const tx = dxC * torsoRight[0] + dyC * torsoRight[1] + dzC * torsoRight[2];
+      const ty = dxC * torsoUp[0]    + dyC * torsoUp[1]    + dzC * torsoUp[2];
+      const tz = dxC * torsoFwd[0]   + dyC * torsoFwd[1]   + dzC * torsoFwd[2];
+      if (ty > skTopY + 0.018 * s || ty < skBotY - 0.036 * s) return pos;
+
+      const r = Math.hypot(tx, tz);
+      if (r < 1e-5) return pos;
+      const ang = Math.atan2(tx, tz);
+
+      let envR = 0.0;
+      let clrScale = 1.0;
+      if (ty >= skRingSamples[0].y) {
+        envR = maxCrestRAtAngle(skRingSamples[0], ang);
+        const aboveT = Math.max(0.0, Math.min(1.0, (ty - skRingSamples[0].y) / (0.018 * s)));
+        clrScale = 1.0 - aboveT;
+      } else if (ty <= skRingSamples[skRingSamples.length - 1].y) {
+        envR = maxCrestRAtAngle(skRingSamples[skRingSamples.length - 1], ang);
+        const belowT = Math.max(0.0, Math.min(1.0, (skRingSamples[skRingSamples.length - 1].y - ty) / (0.036 * s)));
+        clrScale = 1.0 - belowT * 0.45;
+      } else {
+        for (let sr = 0; sr < skRingSamples.length - 1; sr++) {
+          const rHi = skRingSamples[sr];
+          const rLo = skRingSamples[sr + 1];
+          if (ty <= rHi.y && ty >= rLo.y) {
+            const span = Math.max(1e-5, rHi.y - rLo.y);
+            const f = (rHi.y - ty) / span;
+            envR = maxCrestRAtAngle(rHi, ang) * (1.0 - f) + maxCrestRAtAngle(rLo, ang) * f;
+            break;
+          }
+        }
+      }
+
+      const targetR = (envR + extraClearance) * clrScale + r * (1.0 - clrScale);
+      if (r < targetR) {
+        const push = targetR - r;
+        const dirX = torsoRight[0] * (tx / r) + torsoFwd[0] * (tz / r);
+        const dirY = torsoRight[1] * (tx / r) + torsoFwd[1] * (tz / r);
+        const dirZ = torsoRight[2] * (tx / r) + torsoFwd[2] * (tz / r);
+        return [pos[0] + dirX * push, pos[1] + dirY * push, pos[2] + dirZ * push];
+      }
+      return pos;
+    };
+  }
+
   function buildTravelerHoodieCloakMesh(
     headP1, headP2,
     chestP1, chestP2,
@@ -5132,9 +6164,11 @@
     };
 
     const useClonePhys = !!(clothContext && clothContext.isClone);
-    const hPhys = useClonePhys
-      ? chibiCloneHoodiePhysics
-      : ((typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : _createDefaultHoodiePhysState());
+    const hPhys = (clothContext && clothContext.hoodiePhysics)
+      ? clothContext.hoodiePhysics
+      : (useClonePhys
+          ? chibiCloneHoodiePhysics
+          : ((typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : _createDefaultHoodiePhysState()));
     const pAngle = isLocal ? 0.0 : (hPhys.pitch || 0.0);
     const yAngle = isLocal ? 0.0 : (hPhys.yaw || 0.0);
     const rAngle = isLocal ? 0.0 : (hPhys.roll || 0.0);
@@ -5405,179 +6439,64 @@
     ];
 
     // Measure current stride swing of left/right legs in torso space so skirt drapes OVER raised knees instead of lagging behind them
-    const dotFwd = (p, q) => (p[0] - q[0]) * torsoFwd[0] + (p[1] - q[1]) * torsoFwd[1] + (p[2] - q[2]) * torsoFwd[2];
-    const dotLat = (p, q) => (p[0] - q[0]) * torsoRight[0] + (p[1] - q[1]) * torsoRight[1] + (p[2] - q[2]) * torsoRight[2];
-    const lHipP = bodyColliderData.leftLegPivot;
-    const lKneeP = bodyColliderData.leftKneeRot;
-    const lFootP = bodyColliderData.leftFootRot;
-    const rHipP = bodyColliderData.rightLegPivot;
-    const rKneeP = bodyColliderData.rightKneeRot;
-    const rFootP = bodyColliderData.rightFootRot;
+    const bodiceStride = _computeGarmentLegStride(bodyColliderData, torsoRight, torsoFwd, 0.72, !isLocal);
+    const lFwdSwing = bodiceStride.lFwd;
+    const lBackSwing = bodiceStride.lBack;
+    const lOutSpread = bodiceStride.lOut;
+    const rFwdSwing = bodiceStride.rFwd;
+    const rBackSwing = bodiceStride.rBack;
+    const rOutSpread = bodiceStride.rOut;
 
-    const lFwdSwing = (!isLocal && lHipP && lKneeP)
-      ? Math.max(0.0, dotFwd(lKneeP, lHipP), lFootP ? dotFwd(lFootP, lHipP) * 0.72 : 0.0)
-      : 0.0;
-    const lBackSwing = (!isLocal && lHipP && lKneeP)
-      ? Math.max(0.0, -dotFwd(lKneeP, lHipP), lFootP ? -dotFwd(lFootP, lHipP) * 0.72 : 0.0)
-      : 0.0;
-    const lOutSpread = (!isLocal && lHipP && lKneeP)
-      ? Math.max(0.0, -dotLat(lKneeP, lHipP))
-      : 0.0;
-
-    const rFwdSwing = (!isLocal && rHipP && rKneeP)
-      ? Math.max(0.0, dotFwd(rKneeP, rHipP), rFootP ? dotFwd(rFootP, rHipP) * 0.72 : 0.0)
-      : 0.0;
-    const rBackSwing = (!isLocal && rHipP && rKneeP)
-      ? Math.max(0.0, -dotFwd(rKneeP, rHipP), rFootP ? -dotFwd(rFootP, rHipP) * 0.72 : 0.0)
-      : 0.0;
-    const rOutSpread = (!isLocal && rHipP && rKneeP)
-      ? Math.max(0.0, dotLat(rKneeP, rHipP))
-      : 0.0;
-
-    // When wearing Black Pleated Skirt underneath, sample its body-clamped outer pleat crests so hoodie walls stay strictly outside
+    // When wearing Black Pleated Skirt underneath, reuse its clamped crest envelope from clothContext if built earlier in the frame,
+    // otherwise sample its outer pleat crests directly so hoodie walls stay strictly outside.
     let clampPointOutsideActiveSkirt = null;
     if (wearSkirtUnderHoodie) {
-      const torsoRatioSk = Math.max(0.75, Math.min(1.15, tLen / (0.27 * s)));
-      const waistOriginSk = [
-        chestP1[0] + torsoUp[0] * (tLen * 0.41),
-        chestP1[1] + torsoUp[1] * (tLen * 0.41),
-        chestP1[2] + torsoUp[2] * (tLen * 0.41)
-      ];
-      const skRingsDef = _getBlackPleatedSkirtRingsDef(s, torsoRatioSk, true);
-      const NUM_PLEATS_SK = 18;
-      const skRingSamples = [];
-      let skTopY = -Infinity;
-      let skBotY = Infinity;
-      const lFwdSk = (lHipP && lKneeP) ? Math.max(0.0, dotFwd(lKneeP, lHipP), lFootP ? dotFwd(lFootP, lHipP) * 0.68 : 0.0) : 0.0;
-      const lBackSk = (lHipP && lKneeP) ? Math.max(0.0, -dotFwd(lKneeP, lHipP), lFootP ? -dotFwd(lFootP, lHipP) * 0.68 : 0.0) : 0.0;
-      const lOutSk = (lHipP && lKneeP) ? Math.max(0.0, -dotLat(lKneeP, lHipP)) : 0.0;
-      const rFwdSk = (rHipP && rKneeP) ? Math.max(0.0, dotFwd(rKneeP, rHipP), rFootP ? dotFwd(rFootP, rHipP) * 0.68 : 0.0) : 0.0;
-      const rBackSk = (rHipP && rKneeP) ? Math.max(0.0, -dotFwd(rKneeP, rHipP), rFootP ? -dotFwd(rFootP, rHipP) * 0.68 : 0.0) : 0.0;
-      const rOutSk = (rHipP && rKneeP) ? Math.max(0.0, dotLat(rKneeP, rHipP)) : 0.0;
-
-      for (let sr = 0; sr < skRingsDef.length; sr++) {
-        const sLvl = skRingsDef[sr];
-        const sw = sLvl.t;
-        const wPrimarySk = sw * (0.48 + 0.52 * sw);
-        const wWhipSk = sw * sw * (0.40 + 0.60 * sw);
-        const bounceYSk = Math.sin(effPhase * 2.0) * 0.0055 * sw * s;
-        const sbDispX = (hPhys.gx * 0.24 * wPrimarySk + hPhys.tx * 0.28 * wWhipSk + hPhys.airX * 0.45 * sw + (yAngle * 0.024 + rAngle * 0.016 + yawLagTerm * 0.60) * sw + breezeX * 0.55 * sw + turbX * 0.55 * sw) * s;
-        const sbDispY = (hPhys.gy * 0.24 * wPrimarySk + hPhys.ty * 0.28 * wWhipSk + hPhys.airY * 0.45 * sw + turbY * 0.55 * sw) * s + bounceYSk;
-        const sbDispZ = (hPhys.gz * 0.24 * wPrimarySk + hPhys.tz * 0.28 * wWhipSk + hPhys.airZ * 0.45 * sw - pAngle * 0.028 * sw + breezeZ * 0.55 * sw + turbZ * 0.55 * sw) * s;
-        const sFlare = (airFlare * 0.24 + Math.abs(yAngle) * 0.012) * sw * s;
-        const ringCrests = [];
-        let ringYAvg = 0.0;
-
-        for (let p = 0; p < NUM_PLEATS_SK; p++) {
-          const ang = ((p + 0.02) / NUM_PLEATS_SK) * Math.PI * 2.0;
-          const sinA = Math.sin(ang);
-          const cosA = Math.cos(ang);
-          const rz = (cosA >= 0.0) ? sLvl.rzF : sLvl.rzB;
-          const skirtW = Math.max(0.0, (sw - 0.18) / 0.82);
-          const wLeft = Math.max(0.0, -sinA);
-          const wRight = Math.max(0.0, sinA);
-          const wFront = Math.max(0.0, cosA);
-          const wBack = Math.max(0.0, -cosA);
-          const legFrontTent = (wLeft * lFwdSk + wRight * rFwdSk) * (0.28 + 0.72 * wFront) * skirtW;
-          const legBackTent = (wLeft * lBackSk + wRight * rBackSk) * (0.30 + 0.70 * wBack) * skirtW;
-          const legSidePush = (
-            wRight * (rFwdSk * 0.25 + rBackSk * 0.20 + rOutSk * 0.72) -
-            wLeft  * (lFwdSk * 0.25 + lBackSk * 0.20 + lOutSk * 0.72)
-          ) * skirtW;
-          const dragShield = Math.min(1.0, ((wLeft * lFwdSk + wRight * rFwdSk) * (0.35 + 0.65 * wFront)) / (0.042 * s));
-          const effDispZ = (sbDispZ < 0.0) ? (sbDispZ * (1.0 - 0.80 * dragShield)) : sbDispZ;
-          const rippleY = (sw < 0.05) ? 0.0 : Math.sin(effPhase * 2.2 + ang * 3.0) * 0.003 * sw * s;
-
-          const slx = sinA * (sLvl.rx + sLvl.pleatDepth + sFlare) + sbDispX + legSidePush;
-          const sly = sLvl.dy + sbDispY + rippleY + (legFrontTent * 0.14 + legBackTent * 0.10);
-          const slz = sLvl.cy + cosA * (rz + sLvl.pleatDepth + sFlare) + effDispZ + (legFrontTent * 0.80 - legBackTent * 0.70);
-
-          let wx = waistOriginSk[0] + torsoRight[0] * slx + torsoUp[0] * sly + torsoFwd[0] * slz;
-          let wy = waistOriginSk[1] + torsoRight[1] * slx + torsoUp[1] * sly + torsoFwd[1] * slz;
-          let wz = waistOriginSk[2] + torsoRight[2] * slx + torsoUp[2] * sly + torsoFwd[2] * slz;
-          const hint = (sr >= 2) ? [torsoRight[0] * sinA + torsoFwd[0] * cosA, 0.0, torsoRight[2] * sinA + torsoFwd[2] * cosA] : null;
-          const clamped = clampPointOutsideChibiBodyForCloth(wx, wy, wz, bodyColliderData, sLvl.clr, false, hint);
-          wx = clamped[0]; wy = clamped[1]; wz = clamped[2];
-
-          const dxC = wx - collarBaseX;
-          const dyC = wy - collarBaseY;
-          const dzC = wz - collarBaseZ;
-          const tx = dxC * torsoRight[0] + dyC * torsoRight[1] + dzC * torsoRight[2];
-          const ty = dxC * torsoUp[0]    + dyC * torsoUp[1]    + dzC * torsoUp[2];
-          const tz = dxC * torsoFwd[0]   + dyC * torsoFwd[1]   + dzC * torsoFwd[2];
-          ringYAvg += ty;
-          ringCrests.push({ ang: Math.atan2(tx, tz), r: Math.hypot(tx, tz), tx, ty, tz });
+      let worldRings = (clothContext && clothContext._cachedSkirtEnvelope) ? clothContext._cachedSkirtEnvelope : null;
+      if (!worldRings) {
+        const torsoRatioSk = Math.max(0.75, Math.min(1.15, tLen / (0.27 * s)));
+        const waistOriginSk = [
+          chestP1[0] + torsoUp[0] * (tLen * 0.41),
+          chestP1[1] + torsoUp[1] * (tLen * 0.41),
+          chestP1[2] + torsoUp[2] * (tLen * 0.41)
+        ];
+        const skRingsDef = _getBlackPleatedSkirtRingsDef(s, torsoRatioSk, true);
+        const NUM_PLEATS_SK = 18;
+        const skStride = _computeGarmentLegStride(bodyColliderData, torsoRight, torsoFwd, 0.68, true);
+        worldRings = [];
+        for (let sr = 0; sr < skRingsDef.length; sr++) {
+          const sLvl = skRingsDef[sr];
+          const sw = sLvl.t;
+          const wPrimarySk = sw * (0.48 + 0.52 * sw);
+          const wWhipSk = sw * sw * (0.40 + 0.60 * sw);
+          const bounceYSk = Math.sin(effPhase * 2.0) * 0.0055 * sw * s;
+          const sbDisp = [
+            (hPhys.gx * 0.24 * wPrimarySk + hPhys.tx * 0.28 * wWhipSk + hPhys.airX * 0.45 * sw + (yAngle * 0.024 + rAngle * 0.016 + yawLagTerm * 0.60) * sw + breezeX * 0.55 * sw + turbX * 0.55 * sw) * s,
+            (hPhys.gy * 0.24 * wPrimarySk + hPhys.ty * 0.28 * wWhipSk + hPhys.airY * 0.45 * sw + turbY * 0.55 * sw) * s + bounceYSk,
+            (hPhys.gz * 0.24 * wPrimarySk + hPhys.tz * 0.28 * wWhipSk + hPhys.airZ * 0.45 * sw - pAngle * 0.028 * sw + breezeZ * 0.55 * sw + turbZ * 0.55 * sw) * s
+          ];
+          const sFlare = (airFlare * 0.24 + Math.abs(yAngle) * 0.012) * sw * s;
+          const ringPts = [];
+          for (let p = 0; p < NUM_PLEATS_SK; p++) {
+            const ang = ((p + 0.02) / NUM_PLEATS_SK) * Math.PI * 2.0;
+            const sinA = Math.sin(ang);
+            const cosA = Math.cos(ang);
+            const rz = (cosA >= 0.0) ? sLvl.rzF : sLvl.rzB;
+            const skD = _computeSkirtVertexDisplacement(sinA, cosA, sw, 0.18, s, sbDisp, skStride, 0.042, effPhase, 0.003, 0.28, 0.30, 0.25, 0.20, 0.72);
+            const slx = sinA * (sLvl.rx + sLvl.pleatDepth + sFlare) + sbDisp[0] + skD.legSidePush;
+            const sly = sLvl.dy + sbDisp[1] + skD.rippleY + (skD.legFrontTent * 0.14 + skD.legBackTent * 0.10);
+            const slz = sLvl.cy + cosA * (rz + sLvl.pleatDepth + sFlare) + skD.effDispZ + (skD.legFrontTent * 0.80 - skD.legBackTent * 0.70);
+            const wx = waistOriginSk[0] + torsoRight[0] * slx + torsoUp[0] * sly + torsoFwd[0] * slz;
+            const wy = waistOriginSk[1] + torsoRight[1] * slx + torsoUp[1] * sly + torsoFwd[1] * slz;
+            const wz = waistOriginSk[2] + torsoRight[2] * slx + torsoUp[2] * sly + torsoFwd[2] * slz;
+            const hint = (sr >= 2) ? [torsoRight[0] * sinA + torsoFwd[0] * cosA, 0.0, torsoRight[2] * sinA + torsoFwd[2] * cosA] : null;
+            ringPts.push(clampPointOutsideChibiBodyForCloth(wx, wy, wz, bodyColliderData, sLvl.clr, false, hint));
+          }
+          worldRings.push(ringPts);
         }
-        ringYAvg /= NUM_PLEATS_SK;
-        if (ringYAvg > skTopY) skTopY = ringYAvg;
-        if (ringYAvg < skBotY) skBotY = ringYAvg;
-        skRingSamples.push({ y: ringYAvg, crests: ringCrests });
       }
-
-      const maxCrestRAtAngle = (ringSamples, ang, halfWin = 0.28) => {
-        let maxR = 0.0;
-        const crests = ringSamples.crests;
-        for (let i = 0; i < crests.length; i++) {
-          let dA = crests[i].ang - ang;
-          while (dA > Math.PI) dA -= Math.PI * 2;
-          while (dA < -Math.PI) dA += Math.PI * 2;
-          if (Math.abs(dA) <= halfWin) {
-            // Project crest onto ray `ang` (with chord margin) so nearby pleat peaks are strictly enclosed
-            const proj = crests[i].tx * Math.sin(ang) + crests[i].tz * Math.cos(ang);
-            if (proj > maxR) maxR = proj;
-          }
-        }
-        return maxR;
-      };
-
-      clampPointOutsideActiveSkirt = (pos, extraClearance) => {
-        const dxC = pos[0] - collarBaseX;
-        const dyC = pos[1] - collarBaseY;
-        const dzC = pos[2] - collarBaseZ;
-        const tx = dxC * torsoRight[0] + dyC * torsoRight[1] + dzC * torsoRight[2];
-        const ty = dxC * torsoUp[0]    + dyC * torsoUp[1]    + dzC * torsoUp[2];
-        const tz = dxC * torsoFwd[0]   + dyC * torsoFwd[1]   + dzC * torsoFwd[2];
-        if (ty > skTopY + 0.018 * s || ty < skBotY - 0.036 * s) return pos;
-
-        const r = Math.hypot(tx, tz);
-        if (r < 1e-5) return pos;
-        const ang = Math.atan2(tx, tz);
-
-        let envR = 0.0;
-        let clrScale = 1.0;
-        if (ty >= skRingSamples[0].y) {
-          envR = maxCrestRAtAngle(skRingSamples[0], ang);
-          const aboveT = Math.max(0.0, Math.min(1.0, (ty - skRingSamples[0].y) / (0.018 * s)));
-          clrScale = 1.0 - aboveT;
-        } else if (ty <= skRingSamples[skRingSamples.length - 1].y) {
-          envR = maxCrestRAtAngle(skRingSamples[skRingSamples.length - 1], ang);
-          const belowT = Math.max(0.0, Math.min(1.0, (skRingSamples[skRingSamples.length - 1].y - ty) / (0.036 * s)));
-          clrScale = 1.0 - belowT * 0.45;
-        } else {
-          for (let sr = 0; sr < skRingSamples.length - 1; sr++) {
-            const rHi = skRingSamples[sr];
-            const rLo = skRingSamples[sr + 1];
-            if (ty <= rHi.y && ty >= rLo.y) {
-              const span = Math.max(1e-5, rHi.y - rLo.y);
-              const f = (rHi.y - ty) / span;
-              const envHi = maxCrestRAtAngle(rHi, ang);
-              const envLo = maxCrestRAtAngle(rLo, ang);
-              envR = envHi * (1.0 - f) + envLo * f;
-              break;
-            }
-          }
-        }
-
-        const targetR = (envR + extraClearance) * clrScale + r * (1.0 - clrScale);
-        if (r < targetR) {
-          const push = targetR - r;
-          const dirX = torsoRight[0] * (tx / r) + torsoFwd[0] * (tz / r);
-          const dirY = torsoRight[1] * (tx / r) + torsoFwd[1] * (tz / r);
-          const dirZ = torsoRight[2] * (tx / r) + torsoFwd[2] * (tz / r);
-          return [pos[0] + dirX * push, pos[1] + dirY * push, pos[2] + dirZ * push];
-        }
-        return pos;
-      };
+      clampPointOutsideActiveSkirt = _buildSkirtEnvelopeClampFn(
+        worldRings, collarBaseX, collarBaseY, collarBaseZ, torsoRight, torsoUp, torsoFwd, s
+      );
     }
 
     const computeSkirtVertex = (lvl, rIdx, ang, jIdx, radScale = 1.0) => {
@@ -5591,26 +6510,11 @@
       const rippleY = (isLocal || w < 0.05) ? 0.0 : (Math.sin(effPhase * 2.2 + ang * 2.0) * 0.008 * w * s);
       const rippleR = (isLocal || w < 0.05) ? 0.0 : (Math.cos(effPhase * 1.8 + ang * 2.0) * 0.006 * w * s);
 
-      const skirtW = Math.max(0.0, (w - 0.35) / 0.65);
-      const wLeft = Math.max(0.0, -sinA);
-      const wRight = Math.max(0.0, sinA);
-      const wFront = Math.max(0.0, cosA);
-      const wBack = Math.max(0.0, -cosA);
+      const bd = _computeSkirtVertexDisplacement(sinA, cosA, w, 0.35, s, bDisp, bodiceStride, 0.045, 0.0, 0.0, 0.24, 0.28, 0.28, 0.22, 0.75);
 
-      // Leg-driven tenting & wind-drag shielding: an advancing thigh lifts and tents its side/front panel forward
-      const legFrontTent = (wLeft * lFwdSwing + wRight * rFwdSwing) * (0.24 + 0.76 * wFront) * skirtW;
-      const legBackTent = (wLeft * lBackSwing + wRight * rBackSwing) * (0.28 + 0.72 * wBack) * skirtW;
-      const legSidePush = (
-        wRight * (rFwdSwing * 0.28 + rBackSwing * 0.22 + rOutSpread * 0.75) -
-        wLeft  * (lFwdSwing * 0.28 + lBackSwing * 0.22 + lOutSpread * 0.75)
-      ) * skirtW;
-
-      const dragShield = Math.min(1.0, ((wLeft * lFwdSwing + wRight * rFwdSwing) * (0.35 + 0.65 * wFront)) / (0.045 * s));
-      const effDispZ = (bDisp[2] < 0.0) ? (bDisp[2] * (1.0 - 0.80 * dragShield)) : bDisp[2];
-
-      let lx = sinA * (lvl.rx * radScale + flare + rippleR) + bDisp[0] + legSidePush;
-      let ly = lvl.dy + bDisp[1] + rippleY + (legFrontTent * 0.16 + legBackTent * 0.12);
-      let lz = cosA * (rz * radScale + flare + rippleR) + effDispZ + (legFrontTent * 0.82 - legBackTent * 0.72);
+      let lx = sinA * (lvl.rx * radScale + flare + rippleR) + bDisp[0] + bd.legSidePush;
+      let ly = lvl.dy + bDisp[1] + rippleY + (bd.legFrontTent * 0.16 + bd.legBackTent * 0.12);
+      let lz = cosA * (rz * radScale + flare + rippleR) + bd.effDispZ + (bd.legFrontTent * 0.82 - bd.legBackTent * 0.72);
 
       const isRidge = (jIdx % 2 === 0);
       if (lvl.scalloped) {
@@ -6006,15 +6910,21 @@
       outI.push(v0, v2, v3);
     };
 
-    const addTravelerBoot = (pFoot, pKnee, isLeft) => {
+    const addTravelerBoot = (pFoot, pKnee, isLeft, pHip = null, legRig = null) => {
       if (!pFoot) return;
       const fx = pFoot[0];
       const fy = pFoot[1];
       const fz = pFoot[2];
 
+      const activeLegRig = legRig || computeLegRigFrame(pHip, pKnee, pFoot, isLeft);
+      const footBasis = activeLegRig.footBoneBasis;
+      const fRight = footBasis.rightAxis;
+      const fUp = footBasis.upAxis;
+      const fFwd = footBasis.fwdAxis;
+
       // 1. Align boot ankle shaft strictly with actual shin direction (pKnee - pFoot)
-      //    so walking/running strides never tear or clip the ankle cuff!
-      let ux = 0.0, uy = 1.0, uz = 0.0;
+      //    and blend smoothly into footBoneBasis so walking/running/jumping never tear or clip!
+      let ux = fUp[0], uy = fUp[1], uz = fUp[2];
       if (pKnee) {
         const vx = pKnee[0] - fx;
         const vy = pKnee[1] - fy;
@@ -6024,10 +6934,10 @@
           ux = vx / vLen; uy = vy / vLen; uz = vz / vLen;
         }
       }
-      // Shaft right = normalize(up x [0,0,1])
-      let rxX = uy * 1.0 - uz * 0.0;
-      let rxY = uz * 0.0 - ux * 1.0;
-      let rxZ = ux * 0.0 - uy * 0.0;
+      // Shaft right = normalize(up x fFwd)
+      let rxX = uy * fFwd[2] - uz * fFwd[1];
+      let rxY = uz * fFwd[0] - ux * fFwd[2];
+      let rxZ = ux * fFwd[1] - uy * fFwd[0];
       const rxL = Math.hypot(rxX, rxY, rxZ) || 1.0;
       rxX /= rxL; rxY /= rxL; rxZ /= rxL;
       // Shaft fwd = right x up
@@ -6036,19 +6946,26 @@
       const fxZ = rxX * uy - rxY * ux;
 
       const SHAFT_SIDES = 16;
-      const midRxX = rxX + (1.0 - rxX) * 0.5, midRxY = rxY * 0.5, midRxZ = rxZ * 0.5;
+      const midRxX = (rxX + fRight[0]) * 0.5, midRxY = (rxY + fRight[1]) * 0.5, midRxZ = (rxZ + fRight[2]) * 0.5;
       const midRxL = Math.hypot(midRxX, midRxY, midRxZ) || 1.0;
       const mrxX = midRxX / midRxL, mrxY = midRxY / midRxL, mrxZ = midRxZ / midRxL;
 
-      const midFxX = fxX * 0.5, midFxY = fxY * 0.5, midFxZ = fxZ * 0.5 + 0.5;
+      const midFxX = (fxX + fFwd[0]) * 0.5, midFxY = (fxY + fFwd[1]) * 0.5, midFxZ = (fxZ + fFwd[2]) * 0.5;
       const midFxL = Math.hypot(midFxX, midFxY, midFxZ) || 1.0;
       const mfxX = midFxX / midFxL, mfxY = midFxY / midFxL, mfxZ = midFxZ / midFxL;
 
+      const footPt = (dx, dy, dz) => [
+        fx + fRight[0] * dx + fUp[0] * dy + fFwd[0] * dz,
+        fy + fRight[1] * dx + fUp[1] * dy + fFwd[1] * dz,
+        fz + fRight[2] * dx + fUp[2] * dy + fFwd[2] * dz,
+      ];
+
+      const anchorPt = footPt(0, -0.013 * s, 0.002 * s);
       const shaftRingsDef = [
         { cx: fx + ux * 0.034 * s, cy: fy + uy * 0.034 * s, cz: fz + uz * 0.034 * s, rx: 0.0335 * s, rz: 0.0335 * s, rAx: [rxX, rxY, rxZ], fAx: [fxX, fxY, fxZ], col: colInner }, // 0: Inner cuff tucked cleanly inside calf/leggings
         { cx: fx + ux * 0.039 * s, cy: fy + uy * 0.039 * s, cz: fz + uz * 0.039 * s, rx: 0.0415 * s, rz: 0.0420 * s, rAx: [rxX, rxY, rxZ], fAx: [fxX, fxY, fxZ], col: colTrim  }, // 1: Smooth rolled top collar rim
         { cx: fx + ux * 0.015 * s, cy: fy + uy * 0.015 * s, cz: fz + uz * 0.015 * s, rx: 0.0420 * s, rz: 0.0430 * s, rAx: [mrxX, mrxY, mrxZ], fAx: [mfxX, mfxY, mfxZ], col: colUpper }, // 2: Elastic ankle bridge following stride
-        { cx: fx,                  cy: fy - 0.013 * s,      cz: fz + 0.002 * s,      rx: 0.0425 * s, rz: 0.0440 * s, rAx: [1, 0, 0],          fAx: [0, 0, 1],          col: colUpper }  // 3: Anchored deep inside solid shoe vamp (zero gap!)
+        { cx: anchorPt[0],         cy: anchorPt[1],         cz: anchorPt[2],         rx: 0.0425 * s, rz: 0.0440 * s, rAx: fRight,            fAx: fFwd,            col: colUpper }  // 3: Anchored deep inside solid shoe vamp (zero gap!)
       ];
 
       const shaftRings = [];
@@ -6078,13 +6995,14 @@
         }
       }
       const botShaft = shaftRings[shaftRings.length - 1];
-      const vBaseC = addV(fx, fy - 0.015 * s, fz + 0.002 * s, colUpper);
+      const baseCPt = footPt(0, -0.015 * s, 0.002 * s);
+      const vBaseC = addV(baseCPt[0], baseCPt[1], baseCPt[2], colUpper);
       for (let i = 0; i < SHAFT_SIDES; i++) {
         const nextI = (i + 1) % SHAFT_SIDES;
         addTri(vBaseC, botShaft[nextI], botShaft[i]);
       }
 
-      // 2. Sculpted Superellipse Shoe Vamp, Toe Box & Flat Sole (full clearance around heel, arch, forefoot & toes)
+      // 2. Sculpted Superellipse Shoe Vamp, Toe Box & Flat Sole oriented along footBoneBasis
       const xBias = (isLeft ? -0.001 : 0.001) * s;
       const shoeSlicesDef = [
         { z: -0.048 * s, rx: 0.034 * s, hTop: 0.017 * s, hBot: 0.016 * s, yMid: -0.020 * s }, // 0: Heel back bevel
@@ -6100,9 +7018,7 @@
       for (let r = 0; r < shoeSlicesDef.length; r++) {
         const sl = shoeSlicesDef[r];
         const ring = [];
-        const cx = fx + xBias * ((r / (shoeSlicesDef.length - 1)) * 1.5);
-        const cy = fy + sl.yMid;
-        const cz = fz + sl.z;
+        const dxCenter = xBias * ((r / (shoeSlicesDef.length - 1)) * 1.5);
         for (let i = 0; i < SHOE_SIDES; i++) {
           const ang = (i / SHOE_SIDES) * Math.PI * 2.0;
           const sinA = Math.sin(ang);
@@ -6115,10 +7031,11 @@
             ? (Math.pow(cosA, 0.80) * sl.hTop)
             : (-Math.pow(-cosA, 0.55) * sl.hBot);
           const isSolePart = cosA < -0.30;
+          const pt = footPt(dxCenter + vxOff, sl.yMid + vyOff, sl.z);
           ring.push(addV(
-            cx + vxOff,
-            cy + vyOff,
-            cz,
+            pt[0],
+            pt[1],
+            pt[2],
             isSolePart ? colSole : colUpper
           ));
         }
@@ -6135,24 +7052,30 @@
       }
 
       const heelRing = shoeRings[0];
-      const vHeelCap = addV(fx, fy - 0.020 * s, fz - 0.051 * s, colUpper);
+      const heelCapPt = footPt(0, -0.020 * s, -0.051 * s);
+      const vHeelCap = addV(heelCapPt[0], heelCapPt[1], heelCapPt[2], colUpper);
       for (let i = 0; i < SHOE_SIDES; i++) {
         const nextI = (i + 1) % SHOE_SIDES;
         addTri(vHeelCap, heelRing[i], heelRing[nextI]);
       }
 
       const toeRing = shoeRings[shoeRings.length - 1];
-      const vToeCap = addV(fx + xBias * 1.5, fy - 0.023 * s, fz + 0.079 * s, colUpper);
+      const toeCapPt = footPt(xBias * 1.5, -0.023 * s, 0.079 * s);
+      const vToeCap = addV(toeCapPt[0], toeCapPt[1], toeCapPt[2], colUpper);
       for (let i = 0; i < SHOE_SIDES; i++) {
         const nextI = (i + 1) % SHOE_SIDES;
         addTri(vToeCap, toeRing[nextI], toeRing[i]);
       }
     };
 
+    const lHip = clothContext ? clothContext.leftLegPivot : null;
+    const rHip = clothContext ? clothContext.rightLegPivot : null;
     const lKnee = clothContext ? clothContext.leftKneeRot : null;
     const rKnee = clothContext ? clothContext.rightKneeRot : null;
-    if (leftFootRot) addTravelerBoot(leftFootRot, lKnee, true);
-    if (rightFootRot) addTravelerBoot(rightFootRot, rKnee, false);
+    const lLegRig = clothContext ? clothContext.leftLegRig : null;
+    const rLegRig = clothContext ? clothContext.rightLegRig : null;
+    if (leftFootRot) addTravelerBoot(leftFootRot, lKnee, true, lHip, lLegRig);
+    if (rightFootRot) addTravelerBoot(rightFootRot, rKnee, false, rHip, rLegRig);
 
     const normals = new Float32Array(outV.length);
     for (let k = 0; k < outI.length; k += 3) {
@@ -6196,8 +7119,10 @@
   // =========================================================================
   // --- 11A-2. 3D White Spread Shirt Collar Mesh (WHITE_SHIRT_SHORT) ---
   // =========================================================================
-  function buildWhiteShirtCollarMesh(headP1, chestP1, chestP2, neckP1, neckP2, scale = 1.0) {
+  function buildWhiteShirtCollarMesh(headP1, chestP1, chestP2, neckP1, neckP2, scale = 1.0, ignoreOuterCoat = false) {
     const s = scale || 1.0;
+    const eqState = ignoreOuterCoat ? { wearSuit: false } : getCharacterEquippedClothingState(false);
+    const underSuit = !!eqState.wearSuit;
     const baseChest = chestP2 || neckP1 || [0, 0.14 * s, 0];
     const baseGroin = chestP1 || [0, -0.10 * s, 0];
 
@@ -6259,6 +7184,11 @@
     const standTop = [];
     const lapelMid = [];
     const lapelTip = [];
+    // When worn under DOUBLE_BREASTED_SUIT, tuck the shirt collar wings inside the suit collar & peak lapels so they never poke through
+    const wingScale = underSuit ? 0.72 : 1.0;
+    const standScale = underSuit ? 0.88 : 1.0;
+    const yTuck = underSuit ? (-0.004 * s) : 0.0;
+    const clrScale = underSuit ? 0.25 : 1.0;
 
     for (let i = 0; i <= segs; i++) {
       const frac = i / segs;
@@ -6269,21 +7199,21 @@
       const isNearFront = (i <= 2 || i >= segs - 2);
 
       // Stand base hugging neck base
-      const sb = pt(sinA * 0.056 * s, (cosA > 0 ? -0.022 : -0.006) * s, cosA * 0.052 * s);
-      const st = pt(sinA * 0.050 * s, (cosA > 0 ? 0.006 : 0.024) * s, cosA * 0.048 * s);
+      const sb = pt(sinA * 0.056 * standScale * s, (cosA > 0 ? -0.022 : -0.006) * s + yTuck, cosA * 0.052 * standScale * s);
+      const st = pt(sinA * 0.050 * standScale * s, (cosA > 0 ? 0.006 : 0.024) * s + yTuck, cosA * 0.048 * standScale * s);
 
       // Folded spread collar wing extending outward & slightly down onto collarbone
-      const spreadR = isFrontTip ? 0.068 : (isNearFront ? 0.082 : 0.076);
-      const tipR = isFrontTip ? 0.066 : (isNearFront ? 0.088 : 0.082);
+      const spreadR = (isFrontTip ? 0.068 : (isNearFront ? 0.082 : 0.076)) * wingScale;
+      const tipR = (isFrontTip ? 0.066 : (isNearFront ? 0.088 : 0.082)) * wingScale;
       const foldDrop = isFrontTip ? -0.046 : (isNearFront ? -0.038 : -0.018);
 
-      const lm = pt(sinA * spreadR * s, (foldDrop * 0.45 + 0.004) * s, cosA * spreadR * s);
-      const lt = pt(sinA * tipR * s, foldDrop * s, cosA * tipR * s + (isFrontTip ? 0.018 * s : 0.0));
+      const lm = pt(sinA * spreadR * s, (foldDrop * 0.45 + 0.004) * s + yTuck, cosA * spreadR * s);
+      const lt = pt(sinA * tipR * s, foldDrop * s + yTuck, cosA * tipR * s + (isFrontTip ? (underSuit ? 0.006 : 0.018) * s : 0.0));
 
-      standBot.push(addV(sb, colShade, 0.003));
-      standTop.push(addV(st, colWhite, 0.003));
-      lapelMid.push(addV(lm, colWhite, 0.005));
-      lapelTip.push(addV(lt, isNearFront ? colWhite : colShade, 0.006));
+      standBot.push(addV(sb, colShade, 0.003 * clrScale));
+      standTop.push(addV(st, colWhite, 0.003 * clrScale));
+      lapelMid.push(addV(lm, colWhite, 0.005 * clrScale));
+      lapelTip.push(addV(lt, isNearFront ? colWhite : colShade, 0.006 * clrScale));
     }
 
     for (let i = 0; i < segs; i++) {
@@ -6413,33 +7343,18 @@
       return [dx, dy, dz];
     };
 
-    const dotFwd = (p, q) => (p[0] - q[0]) * torsoFwd[0] + (p[1] - q[1]) * torsoFwd[1] + (p[2] - q[2]) * torsoFwd[2];
-    const dotLat = (p, q) => (p[0] - q[0]) * torsoRight[0] + (p[1] - q[1]) * torsoRight[1] + (p[2] - q[2]) * torsoRight[2];
-    const lHipP = clothContext ? clothContext.leftLegPivot : null;
-    const lKneeP = clothContext ? clothContext.leftKneeRot : null;
-    const lFootP = clothContext ? clothContext.leftFootRot : null;
-    const rHipP = clothContext ? clothContext.rightLegPivot : null;
-    const rKneeP = clothContext ? clothContext.rightKneeRot : null;
-    const rFootP = clothContext ? clothContext.rightFootRot : null;
-
-    const lFwdSwing = (lHipP && lKneeP) ? Math.max(0.0, dotFwd(lKneeP, lHipP), lFootP ? dotFwd(lFootP, lHipP) * 0.68 : 0.0) : 0.0;
-    const lBackSwing = (lHipP && lKneeP) ? Math.max(0.0, -dotFwd(lKneeP, lHipP), lFootP ? -dotFwd(lFootP, lHipP) * 0.68 : 0.0) : 0.0;
-    const lOutSpread = (lHipP && lKneeP) ? Math.max(0.0, -dotLat(lKneeP, lHipP)) : 0.0;
-
-    const rFwdSwing = (rHipP && rKneeP) ? Math.max(0.0, dotFwd(rKneeP, rHipP), rFootP ? dotFwd(rFootP, rHipP) * 0.68 : 0.0) : 0.0;
-    const rBackSwing = (rHipP && rKneeP) ? Math.max(0.0, -dotFwd(rKneeP, rHipP), rFootP ? -dotFwd(rFootP, rHipP) * 0.68 : 0.0) : 0.0;
-    const rOutSpread = (rHipP && rKneeP) ? Math.max(0.0, dotLat(rKneeP, rHipP)) : 0.0;
+    const skirtStride = _computeGarmentLegStride(clothContext, torsoRight, torsoFwd, 0.68, true);
 
     const bodyColliderData = {
       headP1: headP1 || [baseChest[0], baseChest[1] + 0.08 * s, baseChest[2]],
       chestP1: baseGroin,
       chestP2: baseChest,
-      leftLegPivot: lHipP,
-      leftKneeRot: lKneeP,
-      leftFootRot: lFootP,
-      rightLegPivot: rHipP,
-      rightKneeRot: rKneeP,
-      rightFootRot: rFootP,
+      leftLegPivot: clothContext ? clothContext.leftLegPivot : null,
+      leftKneeRot: clothContext ? clothContext.leftKneeRot : null,
+      leftFootRot: clothContext ? clothContext.leftFootRot : null,
+      rightLegPivot: clothContext ? clothContext.rightLegPivot : null,
+      rightKneeRot: clothContext ? clothContext.rightKneeRot : null,
+      rightFootRot: clothContext ? clothContext.rightFootRot : null,
       scale: s
     };
 
@@ -6478,12 +7393,14 @@
     const ringVerts = [];
     const waistInnerRing = [];
     const hemInnerRing = [];
+    const envWorldRings = (wearHoodieOverSkirt && clothContext) ? [] : null;
 
     for (let rIdx = 0; rIdx < skirtRingsDef.length; rIdx++) {
       const lvl = skirtRingsDef[rIdx];
       const bDisp = computeSkirtDisp(lvl.t);
       const flare = (airFlare * (wearHoodieOverSkirt ? 0.24 : 0.36) + Math.abs(yAngle) * (wearHoodieOverSkirt ? 0.012 : 0.016)) * lvl.t * s;
       const row = [];
+      const envCrestsRow = envWorldRings ? [] : null;
 
       for (let p = 0; p < NUM_PLEATS; p++) {
         for (let sub = 0; sub < SUB_PER_PLEAT; sub++) {
@@ -6498,27 +7415,15 @@
           const pMod = (sub === 0) ? 1.0 : ((sub === 1) ? 0.15 : -0.95);
           const rBoost = lvl.pleatDepth * pMod;
 
-          const w = lvl.t;
-          const skirtW = Math.max(0.0, (w - 0.18) / 0.82);
-          const wLeft = Math.max(0.0, -sinA);
-          const wRight = Math.max(0.0, sinA);
-          const wFront = Math.max(0.0, cosA);
-          const wBack = Math.max(0.0, -cosA);
+          const skD = _computeSkirtVertexDisplacement(
+            sinA, cosA, lvl.t, 0.18, s, bDisp, skirtStride, 0.042,
+            phase, wearHoodieOverSkirt ? 0.003 : 0.004,
+            0.28, 0.30, 0.25, 0.20, 0.72
+          );
 
-          const legFrontTent = (wLeft * lFwdSwing + wRight * rFwdSwing) * (0.28 + 0.72 * wFront) * skirtW;
-          const legBackTent = (wLeft * lBackSwing + wRight * rBackSwing) * (0.30 + 0.70 * wBack) * skirtW;
-          const legSidePush = (
-            wRight * (rFwdSwing * 0.25 + rBackSwing * 0.20 + rOutSpread * 0.72) -
-            wLeft  * (lFwdSwing * 0.25 + lBackSwing * 0.20 + lOutSpread * 0.72)
-          ) * skirtW;
-
-          const dragShield = Math.min(1.0, ((wLeft * lFwdSwing + wRight * rFwdSwing) * (0.35 + 0.65 * wFront)) / (0.042 * s));
-          const effDispZ = (bDisp[2] < 0.0) ? (bDisp[2] * (1.0 - 0.80 * dragShield)) : bDisp[2];
-          const rippleY = (w < 0.05) ? 0.0 : Math.sin(phase * 2.2 + ang * 3.0) * (wearHoodieOverSkirt ? 0.003 : 0.004) * w * s;
-
-          const lx = sinA * (lvl.rx + rBoost + flare) + bDisp[0] + legSidePush;
-          const ly = lvl.dy + bDisp[1] + rippleY + (legFrontTent * 0.14 + legBackTent * 0.10);
-          const lz = lvl.cy + cosA * (rz + rBoost + flare) + effDispZ + (legFrontTent * 0.80 - legBackTent * 0.70);
+          const lx = sinA * (lvl.rx + rBoost + flare) + bDisp[0] + skD.legSidePush;
+          const ly = lvl.dy + bDisp[1] + skD.rippleY + (skD.legFrontTent * 0.14 + skD.legBackTent * 0.10);
+          const lz = lvl.cy + cosA * (rz + rBoost + flare) + skD.effDispZ + (skD.legFrontTent * 0.80 - skD.legBackTent * 0.70);
 
           const pushHint = (rIdx >= 2)
             ? [
@@ -6532,7 +7437,11 @@
           const col = lvl.isYoke
             ? colYoke
             : (sub === 0 ? colRidge : (sub === 1 ? colBlade : colFoldShadow));
-          row.push(addV(pos[0], pos[1], pos[2], col, lvl.clr, pushHint));
+          const vIdx = addV(pos[0], pos[1], pos[2], col, lvl.clr, pushHint);
+          row.push(vIdx);
+          if (envCrestsRow && sub === 0) {
+            envCrestsRow.push([outV[vIdx * 3], outV[vIdx * 3 + 1], outV[vIdx * 3 + 2]]);
+          }
 
           if (rIdx === 0) {
             // Tuck top edge slightly inside waist so zero gap is ever visible from above
@@ -6546,15 +7455,19 @@
 
           if (rIdx === skirtRingsDef.length - 1) {
             const innerPos = waistPt(
-              sinA * ((lvl.rx - 0.011 * s) + rBoost * 0.55 + flare) + bDisp[0] + legSidePush,
-              lvl.dy + 0.014 * s + bDisp[1] + rippleY + (legFrontTent * 0.14 + legBackTent * 0.10),
-              lvl.cy + cosA * ((rz - 0.011 * s) + rBoost * 0.55 + flare) + effDispZ + (legFrontTent * 0.80 - legBackTent * 0.70)
+              sinA * ((lvl.rx - 0.011 * s) + rBoost * 0.55 + flare) + bDisp[0] + skD.legSidePush,
+              lvl.dy + 0.014 * s + bDisp[1] + skD.rippleY + (skD.legFrontTent * 0.14 + skD.legBackTent * 0.10),
+              lvl.cy + cosA * ((rz - 0.011 * s) + rBoost * 0.55 + flare) + skD.effDispZ + (skD.legFrontTent * 0.80 - skD.legBackTent * 0.70)
             );
             hemInnerRing.push(addV(innerPos[0], innerPos[1], innerPos[2], colInner, 0.011, pushHint));
           }
         }
       }
       ringVerts.push(row);
+      if (envWorldRings) envWorldRings.push(envCrestsRow);
+    }
+    if (envWorldRings && clothContext) {
+      clothContext._cachedSkirtEnvelope = envWorldRings;
     }
 
     // Close top waistband edge neatly against the torso
@@ -6610,7 +7523,1912 @@
   }
 
   // =========================================================================
-  // --- 11B. 3D Clothing Item Icon Mesh Builders (Bodysuit, Shirt, Skirt, Leggings, Hoodie, Boots) ---
+  // --- 11A-4. Double-Breasted Pinstripe Suit Jacket (DOUBLE_BREASTED_SUIT) ---
+  // Reference: image_6f55adb1.png & Screenshot_2026-11-17_04-32-21_cc436ed5.png
+  // (Suit jacket ONLY — charcoal grey pinstripe wool, wide peak lapels,
+  // open V neckline, 4 lower marbled amber buttons [top 2 buttons removed],
+  // worn as an outer Accessory coat mutually exclusive with Traveler Hoodie)
+  // =========================================================================
+  function buildDoubleBreastedSuitMesh(
+    headP1,
+    chestP1, chestP2,
+    neckP1, neckP2,
+    leftArmPivot, leftElbowRot, leftHandRot,
+    rightArmPivot, rightElbowRot, rightHandRot,
+    scale = 1.0,
+    phase = 0.0,
+    isLocal = false,
+    leftFootRot = null,
+    rightFootRot = null,
+    clothContext = null
+  ) {
+    const outV = [], outC = [], outT = [], outI = [];
+    const s = scale || 1.0;
+
+    const baseGroin = chestP1 || [0, -0.090 * s, 0];
+    const baseChest = chestP2 || [0,  0.170 * s, 0];
+    const ny = neckP1 ? neckP1[1] : baseChest[1];
+
+    const tdx = baseChest[0] - baseGroin[0];
+    const tdy = baseChest[1] - baseGroin[1];
+    const tdz = baseChest[2] - baseGroin[2];
+    const torsoLen = Math.hypot(tdx, tdy, tdz) || (0.26 * s);
+    const torsoUp = [tdx / torsoLen, tdy / torsoLen, tdz / torsoLen];
+    const torsoRatio = Math.max(0.75, Math.min(1.15, torsoLen / (0.26 * s)));
+
+    const fDot = torsoUp[2];
+    let torsoFwd = [-torsoUp[0] * fDot, -torsoUp[1] * fDot, 1.0 - torsoUp[2] * fDot];
+    const tfLen = Math.hypot(torsoFwd[0], torsoFwd[1], torsoFwd[2]);
+    torsoFwd = tfLen > 1e-4 ? [torsoFwd[0] / tfLen, torsoFwd[1] / tfLen, torsoFwd[2] / tfLen] : [0, 0, 1];
+    const torsoRight = [
+      torsoUp[1] * torsoFwd[2] - torsoUp[2] * torsoFwd[1],
+      torsoUp[2] * torsoFwd[0] - torsoUp[0] * torsoFwd[2],
+      torsoUp[0] * torsoFwd[1] - torsoUp[1] * torsoFwd[0]
+    ];
+
+    const collarBaseX = baseChest[0];
+    const collarBaseY = Math.min(ny, baseChest[1] + 0.008 * s);
+    const collarBaseZ = baseChest[2];
+    const torsoPt = (dx, dy, dz) => [
+      collarBaseX + torsoRight[0] * dx + torsoUp[0] * dy + torsoFwd[0] * dz,
+      collarBaseY + torsoRight[1] * dx + torsoUp[1] * dy + torsoFwd[1] * dz,
+      collarBaseZ + torsoRight[2] * dx + torsoUp[2] * dy + torsoFwd[2] * dz
+    ];
+
+    // Charcoal Pinstripe Suit Palette (matching image_6f55adb1.png)
+    const colSuitBase  = [0.238, 0.246, 0.268];
+    const colStripeHi  = [0.358, 0.368, 0.394];
+    const colLapelHi   = [0.285, 0.294, 0.320];
+    const colSeamAO    = [0.138, 0.144, 0.162];
+    const colInner     = [0.095, 0.100, 0.115];
+    const colBtnRim    = [0.640, 0.450, 0.250];
+    const colBtnHi     = [0.870, 0.700, 0.460];
+    const colBtnDark   = [0.360, 0.220, 0.110];
+
+    const pinstripeColor = (ang, ao = 0.0, isLapel = false) => {
+      const stripeWave = Math.pow(Math.max(0.0, Math.cos(ang * 26.0)), 10.0);
+      const base = isLapel ? colLapelHi : colSuitBase;
+      const mix = stripeWave * (isLapel ? 0.55 : 0.75);
+      return [
+        Math.max(0.07, (base[0] * (1.0 - mix) + colStripeHi[0] * mix) - ao),
+        Math.max(0.07, (base[1] * (1.0 - mix) + colStripeHi[1] * mix) - ao),
+        Math.max(0.08, (base[2] * (1.0 - mix) + colStripeHi[2] * mix) - ao)
+      ];
+    };
+
+    const bodyColliderData = {
+      headP1: headP1 || [baseChest[0], baseChest[1] + 0.08 * s, baseChest[2]],
+      chestP1: baseGroin,
+      chestP2: baseChest,
+      leftArmPivot,
+      leftElbowRot,
+      leftHandRot,
+      rightArmPivot,
+      rightElbowRot,
+      rightHandRot,
+      leftLegPivot: clothContext ? clothContext.leftLegPivot : null,
+      leftKneeRot: clothContext ? clothContext.leftKneeRot : null,
+      leftFootRot: clothContext ? (clothContext.leftFootRot || leftFootRot) : leftFootRot,
+      rightLegPivot: clothContext ? clothContext.rightLegPivot : null,
+      rightKneeRot: clothContext ? clothContext.rightKneeRot : null,
+      rightFootRot: clothContext ? (clothContext.rightFootRot || rightFootRot) : rightFootRot,
+      legRadiusBoost: 0.002,
+      scale: s
+    };
+
+    const addV = (px, py, pz, col, clampClr = 0.0, includeArms = false, pushHint = null) => {
+      let vx = px, vy = py, vz = pz;
+      if (clampClr > 0.0 && !isLocal) {
+        const clamped = clampPointOutsideChibiBodyForCloth(vx, vy, vz, bodyColliderData, clampClr, includeArms, pushHint);
+        vx = clamped[0]; vy = clamped[1]; vz = clamped[2];
+      }
+      const idx = (outV.length / 3) | 0;
+      outV.push(vx, vy, vz);
+      outC.push(col[0], col[1], col[2]);
+      // Explicitly outside Traveler Hoodie diamond-pattern shader range
+      outT.push(-9.0, -9.0);
+      return idx;
+    };
+    const addTri = (a, b, c) => { outI.push(a, b, c); };
+    const addQuad = (a, b, c, d) => { outI.push(a, b, c); outI.push(a, c, d); };
+
+    const useClonePhys = !!(clothContext && clothContext.isClone);
+    const hPhys = (clothContext && clothContext.hoodiePhysics)
+      ? clothContext.hoodiePhysics
+      : (useClonePhys
+          ? chibiCloneHoodiePhysics
+          : ((typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : _createDefaultHoodiePhysState()));
+    const pAngle = isLocal ? 0.0 : (hPhys.pitch || 0.0);
+    const yAngle = isLocal ? 0.0 : (hPhys.yaw || 0.0);
+    const rAngle = isLocal ? 0.0 : (hPhys.roll || 0.0);
+    const yawLagTerm = isLocal ? 0.0 : ((hPhys.yawLag || 0.0) * 0.05);
+    const effPhase = isLocal ? 0.0 : phase;
+
+    const computeSuitDisp = (w) => {
+      if (isLocal || w <= 0.001) return [0.0, 0.0, 0.0];
+      const wTail = Math.max(0.0, (w - 0.34) / 0.66);
+      const wPrimary = wTail * (0.45 + 0.55 * wTail);
+      const wWhip = wTail * wTail;
+      const bounceY = Math.sin(effPhase * 2.0) * 0.0025 * wTail * s;
+      // Structured wool jacket: subtle sway below the waist
+      const dx = (hPhys.gx * 0.12 * wPrimary + hPhys.tx * 0.12 * wWhip + hPhys.airX * 0.20 * wTail + (yAngle * 0.012 + rAngle * 0.010 + yawLagTerm) * wTail) * s;
+      const dy = (hPhys.gy * 0.12 * wPrimary + hPhys.ty * 0.12 * wWhip + hPhys.airY * 0.20 * wTail) * s + bounceY;
+      const dz = (hPhys.gz * 0.12 * wPrimary + hPhys.tz * 0.12 * wWhip + hPhys.airZ * 0.20 * wTail - pAngle * 0.015 * wTail) * s;
+      return [dx, dy, dz];
+    };
+
+    // Suit hem ends on the upper thigh (~3cm below hip pivot), so use low footWeight (0.18)
+    // to measure upper-thigh swing rather than full ankle swing.
+    const suitStride = _computeGarmentLegStride(bodyColliderData, torsoRight, torsoFwd, 0.18, !isLocal);
+    const clampPointOutsideActiveSkirt = (!isLocal && clothContext && Array.isArray(clothContext._cachedSkirtEnvelope) && clothContext._cachedSkirtEnvelope.length >= 2)
+      ? _buildSkirtEnvelopeClampFn(clothContext._cachedSkirtEnvelope, collarBaseX, collarBaseY, collarBaseZ, torsoRight, torsoUp, torsoFwd, s)
+      : null;
+
+    // -------------------------------------------------------------------------
+    // 1. Tailored Double-Breasted Jacket Body (Open V Neckline at Top + Straight Tailored Hem)
+    //    Trim, straight tailored hip silhouette (no A-line skirt flare) that still clears
+    //    inner shirts and slacks while allowing subtle front/back thigh push when walking.
+    // -------------------------------------------------------------------------
+    const N_COLS = 36;
+    const suitLevels = [
+      { dy:  0.002 * s * torsoRatio, rx: 0.072 * s, rzF: 0.064 * s, rzB: 0.060 * s, t: 0.00, clr: 0.0065, gap: 0.42 }, // 0: Collarbone neckline
+      { dy: -0.026 * s * torsoRatio, rx: 0.116 * s, rzF: 0.077 * s, rzB: 0.071 * s, t: 0.08, clr: 0.0085, gap: 0.24 }, // 1: Structured padded shoulders
+      { dy: -0.064 * s * torsoRatio, rx: 0.108 * s, rzF: 0.086 * s, rzB: 0.073 * s, t: 0.20, clr: 0.0095, gap: 0.05 }, // 2: Upper chest (near V-apex)
+      { dy: -0.104 * s * torsoRatio, rx: 0.098 * s, rzF: 0.082 * s, rzB: 0.070 * s, t: 0.34, clr: 0.0105, gap: 0.00 }, // 3: Closed below V-apex
+      { dy: -0.146 * s * torsoRatio, rx: 0.096 * s, rzF: 0.082 * s, rzB: 0.076 * s, t: 0.50, clr: 0.0110, gap: 0.00 }, // 4: Tailored waist taper (mid button row)
+      { dy: -0.192 * s * torsoRatio, rx: 0.112 * s, rzF: 0.090 * s, rzB: 0.091 * s, t: 0.68, clr: 0.0115, gap: 0.00 }, // 5: High hip
+      { dy: -0.234 * s * torsoRatio, rx: 0.118 * s, rzF: 0.094 * s, rzB: 0.095 * s, t: 0.85, clr: 0.0120, gap: 0.00 }, // 6: Mid hip / pocket level
+      { dy: -0.272 * s * torsoRatio, rx: 0.121 * s, rzF: 0.097 * s, rzB: 0.098 * s, t: 1.00, clr: 0.0125, gap: 0.00 }  // 7: Crisp tailored jacket hem
+    ];
+
+    const bodyRings = [];
+    const innerHemRing = [];
+    const neckInnerRing = [];
+
+    const evalTorsoLevelPt = (lvl, ang) => {
+      const sinA = Math.sin(ang);
+      const cosA = Math.cos(ang);
+      const rz = cosA >= 0.0 ? lvl.rzF : lvl.rzB;
+      const bDisp = computeSuitDisp(lvl.t);
+      // Zero sideFwdMul/sideBackMul (0.0, 0.0) so forward/back leg swings never push the sides outward like a skirt,
+      // and tentFwdMul/tentBackMul = 0.0 so only the front over the stepping thigh pushes forward and only the back pushes backward.
+      const skD = _computeSkirtVertexDisplacement(
+        sinA, cosA, lvl.t, 0.50, s, bDisp, suitStride, 0.048,
+        effPhase, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25
+      );
+      const wFront = Math.max(0.0, cosA);
+      const wBack = Math.max(0.0, -cosA);
+      const frontLegPush = skD.legFrontTent * wFront * 0.48;
+      const backLegPush  = skD.legBackTent  * wBack  * 0.42;
+
+      const lx = sinA * lvl.rx + bDisp[0] + skD.legSidePush * 0.35;
+      const ly = lvl.dy + bDisp[1] + (frontLegPush * 0.06 + backLegPush * 0.05);
+      const lz = cosA * rz + skD.effDispZ + (frontLegPush - backLegPush);
+      let pos = torsoPt(lx, ly, lz);
+      // Direct capsule pushout primarily forward/backward (Z) so thigh capsules push the hem in Z rather than flaring X
+      const pushHint = (lvl.t >= 0.50)
+        ? [torsoRight[0] * sinA * 0.25 + torsoFwd[0] * (cosA >= 0.0 ? 1.0 : -1.0), 0.0, torsoRight[2] * sinA * 0.25 + torsoFwd[2] * (cosA >= 0.0 ? 1.0 : -1.0)]
+        : null;
+      if (clampPointOutsideActiveSkirt && lvl.t >= 0.45) {
+        pos = clampPointOutsideActiveSkirt(pos, 0.0085 * s);
+      }
+      return { pos, sinA, cosA, pushHint };
+    };
+
+    // Helper to evaluate and clamp any point on the jacket torso at continuous row rFloat (0..7) and angle ang,
+    // then push outward along the local radial normal by extraOut so layered 3D flaps/lapels/pockets/buttons
+    // deform 1:1 with the torso and never clip when walking.
+    const evalLayeredSuitPt = (rFloat, ang, extraOut = 0.0) => {
+      const r0 = Math.max(0, Math.min(suitLevels.length - 2, Math.floor(rFloat)));
+      const r1 = r0 + 1;
+      const tR = Math.max(0.0, Math.min(1.0, rFloat - r0));
+      const L0 = suitLevels[r0], L1 = suitLevels[r1];
+      const interpLvl = {
+        dy:  L0.dy  * (1.0 - tR) + L1.dy  * tR,
+        rx:  L0.rx  * (1.0 - tR) + L1.rx  * tR,
+        rzF: L0.rzF * (1.0 - tR) + L1.rzF * tR,
+        rzB: L0.rzB * (1.0 - tR) + L1.rzB * tR,
+        t:   L0.t   * (1.0 - tR) + L1.t   * tR,
+        clr: L0.clr * (1.0 - tR) + L1.clr * tR
+      };
+      const ptData = evalTorsoLevelPt(interpLvl, ang);
+      let vx = ptData.pos[0], vy = ptData.pos[1], vz = ptData.pos[2];
+      if (!isLocal && interpLvl.clr > 0.0) {
+        const clamped = clampPointOutsideChibiBodyForCloth(vx, vy, vz, bodyColliderData, interpLvl.clr, false, ptData.pushHint);
+        vx = clamped[0]; vy = clamped[1]; vz = clamped[2];
+      }
+      if (Math.abs(extraOut) > 1e-6) {
+        const rdx = torsoRight[0] * ptData.sinA + torsoFwd[0] * ptData.cosA;
+        const rdy = torsoRight[1] * ptData.sinA + torsoFwd[1] * ptData.cosA;
+        const rdz = torsoRight[2] * ptData.sinA + torsoFwd[2] * ptData.cosA;
+        const rLen = Math.hypot(rdx, rdy, rdz) || 1.0;
+        vx += (rdx / rLen) * extraOut;
+        vy += (rdy / rLen) * extraOut;
+        vz += (rdz / rLen) * extraOut;
+      }
+      return [vx, vy, vz];
+    };
+
+    for (let rIdx = 0; rIdx < suitLevels.length; rIdx++) {
+      const lvl = suitLevels[rIdx];
+      const row = [];
+      const startAng = lvl.gap;
+      const endAng = Math.PI * 2.0 - lvl.gap;
+
+      for (let j = 0; j < N_COLS; j++) {
+        const frac = j / (N_COLS - 1);
+        const ang = startAng + frac * (endAng - startAng);
+        const ptData = evalTorsoLevelPt(lvl, ang);
+
+        // Subtle ambient occlusion under the overlapping front flap edge (on viewer's left, sinA ~ -0.46..-0.52)
+        let ao = 0.0;
+        if (lvl.t >= 0.30 && ptData.cosA > 0.55 && ptData.sinA < -0.42 && ptData.sinA > -0.58) {
+          ao += (1.0 - Math.abs(ptData.sinA + 0.49) / 0.09) * 0.065;
+        }
+        // Back center vent slit AO
+        if (lvl.t >= 0.72 && ptData.cosA < -0.92 && Math.abs(ptData.sinA) < 0.09) {
+          ao += 0.065;
+        }
+        // Under-hem crisp shadow line
+        if (rIdx === suitLevels.length - 1) ao += 0.025;
+
+        const col = pinstripeColor(ang, ao, false);
+        const outIdx = addV(ptData.pos[0], ptData.pos[1], ptData.pos[2], col, lvl.clr, false, ptData.pushHint);
+        row.push(outIdx);
+
+        if (rIdx === 0) {
+          const inNeck = torsoPt(
+            ptData.sinA * (lvl.rx * 0.84),
+            lvl.dy - 0.012 * s,
+            ptData.cosA * ((ptData.cosA >= 0 ? lvl.rzF : lvl.rzB) * 0.84)
+          );
+          neckInnerRing.push(addV(inNeck[0], inNeck[1], inNeck[2], colInner, 0.002));
+        }
+
+        if (rIdx === suitLevels.length - 1) {
+          const ox = outV[outIdx * 3], oy = outV[outIdx * 3 + 1], oz = outV[outIdx * 3 + 2];
+          const radX = torsoRight[0] * ptData.sinA + torsoFwd[0] * ptData.cosA;
+          const radY = torsoRight[1] * ptData.sinA + torsoFwd[1] * ptData.cosA;
+          const radZ = torsoRight[2] * ptData.sinA + torsoFwd[2] * ptData.cosA;
+          const inX = ox - radX * (0.0045 * s) + torsoUp[0] * (0.0015 * s);
+          const inY = oy - radY * (0.0045 * s) + torsoUp[1] * (0.0015 * s);
+          const inZ = oz - radZ * (0.0045 * s) + torsoUp[2] * (0.0015 * s);
+          innerHemRing.push(addV(inX, inY, inZ, colInner, 0.0));
+        }
+      }
+      bodyRings.push(row);
+    }
+
+    // Stitch body rings
+    for (let r = 0; r < bodyRings.length - 1; r++) {
+      const r0 = bodyRings[r];
+      const r1 = bodyRings[r + 1];
+      for (let j = 0; j < N_COLS - 1; j++) {
+        addQuad(r0[j], r1[j], r1[j + 1], r0[j + 1]);
+      }
+      // Seam front closure from V-apex downward
+      if (suitLevels[r].gap <= 0.05 && suitLevels[r + 1].gap === 0.0) {
+        addQuad(r0[N_COLS - 1], r1[N_COLS - 1], r1[0], r0[0]);
+      }
+    }
+    // Inner neck & inner hem thickness
+    for (let j = 0; j < N_COLS - 1; j++) {
+      addQuad(neckInnerRing[j], bodyRings[0][j], bodyRings[0][j + 1], neckInnerRing[j + 1]);
+      addQuad(bodyRings[bodyRings.length - 1][j], innerHemRing[j], innerHemRing[j + 1], bodyRings[bodyRings.length - 1][j + 1]);
+    }
+    addQuad(bodyRings[bodyRings.length - 1][N_COLS - 1], innerHemRing[N_COLS - 1], innerHemRing[0], bodyRings[bodyRings.length - 1][0]);
+
+    // -------------------------------------------------------------------------
+    // 2. Standing Back Collar + Symmetrical 3D Notched Lapels + Overlapping Front Flap
+    //    (Matches Screenshot_2026-11-17_06-15-54_f927412f.png:
+    //     - Left & Right collar and notched lapels are 100% symmetrical flanking the V-neck.
+    //     - Viewer's Left lapel (ang < 0) tucks UNDER Viewer's Right lapel (ang > 0) at the center V-apex.
+    //     - Viewer's Right lapel & front flap cross diagonally down-left (/) to ang = -0.46 above the
+    //       top-left button and run down outside the left button column to the bottom hem.)
+    // -------------------------------------------------------------------------
+    const N_COLLAR_SEG = 14;
+    const colTopRing = [], colBotRing = [], colInRing = [];
+    for (let i = 0; i <= N_COLLAR_SEG; i++) {
+      const frac = i / N_COLLAR_SEG;
+      // Symmetrical standing collar from +0.42 (viewer's right) around back (PI) to 2*PI - 0.42 (viewer's left)
+      const ang = 0.42 + frac * (Math.PI * 2.0 - 0.84);
+      const sA = Math.sin(ang);
+      const cA = Math.cos(ang);
+      const edgeFade = Math.sin(frac * Math.PI);
+      const liftH = (0.011 + 0.014 * edgeFade) * s;
+      const radR = (0.072 + 0.008 * edgeFade) * s;
+      const radZ = (cA >= 0 ? 0.064 : 0.065) * s + 0.007 * edgeFade * s;
+
+      const pTop = torsoPt(sA * radR, liftH, cA * radZ);
+      const pBot = torsoPt(sA * (radR + 0.008 * s), liftH - 0.022 * s, cA * (radZ + 0.007 * s));
+      const pIn  = torsoPt(sA * (radR * 0.84), liftH - 0.006 * s, cA * (radZ * 0.84));
+      colTopRing.push(addV(pTop[0], pTop[1], pTop[2], pinstripeColor(ang, 0.02, true), 0.006));
+      colBotRing.push(addV(pBot[0], pBot[1], pBot[2], pinstripeColor(ang, 0.01, true), 0.007));
+      colInRing.push(addV(pIn[0], pIn[1], pIn[2], colInner, 0.002));
+    }
+    for (let i = 0; i < N_COLLAR_SEG; i++) {
+      addQuad(colTopRing[i], colBotRing[i], colBotRing[i + 1], colTopRing[i + 1]);
+      addQuad(colInRing[i], colTopRing[i], colTopRing[i + 1], colInRing[i + 1]);
+    }
+
+    // 2A. Overlapping Double-Breasted Front Panel Mesh (rF = 2.15 .. 7.00)
+    //     Starts at the centered V-apex (rF = 2.15, ang = 0.00), sweeps diagonally down-left (/)
+    //     to the corner above the top-left button (rF = 3.25, ang = -0.45), and runs down outside
+    //     the left button column (ang = -0.47 .. -0.50) to the bottom hem.
+    const flapRowSpecs = [
+      { rF: 2.15, angEdge:  0.00, angMerge: 0.52 }, // 0: Center V-apex crossing point
+      { rF: 2.70, angEdge: -0.23, angMerge: 0.52 }, // 1: Diagonal crossover (/) toward viewer's left
+      { rF: 3.25, angEdge: -0.45, angMerge: 0.52 }, // 2: Corner just above & left of top-left button
+      { rF: 4.00, angEdge: -0.47, angMerge: 0.50 }, // 3: Top button row level (waist)
+      { rF: 5.00, angEdge: -0.48, angMerge: 0.50 }, // 4: High hip level
+      { rF: 6.00, angEdge: -0.49, angMerge: 0.50 }, // 5: Bottom button row / mid-hip level
+      { rF: 7.00, angEdge: -0.50, angMerge: 0.50 }  // 6: Jacket bottom hem
+    ];
+    const N_FLAP_COLS = 10; // fc=0 is angEdge (viewer's left, -X), fc=N-1 is angMerge (viewer's right, +X)
+    const flapStepBaseCol = [];
+    const flapTopRows = [];
+    const flapThickness = 0.0052 * s;
+
+    for (let fr = 0; fr < flapRowSpecs.length; fr++) {
+      const fSpec = flapRowSpecs[fr];
+      // Underlying base point just outside angEdge (more negative ang) to form a crisp 3D step wall
+      const pEdgeBase = evalLayeredSuitPt(fSpec.rF, fSpec.angEdge - 0.024, 0.0003 * s);
+      flapStepBaseCol.push(addV(pEdgeBase[0], pEdgeBase[1], pEdgeBase[2], colSeamAO, 0.0));
+
+      const fRow = [];
+      for (let fc = 0; fc < N_FLAP_COLS; fc++) {
+        const u = fc / (N_FLAP_COLS - 1); // 0 = angEdge (-X), 1 = angMerge (+X)
+        const ang = fSpec.angEdge + u * (fSpec.angMerge - fSpec.angEdge);
+
+        // Full 3D overlap thickness across the overlap edge and both button columns (u <= 0.74),
+        // then smoothly blend into the right-screen chest body (u = 0.74 .. 1.0)
+        const mergeFade = u <= 0.74 ? 1.0 : Math.max(0.0, 1.0 - (u - 0.74) / 0.26);
+        const extraOut = flapThickness * (mergeFade * mergeFade * (3.0 - 2.0 * mergeFade));
+
+        let colVert = pinstripeColor(ang, 0.0, false);
+        if (fc === 0) {
+          colVert = colLapelHi; // Crisp lit edge along the overlapping seam
+        } else if (fr === flapRowSpecs.length - 1) {
+          colVert = pinstripeColor(ang, 0.025, false);
+        }
+
+        const pSurf = evalLayeredSuitPt(fSpec.rF, ang, extraOut);
+        fRow.push(addV(pSurf[0], pSurf[1], pSurf[2], colVert, 0.0));
+      }
+      flapTopRows.push(fRow);
+    }
+
+    // Stitch 3D step wall along the viewer-left overlap edge + front surface quads (fc increases toward +X -> outward +Z normal)
+    for (let fr = 0; fr < flapRowSpecs.length - 1; fr++) {
+      addQuad(flapStepBaseCol[fr], flapStepBaseCol[fr + 1], flapTopRows[fr + 1][0], flapTopRows[fr][0]);
+      const r0 = flapTopRows[fr];
+      const r1 = flapTopRows[fr + 1];
+      for (let fc = 0; fc < N_FLAP_COLS - 1; fc++) {
+        addQuad(r0[fc], r1[fc], r1[fc + 1], r0[fc + 1]);
+      }
+    }
+    // Close bottom hem thickness of the overlapping flap at rF = 7.0
+    {
+      const lastR = flapRowSpecs.length - 1;
+      const fSpec = flapRowSpecs[lastR];
+      const botInRow = [];
+      for (let fc = 0; fc < N_FLAP_COLS; fc++) {
+        const u = fc / (N_FLAP_COLS - 1);
+        const ang = fSpec.angEdge + u * (fSpec.angMerge - fSpec.angEdge);
+        const pIn = evalLayeredSuitPt(fSpec.rF, ang, 0.0002 * s);
+        botInRow.push(addV(pIn[0], pIn[1], pIn[2], colInner, 0.0));
+      }
+      for (let fc = 0; fc < N_FLAP_COLS - 1; fc++) {
+        addQuad(flapTopRows[lastR][fc], botInRow[fc], botInRow[fc + 1], flapTopRows[lastR][fc + 1]);
+      }
+    }
+
+    // 2B. Symmetrical Left & Right 3D Notched Suit Lapels (ปกสูทซ้าย-ขวาสมมาตรกัน)
+    //     side = -1 (Viewer's Left, ang < 0): Under-lapel that tucks cleanly under the right lapel at the center V-apex (rF = 2.15).
+    //     side = +1 (Viewer's Right, ang > 0): Over-lapel with identical upper notch/peak geometry that crosses over at rF = 2.15
+    //     and tapers along the diagonal overlap edge down to rF = 3.25.
+    const buildSymmetricalSuitLapel = (side) => {
+      const isOver = side > 0;
+      const lapelRows = isOver
+        ? [
+            { rF: 0.00, angIn:  0.42, angOut:  0.58 }, // 0: Collar root (symmetrical)
+            { rF: 0.58, angIn:  0.31, angOut:  0.56 }, // 1: Upper collar step / gorge notch (symmetrical)
+            { rF: 0.85, angIn:  0.26, angOut:  0.74 }, // 2: Wide outer lapel peak tip (symmetrical)
+            { rF: 1.55, angIn:  0.12, angOut:  0.58 }, // 3: Mid lapel outer blade (symmetrical)
+            { rF: 2.15, angIn:  0.00, angOut:  0.40 }, // 4: Center V-apex crossing point (symmetrical)
+            { rF: 2.70, angIn: -0.23, angOut:  0.12 }, // 5: Diagonal crossover extension over under-lapel
+            { rF: 3.25, angIn: -0.45, angOut: -0.22 }  // 6: Tapers into overlap corner above top-left button
+          ]
+        : [
+            { rF: 0.00, angIn: -0.42, angOut: -0.58 }, // 0: Collar root (symmetrical)
+            { rF: 0.58, angIn: -0.31, angOut: -0.56 }, // 1: Upper collar step / gorge notch (symmetrical)
+            { rF: 0.85, angIn: -0.26, angOut: -0.74 }, // 2: Wide outer lapel peak tip (symmetrical)
+            { rF: 1.55, angIn: -0.12, angOut: -0.58 }, // 3: Mid lapel outer blade (symmetrical)
+            { rF: 2.15, angIn:  0.00, angOut: -0.40 }, // 4: Center V-apex crossing point (tucks under over-lapel)
+            { rF: 2.65, angIn:  0.10, angOut: -0.26 }  // 5: Tucks cleanly underneath the overlapping front flap
+          ];
+
+      const lHeight = isOver ? (flapThickness + 0.0022 * s) : (0.0028 * s);
+      const lGrid = [];
+      for (let lr = 0; lr < lapelRows.length; lr++) {
+        const lSpec = lapelRows[lr];
+        // Taper height slightly at the very bottom tip of the over-lapel (lr === 6) so it merges seamlessly into flapTopRows
+        const tipFade = (isOver && lr === lapelRows.length - 1) ? (flapThickness + 0.0006 * s) : lHeight;
+        const pInBase  = evalLayeredSuitPt(lSpec.rF, lSpec.angIn, isOver && lr >= 4 ? flapThickness * 0.85 : 0.0004 * s);
+        const pInTop   = evalLayeredSuitPt(lSpec.rF, lSpec.angIn, tipFade);
+        const pMidTop  = evalLayeredSuitPt(lSpec.rF, (lSpec.angIn + lSpec.angOut) * 0.5, tipFade);
+        const pOutTop  = evalLayeredSuitPt(lSpec.rF, lSpec.angOut, tipFade * 0.92);
+        const pOutBase = evalLayeredSuitPt(lSpec.rF, lSpec.angOut + side * 0.022, isOver && lr >= 4 ? flapThickness * 0.85 : 0.0003 * s);
+        const cFace = pinstripeColor(lSpec.angOut * 0.5, -0.005, true);
+        lGrid.push([
+          addV(pInBase[0],  pInBase[1],  pInBase[2],  colSeamAO, 0.0),
+          addV(pInTop[0],   pInTop[1],   pInTop[2],   colLapelHi, 0.0),
+          addV(pMidTop[0],  pMidTop[1],  pMidTop[2],  cFace, 0.0),
+          addV(pOutTop[0],  pOutTop[1],  pOutTop[2],  colLapelHi, 0.0),
+          addV(pOutBase[0], pOutBase[1], pOutBase[2], colSeamAO, 0.0)
+        ]);
+      }
+      for (let lr = 0; lr < lGrid.length - 1; lr++) {
+        const g0 = lGrid[lr], g1 = lGrid[lr + 1];
+        for (let c = 0; c < 4; c++) {
+          if (side > 0) {
+            // c increases from angIn to angOut (+ang / +X), so g0[c]->g1[c]->g1[c+1]->g0[c+1] faces +Z
+            addQuad(g0[c], g1[c], g1[c + 1], g0[c + 1]);
+          } else {
+            // c increases from angIn to angOut (-ang / -X), so g0[c+1]->g1[c+1]->g1[c]->g0[c] faces +Z
+            addQuad(g0[c + 1], g1[c + 1], g1[c], g0[c]);
+          }
+        }
+      }
+    };
+    buildSymmetricalSuitLapel(-1.0); // Viewer's Left (under-lapel)
+    buildSymmetricalSuitLapel(1.0);  // Viewer's Right (over-lapel)
+
+    // -------------------------------------------------------------------------
+    // 2C. Two 3D Raised Hip Pocket Flaps (Left & Right Hips, matching image_45db25ee.png)
+    // -------------------------------------------------------------------------
+    for (const pSide of [1.0, -1.0]) {
+      const angStart = pSide * 0.53;
+      const angEnd   = pSide * 0.84;
+      const rTop = 4.62;
+      const rBot = 5.26;
+      const N_PK = 5;
+      const pkOut = 0.0042 * s;
+      const topBase = [], topFace = [], botFace = [], botBase = [];
+      for (let k = 0; k < N_PK; k++) {
+        const u = k / (N_PK - 1);
+        const ang = angStart + u * (angEnd - angStart);
+        const pTB = evalLayeredSuitPt(rTop, ang, 0.0004 * s);
+        const pTF = evalLayeredSuitPt(rTop, ang, pkOut);
+        const pBF = evalLayeredSuitPt(rBot, ang, pkOut * 1.05);
+        const pBB = evalLayeredSuitPt(rBot, ang, 0.0004 * s);
+        const cPk = pinstripeColor(ang, -0.008, true);
+        topBase.push(addV(pTB[0], pTB[1], pTB[2], colSeamAO, 0.0));
+        topFace.push(addV(pTF[0], pTF[1], pTF[2], colLapelHi, 0.0));
+        botFace.push(addV(pBF[0], pBF[1], pBF[2], cPk, 0.0));
+        botBase.push(addV(pBB[0], pBB[1], pBB[2], colSeamAO, 0.0));
+      }
+      for (let k = 0; k < N_PK - 1; k++) {
+        if (pSide > 0) {
+          addQuad(topBase[k], topFace[k], topFace[k + 1], topBase[k + 1]);
+          addQuad(topFace[k], botFace[k], botFace[k + 1], topFace[k + 1]);
+          addQuad(botFace[k], botBase[k], botBase[k + 1], botFace[k + 1]);
+        } else {
+          addQuad(topBase[k + 1], topFace[k + 1], topFace[k], topBase[k]);
+          addQuad(topFace[k + 1], botFace[k + 1], botFace[k], topFace[k]);
+          addQuad(botFace[k + 1], botBase[k + 1], botBase[k], botFace[k]);
+        }
+      }
+      // Side end-caps of the pocket flap
+      if (pSide > 0) {
+        addQuad(topBase[0], botBase[0], botFace[0], topFace[0]);
+        addQuad(topFace[N_PK - 1], botFace[N_PK - 1], botBase[N_PK - 1], topBase[N_PK - 1]);
+      } else {
+        addQuad(topFace[0], botFace[0], botBase[0], topBase[0]);
+        addQuad(topBase[N_PK - 1], botBase[N_PK - 1], botFace[N_PK - 1], topFace[N_PK - 1]);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Four 3D Tortoiseshell Amber-Brown Buttons (2 Columns x 2 Lower Rows)
+    //    Anchored directly to the raised 3D overlapping front panel quads (flapTopRows)
+    //    so buttons stay locked to the overlapping suit flap in every walking pose.
+    // -------------------------------------------------------------------------
+    const getVert3 = (vIdx) => [outV[vIdx * 3], outV[vIdx * 3 + 1], outV[vIdx * 3 + 2]];
+    const sampleFlapButtonPos = (frFloat, fcFloat) => {
+      const r0 = Math.max(0, Math.min(flapTopRows.length - 2, Math.floor(frFloat)));
+      const r1 = r0 + 1;
+      const tR = frFloat - r0;
+      const c0 = Math.max(0, Math.min(N_FLAP_COLS - 2, Math.floor(fcFloat)));
+      const c1 = c0 + 1;
+      const tC = fcFloat - c0;
+
+      const p00 = getVert3(flapTopRows[r0][c0]);
+      const p10 = getVert3(flapTopRows[r0][c1]);
+      const p01 = getVert3(flapTopRows[r1][c0]);
+      const p11 = getVert3(flapTopRows[r1][c1]);
+
+      const bx = (p00[0] * (1.0 - tC) + p10[0] * tC) * (1.0 - tR) + (p01[0] * (1.0 - tC) + p11[0] * tC) * tR;
+      const by = (p00[1] * (1.0 - tC) + p10[1] * tC) * (1.0 - tR) + (p01[1] * (1.0 - tC) + p11[1] * tC) * tR;
+      const bz = (p00[2] * (1.0 - tC) + p10[2] * tC) * (1.0 - tR) + (p01[2] * (1.0 - tC) + p11[2] * tC) * tR;
+
+      let maxFwdDelta = 0.0;
+      const corners = [p00, p10, p01, p11];
+      for (let k = 0; k < 4; k++) {
+        const c = corners[k];
+        const dFwd = (c[0] - bx) * torsoFwd[0] + (c[1] - by) * torsoFwd[1] + (c[2] - bz) * torsoFwd[2];
+        if (dFwd > maxFwdDelta) maxFwdDelta = dFwd;
+      }
+      const lift = maxFwdDelta * 0.45 + 0.0030 * s;
+      return [
+        bx + torsoFwd[0] * lift,
+        by + torsoFwd[1] * lift,
+        bz + torsoFwd[2] * lift
+      ];
+    };
+
+    const buttonPlacements = [
+      // Middle row (at waist level fr ≈ 3.02 in flapRowSpecs -> rF ≈ 4.02, symmetrical ±x button columns)
+      { fr: 3.02, fc: 2.25 },
+      { fr: 3.02, fc: 6.35 },
+      // Bottom row (at lower hip level fr ≈ 4.42 in flapRowSpecs -> rF ≈ 5.42, symmetrical ±x button columns)
+      { fr: 4.42, fc: 2.45 },
+      { fr: 4.42, fc: 6.25 }
+    ];
+    for (let bi = 0; bi < buttonPlacements.length; bi++) {
+      const bp = buttonPlacements[bi];
+      const bPos = sampleFlapButtonPos(bp.fr, bp.fc);
+      const bx = bPos[0];
+      const by = bPos[1];
+      const bz = bPos[2];
+      const rBtn = 0.0076 * s;
+      const bThick = 0.0038 * s;
+
+      const vDome = addV(
+        bx + torsoFwd[0] * bThick,
+        by + torsoFwd[1] * bThick,
+        bz + torsoFwd[2] * bThick,
+        colBtnHi
+      );
+      const rimFront = [], rimBack = [];
+      for (let j = 0; j < 8; j++) {
+        const a = (j / 8) * Math.PI * 2.0;
+        const cA = Math.cos(a), sA = Math.sin(a);
+        const colB = (j % 2 === 0) ? colBtnRim : colBtnDark;
+        rimFront.push(addV(
+          bx + torsoRight[0] * (sA * rBtn) + torsoUp[0] * (cA * rBtn) + torsoFwd[0] * (bThick * 0.55),
+          by + torsoRight[1] * (sA * rBtn) + torsoUp[1] * (cA * rBtn) + torsoFwd[1] * (bThick * 0.55),
+          bz + torsoRight[2] * (sA * rBtn) + torsoUp[2] * (cA * rBtn) + torsoFwd[2] * (bThick * 0.55),
+          colB
+        ));
+        rimBack.push(addV(
+          bx + torsoRight[0] * (sA * rBtn * 1.08) + torsoUp[0] * (cA * rBtn * 1.08) - torsoFwd[0] * 0.0012 * s,
+          by + torsoRight[1] * (sA * rBtn * 1.08) + torsoUp[1] * (cA * rBtn * 1.08) - torsoFwd[1] * 0.0012 * s,
+          bz + torsoRight[2] * (sA * rBtn * 1.08) + torsoUp[2] * (cA * rBtn * 1.08) - torsoFwd[2] * 0.0012 * s,
+          colSeamAO
+        ));
+      }
+      for (let j = 0; j < 8; j++) {
+        const nextJ = (j + 1) % 8;
+        addTri(rimFront[j], vDome, rimFront[nextJ]);
+        addQuad(rimBack[j], rimFront[j], rimFront[nextJ], rimBack[nextJ]);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Structured Long Suit Sleeves (Generous Upper-Arm Clearance, No Inner Cuff)
+    // -------------------------------------------------------------------------
+    const buildSuitSleeve = (pShoulder, pElbow, pHand, isLeft) => {
+      if (!pShoulder || !pElbow || !pHand) return;
+      const N_SLEEVE = 16;
+      const side = isLeft ? -1.0 : 1.0;
+
+      const norm3 = (v, fb = [0, -1, 0]) => {
+        const l = Math.hypot(v[0], v[1], v[2]);
+        return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+      };
+      const cross3 = (a, b) => [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      ];
+      const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+      const dirUpper = norm3([pElbow[0] - pShoulder[0], pElbow[1] - pShoulder[1], pElbow[2] - pShoulder[2]], [side * 0.25, -0.96, 0]);
+      const dirFore  = norm3([pHand[0] - pElbow[0], pHand[1] - pElbow[1], pHand[2] - pElbow[2]], dirUpper);
+      const dirElbow = norm3([dirUpper[0] + dirFore[0], dirUpper[1] + dirFore[1], dirUpper[2] + dirFore[2]], dirUpper);
+
+      const pArmhole = [
+        pShoulder[0] - torsoRight[0] * (side * 0.015 * s) + torsoUp[0] * (0.005 * s),
+        pShoulder[1] - torsoRight[1] * (side * 0.015 * s) + torsoUp[1] * (0.005 * s),
+        pShoulder[2] - torsoRight[2] * (side * 0.015 * s) + torsoUp[2] * (0.005 * s)
+      ];
+      const dirArmhole = norm3([
+        torsoRight[0] * side * 0.85 + dirUpper[0] * 0.35,
+        torsoRight[1] * side * 0.85 + dirUpper[1] * 0.35 - 0.10,
+        torsoRight[2] * side * 0.85 + dirUpper[2] * 0.35
+      ], dirUpper);
+
+      const slvDisp = computeSuitDisp(0.16);
+      const stations = [
+        { p: pArmhole,                       dir: dirArmhole,                                rx: 0.0515 * s, ry: 0.0550 * s, clamp: false, sag: 0.00, ao: 0.045, isIn: false },
+        { p: pShoulder,                      dir: dirUpper,                                  rx: 0.0510 * s, ry: 0.0510 * s, clamp: false, sag: 0.05, ao: 0.000, isIn: false },
+        { p: lerp3(pShoulder, pElbow, 0.34), dir: dirUpper,                                  rx: 0.0490 * s, ry: 0.0485 * s, clamp: true,  sag: 0.25, ao: 0.000, isIn: false },
+        { p: lerp3(pShoulder, pElbow, 0.70), dir: dirUpper,                                  rx: 0.0460 * s, ry: 0.0455 * s, clamp: true,  sag: 0.45, ao: 0.000, isIn: false },
+        { p: lerp3(pShoulder, pElbow, 0.88), dir: norm3(lerp3(dirUpper, dirElbow, 0.5)),     rx: 0.0445 * s, ry: 0.0440 * s, clamp: true,  sag: 0.55, ao: 0.005, isIn: false },
+        { p: pElbow,                         dir: dirElbow,                                  rx: 0.0435 * s, ry: 0.0430 * s, clamp: true,  sag: 0.62, ao: 0.015, isIn: false },
+        { p: lerp3(pElbow, pHand, 0.14),     dir: norm3(lerp3(dirElbow, dirFore, 0.5)),      rx: 0.0425 * s, ry: 0.0420 * s, clamp: true,  sag: 0.66, ao: 0.005, isIn: false },
+        { p: lerp3(pElbow, pHand, 0.50),     dir: dirFore,                                   rx: 0.0405 * s, ry: 0.0400 * s, clamp: true,  sag: 0.80, ao: 0.000, isIn: false },
+        { p: lerp3(pElbow, pHand, 0.85),     dir: dirFore,                                   rx: 0.0380 * s, ry: 0.0375 * s, clamp: true,  sag: 0.94, ao: 0.008, isIn: false },
+        { p: lerp3(pElbow, pHand, 0.96),     dir: dirFore,                                   rx: 0.0370 * s, ry: 0.0365 * s, clamp: true,  sag: 1.00, ao: 0.025, isIn: false },
+        { p: lerp3(pElbow, pHand, 0.86),     dir: dirFore,                                   rx: 0.0275 * s, ry: 0.0275 * s, clamp: false, sag: 0.94, ao: 0.000, isIn: true }
+      ];
+
+      let curU = cross3(torsoFwd, stations[0].dir);
+      if (Math.hypot(curU[0], curU[1], curU[2]) < 1e-4) curU = cross3([0, 1, 0], stations[0].dir);
+      curU = norm3(curU, [side, 0, 0]);
+      let curV = norm3(cross3(stations[0].dir, curU), [0, 0, 1]);
+
+      const rings = [];
+      for (let k = 0; k < stations.length; k++) {
+        const st = stations[k];
+        if (k > 0) {
+          const proj = dot3(curU, st.dir);
+          const nextU = [curU[0] - st.dir[0] * proj, curU[1] - st.dir[1] * proj, curU[2] - st.dir[2] * proj];
+          if (Math.hypot(nextU[0], nextU[1], nextU[2]) > 1e-4) {
+            curU = norm3(nextU, curU);
+            curV = norm3(cross3(st.dir, curU), curV);
+          }
+        }
+        const ring = [];
+        for (let j = 0; j < N_SLEEVE; j++) {
+          const ang = (j / N_SLEEVE) * Math.PI * 2.0;
+          const cosA = Math.cos(ang), sinA = Math.sin(ang);
+          let vx = st.p[0] + (curU[0] * cosA * st.rx + curV[0] * sinA * st.ry) + slvDisp[0] * st.sag;
+          let vy = st.p[1] + (curU[1] * cosA * st.rx + curV[1] * sinA * st.ry) + slvDisp[1] * st.sag;
+          let vz = st.p[2] + (curU[2] * cosA * st.rx + curV[2] * sinA * st.ry) + slvDisp[2] * st.sag;
+          if (st.clamp && !isLocal) {
+            const c1 = clampPointOutsideSegmentCapsule(vx, vy, vz, pShoulder, pElbow, 0.046 * s, 0.039 * s, 0.0055 * s);
+            const c2 = clampPointOutsideSegmentCapsule(c1[0], c1[1], c1[2], pElbow, pHand, 0.039 * s, 0.028 * s, 0.0050 * s);
+            vx = c2[0]; vy = c2[1]; vz = c2[2];
+          }
+          const col = st.isIn ? colInner : pinstripeColor(ang * 0.5, st.ao, false);
+          ring.push(addV(vx, vy, vz, col));
+        }
+        rings.push(ring);
+      }
+
+      for (let k = 0; k < rings.length - 1; k++) {
+        const r0 = rings[k], r1 = rings[k + 1];
+        for (let j = 0; j < N_SLEEVE; j++) {
+          const nextJ = (j + 1) % N_SLEEVE;
+          addQuad(r0[j], r0[nextJ], r1[nextJ], r1[j]);
+        }
+      }
+    };
+
+    buildSuitSleeve(leftArmPivot, leftElbowRot, leftHandRot, true);
+    buildSuitSleeve(rightArmPivot, rightElbowRot, rightHandRot, false);
+
+    // Smooth normals & double-sided inside faces
+    const frontTriCount = outI.length;
+    const normals = new Float32Array(outV.length);
+    for (let k = 0; k < frontTriCount; k += 3) {
+      const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
+      const ux = outV[i1 * 3] - outV[i0 * 3], uy = outV[i1 * 3 + 1] - outV[i0 * 3 + 1], uz = outV[i1 * 3 + 2] - outV[i0 * 3 + 2];
+      const vx = outV[i2 * 3] - outV[i0 * 3], vy = outV[i2 * 3 + 1] - outV[i0 * 3 + 1], vz = outV[i2 * 3 + 2] - outV[i0 * 3 + 2];
+      const nX = uy * vz - uz * vy, nY = uz * vx - ux * vz, nZ = ux * vy - uy * vx;
+      normals[i0 * 3] += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
+      normals[i1 * 3] += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
+      normals[i2 * 3] += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
+    }
+    for (let k = 0; k < normals.length; k += 3) {
+      const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+      if (l > 1e-12) { normals[k] /= l; normals[k + 1] /= l; normals[k + 2] /= l; }
+      else { normals[k] = 0.0; normals[k + 1] = 1.0; normals[k + 2] = 0.0; }
+    }
+    for (let k = 0; k < frontTriCount; k += 3) {
+      outI.push(outI[k], outI[k + 2], outI[k + 1]);
+    }
+
+    return {
+      vertices: outV,
+      normals: normals,
+      colors: outC,
+      texcoords: outT,
+      indices: outI
+    };
+  }
+
+  // =========================================================================
+  // --- 11A-5. Tailored Pleated Straight-Leg Dark Slacks Mesh (BLACK_SLACKS) ---
+  // Reference: Screenshot_2026-11-17_04-30-49_9938dd28.png & image_8ca5cef7.png
+  //   - Exact warm dark plum-charcoal slate palette (R > G, B > R)
+  //   - Sculpted 3D sawtooth front waist pleats descending into crisp center-leg
+  //     press creases, secondary outer-front thigh pleat fold, diagonal fly/crotch
+  //     tension folds, and knee drape creases
+  //   - Full enclosed crotch saddle & wide outer-hip envelope (zero skin clipping)
+  //   - Asymmetric inner/outer leg radii for a clean separation gap between legs
+  // =========================================================================
+  function buildBlackSlacksMesh(
+    headP1,
+    chestP1, chestP2,
+    leftLegPivot, leftKneeRot, leftFootRot,
+    rightLegPivot, rightKneeRot, rightFootRot,
+    scale = 1.0,
+    phase = 0.0,
+    clothContext = null
+  ) {
+    const outV = [], outC = [], outT = [], outI = [];
+    const s = scale || 1.0;
+
+    const baseGroin = chestP1 || [0, -0.090 * s, 0];
+    const baseChest = chestP2 || [0,  0.170 * s, 0];
+
+    const tdx = baseChest[0] - baseGroin[0];
+    const tdy = baseChest[1] - baseGroin[1];
+    const tdz = baseChest[2] - baseGroin[2];
+    const torsoLen = Math.hypot(tdx, tdy, tdz) || (0.26 * s);
+    const torsoUp = [tdx / torsoLen, tdy / torsoLen, tdz / torsoLen];
+
+    const fDot = torsoUp[2];
+    let torsoFwd = [-torsoUp[0] * fDot, -torsoUp[1] * fDot, 1.0 - torsoUp[2] * fDot];
+    const tfLen = Math.hypot(torsoFwd[0], torsoFwd[1], torsoFwd[2]);
+    torsoFwd = tfLen > 1e-4 ? [torsoFwd[0] / tfLen, torsoFwd[1] / tfLen, torsoFwd[2] / tfLen] : [0, 0, 1];
+    const torsoRight = [
+      torsoUp[1] * torsoFwd[2] - torsoUp[2] * torsoFwd[1],
+      torsoUp[2] * torsoFwd[0] - torsoUp[0] * torsoFwd[2],
+      torsoUp[0] * torsoFwd[1] - torsoUp[1] * torsoFwd[0]
+    ];
+
+    const groinPt = (dx, dy, dz) => [
+      baseGroin[0] + torsoRight[0] * dx + torsoUp[0] * dy + torsoFwd[0] * dz,
+      baseGroin[1] + torsoRight[1] * dx + torsoUp[1] * dy + torsoFwd[1] * dz,
+      baseGroin[2] + torsoRight[2] * dx + torsoUp[2] * dy + torsoFwd[2] * dz
+    ];
+
+    // Charcoal grey tailored wool palette matching DOUBLE_BREASTED_SUIT (colSuitBase = [0.238, 0.246, 0.268]).
+    // No dark vertical stripes on the base cylinder; all pleats and creases are built as real 3D folded meshes!
+    const colBase       = [0.238, 0.246, 0.268];
+    const colLit        = [0.262, 0.270, 0.294];
+    const colCreaseHi   = [0.284, 0.293, 0.318];
+    const colTuckStep   = [0.182, 0.188, 0.208]; // Subtle inner fold-step shade (only on hidden 3D step wall)
+    const colInner      = [0.095, 0.100, 0.115];
+    const colTabWhite   = [0.865, 0.870, 0.900];
+
+    const eqState = (clothContext !== null && typeof getCharacterEquippedClothingState === "function")
+      ? getCharacterEquippedClothingState(false)
+      : null;
+    const underSuit = !!(eqState && eqState.wearSuit);
+    const pScale = underSuit ? 0.88 : 1.0;
+
+    const bodyColliderData = {
+      headP1: headP1 || [baseChest[0], baseChest[1] + 0.08 * s, baseChest[2]],
+      chestP1: baseGroin,
+      chestP2: baseChest,
+      leftLegPivot,
+      leftKneeRot,
+      leftFootRot,
+      rightLegPivot,
+      rightKneeRot,
+      rightFootRot,
+      scale: s
+    };
+
+    const addV = (px, py, pz, col, clampClr = 0.0, pushHint = null) => {
+      let vx = px, vy = py, vz = pz;
+      if (clampClr > 0.0) {
+        const clamped = clampPointOutsideChibiBodyForCloth(vx, vy, vz, bodyColliderData, clampClr, false, pushHint);
+        vx = clamped[0]; vy = clamped[1]; vz = clamped[2];
+      }
+      const idx = (outV.length / 3) | 0;
+      outV.push(vx, vy, vz);
+      outC.push(col[0], col[1], col[2]);
+      outT.push(-9.0, -9.0);
+      return idx;
+    };
+    const addQuad = (a, b, c, d) => { outI.push(a, b, c); outI.push(a, c, d); };
+
+    // -------------------------------------------------------------------------
+    // 1. Clean High-Waisted Slacks Pelvis, 3D Waistband, 3D Overlapping Fly Flap,
+    //    3D Waist Pleat Folds & Full Crotch Saddle
+    // -------------------------------------------------------------------------
+    const N_WAIST = 32;
+    const pelvisLevels = [
+      { dy: torsoLen * 0.425, rx: 0.079 * s * pScale, rzF: 0.067 * s * pScale, rzB: 0.064 * s * pScale, cy: -0.001 * s, isBand: true,  clr: underSuit ? 0.0010 : 0.0025 }, // 0: Top waistband edge
+      { dy: torsoLen * 0.360, rx: 0.083 * s * pScale, rzF: 0.070 * s * pScale, rzB: 0.068 * s * pScale, cy: -0.002 * s, isBand: true,  clr: underSuit ? 0.0015 : 0.0040 }, // 1: Waistband bottom edge
+      { dy: torsoLen * 0.270, rx: 0.104 * s * pScale, rzF: 0.077 * s * pScale, rzB: 0.084 * s * pScale, cy: -0.002 * s, isBand: false, clr: underSuit ? 0.0020 : 0.0065 }, // 2: Upper hip
+      { dy: torsoLen * 0.160, rx: 0.118 * s * pScale, rzF: 0.083 * s * pScale, rzB: 0.093 * s * pScale, cy: -0.003 * s, isBand: false, clr: underSuit ? 0.0025 : 0.0075 }, // 3: Full hip
+      { dy: torsoLen * 0.050, rx: 0.114 * s * pScale, rzF: 0.078 * s * pScale, rzB: 0.086 * s * pScale, cy: -0.002 * s, isBand: false, clr: underSuit ? 0.0025 : 0.0065 }, // 4: Upper crotch
+      { dy: -0.010 * s,       rx: 0.102 * s * pScale, rzF: 0.068 * s * pScale, rzB: 0.074 * s * pScale, cy: -0.001 * s, isBand: false, clr: underSuit ? 0.0020 : 0.0045 }, // 5: Lower groin wrap
+      { dy: -0.022 * s,       rx: 0.088 * s * pScale, rzF: 0.056 * s * pScale, rzB: 0.060 * s * pScale, cy: -0.001 * s, isBand: false, clr: underSuit ? 0.0015 : 0.0030 }  // 6: Under-crotch saddle floor
+    ];
+
+    const evalPelvisSurfacePt = (rFloat, ang, extraOut = 0.0) => {
+      const r0 = Math.max(0, Math.min(pelvisLevels.length - 2, Math.floor(rFloat)));
+      const r1 = r0 + 1;
+      const tR = Math.max(0.0, Math.min(1.0, rFloat - r0));
+      const L0 = pelvisLevels[r0], L1 = pelvisLevels[r1];
+      const rx  = L0.rx  * (1.0 - tR) + L1.rx  * tR;
+      const rzF = L0.rzF * (1.0 - tR) + L1.rzF * tR;
+      const rzB = L0.rzB * (1.0 - tR) + L1.rzB * tR;
+      const dy  = L0.dy  * (1.0 - tR) + L1.dy  * tR;
+      const cy  = L0.cy  * (1.0 - tR) + L1.cy  * tR;
+      const clr = L0.clr * (1.0 - tR) + L1.clr * tR;
+
+      const sinA = Math.sin(ang);
+      const cosA = Math.cos(ang);
+      const rz = cosA >= 0.0 ? rzF : rzB;
+      const p = groinPt(sinA * (rx + extraOut), dy, cy + cosA * (rz + extraOut));
+      if (clr > 0.0) {
+        return clampPointOutsideChibiBodyForCloth(p[0], p[1], p[2], bodyColliderData, clr + extraOut * 0.5, false, null);
+      }
+      return p;
+    };
+
+    const pelvisRings = [];
+    const waistInnerRing = [];
+    for (let rIdx = 0; rIdx < pelvisLevels.length; rIdx++) {
+      const lvl = pelvisLevels[rIdx];
+      const row = [];
+      for (let j = 0; j < N_WAIST; j++) {
+        const ang = (j / N_WAIST) * Math.PI * 2.0;
+        const sinA = Math.sin(ang);
+        const cosA = Math.cos(ang);
+        const rz = cosA >= 0.0 ? lvl.rzF : lvl.rzB;
+
+        const bandBump = lvl.isBand ? (0.0014 * s) : 0.0;
+        const col = (lvl.isBand && rIdx === 0) ? colLit : colBase;
+
+        const p = groinPt(
+          sinA * (lvl.rx + bandBump),
+          lvl.dy,
+          lvl.cy + cosA * (rz + bandBump)
+        );
+
+        row.push(addV(p[0], p[1], p[2], col, lvl.clr));
+        if (rIdx === 0) {
+          const pIn = groinPt(sinA * (lvl.rx * 0.88), lvl.dy - 0.008 * s, lvl.cy + cosA * (rz * 0.88));
+          waistInnerRing.push(addV(pIn[0], pIn[1], pIn[2], colInner));
+        }
+      }
+      pelvisRings.push(row);
+    }
+
+    for (let j = 0; j < N_WAIST; j++) {
+      const nextJ = (j + 1) % N_WAIST;
+      addQuad(waistInnerRing[j], pelvisRings[0][j], pelvisRings[0][nextJ], waistInnerRing[nextJ]);
+    }
+    for (let r = 0; r < pelvisRings.length - 1; r++) {
+      const r0 = pelvisRings[r], r1 = pelvisRings[r + 1];
+      for (let j = 0; j < N_WAIST; j++) {
+        const nextJ = (j + 1) % N_WAIST;
+        addQuad(r0[j], r1[j], r1[nextJ], r0[nextJ]);
+      }
+    }
+    // Close the under-crotch saddle floor (pelvisRings[last]) from front to back across the groin
+    const botPelvis = pelvisRings[pelvisRings.length - 1];
+    for (let step = 1; step < (N_WAIST / 2) - 1; step++) {
+      const a0 = step - 1, a1 = step;
+      const b0 = N_WAIST - step + 1, b1 = N_WAIST - step;
+      addQuad(botPelvis[b0 % N_WAIST], botPelvis[b1], botPelvis[a1], botPelvis[a0 === 0 ? 0 : a0]);
+    }
+
+    // 1B. 3D Overlapping Front Fly Placket & Upper-Hip 3D Pleat Origins on Pelvis
+    //     (Visible when worn standalone or partially below suit hem)
+    {
+      // Center-front 3D overlapping fly flap (ang from -0.15 on viewer's left to +0.16 on viewer's right,
+      // with a 3D step wall on the viewer's right / wearer's left J-seam at ang = +0.16)
+      const flyRows = [1.0, 1.8, 2.7, 3.6];
+      const flyThick = 0.0032 * s * pScale;
+      const fGrid = [];
+      for (let r = 0; r < flyRows.length; r++) {
+        const rF = flyRows[r];
+        const bottomCurve = (r === flyRows.length - 1) ? 0.06 : 0.16;
+        const pLBase = evalPelvisSurfacePt(rF, -0.16, 0.0004 * s);
+        const pLTop  = evalPelvisSurfacePt(rF, -0.14, flyThick * 0.75);
+        const pMid   = evalPelvisSurfacePt(rF,  0.00, flyThick);
+        const pRTop  = evalPelvisSurfacePt(rF,  bottomCurve, flyThick);
+        const pRBase = evalPelvisSurfacePt(rF,  bottomCurve + 0.028, 0.0004 * s);
+        fGrid.push([
+          addV(pLBase[0], pLBase[1], pLBase[2], colBase),
+          addV(pLTop[0],  pLTop[1],  pLTop[2],  colLit),
+          addV(pMid[0],   pMid[1],   pMid[2],   colLit),
+          addV(pRTop[0],  pRTop[1],  pRTop[2],  colCreaseHi),
+          addV(pRBase[0], pRBase[1], pRBase[2], colTuckStep)
+        ]);
+      }
+      for (let r = 0; r < fGrid.length - 1; r++) {
+        const g0 = fGrid[r], g1 = fGrid[r + 1];
+        for (let c = 0; c < 4; c++) {
+          addQuad(g0[c], g1[c], g1[c + 1], g0[c + 1]);
+        }
+      }
+
+      // Upper pelvis 3D front waist pleat folds (descending from waistband rF = 1.05 into the top of each leg)
+      for (const side of [-1.0, 1.0]) {
+        const pRows = [1.05, 1.85, 2.70, 3.45];
+        const pThick = 0.0038 * s * pScale;
+        const pGrid = [];
+        for (let r = 0; r < pRows.length; r++) {
+          const rF = pRows[r];
+          // Main waist pleat fold centered around ang = side * 0.56, folding inward toward center-front
+          const angTuck  = side * 0.49;
+          const angEdge  = side * 0.52;
+          const angBlade = side * 0.63;
+          const angMerge = side * 0.76;
+          const pTuck  = evalPelvisSurfacePt(rF, angTuck,  0.0004 * s);
+          const pEdge  = evalPelvisSurfacePt(rF, angEdge,  pThick);
+          const pBlade = evalPelvisSurfacePt(rF, angBlade, pThick * 0.72);
+          const pMerge = evalPelvisSurfacePt(rF, angMerge, 0.0004 * s);
+          pGrid.push([
+            addV(pTuck[0],  pTuck[1],  pTuck[2],  colTuckStep),
+            addV(pEdge[0],  pEdge[1],  pEdge[2],  colCreaseHi),
+            addV(pBlade[0], pBlade[1], pBlade[2], colLit),
+            addV(pMerge[0], pMerge[1], pMerge[2], colBase)
+          ]);
+        }
+        for (let r = 0; r < pGrid.length - 1; r++) {
+          const g0 = pGrid[r], g1 = pGrid[r + 1];
+          for (let c = 0; c < 3; c++) {
+            if (side > 0) {
+              addQuad(g0[c], g1[c], g1[c + 1], g0[c + 1]);
+            } else {
+              addQuad(g0[c + 1], g1[c + 1], g1[c], g0[c]);
+            }
+          }
+        }
+      }
+    }
+
+    if (!underSuit) {
+      // 6 Raised 3D Belt Loops around the waistband + small white/silver brand tab below right-front waistband
+      const loopAngles = [-0.48, 0.48, -1.48, 1.48, Math.PI - 0.48, Math.PI + 0.48];
+      for (let li = 0; li < loopAngles.length; li++) {
+        const ang = loopAngles[li];
+        const hw = 0.068;
+        const aL = ang - hw, aR = ang + hw;
+        const rB = 0.0865 * s;
+        const rZF = 0.0745 * s;
+        const rZB = 0.0715 * s;
+        const ptLoop = (a, dy) => {
+          const sA = Math.sin(a), cA = Math.cos(a);
+          return groinPt(sA * rB, dy, -0.0015 * s + cA * (cA >= 0 ? rZF : rZB));
+        };
+        const vTL = addV(...ptLoop(aL, torsoLen * 0.430), colCreaseHi);
+        const vTR = addV(...ptLoop(aR, torsoLen * 0.430), colCreaseHi);
+        const vBL = addV(...ptLoop(aL, torsoLen * 0.355), colLit);
+        const vBR = addV(...ptLoop(aR, torsoLen * 0.355), colLit);
+        addQuad(vTL, vBL, vBR, vTR);
+      }
+      // Small crisp metallic/white brand tab at wearer's right upper hip
+      {
+        const aTabL = -0.82, aTabR = -0.71;
+        const ptTab = (a, dy) => {
+          const sA = Math.sin(a), cA = Math.cos(a);
+          return groinPt(sA * 0.089 * s, dy, -0.0015 * s + cA * 0.075 * s);
+        };
+        const tTL = addV(...ptTab(aTabL, torsoLen * 0.358), colTabWhite);
+        const tTR = addV(...ptTab(aTabR, torsoLen * 0.358), colTabWhite);
+        const tBL = addV(...ptTab(aTabL, torsoLen * 0.332), colTabWhite);
+        const tBR = addV(...ptTab(aTabR, torsoLen * 0.332), colTabWhite);
+        addQuad(tTL, tBL, tBR, tTR);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Articulated Straight-Leg Trouser Tubes + Real 3D Folded Pleat & Crease Meshes
+    //    - Base leg tube is 100% smooth, uniform charcoal (colBase) around the back,
+    //      sides, and front so there are NEVER any dark vertical stripes!
+    //    - Front knife-pleats, full-length center press creases, secondary outer-thigh
+    //      pleats, and groin drape folds are constructed as real 3D folded mesh layers
+    //      with dedicated vertices and 3D step walls.
+    // -------------------------------------------------------------------------
+    const addSlacksLeg = (pHip, pKnee, pFoot, isLeft) => {
+      if (!pHip || !pKnee || !pFoot) return;
+      const N_LEG = 28;
+      const outerSign = isLeft ? -1.0 : 1.0;
+
+      const norm3 = (v, fb = [0, -1, 0]) => {
+        const l = Math.hypot(v[0], v[1], v[2]);
+        return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
+      };
+      const cross3 = (a, b) => [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      ];
+      const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+      const dirThigh = norm3([pKnee[0] - pHip[0], pKnee[1] - pHip[1], pKnee[2] - pHip[2]], [0, -1, 0]);
+      const dirCalf  = norm3([pFoot[0] - pKnee[0], pFoot[1] - pKnee[1], pFoot[2] - pKnee[2]], dirThigh);
+      const dirKnee  = norm3([dirThigh[0] + dirCalf[0], dirThigh[1] + dirCalf[1], dirThigh[2] + dirCalf[2]], dirThigh);
+
+      const shiftHip = (pt, upAmt, outAmt) => [
+        pt[0] + torsoUp[0] * upAmt + torsoRight[0] * (outerSign * outAmt),
+        pt[1] + torsoUp[1] * upAmt + torsoRight[1] * (outerSign * outAmt),
+        pt[2] + torsoUp[2] * upAmt + torsoRight[2] * (outerSign * outAmt)
+      ];
+
+      const uS0 = underSuit ? 0.88 : 1.0;
+      const uS1 = underSuit ? 0.92 : 1.0;
+      const stations = [
+        { p: shiftHip(pHip, 0.024 * s, 0.0030 * s * uS0),                dir: dirThigh,                             rxOut: 0.0660 * s * uS0, rxIn: 0.0510 * s * uS0, rz: 0.0630 * s * uS0, t: 0.00, clamp: false,      isHemIn: false },
+        { p: shiftHip(lerp3(pHip, pKnee, 0.16), 0.0, 0.0028 * s * uS1),  dir: dirThigh,                             rxOut: 0.0640 * s * uS1, rxIn: 0.0445 * s * uS1, rz: 0.0600 * s * uS1, t: 0.14, clamp: !underSuit, isHemIn: false },
+        { p: shiftHip(lerp3(pHip, pKnee, 0.42), 0.0, 0.0022 * s),        dir: dirThigh,                             rxOut: 0.0605 * s,       rxIn: 0.0435 * s,       rz: 0.0570 * s,       t: 0.30, clamp: true,       isHemIn: false },
+        { p: shiftHip(lerp3(pHip, pKnee, 0.72), 0.0, 0.0014 * s),        dir: dirThigh,                             rxOut: 0.0565 * s,       rxIn: 0.0430 * s,       rz: 0.0545 * s,       t: 0.44, clamp: true,       isHemIn: false },
+        { p: shiftHip(lerp3(pHip, pKnee, 0.92), 0.0, 0.0008 * s),        dir: norm3(lerp3(dirThigh, dirKnee, 0.5)), rxOut: 0.0540 * s,       rxIn: 0.0425 * s,       rz: 0.0530 * s,       t: 0.52, clamp: true,       isHemIn: false },
+        { p: pKnee,                                                      dir: dirKnee,                              rxOut: 0.0525 * s,       rxIn: 0.0420 * s,       rz: 0.0520 * s,       t: 0.58, clamp: true,       isHemIn: false },
+        { p: lerp3(pKnee, pFoot, 0.16),                                  dir: norm3(lerp3(dirKnee, dirCalf, 0.5)),  rxOut: 0.0515 * s,       rxIn: 0.0418 * s,       rz: 0.0515 * s,       t: 0.66, clamp: true,       isHemIn: false },
+        { p: lerp3(pKnee, pFoot, 0.50),                                  dir: dirCalf,                              rxOut: 0.0500 * s,       rxIn: 0.0412 * s,       rz: 0.0500 * s,       t: 0.80, clamp: true,       isHemIn: false },
+        { p: lerp3(pKnee, pFoot, 0.82),                                  dir: dirCalf,                              rxOut: 0.0485 * s,       rxIn: 0.0408 * s,       rz: 0.0485 * s,       t: 0.92, clamp: true,       isHemIn: false },
+        { p: lerp3(pKnee, pFoot, 0.945),                                 dir: dirCalf,                              rxOut: 0.0470 * s,       rxIn: 0.0402 * s,       rz: 0.0475 * s,       t: 1.00, clamp: true,       isHemIn: false },
+        { p: lerp3(pKnee, pFoot, 0.87),                                  dir: dirCalf,                              rxOut: 0.0365 * s,       rxIn: 0.0355 * s,       rz: 0.0365 * s,       t: 0.94, clamp: false,      isHemIn: true }
+      ];
+
+      // Precompute orthonormal frame (U = +torsoRight, V = +torsoFwd) at every leg station
+      let curU = cross3(torsoFwd, stations[0].dir);
+      if (Math.hypot(curU[0], curU[1], curU[2]) < 1e-4) curU = [1, 0, 0];
+      curU = norm3(curU, [1, 0, 0]);
+      let curV = norm3(cross3(stations[0].dir, curU), torsoFwd);
+      if (dot3(curV, torsoFwd) < 0) {
+        curU = [-curU[0], -curU[1], -curU[2]];
+        curV = [-curV[0], -curV[1], -curV[2]];
+      }
+      for (let k = 0; k < stations.length; k++) {
+        const st = stations[k];
+        if (k > 0) {
+          const proj = dot3(curU, st.dir);
+          const nextU = [curU[0] - st.dir[0] * proj, curU[1] - st.dir[1] * proj, curU[2] - st.dir[2] * proj];
+          if (Math.hypot(nextU[0], nextU[1], nextU[2]) > 1e-4) {
+            curU = norm3(nextU, curU);
+            curV = norm3(cross3(st.dir, curU), curV);
+          }
+        }
+        st.U = [curU[0], curU[1], curU[2]];
+        st.V = [curV[0], curV[1], curV[2]];
+      }
+
+      // Evaluate any point on the smooth base leg tube at station index kFloat (0..9) and angle ang,
+      // plus an outward radial offset extraOut along the local leg normal for 3D folded pleat layers.
+      const evalLegPt = (kFloat, ang, extraOut = 0.0, isHemIn = false) => {
+        const maxOuterK = stations.length - 2; // station 9 is bottom hem
+        const k0 = isHemIn ? (stations.length - 1) : Math.max(0, Math.min(maxOuterK - 1, Math.floor(kFloat)));
+        const k1 = isHemIn ? k0 : Math.min(maxOuterK, k0 + 1);
+        const tK = isHemIn ? 0.0 : Math.max(0.0, Math.min(1.0, kFloat - k0));
+        const S0 = stations[k0], S1 = stations[k1];
+
+        const p = lerp3(S0.p, S1.p, tK);
+        const U = norm3(lerp3(S0.U, S1.U, tK), S0.U);
+        const V = norm3(lerp3(S0.V, S1.V, tK), S0.V);
+        const rxOut = S0.rxOut * (1.0 - tK) + S1.rxOut * tK;
+        const rxIn  = S0.rxIn  * (1.0 - tK) + S1.rxIn  * tK;
+        const rz    = S0.rz    * (1.0 - tK) + S1.rz    * tK;
+        const doClamp = S0.clamp || S1.clamp;
+
+        const sinA = Math.sin(ang); // +1 = front, -1 = back
+        const cosA = Math.cos(ang); // +1 = +torsoRight, -1 = -torsoRight
+
+        const isOuterHalf = (cosA * outerSign) >= 0.0;
+        const baseRx = isOuterHalf
+          ? (rxIn + (rxOut - rxIn) * Math.pow(Math.abs(cosA), 0.65))
+          : (rxIn * (1.0 - 0.06 * Math.pow(Math.abs(cosA), 1.2)));
+
+        // Subtle smooth front/back ironed trouser taper on the base cylinder (no sharp single-vertex spikes)
+        const frontTailorTaper = (!isHemIn && sinA > 0.0) ? (Math.pow(sinA, 3.0) * 0.0018 * s) : 0.0;
+        const backTailorTaper  = (!isHemIn && sinA < 0.0) ? (Math.pow(-sinA, 4.0) * 0.0014 * s) : 0.0;
+        const radX = baseRx;
+        const radZ = rz + frontTailorTaper + backTailorTaper;
+
+        let vx = p[0] + U[0] * (cosA * radX) + V[0] * (sinA * radZ);
+        let vy = p[1] + U[1] * (cosA * radX) + V[1] * (sinA * radZ);
+        let vz = p[2] + U[2] * (cosA * radX) + V[2] * (sinA * radZ);
+
+        if (doClamp && !isHemIn) {
+          const isInnerCrotchSide = !isOuterHalf && Math.abs(sinA) < 0.55;
+          if (!isInnerCrotchSide) {
+            const c1 = clampPointOutsideSegmentCapsule(vx, vy, vz, pHip, pKnee, 0.0550 * s, 0.0440 * s, 0.0035 * s);
+            const c2 = clampPointOutsideSegmentCapsule(c1[0], c1[1], c1[2], pKnee, pFoot, 0.0440 * s, 0.0360 * s, 0.0035 * s);
+            vx = c2[0]; vy = c2[1]; vz = c2[2];
+          }
+        }
+
+        if (Math.abs(extraOut) > 1e-6) {
+          const nx = U[0] * cosA + V[0] * sinA;
+          const ny = U[1] * cosA + V[1] * sinA;
+          const nz = U[2] * cosA + V[2] * sinA;
+          const nLen = Math.hypot(nx, ny, nz) || 1.0;
+          vx += (nx / nLen) * extraOut;
+          vy += (ny / nLen) * extraOut;
+          vz += (nz / nLen) * extraOut;
+        }
+        return [vx, vy, vz];
+      };
+
+      // 2A. Base Smooth Tailored Trouser Tube (100% uniform charcoal around back, sides, and front)
+      const rings = [];
+      for (let k = 0; k < stations.length; k++) {
+        const st = stations[k];
+        const ring = [];
+        const col = st.isHemIn
+          ? colInner
+          : (k === stations.length - 2 ? [colBase[0] * 0.92, colBase[1] * 0.92, colBase[2] * 0.93] : colBase);
+        for (let j = 0; j < N_LEG; j++) {
+          const ang = (j / N_LEG) * Math.PI * 2.0;
+          const pt = evalLegPt(k, ang, 0.0, st.isHemIn);
+          ring.push(addV(pt[0], pt[1], pt[2], col));
+        }
+        rings.push(ring);
+      }
+
+      for (let k = 0; k < rings.length - 1; k++) {
+        const r0 = rings[k], r1 = rings[k + 1];
+        for (let j = 0; j < N_LEG; j++) {
+          const nextJ = (j + 1) % N_LEG;
+          addQuad(r0[j], r0[nextJ], r1[nextJ], r1[j]);
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // 2B. Real 3D Folded Front Knife-Pleat & Full-Length Center Press Crease Mesh
+      //     (พับแมส 3D จริงสำหรับจีบพับหน้ากางเกงและสันกลีบรีดหน้าขายาวถึงปลายขา)
+      //     - At upper thigh (kF = 0.0 .. 4.5), the outer-front pleat blade folds
+      //       over toward the center-front crease with a real 3D tucked step wall.
+      //     - From upper thigh all the way to the ankle hem (kF = 0.0 .. 9.0),
+      //       it forms a crisp 3D pinched center press-crease ridge with dedicated
+      //       angled bevel faces and zero painted dark stripes!
+      // -----------------------------------------------------------------------
+      {
+        const angCenter = Math.PI * 0.5; // Dead-center FRONT of leg (sinA = +1, cosA = 0)
+        // Note: as ang increases around π/2, cos(ang) decreases (moves toward -U = -torsoRight).
+        // Therefore:
+        // - For Left leg (outerSign = -1): inner side (+U) is ang < π/2, outer side (-U) is ang > π/2.
+        // - For Right leg (outerSign = +1): inner side (-U) is ang > π/2, outer side (+U) is ang < π/2.
+        const innerAngSign = isLeft ? -1.0 : 1.0;
+        const outerAngSign = -innerAngSign;
+
+        const creaseStations = [0.0, 0.8, 1.7, 2.7, 3.8, 5.0, 6.2, 7.5, 8.8, 9.0];
+        const pleatGrid = [];
+        for (let r = 0; r < creaseStations.length; r++) {
+          const kF = creaseStations[r];
+          // Pleat fold width & overhang are strongest at the hip/upper thigh (kF = 0..3.5)
+          // and taper smoothly into the sharp ironed center press-crease ridge down to the ankle (kF = 9.0).
+          const pleatEnv = Math.max(0.0, 1.0 - kF / 4.8);
+          const ridgeH = (0.0030 + 0.0020 * pleatEnv) * s * (kF < 1.5 ? uS0 : 1.0);
+          const bladeW = 0.16 + 0.12 * pleatEnv; // Angular width of the outer-front pleat blade
+
+          // 5-column 3D folded cross-section across the front of the leg:
+          // c=0: Inner-side base on leg surface (tucked just inside the fold edge)
+          // c=1: Inner-side 3D tucked step wall under the pleat overhang
+          // c=2: Sharp 3D Center Press-Crease & Pleat Crest (raised outward by ridgeH)
+          // c=3: Outer-front 3D Pleat Blade surface (raised by ridgeH * 0.65)
+          // c=4: Outer-front merge edge blending seamlessly back into the base trouser surface
+          const angInBase  = angCenter + innerAngSign * (0.07 + 0.03 * pleatEnv);
+          const angTuckIn  = angCenter + innerAngSign * (0.015 - 0.020 * pleatEnv); // Overhangs slightly at upper thigh!
+          const angCrest   = angCenter;
+          const angBlade   = angCenter + outerAngSign * (bladeW * 0.52);
+          const angOutBase = angCenter + outerAngSign * bladeW;
+
+          const pInBase  = evalLegPt(kF, angInBase,  0.0002 * s);
+          const pTuckIn  = evalLegPt(kF, angTuckIn,  0.0005 * s);
+          const pCrest   = evalLegPt(kF, angCrest,   ridgeH);
+          const pBlade   = evalLegPt(kF, angBlade,   ridgeH * (0.48 + 0.24 * pleatEnv));
+          const pOutBase = evalLegPt(kF, angOutBase, 0.0002 * s);
+
+          pleatGrid.push([
+            addV(pInBase[0],  pInBase[1],  pInBase[2],  colBase),
+            addV(pTuckIn[0],  pTuckIn[1],  pTuckIn[2],  pleatEnv > 0.15 ? colTuckStep : colBase),
+            addV(pCrest[0],   pCrest[1],   pCrest[2],   colCreaseHi),
+            addV(pBlade[0],   pBlade[1],   pBlade[2],   colLit),
+            addV(pOutBase[0], pOutBase[1], pOutBase[2], colBase)
+          ]);
+        }
+
+        for (let r = 0; r < pleatGrid.length - 1; r++) {
+          const g0 = pleatGrid[r], g1 = pleatGrid[r + 1];
+          for (let c = 0; c < 4; c++) {
+            // Winding order: on the base leg tube, increasing ang (j -> j+1) has quad (r0[j], r0[j+1], r1[j+1], r1[j]).
+            // For Left leg, c increases from innerAngSign (-1) to outerAngSign (+1), so ang INCREASES with c.
+            // For Right leg, c increases from innerAngSign (+1) to outerAngSign (-1), so ang DECREASES with c.
+            if (isLeft) {
+              addQuad(g0[c], g0[c + 1], g1[c + 1], g1[c]);
+            } else {
+              addQuad(g0[c + 1], g0[c], g1[c], g1[c + 1]);
+            }
+          }
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // 2C. Secondary Outer-Front 3D Waist Pleat Fold Mesh (Upper Thigh kF = 0.0 .. 3.4)
+      //     Matches the second outer-front waist pleat in reference image_8ca5cef7.png
+      // -----------------------------------------------------------------------
+      {
+        const angCenter = Math.PI * 0.5;
+        const outerAngSign = isLeft ? 1.0 : -1.0;
+        const secStations = [0.0, 0.9, 1.9, 3.2];
+        const secGrid = [];
+        for (let r = 0; r < secStations.length; r++) {
+          const kF = secStations[r];
+          const env = Math.max(0.0, 1.0 - kF / 3.2);
+          const foldH = 0.0032 * env * s * (kF < 1.5 ? uS0 : 1.0);
+          const angCenterSec = angCenter + outerAngSign * (0.34 - 0.04 * (kF / 3.2));
+
+          const angTuck  = angCenterSec - outerAngSign * 0.035;
+          const angCrest = angCenterSec;
+          const angBlade = angCenterSec + outerAngSign * 0.075;
+          const angMerge = angCenterSec + outerAngSign * 0.150;
+
+          const pTuck  = evalLegPt(kF, angTuck,  0.0003 * s);
+          const pCrest = evalLegPt(kF, angCrest, foldH);
+          const pBlade = evalLegPt(kF, angBlade, foldH * 0.62);
+          const pMerge = evalLegPt(kF, angMerge, 0.0002 * s);
+
+          secGrid.push([
+            addV(pTuck[0],  pTuck[1],  pTuck[2],  env > 0.2 ? colTuckStep : colBase),
+            addV(pCrest[0], pCrest[1], pCrest[2], env > 0.1 ? colCreaseHi : colBase),
+            addV(pBlade[0], pBlade[1], pBlade[2], colLit),
+            addV(pMerge[0], pMerge[1], pMerge[2], colBase)
+          ]);
+        }
+        for (let r = 0; r < secGrid.length - 1; r++) {
+          const g0 = secGrid[r], g1 = secGrid[r + 1];
+          for (let c = 0; c < 3; c++) {
+            if (isLeft) {
+              addQuad(g0[c], g0[c + 1], g1[c + 1], g1[c]);
+            } else {
+              addQuad(g0[c + 1], g0[c], g1[c], g1[c + 1]);
+            }
+          }
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // 2D. Diagonal 3D Groin / Upper-Inner-Thigh Drape Fold Ridge (kF = 0.4 .. 2.4)
+      //     Matches the natural diagonal fabric fold below the fly in image_8ca5cef7.png
+      // -----------------------------------------------------------------------
+      {
+        const angCenter = Math.PI * 0.5;
+        const innerAngSign = isLeft ? -1.0 : 1.0;
+        const diagStations = [0.4, 1.3, 2.3];
+        const diagGrid = [];
+        for (let r = 0; r < diagStations.length; r++) {
+          const kF = diagStations[r];
+          const u = r / (diagStations.length - 1);
+          const env = Math.sin(u * Math.PI);
+          const foldH = 0.0024 * env * s * (kF < 1.5 ? uS0 : 1.0);
+          // Sweeps diagonally from near the lower fly (inner-front) outward toward the front-thigh crease
+          const angMid = angCenter + innerAngSign * (0.42 - u * 0.24);
+          const pIn  = evalLegPt(kF, angMid + innerAngSign * 0.08, 0.0002 * s);
+          const pTop = evalLegPt(kF, angMid, foldH);
+          const pOut = evalLegPt(kF, angMid - innerAngSign * 0.08, 0.0002 * s);
+          diagGrid.push([
+            addV(pIn[0],  pIn[1],  pIn[2],  colBase),
+            addV(pTop[0], pTop[1], pTop[2], colLit),
+            addV(pOut[0], pOut[1], pOut[2], colBase)
+          ]);
+        }
+        for (let r = 0; r < diagGrid.length - 1; r++) {
+          const g0 = diagGrid[r], g1 = diagGrid[r + 1];
+          for (let c = 0; c < 2; c++) {
+            if (isLeft) {
+              addQuad(g0[c], g0[c + 1], g1[c + 1], g1[c]);
+            } else {
+              addQuad(g0[c + 1], g0[c], g1[c], g1[c + 1]);
+            }
+          }
+        }
+      }
+    };
+
+    addSlacksLeg(leftLegPivot, leftKneeRot, leftFootRot, true);
+    addSlacksLeg(rightLegPivot, rightKneeRot, rightFootRot, false);
+
+    const frontTriCount = outI.length;
+    const normals = new Float32Array(outV.length);
+    for (let k = 0; k < frontTriCount; k += 3) {
+      const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
+      const ux = outV[i1 * 3] - outV[i0 * 3], uy = outV[i1 * 3 + 1] - outV[i0 * 3 + 1], uz = outV[i1 * 3 + 2] - outV[i0 * 3 + 2];
+      const vx = outV[i2 * 3] - outV[i0 * 3], vy = outV[i2 * 3 + 1] - outV[i0 * 3 + 1], vz = outV[i2 * 3 + 2] - outV[i0 * 3 + 2];
+      const nX = uy * vz - uz * vy, nY = uz * vx - ux * vz, nZ = ux * vy - uy * vx;
+      normals[i0 * 3] += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
+      normals[i1 * 3] += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
+      normals[i2 * 3] += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
+    }
+    for (let k = 0; k < normals.length; k += 3) {
+      const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+      if (l > 1e-12) { normals[k] /= l; normals[k + 1] /= l; normals[k + 2] /= l; }
+      else { normals[k] = 0.0; normals[k + 1] = 1.0; normals[k + 2] = 0.0; }
+    }
+    for (let k = 0; k < frontTriCount; k += 3) {
+      outI.push(outI[k], outI[k + 2], outI[k + 1]);
+    }
+
+    return {
+      vertices: outV,
+      normals: normals,
+      colors: outC,
+      texcoords: outT,
+      indices: outI
+    };
+  }
+
+  // =========================================================================
+  // --- 11A-6. Asymmetric One-Shoulder Opera Cape (OPERA_CAPE) ---
+  // Reference: /public/assets/aistudio/image_1cba5f2b.png
+  //   - Drapes over the viewer's right shoulder (+torsoRight / rightArmPivot)
+  //     and back down to mid-calf, leaving the viewer's left arm & chest uncovered
+  //   - Deep velvet jet-black outer shell with subtle slate-violet shoulder sheen
+  //     and rich dark emerald-teal satin inner lining + 3D stitched border thickness
+  //   - Standing velvet collar + curved brushed gunmetal-silver collar strap across
+  //     the collarbone with left eyelet buckle tab and 3D pentagonal shield clasp
+  // =========================================================================
+  function buildOperaCapeMesh(
+    headP1,
+    chestP1, chestP2,
+    neckP1, neckP2,
+    leftArmPivot, leftElbowRot, leftHandRot,
+    rightArmPivot, rightElbowRot, rightHandRot,
+    scale = 1.0,
+    phase = 0.0,
+    isLocal = false,
+    leftFootRot = null,
+    rightFootRot = null,
+    clothContext = null
+  ) {
+    const outV = [], outC = [], outT = [], outI = [];
+    const s = scale || 1.0;
+
+    const baseGroin = chestP1 || [0, -0.090 * s, 0];
+    const baseChest = chestP2 || [0,  0.170 * s, 0];
+    const ny = neckP1 ? neckP1[1] : (baseChest[1] + 0.008 * s);
+
+    const tdx = baseChest[0] - baseGroin[0];
+    const tdy = baseChest[1] - baseGroin[1];
+    const tdz = baseChest[2] - baseGroin[2];
+    const torsoLen = Math.hypot(tdx, tdy, tdz) || (0.26 * s);
+    const torsoUp = [tdx / torsoLen, tdy / torsoLen, tdz / torsoLen];
+    const torsoRatio = Math.max(0.75, Math.min(1.15, torsoLen / (0.26 * s)));
+
+    const fDot = torsoUp[2];
+    let torsoFwd = [-torsoUp[0] * fDot, -torsoUp[1] * fDot, 1.0 - torsoUp[2] * fDot];
+    const tfLen = Math.hypot(torsoFwd[0], torsoFwd[1], torsoFwd[2]);
+    torsoFwd = tfLen > 1e-4 ? [torsoFwd[0] / tfLen, torsoFwd[1] / tfLen, torsoFwd[2] / tfLen] : [0, 0, 1];
+    const torsoRight = [
+      torsoUp[1] * torsoFwd[2] - torsoUp[2] * torsoFwd[1],
+      torsoUp[2] * torsoFwd[0] - torsoUp[0] * torsoFwd[2],
+      torsoUp[0] * torsoFwd[1] - torsoUp[1] * torsoFwd[0]
+    ];
+
+    const collarBaseX = baseChest[0];
+    const collarBaseY = Math.min(ny, baseChest[1] + 0.008 * s);
+    const collarBaseZ = baseChest[2];
+    const torsoPt = (dx, dy, dz) => [
+      collarBaseX + torsoRight[0] * dx + torsoUp[0] * dy + torsoFwd[0] * dz,
+      collarBaseY + torsoRight[1] * dx + torsoUp[1] * dy + torsoFwd[1] * dz,
+      collarBaseZ + torsoRight[2] * dx + torsoUp[2] * dy + torsoFwd[2] * dz
+    ];
+
+    // Opera Cape Palette (matching image_1cba5f2b.png)
+    const colCapeOuter     = [0.082, 0.086, 0.102]; // Deep velvet jet-black outer fabric
+    const colCapeSheen     = [0.124, 0.130, 0.152]; // Subtle shoulder & outer fold edge sheen
+    const colCapeEdge      = [0.062, 0.066, 0.080]; // Crisp 3D border rim
+    const colLiningTeal    = [0.044, 0.124, 0.118]; // Rich dark emerald-teal inner satin lining
+    const colLiningDeep    = [0.025, 0.072, 0.070]; // Shaded upper interior lining under shoulder/back
+    const colMetalDark     = [0.220, 0.238, 0.265]; // Dark gunmetal strap edge & buckle slot
+    const colMetalMid      = [0.440, 0.468, 0.508]; // Brushed steel-silver midtone
+    const colMetalHi       = [0.735, 0.765, 0.810]; // Specular silver highlight on strap & shield bevel
+    const colMetalHole     = [0.075, 0.080, 0.092]; // Recessed rectangular buckle hole
+
+    const addV = (px, py, pz, col) => {
+      const idx = (outV.length / 3) | 0;
+      outV.push(px, py, pz);
+      outC.push(col[0], col[1], col[2]);
+      outT.push(-9.0, -9.0);
+      return idx;
+    };
+    const addTri = (a, b, c) => { outI.push(a, b, c); };
+    const addQuad = (a, b, c, d) => { outI.push(a, b, c); outI.push(a, c, d); };
+
+    const useClonePhys = !!(clothContext && clothContext.isClone);
+    const hPhys = (clothContext && clothContext.hoodiePhysics)
+      ? clothContext.hoodiePhysics
+      : (useClonePhys
+          ? chibiCloneHoodiePhysics
+          : ((typeof chibiHoodiePhysics !== "undefined") ? chibiHoodiePhysics : _createDefaultHoodiePhysState()));
+    const pAngle = isLocal ? 0.0 : (hPhys.pitch || 0.0);
+    const yAngle = isLocal ? 0.0 : (hPhys.yaw || 0.0);
+    const rAngle = isLocal ? 0.0 : (hPhys.roll || 0.0);
+    const yawLagTerm = isLocal ? 0.0 : ((hPhys.yawLag || 0.0) * 0.24);
+    const effPhase = isLocal ? 0.0 : phase;
+
+    const nowPerfSec = (typeof performance !== "undefined" ? performance.now() : Date.now()) * 0.001;
+    const windTurb = isLocal ? 0.0 : (hPhys.windTurb || 0.0);
+    const airFlare = isLocal ? 0.0 : (hPhys.airFlare || 0.0);
+    const flutterT = nowPerfSec * (12.0 + windTurb * 14.0);
+    const turbX = (!isLocal && windTurb > 0) ? Math.sin(flutterT) * (windTurb * 0.018) : 0.0;
+    const turbY = (!isLocal && windTurb > 0) ? Math.sin(flutterT * 0.85) * (windTurb * 0.013) : 0.0;
+    const turbZ = (!isLocal && windTurb > 0) ? Math.cos(flutterT * 1.1) * (windTurb * 0.018) : 0.0;
+
+    // Gentle continuous ambient breeze sway so the cape breathes even when standing still
+    const breezeT = nowPerfSec * 1.45;
+    const breezeX = isLocal ? 0.0 : Math.sin(breezeT * 1.5) * 0.0042;
+    const breezeZ = isLocal ? 0.0 : Math.cos(breezeT * 1.2) * 0.0045;
+    const breezeY = isLocal ? 0.0 : Math.sin(breezeT * 1.8) * 0.0020;
+
+    const pLHip  = clothContext && clothContext.leftLegPivot  ? clothContext.leftLegPivot  : [-0.052 * s, baseGroin[1], baseGroin[2]];
+    const pLKnee = clothContext && clothContext.leftKneeRot   ? clothContext.leftKneeRot   : [-0.052 * s, baseGroin[1] - 0.15 * s, baseGroin[2]];
+    const pLFoot = clothContext && clothContext.leftFootRot   ? clothContext.leftFootRot   : (leftFootRot  || [-0.052 * s, baseGroin[1] - 0.30 * s, baseGroin[2]]);
+    const pRHip  = clothContext && clothContext.rightLegPivot ? clothContext.rightLegPivot : [ 0.052 * s, baseGroin[1], baseGroin[2]];
+    const pRKnee = clothContext && clothContext.rightKneeRot  ? clothContext.rightKneeRot  : [ 0.052 * s, baseGroin[1] - 0.15 * s, baseGroin[2]];
+    const pRFoot = clothContext && clothContext.rightFootRot  ? clothContext.rightFootRot  : (rightFootRot || [ 0.052 * s, baseGroin[1] - 0.30 * s, baseGroin[2]]);
+
+    const bodyColliderData = {
+      headP1: headP1 || [baseChest[0], baseChest[1] + 0.08 * s, baseChest[2]],
+      chestP1: baseGroin,
+      chestP2: baseChest,
+      leftArmPivot,
+      leftElbowRot,
+      leftHandRot,
+      rightArmPivot,
+      rightElbowRot,
+      rightHandRot,
+      leftLegPivot: pLHip,
+      leftKneeRot: pLKnee,
+      leftFootRot: pLFoot,
+      rightLegPivot: pRHip,
+      rightKneeRot: pRKnee,
+      rightFootRot: pRFoot,
+      legRadiusBoost: 0.002,
+      scale: s
+    };
+
+    const capeStride = _computeGarmentLegStride(clothContext, torsoRight, torsoFwd, 0.72, !isLocal);
+    const strideAct = isLocal
+      ? 0.0
+      : Math.min(1.0, (capeStride.lFwd + capeStride.lBack + capeStride.rFwd + capeStride.rBack) / (0.13 * s));
+    const physAct = isLocal
+      ? 0.0
+      : Math.min(1.0, Math.hypot(hPhys.gx || 0.0, hPhys.gz || 0.0) * 18.0 + Math.hypot(hPhys.tx || 0.0, hPhys.tz || 0.0) * 10.0 + Math.abs(pAngle) * 2.4 + Math.abs(yAngle) * 2.4);
+    const motionIntensity = isLocal ? 0.0 : Math.min(1.0, Math.max(strideAct, physAct));
+
+    // Right upper-arm swing offset relative to neutral hanging pose so the right shoulder drape flows with the arm
+    let armSwingX = 0.0, armSwingZ = 0.0;
+    if (!isLocal && rightArmPivot && rightElbowRot) {
+      const adx = rightElbowRot[0] - rightArmPivot[0];
+      const ady = rightElbowRot[1] - rightArmPivot[1];
+      const adz = rightElbowRot[2] - rightArmPivot[2];
+      const projX = adx * torsoRight[0] + ady * torsoRight[1] + adz * torsoRight[2];
+      const projZ = adx * torsoFwd[0]   + ady * torsoFwd[1]   + adz * torsoFwd[2];
+      armSwingX = Math.max(-0.035 * s, Math.min(0.045 * s, (projX - 0.028 * s) * 0.55));
+      armSwingZ = Math.max(-0.055 * s, Math.min(0.055 * s, projZ * 0.65));
+    }
+
+    const computeCapeDisp = (w) => {
+      if (isLocal || w <= 0.001) return [0.0, 0.0, 0.0];
+      const wEff = Math.max(0.0, (w - 0.04) / 0.96);
+      const wPrimary = wEff * (0.50 + 0.50 * wEff);
+      const wWhip = wEff * wEff * (0.38 + 0.62 * wEff);
+      const bounceY = Math.sin(effPhase * 2.0 - w * 1.1) * 0.013 * wEff * s;
+      const dx = (
+        hPhys.gx * 0.78 * wPrimary +
+        hPhys.tx * 0.96 * wWhip +
+        hPhys.airX * 1.15 * wEff +
+        (yAngle * 0.075 + rAngle * 0.048 + yawLagTerm) * wEff +
+        breezeX * wEff +
+        turbX * wEff
+      ) * s;
+      const dy = (
+        hPhys.gy * 0.64 * wPrimary +
+        hPhys.ty * 0.82 * wWhip +
+        hPhys.airY * 0.95 * wEff +
+        breezeY * wEff +
+        turbY * wEff
+      ) * s + bounceY;
+      const dz = (
+        hPhys.gz * 0.85 * wPrimary +
+        hPhys.tz * 1.12 * wWhip +
+        hPhys.airZ * 1.15 * wEff -
+        pAngle * 0.095 * wEff +
+        breezeZ * wEff +
+        turbZ * wEff
+      ) * s;
+      return [dx, dy, dz];
+    };
+
+    // Helper to guarantee any collar/upper-cape point sits strictly outside the suit's standing collar
+    const clampOutsideSuitCollar = (pt, extraPad = 0.004 * s) => {
+      const rx = pt[0] - collarBaseX, ry = pt[1] - collarBaseY, rz = pt[2] - collarBaseZ;
+      const tx = rx * torsoRight[0] + ry * torsoRight[1] + rz * torsoRight[2];
+      const ty = rx * torsoUp[0]    + ry * torsoUp[1]    + rz * torsoUp[2];
+      const tz = rx * torsoFwd[0]   + ry * torsoFwd[1]   + rz * torsoFwd[2];
+      if (ty < -0.028 * s || ty > 0.036 * s) return pt;
+      const minRx = 0.096 * s + extraPad;
+      const minRz = (tz >= 0.0 ? 0.080 : 0.094) * s + extraPad;
+      const nx = tx / minRx, nz = tz / minRz;
+      const rE = Math.hypot(nx, nz);
+      if (rE < 1.0 && rE > 1e-4) {
+        const sc = 1.0 / rE;
+        return torsoPt(tx * sc, ty, tz * sc);
+      }
+      return pt;
+    };
+
+    // -------------------------------------------------------------------------
+    // 1. Standing Velvet Collar Wrapping Cleanly Outside the Suit Collar
+    //    Spans continuously from the front-right shield clasp (ang = 0.22)
+    //    around the right shoulder (PI/2), full back of the neck (PI), and left
+    //    neck side to the front-left strap buckle (ang = 2*PI - 0.26 = 6.02).
+    // -------------------------------------------------------------------------
+    {
+      const ang0 = 0.22;
+      const ang1 = Math.PI * 2.0 - 0.26;
+      const nSeg = 22;
+      const topOut = [], botOut = [], topIn = [], botIn = [];
+      for (let i = 0; i <= nSeg; i++) {
+        const u = i / nSeg;
+        const ang = ang0 + u * (ang1 - ang0);
+        const sA = Math.sin(ang);
+        const cA = Math.cos(ang);
+        // Peak height & radial clearance centered across the back of the neck (ang ≈ PI)
+        const endTaper = Math.sin(u * Math.PI);
+        const backWeight = Math.max(0.0, -cA);
+        const env = Math.min(1.0, endTaper * (0.75 + 0.35 * backWeight));
+
+        const hTop = (0.017 + 0.012 * env) * s;
+        const hBot = -0.006 * s;
+        const rOutX = (0.090 + 0.010 * env) * s;
+        const rOutZ = (cA >= 0 ? 0.078 : 0.092) * s + 0.008 * env * s;
+        const colThick = 0.0036 * s;
+
+        let pTO = torsoPt(sA * rOutX, hTop, cA * rOutZ);
+        let pBO = torsoPt(sA * (rOutX + 0.006 * s), hBot, cA * (rOutZ + 0.006 * s));
+        pTO = clampPointOutsideChibiBodyForCloth(pTO[0], pTO[1], pTO[2], bodyColliderData, 0.012, false);
+        pBO = clampPointOutsideChibiBodyForCloth(pBO[0], pBO[1], pBO[2], bodyColliderData, 0.013, false);
+        pTO = clampOutsideSuitCollar(pTO, 0.0050 * s);
+        pBO = clampOutsideSuitCollar(pBO, 0.0070 * s);
+
+        const rdx = torsoRight[0] * sA + torsoFwd[0] * cA;
+        const rdy = torsoRight[1] * sA + torsoFwd[1] * cA;
+        const rdz = torsoRight[2] * sA + torsoFwd[2] * cA;
+        const rL = Math.hypot(rdx, rdy, rdz) || 1.0;
+        const nx = rdx / rL, nyN = rdy / rL, nz = rdz / rL;
+
+        const pTI = [pTO[0] - nx * colThick, pTO[1] - nyN * colThick - 0.0008 * s, pTO[2] - nz * colThick];
+        const pBI = [pBO[0] - nx * colThick, pBO[1] - nyN * colThick, pBO[2] - nz * colThick];
+
+        topOut.push(addV(pTO[0], pTO[1], pTO[2], colCapeSheen));
+        botOut.push(addV(pBO[0], pBO[1], pBO[2], colCapeOuter));
+        topIn.push(addV(pTI[0], pTI[1], pTI[2], colCapeEdge));
+        botIn.push(addV(pBI[0], pBI[1], pBI[2], colLiningDeep));
+      }
+      for (let i = 0; i < nSeg; i++) {
+        addQuad(topOut[i], botOut[i], botOut[i + 1], topOut[i + 1]); // Outer collar face
+        addQuad(botIn[i],  topIn[i],  topIn[i + 1],  botIn[i + 1]);  // Inner collar face
+        addQuad(topIn[i],  topOut[i], topOut[i + 1], topIn[i + 1]);  // Top collar rim
+      }
+      addQuad(topIn[0], botIn[0], botOut[0], topOut[0]);
+      addQuad(topOut[nSeg], botOut[nSeg], botIn[nSeg], topIn[nSeg]);
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. One-Shoulder Asymmetric Opera Cape Body (Double-Sided 3D Shell Mesh)
+    //    - Outer surface: deep velvet jet-black (colCapeOuter / colCapeSheen)
+    //    - Inner surface: dark emerald-teal satin lining (colLiningTeal / colLiningDeep)
+    //    - Drapes over viewer's right shoulder (+X, rightArmPivot) down to mid-calf (-0.408*s)
+    //    - Diagonal front cut from the silver shield clasp (ang = 0.22) across the upper
+    //      arm (ang = 1.28 at elbow) so the forearm/hand holding weapons stays completely clear!
+    // -------------------------------------------------------------------------
+    const capeLevels = [
+      { dy:  0.004 * s * torsoRatio, rx: 0.103 * s, rzF: 0.085 * s, rzB: 0.098 * s, shiftX: 0.003 * s, angStart: 0.22, angEnd: 3.68, t: 0.00 }, // 0: Neck / collar base
+      { dy: -0.022 * s * torsoRatio, rx: 0.140 * s, rzF: 0.095 * s, rzB: 0.102 * s, shiftX: 0.010 * s, angStart: 0.44, angEnd: 3.65, t: 0.08 }, // 1: Right shoulder cap
+      { dy: -0.058 * s * torsoRatio, rx: 0.153 * s, rzF: 0.100 * s, rzB: 0.105 * s, shiftX: 0.016 * s, angStart: 0.74, angEnd: 3.60, t: 0.18 }, // 2: Upper arm drape
+      { dy: -0.104 * s * torsoRatio, rx: 0.162 * s, rzF: 0.104 * s, rzB: 0.106 * s, shiftX: 0.020 * s, angStart: 1.04, angEnd: 3.54, t: 0.30 }, // 3: Mid arm diagonal sweep
+      { dy: -0.156 * s * torsoRatio, rx: 0.169 * s, rzF: 0.107 * s, rzB: 0.109 * s, shiftX: 0.022 * s, angStart: 1.28, angEnd: 3.48, t: 0.43 }, // 4: Forearm/hand exit level
+      { dy: -0.215 * s * torsoRatio, rx: 0.175 * s, rzF: 0.109 * s, rzB: 0.114 * s, shiftX: 0.025 * s, angStart: 1.35, angEnd: 3.43, t: 0.56 }, // 5: Hip level
+      { dy: -0.278 * s * torsoRatio, rx: 0.182 * s, rzF: 0.112 * s, rzB: 0.120 * s, shiftX: 0.028 * s, angStart: 1.38, angEnd: 3.38, t: 0.70 }, // 6: Suit hem / upper thigh
+      { dy: -0.342 * s * torsoRatio, rx: 0.189 * s, rzF: 0.115 * s, rzB: 0.127 * s, shiftX: 0.030 * s, angStart: 1.40, angEnd: 3.34, t: 0.85 }, // 7: Knee level
+      { dy: -0.408 * s * torsoRatio, rx: 0.196 * s, rzF: 0.118 * s, rzB: 0.134 * s, shiftX: 0.032 * s, angStart: 1.42, angEnd: 3.30, t: 1.00 }  // 8: Mid-calf bottom hem
+    ];
+
+    const N_CAPE_COLS = 18;
+    const capeThick = 0.0036 * s;
+    const outerGrid = [];
+    const innerGrid = [];
+
+    for (let r = 0; r < capeLevels.length; r++) {
+      const lvl = capeLevels[r];
+      const w = lvl.t;
+      const wEff = Math.max(0.0, (w - 0.04) / 0.96);
+      const bDisp = computeCapeDisp(w);
+      const flare = isLocal ? 0.0 : ((airFlare * 0.65 + Math.abs(yAngle) * 0.034 + motionIntensity * 0.028) * wEff * s);
+      const outRow = [];
+      const inRow = [];
+
+      for (let c = 0; c < N_CAPE_COLS; c++) {
+        const u = c / (N_CAPE_COLS - 1);
+        const ang = lvl.angStart + u * (lvl.angEnd - lvl.angStart);
+        const sinA = Math.sin(ang); // +1 at right shoulder (ang = PI/2), 0 at back (ang = PI), < 0 past PI
+        const cosA = Math.cos(ang); // +1 at front, -1 at back
+
+        // Tailored vertical drape flutes + dynamic phase-delayed travelling wave when moving/in wind
+        const staticFlute = Math.sin(u * Math.PI * 3.0) * 0.0032 * s * (0.30 + 0.70 * w);
+        const waveArg = effPhase * 2.0 - w * 2.5 + u * Math.PI * 3.0 + breezeT * 0.7;
+        const dynWaveAmp = isLocal ? 0.0 : ((0.0028 + 0.015 * motionIntensity + windTurb * 0.012) * wEff * s);
+        const rippleR = Math.sin(waveArg) * dynWaveAmp;
+        const rippleY = Math.cos(waveArg * 1.15) * dynWaveAmp * 0.62;
+
+        // Leg-stride tenting & side push on the lower cape (r >= 3)
+        const skD = _computeSkirtVertexDisplacement(
+          sinA, cosA, w, 0.24, s, bDisp, capeStride, 0.045,
+          effPhase, 0.005, 0.24, 0.42, 0.30, 0.28, 0.78
+        );
+
+        // Right-arm swing follow on the shoulder & upper-side drape
+        const armFollowW = (!isLocal && r >= 1 && r <= 6 && sinA > 0.15)
+          ? (Math.max(0.0, sinA) * Math.sin(Math.min(1.0, w / 0.72) * Math.PI) * 0.48)
+          : 0.0;
+
+        // Aerodynamic backward stream along the back of the cape when moving forward
+        const backStreamZ = isLocal
+          ? 0.0
+          : (-Math.max(0.0, -cosA + 0.25) * motionIntensity * 0.036 * wEff * wEff * s);
+
+        const rz = (cosA >= 0.0 ? lvl.rzF : lvl.rzB) + staticFlute + flare + rippleR;
+        const rx = lvl.rx + (staticFlute + flare + rippleR) * 0.88;
+
+        const lx = lvl.shiftX + sinA * rx + bDisp[0] + skD.legSidePush + armSwingX * armFollowW;
+        const ly = lvl.dy + bDisp[1] + rippleY + skD.rippleY + (skD.legFrontTent * 0.16 + skD.legBackTent * 0.22);
+        const lz = cosA * rz + skD.effDispZ + backStreamZ + armSwingZ * armFollowW + (skD.legFrontTent * 0.78 - skD.legBackTent * 0.88);
+        let pos = torsoPt(lx, ly, lz);
+
+        // 1) Clamp against Chibi neck/chest/torso collider on upper rows so collar & upper back never clip
+        if (r <= 2) {
+          pos = clampPointOutsideChibiBodyForCloth(pos[0], pos[1], pos[2], bodyColliderData, 0.012, false);
+        }
+        if (r <= 1) {
+          pos = clampOutsideSuitCollar(pos, 0.0065 * s);
+        }
+
+        // 2) Ensure outer clearance over the right shoulder & upper arm (rightArmPivot -> rightElbowRot)
+        //    while allowing the lower forearm/hand to emerge cleanly in front of the diagonal cut!
+        if (rightArmPivot && rightElbowRot && r >= 1 && r <= 4 && sinA > 0.25) {
+          const armRestEnd = [
+            rightArmPivot[0] + (rightElbowRot[0] - rightArmPivot[0]) * 0.85,
+            rightArmPivot[1] + (rightElbowRot[1] - rightArmPivot[1]) * 0.85,
+            rightArmPivot[2] + (rightElbowRot[2] - rightArmPivot[2]) * 0.85
+          ];
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], rightArmPivot, armRestEnd, 0.055 * s, 0.049 * s, 0.005 * s);
+        }
+
+        // 3) Ensure clearance outside the suit torso & upper back (including inner lining thickness!)
+        if (r <= 5) {
+          const suitRx = (r === 0 ? 0.100 : (r === 1 ? 0.132 : (r <= 4 ? 0.112 : 0.128))) * s;
+          const suitRzB = (r === 0 ? 0.097 : (r === 1 ? 0.099 : (r <= 4 ? 0.095 : 0.105))) * s;
+          const suitRzF = (r === 0 ? 0.083 : (r === 1 ? 0.089 : (r <= 4 ? 0.090 : 0.102))) * s;
+          const relX = pos[0] - collarBaseX, relY = pos[1] - collarBaseY, relZ = pos[2] - collarBaseZ;
+          const tx = relX * torsoRight[0] + relY * torsoRight[1] + relZ * torsoRight[2];
+          const ty = relX * torsoUp[0]    + relY * torsoUp[1]    + relZ * torsoUp[2];
+          const tz = relX * torsoFwd[0]   + relY * torsoFwd[1]   + relZ * torsoFwd[2];
+          const suitRz = tz >= 0.0 ? suitRzF : suitRzB;
+          const nxE = tx / suitRx, nzE = tz / suitRz;
+          const radE = Math.hypot(nxE, nzE);
+          if (radE < 1.04 && radE > 1e-4) {
+            const pushScale = 1.04 / radE;
+            pos = torsoPt(tx * pushScale, ty, tz * pushScale);
+          }
+        }
+
+        // 4) Ensure lower cape clears walking thighs and calves (pushing backward/outward, never forward through the leg)
+        if (r >= 5) {
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pRHip, pRKnee, 0.068 * s, 0.056 * s, 0.006 * s);
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pRKnee, pRFoot, 0.056 * s, 0.048 * s, 0.006 * s);
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pLHip, pLKnee, 0.068 * s, 0.056 * s, 0.006 * s);
+          pos = clampPointOutsideSegmentCapsule(pos[0], pos[1], pos[2], pLKnee, pLFoot, 0.056 * s, 0.048 * s, 0.006 * s);
+        }
+
+        // Outward radial normal for offsetting the inner emerald-teal lining shell
+        const rdx = torsoRight[0] * sinA + torsoFwd[0] * cosA;
+        const rdy = torsoRight[1] * sinA + torsoFwd[1] * cosA;
+        const rdz = torsoRight[2] * sinA + torsoFwd[2] * cosA;
+        const rLen = Math.hypot(rdx, rdy, rdz) || 1.0;
+        const nOutX = rdx / rLen, nOutY = rdy / rLen, nOutZ = rdz / rLen;
+
+        const pIn = [
+          pos[0] - nOutX * capeThick,
+          pos[1] - nOutY * capeThick,
+          pos[2] - nOutZ * capeThick
+        ];
+
+        // Outer color: jet-black velvet with subtle shoulder & fold-crest sheen
+        const isFoldCrest = (c <= 1) || (r <= 2 && u < 0.35) || (r >= 3 && Math.sin(u * Math.PI * 3.0) > 0.65);
+        const colOut = isFoldCrest ? colCapeSheen : colCapeOuter;
+        // Inner color: dark emerald-teal satin lining (slightly deeper higher up in the interior shadow)
+        const liningMix = Math.min(1.0, Math.max(0.0, (lvl.t - 0.15) / 0.65));
+        const colIn = [
+          colLiningDeep[0] * (1.0 - liningMix) + colLiningTeal[0] * liningMix,
+          colLiningDeep[1] * (1.0 - liningMix) + colLiningTeal[1] * liningMix,
+          colLiningDeep[2] * (1.0 - liningMix) + colLiningTeal[2] * liningMix
+        ];
+
+        outRow.push(addV(pos[0], pos[1], pos[2], colOut));
+        inRow.push(addV(pIn[0], pIn[1], pIn[2], colIn));
+      }
+      outerGrid.push(outRow);
+      innerGrid.push(inRow);
+    }
+
+    // Stitch Outer Shell (outward normals) & Inner Lining Shell (inward normals)
+    for (let r = 0; r < capeLevels.length - 1; r++) {
+      const o0 = outerGrid[r], o1 = outerGrid[r + 1];
+      const i0 = innerGrid[r], i1 = innerGrid[r + 1];
+      for (let c = 0; c < N_CAPE_COLS - 1; c++) {
+        // As c increases, ang increases (from front +Z around right +X to back -Z),
+        // and as r increases, y decreases (-Y). Thus (o0[c] -> o1[c] -> o1[c+1] -> o0[c+1]) has outward normal!
+        addQuad(o0[c], o1[c], o1[c + 1], o0[c + 1]);
+        // Reversed winding on innerGrid so inner emerald-teal lining faces INWARD toward the body/viewer!
+        addQuad(i0[c + 1], i1[c + 1], i1[c], i0[c]);
+      }
+      // Stitch 3D front diagonal border wall (c = 0) & back border wall (c = N_CAPE_COLS - 1)
+      const lastC = N_CAPE_COLS - 1;
+      addQuad(i0[0], i1[0], o1[0], o0[0]);
+      addQuad(o0[lastC], o1[lastC], i1[lastC], i0[lastC]);
+    }
+    // Stitch 3D top shoulder rim (r = 0) & bottom hem rim (r = capeLevels.length - 1)
+    {
+      const lastR = capeLevels.length - 1;
+      for (let c = 0; c < N_CAPE_COLS - 1; c++) {
+        addQuad(innerGrid[0][c], outerGrid[0][c], outerGrid[0][c + 1], innerGrid[0][c + 1]);
+        addQuad(outerGrid[lastR][c], innerGrid[lastR][c], innerGrid[lastR][c + 1], outerGrid[lastR][c + 1]);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Curved Brushed Gunmetal-Silver Collar Strap & Pentagonal Shield Clasp
+    //    (Matches image_1cba5f2b.png:
+    //     - Spans from viewer's left collar [-0.044*s, +0.015*s, +0.075*s] with a
+    //       recessed rectangular buckle slot, curving across the open V-neck to
+    //       the 3D 5-sided pentagonal shield clasp at [+0.022*s .. +0.052*s, -0.008*s, +0.084*s])
+    // -------------------------------------------------------------------------
+    {
+      const N_STRAP = 12;
+      const strapTopOut = [], strapBotOut = [], strapTopIn = [], strapBotIn = [];
+      for (let i = 0; i <= N_STRAP; i++) {
+        const u = i / N_STRAP; // 0 = viewer's left buckle end, 1 = viewer's right shield clasp entry
+        // Smooth curved arc across the front collarbone
+        const dx = (-0.044 + u * 0.068) * s;
+        const sag = Math.sin(u * Math.PI) * 0.005 * s;
+        const dyMid = (0.015 * (1.0 - u) + (-0.006) * u) * s - sag;
+        const dzOut = (0.075 + Math.sin(u * Math.PI) * 0.013 + u * 0.008) * s;
+        const dzIn  = dzOut - 0.0034 * s;
+        const halfW = 0.0068 * s;
+
+        // Brushed metallic specular gradient: gunmetal at ends -> bright silver highlight near u = 0.62
+        const spec = Math.exp(-Math.pow((u - 0.62) / 0.24, 2));
+        const colFace = [
+          colMetalDark[0] * (1.0 - spec) + colMetalHi[0] * spec,
+          colMetalDark[1] * (1.0 - spec) + colMetalHi[1] * spec,
+          colMetalDark[2] * (1.0 - spec) + colMetalHi[2] * spec
+        ];
+
+        const pTO = torsoPt(dx, dyMid + halfW, dzOut);
+        const pBO = torsoPt(dx, dyMid - halfW, dzOut);
+        const pTI = torsoPt(dx, dyMid + halfW, dzIn);
+        const pBI = torsoPt(dx, dyMid - halfW, dzIn);
+
+        strapTopOut.push(addV(pTO[0], pTO[1], pTO[2], colFace));
+        strapBotOut.push(addV(pBO[0], pBO[1], pBO[2], colMetalMid));
+        strapTopIn.push(addV(pTI[0], pTI[1], pTI[2], colMetalDark));
+        strapBotIn.push(addV(pBI[0], pBI[1], pBI[2], colMetalDark));
+      }
+      for (let i = 0; i < N_STRAP; i++) {
+        addQuad(strapTopOut[i], strapBotOut[i], strapBotOut[i + 1], strapTopOut[i + 1]); // Front metallic face
+        addQuad(strapBotIn[i],  strapTopIn[i],  strapTopIn[i + 1],  strapBotIn[i + 1]);  // Back face
+        addQuad(strapTopIn[i],  strapTopOut[i], strapTopOut[i + 1], strapTopIn[i + 1]);  // Top bevel rim
+        addQuad(strapBotOut[i], strapBotIn[i],  strapBotIn[i + 1],  strapBotOut[i + 1]); // Bottom bevel rim
+      }
+      // Left end cap of strap
+      addQuad(strapTopIn[0], strapBotIn[0], strapBotOut[0], strapTopOut[0]);
+
+      // Small dark rectangular buckle eyelet slot near the viewer's left end of the strap (u ≈ 0.06 .. 0.15)
+      {
+        const hTL = addV(...torsoPt(-0.040 * s, 0.0165 * s, 0.0778 * s), colMetalHole);
+        const hTR = addV(...torsoPt(-0.034 * s, 0.0150 * s, 0.0792 * s), colMetalHole);
+        const hBL = addV(...torsoPt(-0.040 * s, 0.0110 * s, 0.0778 * s), colMetalHole);
+        const hBR = addV(...torsoPt(-0.034 * s, 0.0095 * s, 0.0792 * s), colMetalHole);
+        addQuad(hTL, hBL, hBR, hTR);
+      }
+
+      // 3D 5-Sided Pentagonal Shield Clasp on the Viewer's Right Collarbone
+      // (Sits at the right end of the strap, overlapping the front-right edge of the cape)
+      {
+        // Local 2D coordinates (uAlong, vUp) of the 5-sided shield centered at (dx0, dy0, dz0),
+        // tilted slightly downward-right (-15 deg) along the strap direction
+        const cx =  0.035 * s;
+        const cy = -0.008 * s;
+        const cz =  0.084 * s;
+        const cosT =  0.966;
+        const sinT = -0.259; // -15 deg tilt
+        const shieldPt = (uL, vU, zOff, scaleUV = 1.0) => {
+          const su = uL * scaleUV;
+          const sv = vU * scaleUV;
+          const dx = cx + (su * cosT - sv * sinT);
+          const dy = cy + (su * sinT + sv * cosT);
+          // Curve slightly backward along the shoulder contour as dx increases
+          const curveZ = cz + zOff - Math.max(0.0, su) * 0.18;
+          return torsoPt(dx, dy, curveZ);
+        };
+
+        // 5 vertices of the pentagonal shield in CCW order:
+        // 0: Top-Left, 1: Bottom-Left, 2: Bottom-Right shoulder, 3: Right Tip (>), 4: Top-Right shoulder
+        const wL = -0.013 * s, wM = 0.007 * s, wTip = 0.016 * s;
+        const hB =  0.0105 * s;
+        const polyUV = [
+          [wL,   hB],   // 0: Top-Left
+          [wL,  -hB],   // 1: Bottom-Left
+          [wM,  -hB],   // 2: Bottom-Right
+          [wTip, 0.0],  // 3: Pointed Right Tip (>)
+          [wM,   hB]    // 4: Top-Right
+        ];
+
+        const baseRing = [], rimRing = [], innerRing = [];
+        for (let k = 0; k < 5; k++) {
+          const uv = polyUV[k];
+          const pBase = shieldPt(uv[0], uv[1], -0.0022 * s, 1.04);
+          const pRim  = shieldPt(uv[0], uv[1],  0.0032 * s, 1.00);
+          const pIn   = shieldPt(uv[0], uv[1],  0.0036 * s, 0.72);
+          baseRing.push(addV(pBase[0], pBase[1], pBase[2], colMetalDark));
+          rimRing.push(addV(pRim[0],   pRim[1],   pRim[2],   colMetalHi));
+          innerRing.push(addV(pIn[0],  pIn[1],    pIn[2],    colMetalMid));
+        }
+        const pCenter = shieldPt(0.001 * s, 0.0, 0.0040 * s, 1.0);
+        const vCenter = addV(pCenter[0], pCenter[1], pCenter[2], colMetalMid);
+
+        for (let k = 0; k < 5; k++) {
+          const nextK = (k + 1) % 5;
+          // Outer side wall of the shield clasp
+          addQuad(baseRing[k], baseRing[nextK], rimRing[nextK], rimRing[k]);
+          // Raised silver bevel frame of the shield clasp
+          addQuad(rimRing[k], rimRing[nextK], innerRing[nextK], innerRing[k]);
+          // Brushed gunmetal-silver inner plate
+          addTri(innerRing[k], innerRing[nextK], vCenter);
+        }
+      }
+    }
+
+    const frontTriCount = outI.length;
+    const normals = new Float32Array(outV.length);
+    for (let k = 0; k < frontTriCount; k += 3) {
+      const i0 = outI[k], i1 = outI[k + 1], i2 = outI[k + 2];
+      const ux = outV[i1 * 3] - outV[i0 * 3], uy = outV[i1 * 3 + 1] - outV[i0 * 3 + 1], uz = outV[i1 * 3 + 2] - outV[i0 * 3 + 2];
+      const vx = outV[i2 * 3] - outV[i0 * 3], vy = outV[i2 * 3 + 1] - outV[i0 * 3 + 1], vz = outV[i2 * 3 + 2] - outV[i0 * 3 + 2];
+      const nX = uy * vz - uz * vy, nY = uz * vx - ux * vz, nZ = ux * vy - uy * vx;
+      normals[i0 * 3] += nX; normals[i0 * 3 + 1] += nY; normals[i0 * 3 + 2] += nZ;
+      normals[i1 * 3] += nX; normals[i1 * 3 + 1] += nY; normals[i1 * 3 + 2] += nZ;
+      normals[i2 * 3] += nX; normals[i2 * 3 + 1] += nY; normals[i2 * 3 + 2] += nZ;
+    }
+    for (let k = 0; k < normals.length; k += 3) {
+      const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+      if (l > 1e-12) { normals[k] /= l; normals[k + 1] /= l; normals[k + 2] /= l; }
+      else { normals[k] = 0.0; normals[k + 1] = 1.0; normals[k + 2] = 0.0; }
+    }
+    for (let k = 0; k < frontTriCount; k += 3) {
+      outI.push(outI[k], outI[k + 2], outI[k + 1]);
+    }
+
+    return {
+      vertices: outV,
+      normals: normals,
+      colors: outC,
+      texcoords: outT,
+      indices: outI
+    };
+  }
+
+  // =========================================================================
+  // --- 11B. 3D Clothing Item Icon Mesh Builders (Bodysuit, Shirt, Skirt, Leggings, Hoodie, Boots, Suit, Slacks, Opera Cape) ---
   // =========================================================================
   function buildWhiteBodysuitTopIconMesh(rawVertices, rawColors, rawIndices) {
     const baseV = (rawVertices.length / 3) | 0;
@@ -7087,7 +9905,7 @@
     });
 
     // 3. Real 3D Folded Spread Shirt Collar
-    const collarMesh = buildWhiteShirtCollarMesh(headP1, chestP1, chestP2, neckP1, neckP2, 1.0);
+    const collarMesh = buildWhiteShirtCollarMesh(headP1, chestP1, chestP2, neckP1, neckP2, 1.0, true);
     _appendCCWMeshAsCWIcon(collarMesh, rawVertices, rawColors, rawIndices, {
       firstHalfOnly: true
     });
@@ -7224,6 +10042,82 @@
     }
   }
 
+  function buildDoubleBreastedSuitIconMesh(rawVertices, rawColors, rawIndices) {
+    const suitMesh = buildDoubleBreastedSuitMesh(
+      [0, 0.336, 0],
+      [0, -0.090, 0], [0, 0.170, 0],
+      [0, 0.162, 0], [0, 0.212, 0],
+      [-0.074, 0.124, 0], [-0.116, 0.012, -0.006], [-0.146, -0.095, 0.022],
+      [ 0.074, 0.124, 0], [ 0.116, 0.012, -0.006], [ 0.146, -0.095, 0.022],
+      1.0,
+      0.0,
+      false,
+      [-0.052, -0.420, 0.0], [0.052, -0.420, 0.0],
+      null
+    );
+    _appendCCWMeshAsCWIcon(suitMesh, rawVertices, rawColors, rawIndices, {
+      firstHalfOnly: true,
+      colorMap: (r, g, b) => {
+        // Keep warm tortoiseshell amber buttons faithful while lifting charcoal pinstripe slightly for crisp inventory slot contrast
+        if (r - b > 0.10) return [r, g, b];
+        const lift = 1.16;
+        return [
+          Math.min(0.60, r * lift + 0.02),
+          Math.min(0.62, g * lift + 0.02),
+          Math.min(0.66, b * lift + 0.025)
+        ];
+      }
+    });
+  }
+
+  function buildBlackSlacksIconMesh(rawVertices, rawColors, rawIndices) {
+    const slMesh = buildBlackSlacksMesh(
+      [0, 0.336, 0],
+      [0, -0.090, 0], [0, 0.170, 0],
+      [-0.052, -0.068, 0], [-0.052, -0.246, 0.010], [-0.052, -0.420, 0],
+      [ 0.052, -0.068, 0], [ 0.052, -0.246, 0.010], [ 0.052, -0.420, 0],
+      1.0,
+      0.0,
+      null
+    );
+    _appendCCWMeshAsCWIcon(slMesh, rawVertices, rawColors, rawIndices, {
+      firstHalfOnly: true,
+      colorMap: (r, g, b) => {
+        if (r > 0.60) return [r, g, b]; // Preserve crisp white brand tab
+        // Match DOUBLE_BREASTED_SUIT icon lift so suit & slacks look identical in the inventory
+        const lift = 1.16;
+        return [
+          Math.min(0.60, r * lift + 0.02),
+          Math.min(0.62, g * lift + 0.02),
+          Math.min(0.66, b * lift + 0.025)
+        ];
+      }
+    });
+  }
+
+  function buildOperaCapeIconMesh(rawVertices, rawColors, rawIndices) {
+    const capeMesh = buildOperaCapeMesh(
+      [0, 0.336, 0],
+      [0, -0.090, 0], [0, 0.170, 0],
+      [0, 0.162, 0], [0, 0.212, 0],
+      [-0.074, 0.124, 0], [-0.116, 0.012, -0.006], [-0.146, -0.095, 0.022],
+      [ 0.074, 0.124, 0], [ 0.116, 0.012, -0.006], [ 0.146, -0.095, 0.022],
+      1.0,
+      0.0,
+      true,
+      [-0.052, -0.420, 0], [0.052, -0.420, 0],
+      null
+    );
+    _appendCCWMeshAsCWIcon(capeMesh, rawVertices, rawColors, rawIndices, {
+      firstHalfOnly: true,
+      colorMap: (r, g, b) => {
+        // Preserve bright silver clasp/strap & rich emerald-teal inner lining while lifting velvet black slightly for slot visibility
+        if (r > 0.20 || g > 0.10) return [Math.min(0.92, r * 1.15), Math.min(0.94, g * 1.15), Math.min(0.96, b * 1.15)];
+        return [r * 1.35 + 0.035, g * 1.35 + 0.038, b * 1.38 + 0.045];
+      }
+    });
+  }
+
   // =========================================================================
   // --- 12. Chibi / Anime Face Texture Generator (Expressions & Kaomojis) ---
   // =========================================================================
@@ -7319,6 +10213,17 @@
       </g>
     `;
 
+    const eyebrowsSvg = `
+      <path d="M 84 114 Q 136 96 188 118" fill="none" stroke="#3d2214" stroke-width="9.0" stroke-linecap="round"/>
+      <path d="M 324 118 Q 376 96 428 114" fill="none" stroke="#3d2214" stroke-width="9.0" stroke-linecap="round"/>
+    `;
+    const renderMouthSvg = (topCurveD) => `
+      <g id="mouth">
+        <path d="${topCurveD}" fill="#c83e5b" stroke="#26110a" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 240 366 Q 256 358 272 366 Q 268 378 256 378 Q 244 378 240 366 Z" fill="#ff8aa1"/>
+      </g>
+    `;
+
     if (expr === "blink" || expr === "happy") {
       const isHappy = expr === "happy";
       const eyeY = isHappy ? 208 : 222;
@@ -7327,85 +10232,44 @@
         ${commonDefs}
         ${blushLayer}
         <!-- Eyebrows -->
-        <path d="M 84 114 Q 136 96 188 118" fill="none" stroke="#3d2214" stroke-width="9.0" stroke-linecap="round"/>
-        <path d="M 324 118 Q 376 96 428 114" fill="none" stroke="#3d2214" stroke-width="9.0" stroke-linecap="round"/>
+        ${eyebrowsSvg}
         <!-- Closed / Happy Arched Anime Eyes -->
         <path d="M 80 ${eyeY} Q 136 ${archCtrlY} 192 ${eyeY}" fill="none" stroke="#26130b" stroke-width="12.5" stroke-linecap="round"/>
         <path d="M 70 ${eyeY - 5} L 86 ${eyeY + 3}" fill="none" stroke="#26130b" stroke-width="8" stroke-linecap="round"/>
         <path d="M 320 ${eyeY} Q 376 ${archCtrlY} 432 ${eyeY}" fill="none" stroke="#26130b" stroke-width="12.5" stroke-linecap="round"/>
         <path d="M 442 ${eyeY - 5} L 426 ${eyeY + 3}" fill="none" stroke="#26130b" stroke-width="8" stroke-linecap="round"/>
-        <!-- Cute Chibi Mouth seated between the lower blush cheeks (leaving a round U-chin below, matching image_a38c3f19.png) -->
-        <g id="mouth">
-          <path d="M 234 356 Q 256 350 278 356 Q 273 380 256 380 Q 239 380 234 356 Z" fill="#c83e5b" stroke="#26110a" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M 240 366 Q 256 358 272 366 Q 268 378 256 378 Q 244 378 240 366 Z" fill="#ff8aa1"/>
-        </g>
+        <!-- Cute Chibi Mouth -->
+        ${renderMouthSvg("M 234 356 Q 256 350 278 356 Q 273 380 256 380 Q 239 380 234 356 Z")}
       </svg>`;
     }
 
-    // Default Tall Expressive Anime Chibi Eyes (matching image_a38c3f19.png) + Blush + 3D Mouth
+    const renderOpenEyeSvg = (id, clipId, cxSclera, cxIris, catchX, smallCX, glowX0, glowX1, upperLashD, wingD, lowerLashD) => `
+      <g id="${id}">
+        <g clip-path="url(#${clipId})">
+          <ellipse cx="${cxSclera}" cy="212" rx="52" ry="64" fill="url(#chibiScleraShadow)"/>
+          <ellipse cx="${cxIris}" cy="216" rx="40" ry="56" fill="url(#chibiIrisGrad)" stroke="#2c140a" stroke-width="4.0"/>
+          <path d="M ${glowX0} 240 A 29 30 0 0 0 ${glowX1} 240" fill="none" stroke="#ffe58f" stroke-width="6.5" stroke-linecap="round" opacity="0.90"/>
+          <ellipse cx="${cxIris}" cy="218" rx="19" ry="27" fill="#1f0d06"/>
+          <ellipse cx="${cxIris - 19}" cy="184" rx="14.5" ry="18.5" transform="rotate(-12 ${cxIris - 19} 184)" fill="#ffffff"/>
+          <circle cx="${catchX}" cy="244" r="7.5" fill="#ffffff"/>
+          <circle cx="${smallCX}" cy="248" r="4.0" fill="#ffffff" opacity="0.88"/>
+        </g>
+        <path d="${upperLashD}" fill="none" stroke="#241109" stroke-width="15.0" stroke-linecap="round"/>
+        <path d="${wingD}" fill="none" stroke="#241109" stroke-width="8.5" stroke-linecap="round"/>
+        <path d="${lowerLashD}" fill="none" stroke="#3d2014" stroke-width="4.2" stroke-linecap="round" opacity="0.78"/>
+      </g>
+    `;
+
+    // Default Tall Expressive Anime Chibi Eyes + Blush + 3D Mouth
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
       ${commonDefs}
       ${blushLayer}
-
-      <!-- Expressive Anime Eyebrows -->
-      <path d="M 84 114 Q 136 96 188 118" fill="none" stroke="#3d2214" stroke-width="9.0" stroke-linecap="round"/>
-      <path d="M 324 118 Q 376 96 428 114" fill="none" stroke="#3d2214" stroke-width="9.0" stroke-linecap="round"/>
-
-      <!-- Upper Eyelid Crease Lines -->
+      ${eyebrowsSvg}
       <path d="M 92 138 Q 136 120 182 140" fill="none" stroke="#5c3624" stroke-width="4.0" stroke-linecap="round" opacity="0.68"/>
       <path d="M 330 140 Q 376 120 420 138" fill="none" stroke="#5c3624" stroke-width="4.0" stroke-linecap="round" opacity="0.68"/>
-
-      <!-- LEFT EYE (Tall Vertical Chibi Proportion matching Reference Image 3) -->
-      <g id="leftEye">
-        <g clip-path="url(#leftEyeClip)">
-          <!-- Sclera with soft top lash shadow -->
-          <ellipse cx="136" cy="212" rx="52" ry="64" fill="url(#chibiScleraShadow)"/>
-          <!-- Golden-Amber Tall Anime Iris -->
-          <ellipse cx="140" cy="216" rx="40" ry="56" fill="url(#chibiIrisGrad)" stroke="#2c140a" stroke-width="4.0"/>
-          <!-- Lower Golden Glow Crescent -->
-          <path d="M 112 240 A 29 30 0 0 0 168 240" fill="none" stroke="#ffe58f" stroke-width="6.5" stroke-linecap="round" opacity="0.90"/>
-          <!-- Deep Espresso Center Pupil -->
-          <ellipse cx="140" cy="218" rx="19" ry="27" fill="#1f0d06"/>
-          <!-- Primary & Secondary Specular Catchlights -->
-          <ellipse cx="121" cy="184" rx="14.5" ry="18.5" transform="rotate(-12 121 184)" fill="#ffffff"/>
-          <circle cx="158" cy="244" r="7.5" fill="#ffffff"/>
-          <circle cx="128" cy="248" r="4.0" fill="#ffffff" opacity="0.88"/>
-        </g>
-        <!-- Bold Sculpted Upper Eyelash & Wing -->
-        <path d="M 76 196 Q 134 128 194 188" fill="none" stroke="#241109" stroke-width="15.0" stroke-linecap="round"/>
-        <path d="M 70 184 L 86 194" fill="none" stroke="#241109" stroke-width="8.5" stroke-linecap="round"/>
-        <!-- Subtle Lower Lash Line -->
-        <path d="M 104 274 Q 136 284 168 272" fill="none" stroke="#3d2014" stroke-width="4.2" stroke-linecap="round" opacity="0.78"/>
-      </g>
-
-      <!-- RIGHT EYE (Tall Vertical Chibi Proportion matching Reference Image 3) -->
-      <g id="rightEye">
-        <g clip-path="url(#rightEyeClip)">
-          <!-- Sclera with soft top lash shadow -->
-          <ellipse cx="376" cy="212" rx="52" ry="64" fill="url(#chibiScleraShadow)"/>
-          <!-- Golden-Amber Tall Anime Iris -->
-          <ellipse cx="372" cy="216" rx="40" ry="56" fill="url(#chibiIrisGrad)" stroke="#2c140a" stroke-width="4.0"/>
-          <!-- Lower Golden Glow Crescent -->
-          <path d="M 344 240 A 29 30 0 0 0 400 240" fill="none" stroke="#ffe58f" stroke-width="6.5" stroke-linecap="round" opacity="0.90"/>
-          <!-- Deep Espresso Center Pupil -->
-          <ellipse cx="372" cy="218" rx="19" ry="27" fill="#1f0d06"/>
-          <!-- Primary & Secondary Specular Catchlights -->
-          <ellipse cx="353" cy="184" rx="14.5" ry="18.5" transform="rotate(-12 353 184)" fill="#ffffff"/>
-          <circle cx="390" cy="244" r="7.5" fill="#ffffff"/>
-          <circle cx="360" cy="248" r="4.0" fill="#ffffff" opacity="0.88"/>
-        </g>
-        <!-- Bold Sculpted Upper Eyelash & Wing -->
-        <path d="M 318 188 Q 378 128 436 196" fill="none" stroke="#241109" stroke-width="15.0" stroke-linecap="round"/>
-        <path d="M 442 184 L 426 194" fill="none" stroke="#241109" stroke-width="8.5" stroke-linecap="round"/>
-        <!-- Subtle Lower Lash Line -->
-        <path d="M 344 272 Q 376 284 408 274" fill="none" stroke="#3d2014" stroke-width="4.2" stroke-linecap="round" opacity="0.78"/>
-      </g>
-
-      <!-- Cute Anime Chibi Mouth seated between the lower blush cheeks (leaving a round U-chin below, matching image_a38c3f19.png) -->
-      <g id="mouth">
-        <path d="M 234 356 Q 245 350 256 354 Q 267 350 278 356 Q 273 380 256 380 Q 239 380 234 356 Z" fill="#c83e5b" stroke="#26110a" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M 240 366 Q 256 358 272 366 Q 268 378 256 378 Q 244 378 240 366 Z" fill="#ff8aa1"/>
-      </g>
+      ${renderOpenEyeSvg("leftEye", "leftEyeClip", 136, 140, 158, 128, 112, 168, "M 76 196 Q 134 128 194 188", "M 70 184 L 86 194", "M 104 274 Q 136 284 168 272")}
+      ${renderOpenEyeSvg("rightEye", "rightEyeClip", 376, 372, 390, 360, 344, 400, "M 318 188 Q 378 128 436 196", "M 442 184 L 426 194", "M 344 272 Q 376 284 408 274")}
+      ${renderMouthSvg("M 234 356 Q 245 350 256 354 Q 267 350 278 356 Q 273 380 256 380 Q 239 380 234 356 Z")}
     </svg>`;
   }
 
@@ -7534,6 +10398,10 @@
   window.generateChibiThigh = generateChibiThigh;
   window.generateChibiCalf = generateChibiCalf;
   window.mergeMeshes = mergeMeshes;
+  window.computeSpineHeadRig = computeSpineHeadRig;
+  window.computeHandGripFrame = computeHandGripFrame;
+  window.computeLegRigFrame = computeLegRigFrame;
+  window.computeFullBodyRig = computeFullBodyRig;
   window.buildHandAndFingers = buildHandAndFingers;
   window.buildFootAnkleToes = buildFootAnkleToes;
   window.resetCapsuleBufferPool = resetCapsuleBufferPool;
@@ -7568,6 +10436,9 @@
   window.buildTravelerBootsMesh = buildTravelerBootsMesh;
   window.buildWhiteShirtCollarMesh = buildWhiteShirtCollarMesh;
   window.buildBlackPleatedSkirtMesh = buildBlackPleatedSkirtMesh;
+  window.buildDoubleBreastedSuitMesh = buildDoubleBreastedSuitMesh;
+  window.buildBlackSlacksMesh = buildBlackSlacksMesh;
+  window.buildOperaCapeMesh = buildOperaCapeMesh;
   window.buildWhiteBodysuitTopIconMesh = buildWhiteBodysuitTopIconMesh;
   window.buildWhiteBodysuitShortsIconMesh = buildWhiteBodysuitShortsIconMesh;
   window.buildTravelerHoodieIconMesh = buildTravelerHoodieIconMesh;
@@ -7575,6 +10446,9 @@
   window.buildWhiteShirtIconMesh = buildWhiteShirtIconMesh;
   window.buildBlackPleatedSkirtIconMesh = buildBlackPleatedSkirtIconMesh;
   window.buildBlackLeggingsIconMesh = buildBlackLeggingsIconMesh;
+  window.buildDoubleBreastedSuitIconMesh = buildDoubleBreastedSuitIconMesh;
+  window.buildBlackSlacksIconMesh = buildBlackSlacksIconMesh;
+  window.buildOperaCapeIconMesh = buildOperaCapeIconMesh;
 
   // Face Textures & Expressions
   window.CLONE_EMOJI_FACES = CLONE_EMOJI_FACES;
@@ -7602,6 +10476,10 @@
     generateChibiThigh,
     generateChibiCalf,
     mergeMeshes,
+    computeSpineHeadRig,
+    computeHandGripFrame,
+    computeLegRigFrame,
+    computeFullBodyRig,
     buildHandAndFingers,
     buildFootAnkleToes,
     resetCapsuleBufferPool,
@@ -7621,6 +10499,7 @@
 
     // Clothes, Bodysuit & Hoodie
     getCharacterEquippedClothingState,
+    createHoodiePhysicsState: _createDefaultHoodiePhysState,
     chibiHoodiePhysics,
     triggerHoodieJiggle,
     updateChibiHoodiePhysics,
@@ -7632,6 +10511,9 @@
     buildTravelerBootsMesh,
     buildWhiteShirtCollarMesh,
     buildBlackPleatedSkirtMesh,
+    buildDoubleBreastedSuitMesh,
+    buildBlackSlacksMesh,
+    buildOperaCapeMesh,
     buildWhiteBodysuitTopIconMesh,
     buildWhiteBodysuitShortsIconMesh,
     buildTravelerHoodieIconMesh,
@@ -7639,6 +10521,9 @@
     buildWhiteShirtIconMesh,
     buildBlackPleatedSkirtIconMesh,
     buildBlackLeggingsIconMesh,
+    buildDoubleBreastedSuitIconMesh,
+    buildBlackSlacksIconMesh,
+    buildOperaCapeIconMesh,
 
     // Face Textures
     CLONE_EMOJI_FACES,

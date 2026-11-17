@@ -217,14 +217,17 @@
         gap: 12px;
         pointer-events: auto;
         z-index: 1000; /* Same layer as top-left-menu HUD (1000) so it hides under inventory overlay (10010) */
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: scale(var(--ui-hud-scale, 1));
+        transform-origin: bottom right;
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
       .action-slots.move-mode {
         top: 50%;
         bottom: auto;
         right: auto;
         left: calc(50% + 280px); /* 520px/2 + padding */
-        transform: translateY(-50%);
+        transform: translateY(-50%) scale(var(--ui-hud-scale, 1));
+        transform-origin: left center;
         z-index: 1000; /* Same layer as HUD */
       }
       @media (max-width: 768px) {
@@ -232,7 +235,8 @@
           left: 50%;
           top: auto;
           bottom: 20px;
-          transform: translateX(-50%);
+          transform: translateX(-50%) scale(var(--ui-hud-scale, 1));
+          transform-origin: bottom center;
         }
       }
       .action-slots-normal {
@@ -405,12 +409,6 @@
         border: 1px solid rgba(255, 170, 0, 0.2);
       }
       @media (max-width: 600px), (max-height: 500px) {
-        .action-slots {
-          bottom: 8px;
-          right: 8px;
-          transform: scale(var(--ui-hud-scale, 0.82));
-          transform-origin: bottom right;
-        }
         .controls {
           top: 10px;
           right: 10px;
@@ -458,6 +456,8 @@
         touch-action: none;
         user-select: none;
         -webkit-user-select: none;
+        transform: scale(var(--ui-hud-scale, 1));
+        transform-origin: bottom left;
       }
       .joystick-base {
         width: 130px;
@@ -562,32 +562,6 @@
         top: 50%;
         transform: translateY(-50%);
       }
-      @media (max-width: 600px), (max-height: 500px) {
-        .joystick-container {
-          bottom: 8px;
-          left: 8px;
-          width: 110px;
-          height: 110px;
-          transform: scale(var(--ui-hud-scale, 0.9));
-          transform-origin: bottom left;
-        }
-        .joystick-base {
-          width: 110px;
-          height: 110px;
-        }
-        .joystick-thumb {
-          width: 42px;
-          height: 42px;
-        }
-        .joystick-base::after {
-          width: 50px;
-          height: 50px;
-        }
-        .joystick-dir {
-          font-size: 10px;
-        }
-      }
-
       /* ============================================
            INVENTORY STYLES
            ============================================ */
@@ -600,6 +574,16 @@
         gap: 8px;
         z-index: 1000;
         pointer-events: none; /* Let clicks pass through empty spaces of container */
+        transform: scale(var(--ui-hud-scale, 1));
+        transform-origin: top left;
+      }
+      #compassContainer {
+        transform: translateX(-50%) scale(var(--ui-hud-scale, 1)) !important;
+        transform-origin: top center !important;
+      }
+      #gameplayFullscreenBtn {
+        transform: scale(var(--ui-hud-scale, 1));
+        transform-origin: top right;
       }
       .top-left-menu * {
         pointer-events: auto; /* Enable pointer events on children */
@@ -1163,28 +1147,8 @@
       .action-slot * {
         pointer-events: none;
       }
-      /* Keep fixed top-left layout and scale cleanly on small screens */
-      @media (max-width: 600px), (max-height: 500px) {
-        .top-left-menu {
-          top: 8px;
-          left: 8px;
-          gap: 6px;
-          transform: scale(var(--ui-hud-scale, 0.9));
-          transform-origin: top left;
-        }
-        .inventory-btn {
-          width: 32px;
-          height: 32px;
-          font-size: 14px;
-        }
-        .inventory-panel::-webkit-scrollbar {
-          width: 3px;
-        }
-        .inventory-badge {
-          width: 15px;
-          height: 15px;
-          font-size: 7px;
-        }
+      .inventory-panel::-webkit-scrollbar {
+        width: 3px;
       }
 
       /* ============================================
@@ -1202,6 +1166,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        white-space: nowrap;
+        flex-shrink: 0;
         backdrop-filter: blur(12px); /* ธีมกระเป๋า */
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3); /* ธีมกระเป๋า */
         /* ธีมกระเป๋า */
@@ -1214,14 +1180,6 @@
       .fps-counter .fps-lock {
         color: rgba(255, 255, 255, 0.3);
         font-size: 11px;
-      }
-
-      @media (max-width: 600px) {
-        .fps-counter {
-          font-size: 11px;
-          padding: 0 10px;
-          height: 32px;
-        }
       }
 
       /* Fullscreen button styles */
@@ -1239,6 +1197,8 @@
         display: flex;
         align-items: center;
         gap: 6px;
+        white-space: nowrap;
+        flex-shrink: 0;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(4px);
         transition: all 0.2s;
@@ -1253,14 +1213,6 @@
       }
       .fullscreen-btn:active {
         transform: translateY(1px);
-      }
-
-      @media (max-width: 600px) {
-        .fullscreen-btn {
-          padding: 0 8px;
-          font-size: 10px;
-          height: 32px;
-        }
       }
 
       /* ============================================
@@ -2010,17 +1962,44 @@
         font-family: 'Consolas', 'Courier New', monospace;
       }
 
-      /* Hide screen mode settings from all platforms */
+      /* Hide screen mode settings by default, show in Electron */
       #screenModeSettingContainer {
         display: none !important;
       }
+      body.electron-mode #screenModeSettingContainer {
+        display: flex !important;
+      }
 
-      /* Gameplay fullscreen button on top-right: hidden in touch mode, visible in keyboard/mouse mode */
-      body.touch-mode #gameplayFullscreenBtn {
+      /* Gameplay fullscreen button on top-right: hidden in touch mode or Electron, visible in keyboard/mouse mode */
+      body.touch-mode #gameplayFullscreenBtn,
+      body.electron-mode #gameplayFullscreenBtn {
         display: none !important;
       }
-      body.keyboard-mode #gameplayFullscreenBtn {
+      body.keyboard-mode:not(.electron-mode) #gameplayFullscreenBtn {
         display: flex !important;
+      }
+
+      /* Colorblind Mode Daltonization Filters */
+      body[data-colorblind-mode="protanopia"] canvas#glcanvas,
+      body[data-colorblind-mode="protanopia"] .action-slot canvas,
+      body[data-colorblind-mode="protanopia"] .inventory-slot canvas,
+      body[data-colorblind-mode="protanopia"] .craft-icon canvas,
+      body[data-colorblind-mode="protanopia"] .item-list-card canvas {
+        filter: url(#cb-filter-protanopia) !important;
+      }
+      body[data-colorblind-mode="deuteranopia"] canvas#glcanvas,
+      body[data-colorblind-mode="deuteranopia"] .action-slot canvas,
+      body[data-colorblind-mode="deuteranopia"] .inventory-slot canvas,
+      body[data-colorblind-mode="deuteranopia"] .craft-icon canvas,
+      body[data-colorblind-mode="deuteranopia"] .item-list-card canvas {
+        filter: url(#cb-filter-deuteranopia) !important;
+      }
+      body[data-colorblind-mode="tritanopia"] canvas#glcanvas,
+      body[data-colorblind-mode="tritanopia"] .action-slot canvas,
+      body[data-colorblind-mode="tritanopia"] .inventory-slot canvas,
+      body[data-colorblind-mode="tritanopia"] .craft-icon canvas,
+      body[data-colorblind-mode="tritanopia"] .item-list-card canvas {
+        filter: url(#cb-filter-tritanopia) !important;
       }
 
       /* Mech Stand 8-Slot UI System (Replaced by genuine 3D WebGL World UI Sign) */

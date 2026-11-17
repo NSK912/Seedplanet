@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789500000073';
+  const version = '1789500000148';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -106,6 +106,7 @@
     'gamefile/gameplay/capsuleModel.js',
     'gamefile/gameplay/inventory.js',
     'gamefile/gameplay/player.js',
+    'gamefile/gameplay/ActorCore.js',
     'gamefile/gameplay/TheCube.js',
     'gamefile/gameplay/PlayerClones.js',
     'gamefile/gameplay/ui.js',

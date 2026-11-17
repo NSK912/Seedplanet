@@ -503,6 +503,10 @@ if (classicModelBtn) {
 const chibiModelBtn = document.getElementById("devCharModelChibiBtn");
 if (chibiModelBtn) {
   chibiModelBtn.addEventListener("click", () => {
+    if (window.GLB_DISABLED) {
+      if (typeof showNotice === "function") showNotice("🚫 โมเดล GLB ถูกปิดใช้งานชั่วคราว");
+      return;
+    }
     if (typeof window.switchCharacterModel === "function") window.switchCharacterModel("chibi");
   });
 }
@@ -799,8 +803,23 @@ window.updateDevCharacterModelUI = function() {
   const animContainer = document.getElementById("devAnimContainer");
   const skeletonContainer = document.getElementById("devSkeletonContainer");
   const boneOverlay = document.getElementById("devBoneLabelsOverlay");
-  const isChibiGlb = window.characterModel === "chibi";
+  const glbDisabled = !!(typeof window !== "undefined" && window.GLB_DISABLED);
+  const isChibiGlb = !glbDisabled && window.characterModel === "chibi";
   if (cBtn && chBtn) {
+    if (glbDisabled) {
+      chBtn.disabled = true;
+      chBtn.style.border = "1px solid transparent";
+      chBtn.style.opacity = "0.4";
+      chBtn.style.cursor = "not-allowed";
+      cBtn.style.border = "2px solid white";
+      cBtn.style.opacity = "1";
+      if (animContainer) animContainer.style.display = "none";
+      if (skeletonContainer) skeletonContainer.style.display = "none";
+      if (boneOverlay && boneOverlay.style.display !== "none") {
+        boneOverlay.style.display = "none";
+      }
+      return;
+    }
     if (isChibiGlb) {
       chBtn.style.border = "2px solid white";
       chBtn.style.opacity = "1";

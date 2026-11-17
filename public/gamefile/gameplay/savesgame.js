@@ -37,6 +37,7 @@
             keyBindings: currentKeyBindings,
             gamepadBindings: (typeof currentGamepadBindings !== "undefined" ? currentGamepadBindings : (window.currentGamepadBindings || {})),
             renderScale,
+            uiScale: typeof window.uiScale === "number" ? window.uiScale : (typeof uiScale === "number" ? uiScale : 100),
             mouseSensitivity,
             showFps,
             targetFps,
@@ -51,6 +52,7 @@
             cameraWaterCollisionEnabled: typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : (typeof window !== "undefined" && typeof window.cameraWaterCollisionEnabled === "boolean" ? window.cameraWaterCollisionEnabled : true),
             zoomLimitEnabled,
             ragdollEnabled,
+            colorblindMode: typeof window.colorblindMode === "string" ? window.colorblindMode : (typeof colorblindMode === "string" ? colorblindMode : "none"),
             fullscreen: isCurrentFullscreen
           };
           localStorage.setItem("seedplanet_options_config", JSON.stringify(optionsConfig));
@@ -82,6 +84,7 @@
             sfxMuted,
             keyBindings: currentKeyBindings,
             renderScale,
+            uiScale: typeof window.uiScale === "number" ? window.uiScale : (typeof uiScale === "number" ? uiScale : 100),
             mouseSensitivity,
             showFps,
             targetFps,
@@ -96,7 +99,8 @@
             cameraWaterCollisionEnabled: typeof cameraWaterCollisionEnabled !== "undefined" ? cameraWaterCollisionEnabled : (typeof window !== "undefined" && typeof window.cameraWaterCollisionEnabled === "boolean" ? window.cameraWaterCollisionEnabled : true),
             zoomLimitEnabled,
             ragdollEnabled,
-            characterModel: (typeof window !== "undefined" && window.characterModel === "chibi") ? "chibi" : "classic",
+            colorblindMode: typeof window.colorblindMode === "string" ? window.colorblindMode : (typeof colorblindMode === "string" ? colorblindMode : "none"),
+            characterModel: (typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi") ? "chibi" : "classic",
             fullscreen: isCurrentFullscreen,
 
             // Planet parameters
@@ -247,6 +251,14 @@
               resizeCanvas();
             }
           }
+          if (typeof settings.uiScale === "number") {
+            if (typeof window.applyUIScale === "function") {
+              window.applyUIScale(settings.uiScale);
+            } else {
+              if (typeof uiScale !== "undefined") uiScale = settings.uiScale;
+              if (typeof window !== "undefined") window.uiScale = settings.uiScale;
+            }
+          }
           if (typeof settings.mouseSensitivity === "number") {
             mouseSensitivity = settings.mouseSensitivity;
             const sensSlider = document.getElementById("mouseSensitivitySlider");
@@ -300,6 +312,11 @@
             else if (typeof updateTaauUI === 'function') updateTaauUI();
             else if (typeof window.updateTaauUI === 'function') window.updateTaauUI();
           }
+          if (typeof settings.colorblindMode === "string" && ["none", "protanopia", "deuteranopia", "tritanopia"].includes(settings.colorblindMode)) {
+            if (typeof colorblindMode !== "undefined") colorblindMode = settings.colorblindMode;
+            if (typeof window !== "undefined") window.colorblindMode = settings.colorblindMode;
+            if (typeof window.updateColorblindUI === "function") window.updateColorblindUI();
+          }
           if (typeof settings.fullscreen === "boolean") {
             isCurrentFullscreen = settings.fullscreen;
             if (isCurrentFullscreen) {
@@ -310,7 +327,8 @@
                 doc.fullscreenElement ||
                 doc.mozFullScreenElement ||
                 doc.webkitFullscreenElement ||
-                doc.msFullscreenElement
+                doc.msFullscreenElement ||
+                (typeof window !== "undefined" && typeof window.isElectronApp === "function" && window.isElectronApp())
               );
               if (isFull) {
                 setTimeout(exitFullscreen, 300);
@@ -395,7 +413,7 @@
           }
         }
         if (typeof window !== "undefined") {
-          window.characterModel = (settings.characterModel === "chibi" || settings.characterModel === "chibi_white") ? "chibi" : "classic";
+          window.characterModel = (!window.GLB_DISABLED && (settings.characterModel === "chibi" || settings.characterModel === "chibi_white")) ? "chibi" : "classic";
           if (typeof window.updateDevCharacterModelUI === "function") {
             window.updateDevCharacterModelUI();
           }
@@ -868,6 +886,26 @@
           while (equipSlotsItems.length < 5) {
             equipSlotsItems.push(null);
           }
+          // If DOUBLE_BREASTED_SUIT was previously in shirt slot 0, or worn alongside TRAVELER_HOODIE, move displaced item to bag
+          const moveDisplacedToBag = (displaced) => {
+            if (!displaced || !Array.isArray(inventory)) return;
+            const emptyIdx = inventory.findIndex((s, idx) => s === null && idx < 10);
+            if (emptyIdx !== -1) inventory[emptyIdx] = displaced;
+          };
+          if (equipSlotsItems[0] && String(equipSlotsItems[0].name || "").toUpperCase() === "DOUBLE_BREASTED_SUIT") {
+            const suitIt = equipSlotsItems[0];
+            equipSlotsItems[0] = null;
+            moveDisplacedToBag(suitIt);
+          }
+          const s3 = equipSlotsItems[3] ? String(equipSlotsItems[3].name || "").toUpperCase() : "";
+          const s4 = equipSlotsItems[4] ? String(equipSlotsItems[4].name || "").toUpperCase() : "";
+          if (
+            (s3 === "DOUBLE_BREASTED_SUIT" && (s4 === "TRAVELER_HOODIE" || s4 === "HOODIE_CLOAK")) ||
+            (s4 === "DOUBLE_BREASTED_SUIT" && (s3 === "TRAVELER_HOODIE" || s3 === "HOODIE_CLOAK"))
+          ) {
+            moveDisplacedToBag(equipSlotsItems[4]);
+            equipSlotsItems[4] = null;
+          }
           window.equipSlotsItems = equipSlotsItems;
         } else if (typeof window.createDefaultEquipSlotsItems === "function") {
           equipSlotsItems = window.createDefaultEquipSlotsItems();
@@ -888,7 +926,10 @@
             { slot: 1, item: { name: "BLACK_PLEATED_SKIRT", icon: "👗", label: "BLACK_PLEATED_SKIRT", count: 1 } },
             { slot: 2, item: { name: "TRAVELER_BOOTS", icon: "🥾", label: "TRAVELER_BOOTS", count: 1 } },
             { slot: 3, item: { name: "TRAVELER_HOODIE", icon: "🧥", label: "TRAVELER_HOODIE", count: 1 } },
-            { slot: 4, item: { name: "BLACK_LEGGINGS", icon: "👖", label: "BLACK_LEGGINGS", count: 1 } }
+            { slot: 4, item: { name: "BLACK_LEGGINGS", icon: "👖", label: "BLACK_LEGGINGS", count: 1 } },
+            { slot: -1, item: { name: "DOUBLE_BREASTED_SUIT", icon: "🧥", label: "DOUBLE_BREASTED_SUIT", count: 1 } },
+            { slot: -1, item: { name: "BLACK_SLACKS", icon: "👖", label: "BLACK_SLACKS", count: 1 } },
+            { slot: -1, item: { name: "OPERA_CAPE", icon: "🧛", label: "OPERA_CAPE", count: 1 } }
           ];
           const hasItemAnywhere = (itemName) => {
             const checkArr = (arr) => Array.isArray(arr) && arr.some(it => it && (it.name === itemName || it.label === itemName));
@@ -901,7 +942,7 @@
           let addedToBag = false;
           for (const sc of starterClothes) {
             if (!hasItemAnywhere(sc.item.name)) {
-              if (Array.isArray(window.equipSlotsItems) && window.equipSlotsItems[sc.slot] === null) {
+              if (sc.slot >= 0 && Array.isArray(window.equipSlotsItems) && window.equipSlotsItems[sc.slot] === null) {
                 window.equipSlotsItems[sc.slot] = { ...sc.item };
                 if (typeof equipSlotsItems !== "undefined" && Array.isArray(equipSlotsItems)) {
                   equipSlotsItems[sc.slot] = window.equipSlotsItems[sc.slot];
@@ -1116,6 +1157,7 @@
           demolish: "CapsLock",
         },
         renderScale: /Android/i.test(navigator.userAgent) ? 0.25 : 1.0,
+        uiScale: 100,
         mouseSensitivity: 1,
         showFps: true,
         targetFps: /Android/i.test(navigator.userAgent) ? 30 : 120,
@@ -1125,6 +1167,7 @@
         antialiasEnabled: false,
         fxaaEnabled: true,
         taauEnabled: true,
+        colorblindMode: "none",
         cameraMode: "tps",
         cameraCollisionEnabled: true,
         cameraWaterCollisionEnabled: true,
@@ -1236,6 +1279,7 @@
           "collectSfxVolumeSlider",
           "npcSfxVolumeSlider",
           "renderScaleSlider",
+          "uiScaleSlider",
           "mouseSensitivitySlider",
           "sizeInput",
           "radiusInput",
@@ -1283,6 +1327,10 @@
           "fpsToggleOff",
           "fxaaToggleOn",
           "fxaaToggleOff",
+          "cbNoneBtn",
+          "cbProtanopiaBtn",
+          "cbDeuteranopiaBtn",
+          "cbTritanopiaBtn",
           "taauToggleOn",
           "taauToggleOff",
           "antialiasToggleOn",
@@ -1324,6 +1372,7 @@
             sfxVolume,
             sfxMuted,
             renderScale,
+            uiScale: typeof window.uiScale === "number" ? window.uiScale : (typeof uiScale === "number" ? uiScale : 100),
             mouseSensitivity,
             showFps,
             targetFps,
@@ -1599,6 +1648,15 @@
             renderScale = DEFAULT_SETTINGS.renderScale;
             if (typeof resizeCanvas === "function") resizeCanvas();
 
+            if (typeof window.applyUIScale === "function") {
+              window.applyUIScale(DEFAULT_SETTINGS.uiScale || 100);
+            } else if (typeof applyUIScale === "function") {
+              applyUIScale(DEFAULT_SETTINGS.uiScale || 100);
+            } else {
+              if (typeof uiScale !== "undefined") uiScale = DEFAULT_SETTINGS.uiScale || 100;
+              if (typeof window !== "undefined") window.uiScale = DEFAULT_SETTINGS.uiScale || 100;
+            }
+
             mouseSensitivity = DEFAULT_SETTINGS.mouseSensitivity;
             const sensSlider = document.getElementById("mouseSensitivitySlider");
             const sensVal = document.getElementById("mouseSensitivityVal");
@@ -1636,6 +1694,11 @@
             }
             if (typeof updateFxaaUI === "function") updateFxaaUI();
             else if (typeof updateTaauUI === "function") updateTaauUI();
+
+            const defaultCb = DEFAULT_SETTINGS.colorblindMode || "none";
+            if (typeof colorblindMode !== "undefined") colorblindMode = defaultCb;
+            if (typeof window !== "undefined") window.colorblindMode = defaultCb;
+            if (typeof window.updateColorblindUI === "function") window.updateColorblindUI();
 
             cameraMode = DEFAULT_SETTINGS.cameraMode;
             if (typeof setCameraMode === "function") {

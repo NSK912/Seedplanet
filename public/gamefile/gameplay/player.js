@@ -472,9 +472,9 @@ window.characterVertexShaderSource = `#version 300 es
 
         // Specific whitelist for holdable tools/weapons
         const holdableNames = [
-          "AXE", "PICKAXE", "SHOVEL", "IRON_BUCKET", "WATER_BUCKET", "BOW",
-          "WOODEN_ARM_CANNON", "ARM_CANNON", "BRANCH", "branch", "FRIED_BUG",
-          "GLOW_BATTERY", "DRAGON_FRUIT", "dragon_fruit",
+          "AXE", "PICKAXE", "AEGIS_SHIFT", "aegis_shift", "SHOVEL", "IRON_BUCKET", "WATER_BUCKET", "BOW",
+          "WOODEN_ARM_CANNON", "ARM_CANNON", "BRANCH", "branch", "TANTO", "tanto",
+          "FRIED_BUG", "GLOW_BATTERY", "DRAGON_FRUIT", "dragon_fruit",
           "COTTON_PLANT", "cotton_plant", "COTTON", "cotton"
         ];
         if (holdableNames.includes(itemName)) {
@@ -1553,21 +1553,303 @@ window.characterVertexShaderSource = `#version 300 es
       const rotatePointY = (pivot, point, theta) => (window.CapsuleModel ? window.CapsuleModel.rotatePointY(pivot, point, theta) : window.rotatePointY(pivot, point, theta));
       const rotatePointZ = (pivot, point, theta) => (window.CapsuleModel ? window.CapsuleModel.rotatePointZ(pivot, point, theta) : window.rotatePointZ(pivot, point, theta));
       const generateCapsule = (p1, p2, r, rad, ax) => (window.CapsuleModel ? window.CapsuleModel.generateCapsule(p1, p2, r, rad, ax) : window.generateCapsule(p1, p2, r, rad, ax));
-      const generateChibiHead = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiHead ? window.CapsuleModel.generateChibiHead(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 16));
-      const generateChibiNeck = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiNeck ? window.CapsuleModel.generateChibiNeck(p1, p2, r, sf) : generateCapsule(p1, p2, r, 12, 8));
-      const generateChibiEar = (p1, p2, isL, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiEar ? window.CapsuleModel.generateChibiEar(p1, p2, isL, sf) : generateCapsule(p1, p2, 0.018 * sf, 10, 8));
+      const generateChibiHead = (p1, p2, r, sf, headBasis = null) => (window.CapsuleModel && window.CapsuleModel.generateChibiHead ? window.CapsuleModel.generateChibiHead(p1, p2, r, sf, headBasis) : generateCapsule(p1, p2, r, 16, 16));
+      const generateChibiNeck = (p1, p2, r, sf, boneBasis = null) => (window.CapsuleModel && window.CapsuleModel.generateChibiNeck ? window.CapsuleModel.generateChibiNeck(p1, p2, r, sf, boneBasis) : generateCapsule(p1, p2, r, 12, 8));
+      const generateChibiEar = (p1, p2, isL, sf, boneBasis = null) => (window.CapsuleModel && window.CapsuleModel.generateChibiEar ? window.CapsuleModel.generateChibiEar(p1, p2, isL, sf, boneBasis) : generateCapsule(p1, p2, 0.018 * sf, 10, 8));
       const generateChibiTorso = (p1, p2, r, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiTorso ? window.CapsuleModel.generateChibiTorso(p1, p2, r, sf, ...rest) : (window.CapsuleModel && window.CapsuleModel.generateChibiChest ? window.CapsuleModel.generateChibiChest(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 12)));
-      const generateChibiChest = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiChest ? window.CapsuleModel.generateChibiChest(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 12));
+      const generateChibiChest = (p1, p2, r, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiChest ? window.CapsuleModel.generateChibiChest(p1, p2, r, sf, ...rest) : generateCapsule(p1, p2, r, 16, 12));
       const generateChibiPelvis = (p1, p2, r, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiPelvis ? window.CapsuleModel.generateChibiPelvis(p1, p2, r, sf) : generateCapsule(p1, p2, r, 16, 12));
       const generateChibiUpperArm = (p1, p2, isL, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiUpperArm ? window.CapsuleModel.generateChibiUpperArm(p1, p2, isL, sf, ...rest) : generateCapsule(p1, p2, 0.038 * sf, 12, 10));
-      const generateChibiForeArm = (p1, p2, isL, sf) => (window.CapsuleModel && window.CapsuleModel.generateChibiForeArm ? window.CapsuleModel.generateChibiForeArm(p1, p2, isL, sf) : generateCapsule(p1, p2, 0.032 * sf, 12, 10));
+      const generateChibiForeArm = (p1, p2, isL, sf, boneBasis = null) => (window.CapsuleModel && window.CapsuleModel.generateChibiForeArm ? window.CapsuleModel.generateChibiForeArm(p1, p2, isL, sf, boneBasis) : generateCapsule(p1, p2, 0.032 * sf, 12, 10));
       const generateChibiThigh = (p1, p2, isL, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiThigh ? window.CapsuleModel.generateChibiThigh(p1, p2, isL, sf, ...rest) : generateCapsule(p1, p2, 0.048 * sf, 12, 10));
       const generateChibiCalf = (p1, p2, isL, sf, ...rest) => (window.CapsuleModel && window.CapsuleModel.generateChibiCalf ? window.CapsuleModel.generateChibiCalf(p1, p2, isL, sf, ...rest) : generateCapsule(p1, p2, 0.040 * sf, 12, 10));
       const mergeMeshes = (meshes, verticesOnly = false) => (window.CapsuleModel ? window.CapsuleModel.mergeMeshes(meshes, verticesOnly) : window.mergeMeshes(meshes, verticesOnly));
-      const buildHandAndFingers = (pElbow, pHand, isLeft, sf) => (window.CapsuleModel ? window.CapsuleModel.buildHandAndFingers(pElbow, pHand, isLeft, sf) : window.buildHandAndFingers(pElbow, pHand, isLeft, sf));
-      const buildFootAnkleToes = (pKnee, pFoot, isLeft, sf) => (window.CapsuleModel ? window.CapsuleModel.buildFootAnkleToes(pKnee, pFoot, isLeft, sf) : window.buildFootAnkleToes(pKnee, pFoot, isLeft, sf));
+      const buildHandAndFingers = (pElbow, pHand, isLeft, sf, gripAmount = 0, wristPose = null, pShoulder = null) => (window.CapsuleModel ? window.CapsuleModel.buildHandAndFingers(pElbow, pHand, isLeft, sf, gripAmount, wristPose, pShoulder) : window.buildHandAndFingers(pElbow, pHand, isLeft, sf, gripAmount, wristPose, pShoulder));
+      const buildFootAnkleToes = (pKnee, pFoot, isLeft, sf, legRig = null) => (window.CapsuleModel ? window.CapsuleModel.buildFootAnkleToes(pKnee, pFoot, isLeft, sf, legRig) : window.buildFootAnkleToes(pKnee, pFoot, isLeft, sf, legRig));
+      const computeFullBodyRig = (cfg) => (window.CapsuleModel && window.CapsuleModel.computeFullBodyRig ? window.CapsuleModel.computeFullBodyRig(cfg) : (window.computeFullBodyRig ? window.computeFullBodyRig(cfg) : null));
       const resetCapsuleBufferPool = () => (window.CapsuleModel ? window.CapsuleModel.resetCapsuleBufferPool() : (window.resetCapsuleBufferPool && window.resetCapsuleBufferPool()));
       const resetMergeBufferPool = () => (window.CapsuleModel ? window.CapsuleModel.resetMergeBufferPool() : (window.resetMergeBufferPool && window.resetMergeBufferPool()));
+
+      // Hoisted pure vector math, easing, IK, hair, VFX, and vertex-patching helpers (avoid per-frame closure churn)
+      function _v3Sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+      function _v3Add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+      function _v3Scale(v, s) { return [v[0] * s, v[1] * s, v[2] * s]; }
+      function _v3Dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+      function _v3Crs(a, b) {
+        return [
+          a[1] * b[2] - a[2] * b[1],
+          a[2] * b[0] - a[0] * b[2],
+          a[0] * b[1] - a[1] * b[0]
+        ];
+      }
+      function _v3Nrm(v, fb) {
+        const l = v ? Math.hypot(v[0], v[1], v[2]) : 0.0;
+        return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : (fb || [1, 0, 0]);
+      }
+      function _v3Lerp(a, b, t) {
+        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+      }
+      function _v3Perp(v, b, fb) {
+        const d = _v3Dot(v, b);
+        return _v3Nrm([v[0] - b[0] * d, v[1] - b[1] * d, v[2] - b[2] * d], fb);
+      }
+      function shiraSm(a, b, x) {
+        const t = Math.max(0.0, Math.min(1.0, (x - a) / Math.max(1e-4, b - a)));
+        return t * t * (3.0 - 2.0 * t);
+      }
+      function solveSwordIK(shoulder, targetWrist, L1, L2, poleDir) {
+        const dx = targetWrist[0] - shoulder[0];
+        const dy = targetWrist[1] - shoulder[1];
+        const dz = targetWrist[2] - shoulder[2];
+        let dist = Math.hypot(dx, dy, dz);
+        if (dist < 1e-4) dist = 1e-4;
+        const dir = [dx / dist, dy / dist, dz / dist];
+        const maxReach = (L1 + L2) * 0.992;
+        const minReach = Math.abs(L1 - L2) + 0.01;
+        const d = Math.max(minReach, Math.min(maxReach, dist));
+        const cosA = Math.max(-1.0, Math.min(1.0, (L1 * L1 + d * d - L2 * L2) / (2.0 * L1 * d)));
+        const sinA = Math.sqrt(Math.max(0.0, 1.0 - cosA * cosA));
+        const dotP = poleDir[0] * dir[0] + poleDir[1] * dir[1] + poleDir[2] * dir[2];
+        let bend = [
+          poleDir[0] - dir[0] * dotP,
+          poleDir[1] - dir[1] * dotP,
+          poleDir[2] - dir[2] * dotP
+        ];
+        let bLen = Math.hypot(bend[0], bend[1], bend[2]);
+        if (bLen < 1e-4) {
+          const dF = -dir[1];
+          bend = [-dir[0] * dF, 1.0 - dir[1] * dF, -dir[2] * dF];
+          bLen = Math.hypot(bend[0], bend[1], bend[2]) || 1.0;
+        }
+        bend = [bend[0] / bLen, bend[1] / bLen, bend[2] / bLen];
+        return {
+          elbow: [
+            shoulder[0] + (dir[0] * cosA + bend[0] * sinA) * L1,
+            shoulder[1] + (dir[1] * cosA + bend[1] * sinA) * L1,
+            shoulder[2] + (dir[2] * cosA + bend[2] * sinA) * L1
+          ],
+          wrist: [
+            shoulder[0] + dir[0] * d,
+            shoulder[1] + dir[1] * d,
+            shoulder[2] + dir[2] * d
+          ]
+        };
+      }
+      function _smoothSkillWristVec(mem, key, tgt, kA) {
+        if (!tgt) {
+          mem[key] = null;
+          return;
+        }
+        const cur = mem[key];
+        if (!cur) {
+          mem[key] = [tgt[0], tgt[1], tgt[2]];
+        } else {
+          mem[key] = _v3Nrm([
+            cur[0] + (tgt[0] - cur[0]) * kA,
+            cur[1] + (tgt[1] - cur[1]) * kA,
+            cur[2] + (tgt[2] - cur[2]) * kA
+          ], tgt);
+        }
+      }
+      function _smoothSkillWristPose(mem, initKey, bladeKey, handKey, edgeKey, palmKey, skillWrist, kA) {
+        if (!skillWrist || !skillWrist.bladeDir) {
+          mem[initKey] = false;
+          return skillWrist;
+        }
+        const nrmFallback = (v) => {
+          const l = Math.hypot(v[0], v[1], v[2]) || 1.0;
+          return [v[0] / l, v[1] / l, v[2] / l];
+        };
+        const tgtB = nrmFallback(skillWrist.bladeDir);
+        const tgtH = skillWrist.handDir ? nrmFallback(skillWrist.handDir) : null;
+        const tgtE = skillWrist.edgeDir ? nrmFallback(skillWrist.edgeDir) : null;
+        const tgtP = skillWrist.palmHint ? nrmFallback(skillWrist.palmHint) : null;
+        if (!mem[initKey] || kA >= 0.999) {
+          mem[bladeKey] = [tgtB[0], tgtB[1], tgtB[2]];
+          mem[handKey] = tgtH ? [tgtH[0], tgtH[1], tgtH[2]] : null;
+          mem[edgeKey] = tgtE ? [tgtE[0], tgtE[1], tgtE[2]] : null;
+          mem[palmKey] = tgtP ? [tgtP[0], tgtP[1], tgtP[2]] : null;
+          mem[initKey] = true;
+        } else {
+          _smoothSkillWristVec(mem, bladeKey, tgtB, kA);
+          _smoothSkillWristVec(mem, handKey, tgtH, kA);
+          _smoothSkillWristVec(mem, edgeKey, tgtE, kA);
+          _smoothSkillWristVec(mem, palmKey, tgtP, kA);
+        }
+        return {
+          bladeDir: mem[bladeKey],
+          handDir: mem[handKey],
+          handBlend: skillWrist.handBlend,
+          edgeDir: mem[edgeKey],
+          palmHint: mem[palmKey] || skillWrist.palmHint || null,
+          gripMode: skillWrist.gripMode || "normal"
+        };
+      }
+      function _buildAnimeHairLocalAndNormals(styleIdx, colorRgb, scaleFactor, clipUnderHood) {
+        const rawV = [], rawC = [], rawI = [], rawF = [];
+        if (typeof window.build3DAnimeHair === "function") {
+          const headFit = 0.192 / 0.240;
+          window.build3DAnimeHair(
+            styleIdx,
+            colorRgb,
+            scaleFactor,
+            (lx, ly, lz) => [lx * headFit, ly * headFit, lz * headFit],
+            0,
+            rawV,
+            rawC,
+            rawI,
+            rawF
+          );
+        }
+        let finalV = rawV, finalC = rawC, finalI = rawI, finalF = rawF;
+        if (clipUnderHood && rawV.length > 0) {
+          const numVerts = (rawV.length / 3) | 0;
+          const vKeep = new Uint8Array(numVerts);
+          const clampedV = new Float32Array(rawV.length);
+          const clampedF = new Float32Array(numVerts);
+          for (let v = 0; v < numVerts; v++) {
+            let lx = rawV[v * 3];
+            let ly = rawV[v * 3 + 1];
+            let lz = rawV[v * 3 + 2];
+            const dy = ly - 0.025;
+            const ellR = (lx * lx) / (0.235 * 0.235) + (dy * dy) / (0.265 * 0.265);
+            if (lz >= 0.025 && ly <= 0.258 && ly >= -0.125 && ellR <= 1.12) {
+              vKeep[v] = 1;
+              if (ellR > 0.92) {
+                const shrink = 0.92 / Math.sqrt(ellR);
+                lx *= shrink;
+                ly = 0.025 + dy * shrink;
+              }
+              lz = Math.min(0.258, lz);
+            }
+            clampedV[v * 3] = lx;
+            clampedV[v * 3 + 1] = ly;
+            clampedV[v * 3 + 2] = lz;
+            clampedF[v] = (rawF[v] || 0.0) * 0.22;
+          }
+          const remap = new Int32Array(numVerts);
+          remap.fill(-1);
+          const fV = [], fC = [], fI = [], fF = [];
+          for (let k = 0; k < rawI.length; k += 3) {
+            const i0 = rawI[k], i1 = rawI[k + 1], i2 = rawI[k + 2];
+            if (vKeep[i0] && vKeep[i1] && vKeep[i2]) {
+              const tris = [i0, i1, i2];
+              for (let ti = 0; ti < 3; ti++) {
+                const oldIdx = tris[ti];
+                let newIdx = remap[oldIdx];
+                if (newIdx === -1) {
+                  newIdx = (fV.length / 3) | 0;
+                  remap[oldIdx] = newIdx;
+                  fV.push(clampedV[oldIdx * 3], clampedV[oldIdx * 3 + 1], clampedV[oldIdx * 3 + 2]);
+                  fC.push(rawC[oldIdx * 3], rawC[oldIdx * 3 + 1], rawC[oldIdx * 3 + 2]);
+                  fF.push(clampedF[oldIdx]);
+                }
+                fI.push(newIdx);
+              }
+            }
+          }
+          finalV = fV; finalC = fC; finalI = fI; finalF = fF;
+        }
+        const normals = new Float32Array(finalV.length);
+        for (let k = 0; k < finalI.length; k += 3) {
+          const i0 = finalI[k], i1 = finalI[k + 1], i2 = finalI[k + 2];
+          if (i0 * 3 + 2 >= finalV.length || i1 * 3 + 2 >= finalV.length || i2 * 3 + 2 >= finalV.length) continue;
+          const p0x = finalV[i0 * 3], p0y = finalV[i0 * 3 + 1], p0z = finalV[i0 * 3 + 2];
+          const ux = finalV[i1 * 3] - p0x, uy = finalV[i1 * 3 + 1] - p0y, uz = finalV[i1 * 3 + 2] - p0z;
+          const wx = finalV[i2 * 3] - p0x, wy = finalV[i2 * 3 + 1] - p0y, wz = finalV[i2 * 3 + 2] - p0z;
+          const nx = uy * wz - uz * wy;
+          const ny = uz * wx - ux * wz;
+          const nz = ux * wy - uy * wx;
+          normals[i0 * 3] += nx; normals[i0 * 3 + 1] += ny; normals[i0 * 3 + 2] += nz;
+          normals[i1 * 3] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
+          normals[i2 * 3] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
+        }
+        for (let k = 0; k < normals.length; k += 3) {
+          const len = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
+          if (len > 0.0001) {
+            normals[k] /= len; normals[k + 1] /= len; normals[k + 2] /= len;
+          } else {
+            normals[k + 1] = 1.0;
+          }
+        }
+        const localDummyV = new Float32Array(finalV.length);
+        for (let k = 0; k < finalV.length; k += 3) {
+          localDummyV[k] = finalV[k];
+          localDummyV[k + 1] = finalV[k + 1] - 1000.0;
+          localDummyV[k + 2] = finalV[k + 2];
+        }
+        return { localV: finalV, colors: finalC, indices: finalI, flexW: finalF, normals, localDummyV };
+      }
+      function _addSlashArcRibbon(rawV, rawC, rawI, centerPt, uDir, vDir, nDir, rIn, rOut, aStart, aEnd, segs, maxThick, cCore, cRim, brightMin, brightSpan) {
+        const baseIdx = rawV.length / 3;
+        for (let i = 0; i <= segs; i++) {
+          const u = i / segs;
+          const ang = aStart + (aEnd - aStart) * u;
+          const ca = Math.cos(ang), sa = Math.sin(ang);
+          const taper = Math.sin(u * Math.PI);
+          const wCur = rIn + (rOut - rIn) * (0.18 + 0.82 * Math.pow(taper, 0.65));
+          const halfT = maxThick * taper;
+          const radDir0 = uDir[0] * ca + vDir[0] * sa;
+          const radDir1 = uDir[1] * ca + vDir[1] * sa;
+          const radDir2 = uDir[2] * ca + vDir[2] * sa;
+          const midRad = rIn + (wCur - rIn) * 0.55;
+          const pMidX = centerPt[0] + radDir0 * midRad;
+          const pMidY = centerPt[1] + radDir1 * midRad;
+          const pMidZ = centerPt[2] + radDir2 * midRad;
+          const bright = brightMin + brightSpan * taper;
+          const cr = Math.min(1, cCore[0] * bright), cg = Math.min(1, cCore[1] * bright), cb = Math.min(1, cCore[2] * bright);
+          rawV.push(
+            centerPt[0] + radDir0 * rIn, centerPt[1] + radDir1 * rIn, centerPt[2] + radDir2 * rIn,
+            pMidX + nDir[0] * halfT, pMidY + nDir[1] * halfT, pMidZ + nDir[2] * halfT,
+            centerPt[0] + radDir0 * wCur, centerPt[1] + radDir1 * wCur, centerPt[2] + radDir2 * wCur,
+            pMidX - nDir[0] * halfT, pMidY - nDir[1] * halfT, pMidZ - nDir[2] * halfT
+          );
+          rawC.push(cr, cg, cb, cRim[0], cRim[1], cRim[2], cr, cg, cb, cRim[0], cRim[1], cRim[2]);
+        }
+        for (let i = 0; i < segs; i++) {
+          const a = baseIdx + i * 4;
+          const b = baseIdx + (i + 1) * 4;
+          rawI.push(a + 0, a + 1, b + 1, a + 0, b + 1, b + 0);
+          rawI.push(a + 1, a + 2, b + 2, a + 1, b + 2, b + 1);
+          rawI.push(a + 2, a + 3, b + 3, a + 2, b + 3, b + 2);
+          rawI.push(a + 3, a + 0, b + 0, a + 3, b + 0, b + 3);
+        }
+      }
+      function _emitGroundShatterSpikes(addWedgeFn, tipImpact, spikeDirs, spScale, wBase, wTip, depth, colEven, colOdd) {
+        for (let si = 0; si < spikeDirs.length; si++) {
+          const sd = _v3Nrm(spikeDirs[si]);
+          const spTip = [
+            tipImpact[0] + sd[0] * spScale,
+            tipImpact[1] + sd[1] * spScale,
+            tipImpact[2] + sd[2] * spScale
+          ];
+          addWedgeFn(tipImpact, spTip, wBase, wTip, depth, (si % 2 === 0) ? colEven : colOdd, [1, 0, 0]);
+        }
+      }
+      let _reusableLocalVertBuf = null;
+      function _buildPatchedLocalVerts(mergedVerts, meshesList, hairMesh, hairDummyV, hoodieMesh) {
+        const len = mergedVerts.length;
+        if (!_reusableLocalVertBuf || _reusableLocalVertBuf.length < len) {
+          _reusableLocalVertBuf = new Float32Array(Math.max(len, 1024));
+        }
+        const out = _reusableLocalVertBuf.subarray(0, len);
+        out.set(mergedVerts);
+        let offset = 0;
+        for (let k = 0; k < meshesList.length; k++) {
+          const m = meshesList[k];
+          if (!m || !m.vertices || m.vertices.length === 0) continue;
+          const mLen = m.vertices.length;
+          if (m === hairMesh && hairDummyV && hairDummyV.length === mLen) {
+            out.set(hairDummyV, offset);
+          } else if (m === hoodieMesh) {
+            for (let v = 0; v < mLen; v += 3) {
+              out[offset + v] += 10.0;
+            }
+          }
+          offset += mLen;
+        }
+        return out;
+      }
 
       function initRagdoll(px, py, pz, rx_scaled, ry_scaled, rz_scaled, phase) {
         ragdollPos = [px, py, pz];
@@ -2356,14 +2638,29 @@ window.characterVertexShaderSource = `#version 300 es
 
 
       // =========================================================================
-      // ระบบโมเดลตัวละคร: Classic (Procedural) & Chibi White (GLB)
+      // ระบบโมเดลตัวละคร: Classic (Procedural) & Chibi White (GLB - ปิดใช้งานชั่วคราว)
       // =========================================================================
       if (typeof window !== "undefined") {
-        if (!window.characterModel) {
-          window.characterModel = "classic"; // ค่าเริ่มต้น: Classic (Base Procedural Chibi)
-        }
+        window.GLB_DISABLED = true; // ปิดใช้งานโมเดล GLB ชั่วคราวตามคำขอ
+        window.characterModel = "classic"; // ค่าเริ่มต้น: Classic (Base Procedural Chibi)
 
         window.switchCharacterModel = function(modelName) {
+          if (window.GLB_DISABLED) {
+            window.characterModel = "classic";
+            if (typeof equipIndicesLength !== "undefined") {
+              equipIndicesLength = 0;
+            }
+            if (typeof updateCharacterMesh === "function") {
+              updateCharacterMesh(typeof walkPhase !== "undefined" ? walkPhase : 0.0);
+            }
+            if (typeof window.updateDevCharacterModelUI === "function") {
+              window.updateDevCharacterModelUI();
+            }
+            if (typeof showNotice === "function" && (modelName === "chibi" || modelName === "chibi_white")) {
+              showNotice("🚫 โมเดล GLB (Chibi White) ถูกปิดใช้งานชั่วคราว (ใช้ 🧑 Classic แทน)");
+            }
+            return window.characterModel;
+          }
           if (modelName === "chibi" || modelName === "chibi_white") {
             window.characterModel = "chibi";
           } else {
@@ -2386,14 +2683,17 @@ window.characterVertexShaderSource = `#version 300 es
         };
 
         window.toggleCharacterModel = function() {
+          if (window.GLB_DISABLED) {
+            return window.switchCharacterModel("chibi");
+          }
           let next = window.characterModel === "classic" ? "chibi" : "classic";
           return window.switchCharacterModel(next);
         };
 
-        // Load GLB
+        // Load GLB (skipped while GLB_DISABLED is true)
         window.chibiGlbModel = null;
         window.createChibiGlbTexture = function(targetGl) {
-          if (typeof window === "undefined") return null;
+          if (typeof window === "undefined" || window.GLB_DISABLED) return null;
           if (window.chibiGlbTexture) return window.chibiGlbTexture;
           const model = window.chibiGlbModel;
           if (!model || !model.images || model.images.length === 0) return null;
@@ -2434,7 +2734,7 @@ window.characterVertexShaderSource = `#version 300 es
           return window.chibiGlbTexture;
         };
 
-        if (window.GLBLoader) {
+        if (!window.GLB_DISABLED && window.GLBLoader) {
           const loader = new window.GLBLoader();
           loader.load('gamefile/gameplay/chibi%20white.glb').then(() => {
             window.chibiGlbModel = loader;
@@ -2473,10 +2773,12 @@ window.characterVertexShaderSource = `#version 300 es
       const buildTravelerBootsMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildTravelerBootsMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
       const buildWhiteShirtCollarMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildWhiteShirtCollarMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
       const buildBlackPleatedSkirtMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildBlackPleatedSkirtMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
+      const buildDoubleBreastedSuitMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildDoubleBreastedSuitMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
+      const buildBlackSlacksMesh = (typeof window !== "undefined" && window.CapsuleModel) ? window.CapsuleModel.buildBlackSlacksMesh : () => ({ vertices: [], normals: [], colors: [], texcoords: [], indices: [] });
 
 
       function getGlbCharacterMeshData(phase, isClone = false, cloneWalkBlend = 1.0) {
-        if (typeof window === "undefined" || !window.chibiGlbModel) return null;
+        if (typeof window === "undefined" || window.GLB_DISABLED || !window.chibiGlbModel) return null;
         if (isClone) return null; // Force clones to use procedural classic model
         if (window.characterModel !== "chibi") return null;
         const model = window.chibiGlbModel;
@@ -2986,10 +3288,11 @@ window.characterVertexShaderSource = `#version 300 es
         const armLen = Math.hypot(dir[0], dir[1], dir[2]) || 0.1;
         dir[0] /= armLen; dir[1] /= armLen; dir[2] /= armLen;
 
-        const pRear = [pElbow[0] + dir[0] * 0.015, pElbow[1] + dir[1] * 0.015, pElbow[2] + dir[2] * 0.015];
-        const pMid = [pElbow[0] + dir[0] * (armLen * 0.75), pElbow[1] + dir[1] * (armLen * 0.75), pElbow[2] + dir[2] * (armLen * 0.75)];
-        const pMuzzle = [pHand[0] + dir[0] * 0.065, pHand[1] + dir[1] * 0.065, pHand[2] + dir[2] * 0.065];
-        const pBoreIn = [pMuzzle[0] - dir[0] * 0.035, pMuzzle[1] - dir[1] * 0.035, pMuzzle[2] - dir[2] * 0.035];
+        const pRear = [pElbow[0] + dir[0] * (0.005 * itemScale), pElbow[1] + dir[1] * (0.005 * itemScale), pElbow[2] + dir[2] * (0.005 * itemScale)];
+        const pMid = [pElbow[0] + dir[0] * (armLen * 0.72), pElbow[1] + dir[1] * (armLen * 0.72), pElbow[2] + dir[2] * (armLen * 0.72)];
+        const pMuzzle = [pHand[0] + dir[0] * (0.130 * itemScale), pHand[1] + dir[1] * (0.130 * itemScale), pHand[2] + dir[2] * (0.130 * itemScale)];
+        const pBoreIn = [pMuzzle[0] - dir[0] * (0.045 * itemScale), pMuzzle[1] - dir[1] * (0.045 * itemScale), pMuzzle[2] - dir[2] * (0.045 * itemScale)];
+        const pBoreOut = [pMuzzle[0] + dir[0] * (0.002 * itemScale), pMuzzle[1] + dir[1] * (0.002 * itemScale), pMuzzle[2] + dir[2] * (0.002 * itemScale)];
 
         const woodColorMain = [0.55, 0.38, 0.22];
         const woodColorDark = [0.42, 0.28, 0.15];
@@ -2997,34 +3300,34 @@ window.characterVertexShaderSource = `#version 300 es
         const darkMuzzleColor = [0.22, 0.22, 0.24];
         const innerBoreColor = [0.10, 0.10, 0.10];
 
-        // 1. Main wooden forearm sleeve and barrel body (faceted 6-sided low-poly cylinder)
-        buildTaperedSegment(pRear, pMid, 0.037 * itemScale, 0.033 * itemScale, 6, woodColorMain, rawV, rawC, rawI);
-        buildTaperedSegment(pMid, pMuzzle, 0.033 * itemScale, 0.036 * itemScale, 6, woodColorDark, rawV, rawC, rawI);
+        // 1. Main wooden forearm housing and flared barrel body (8-sided cylinder sized outside forearm & closed fist)
+        buildTaperedSegment(pRear, pMid, 0.056 * itemScale, 0.054 * itemScale, 8, woodColorMain, rawV, rawC, rawI, true);
+        buildTaperedSegment(pMid, pMuzzle, 0.054 * itemScale, 0.060 * itemScale, 8, woodColorDark, rawV, rawC, rawI, true);
 
         // 2. Rear reinforcement iron ring
-        const pRearBand = [pRear[0] + dir[0] * 0.015, pRear[1] + dir[1] * 0.015, pRear[2] + dir[2] * 0.015];
-        buildTaperedSegment(pRear, pRearBand, 0.040 * itemScale, 0.039 * itemScale, 6, ironColor, rawV, rawC, rawI);
+        const pRearBand = [pRear[0] + dir[0] * (0.018 * itemScale), pRear[1] + dir[1] * (0.018 * itemScale), pRear[2] + dir[2] * (0.018 * itemScale)];
+        buildTaperedSegment(pRear, pRearBand, 0.060 * itemScale, 0.059 * itemScale, 8, ironColor, rawV, rawC, rawI, false);
 
         // 3. Mid reinforcement iron ring clamp
-        const pMidBand1 = [pMid[0] - dir[0] * 0.008, pMid[1] - dir[1] * 0.008, pMid[2] - dir[2] * 0.008];
-        const pMidBand2 = [pMid[0] + dir[0] * 0.008, pMid[1] + dir[1] * 0.008, pMid[2] + dir[2] * 0.008];
-        buildTaperedSegment(pMidBand1, pMidBand2, 0.036 * itemScale, 0.036 * itemScale, 6, ironColor, rawV, rawC, rawI);
+        const pMidBand1 = [pMid[0] - dir[0] * (0.009 * itemScale), pMid[1] - dir[1] * (0.009 * itemScale), pMid[2] - dir[2] * (0.009 * itemScale)];
+        const pMidBand2 = [pMid[0] + dir[0] * (0.009 * itemScale), pMid[1] + dir[1] * (0.009 * itemScale), pMid[2] + dir[2] * (0.009 * itemScale)];
+        buildTaperedSegment(pMidBand1, pMidBand2, 0.058 * itemScale, 0.058 * itemScale, 8, ironColor, rawV, rawC, rawI, false);
 
         // 4. Front iron muzzle collar
-        const pMuzzleRing = [pMuzzle[0] - dir[0] * 0.012, pMuzzle[1] - dir[1] * 0.012, pMuzzle[2] - dir[2] * 0.012];
-        buildTaperedSegment(pMuzzleRing, pMuzzle, 0.039 * itemScale, 0.039 * itemScale, 6, darkMuzzleColor, rawV, rawC, rawI);
+        const pMuzzleRing = [pMuzzle[0] - dir[0] * (0.022 * itemScale), pMuzzle[1] - dir[1] * (0.022 * itemScale), pMuzzle[2] - dir[2] * (0.022 * itemScale)];
+        buildTaperedSegment(pMuzzleRing, pMuzzle, 0.065 * itemScale, 0.065 * itemScale, 8, darkMuzzleColor, rawV, rawC, rawI, false);
 
-        // 5. Inner dark hollow cannon bore
-        buildTaperedSegment(pBoreIn, pMuzzle, 0.022 * itemScale, 0.024 * itemScale, 6, innerBoreColor, rawV, rawC, rawI);
+        // 5. Inner dark hollow cannon bore (capped cleanly to prevent seeing fist inside)
+        buildTaperedSegment(pBoreIn, pBoreOut, 0.036 * itemScale, 0.037 * itemScale, 8, innerBoreColor, rawV, rawC, rawI, true);
 
         // 6. Arrow in barrel when aiming/ready
         if (!arrowShotInCurrentAnim && useAnimTimer > 0) {
-          const arrowTip = [pMuzzle[0] + dir[0] * 0.04 * itemScale, pMuzzle[1] + dir[1] * 0.04 * itemScale, pMuzzle[2] + dir[2] * 0.04 * itemScale];
-          const arrowShaftEnd = [pMuzzle[0] - dir[0] * 0.06 * itemScale, pMuzzle[1] - dir[1] * 0.06 * itemScale, pMuzzle[2] - dir[2] * 0.06 * itemScale];
-          buildTaperedSegment(arrowShaftEnd, arrowTip, 0.005 * itemScale, 0.005 * itemScale, 4, [0.55, 0.4, 0.25], rawV, rawC, rawI);
+          const arrowTip = [pMuzzle[0] + dir[0] * (0.048 * itemScale), pMuzzle[1] + dir[1] * (0.048 * itemScale), pMuzzle[2] + dir[2] * (0.048 * itemScale)];
+          const arrowShaftEnd = [pMuzzle[0] - dir[0] * (0.055 * itemScale), pMuzzle[1] - dir[1] * (0.055 * itemScale), pMuzzle[2] - dir[2] * (0.055 * itemScale)];
+          buildTaperedSegment(arrowShaftEnd, arrowTip, 0.0065 * itemScale, 0.0065 * itemScale, 4, [0.55, 0.4, 0.25], rawV, rawC, rawI);
 
-          const arrowHeadTip = [arrowTip[0] + dir[0] * 0.025 * itemScale, arrowTip[1] + dir[1] * 0.025 * itemScale, arrowTip[2] + dir[2] * 0.025 * itemScale];
-          buildTaperedSegment(arrowTip, arrowHeadTip, 0.012 * itemScale, 0.001 * itemScale, 4, [0.35, 0.35, 0.35], rawV, rawC, rawI);
+          const arrowHeadTip = [arrowTip[0] + dir[0] * (0.030 * itemScale), arrowTip[1] + dir[1] * (0.030 * itemScale), arrowTip[2] + dir[2] * (0.030 * itemScale)];
+          buildTaperedSegment(arrowTip, arrowHeadTip, 0.015 * itemScale, 0.001 * itemScale, 4, [0.35, 0.35, 0.35], rawV, rawC, rawI);
         }
 
         // Set firing origin and direction in world space
@@ -3047,7 +3350,7 @@ window.characterVertexShaderSource = `#version 300 es
         }
       }
 
-      function buildHeldIronBucketMesh(handPos, itemScale, heldItem, rawV, rawC, rawI) {
+      function buildHeldIronBucketMesh(handPos, itemScale, heldItem, rawV, rawC, rawI, chibiMode = false, chibiPourPose = null) {
         if (typeof window.buildIronBucketModel !== "function") return;
         if (!window.devBucketOffset) {
           window.devBucketOffset = { x: 0.016, y: -0.031, z: -0.007, scale: 1.0, rotX: 0.0, rotY: -90.0, rotZ: 0.0 };
@@ -3061,6 +3364,7 @@ window.characterVertexShaderSource = `#version 300 es
         let tiltAngle = ((typeof devOff.rotX === "number" ? devOff.rotX : 0.0) * Math.PI) / 180.0;
         let offsetY = 0.0;
         let offsetZ = 0.0;
+        let handleAngle = 0.0;
         const t = 1.0 - Math.max(0.0, Math.min(1.0, scoopTimer));
         const tw = 1.0 - Math.max(0.0, Math.min(1.0, waterTimer));
 
@@ -3068,25 +3372,37 @@ window.characterVertexShaderSource = `#version 300 es
           if (t < 0.40) {
             // Stage 1: Dip & tilt bucket mouth forward/down into the water
             const s = Math.sin((t / 0.40) * (Math.PI * 0.5));
-            tiltAngle += s * 1.75;
-            offsetY = -0.22 * itemScale * s;
-            offsetZ = 0.25 * itemScale * s;
+            tiltAngle += s * (chibiMode ? 1.55 : 1.75);
+            if (chibiMode) {
+              handleAngle = Math.max(0.0, s * 1.12);
+            } else {
+              offsetY = -0.22 * itemScale * s;
+              offsetZ = 0.25 * itemScale * s;
+            }
           } else if (t < 0.75) {
             // Stage 2: Drag through water & rotate upright with water inside
             const u = (t - 0.40) / 0.35;
             const su = u * u * (3.0 - 2.0 * u);
-            tiltAngle += 1.75 * (1.0 - su) - 0.22 * su;
-            offsetY = -0.22 * itemScale * (1.0 - su) + 0.04 * itemScale * su;
-            offsetZ = 0.25 * itemScale * (1.0 - su) + 0.10 * itemScale * su;
+            const dipPeak = chibiMode ? 1.55 : 1.75;
+            const dTilt = dipPeak * (1.0 - su) - 0.22 * su;
+            tiltAngle += dTilt;
+            if (chibiMode) {
+              handleAngle = Math.max(0.0, dTilt * 0.72);
+            } else {
+              offsetY = -0.22 * itemScale * (1.0 - su) + 0.04 * itemScale * su;
+              offsetZ = 0.25 * itemScale * (1.0 - su) + 0.10 * itemScale * su;
+            }
           } else {
             // Stage 3: Settle smoothly back to hand position
             const v = (t - 0.75) / 0.25;
             const sv = v * v * (3.0 - 2.0 * v);
             tiltAngle += -0.22 * (1.0 - sv);
-            offsetY = 0.04 * itemScale * (1.0 - sv);
-            offsetZ = 0.10 * itemScale * (1.0 - sv);
+            if (!chibiMode) {
+              offsetY = 0.04 * itemScale * (1.0 - sv);
+              offsetZ = 0.10 * itemScale * (1.0 - sv);
+            }
           }
-        } else if (waterTimer > 0 && (!window.activeWateringAnimPlanter || !window.activeWateringAnimPlanter.position)) {
+        } else if (waterTimer > 0 && !chibiMode && (!window.activeWateringAnimPlanter || !window.activeWateringAnimPlanter.position)) {
           if (tw < 0.35) {
             const s = Math.sin((tw / 0.35) * (Math.PI * 0.5));
             tiltAngle += s * 1.85;
@@ -3141,6 +3457,51 @@ window.characterVertexShaderSource = `#version 300 es
         let nVec = rotateVec3D([0, 1, 0]);
         let fVec = rotateVec3D([0, 0, 1]);
 
+        if (chibiMode && waterTimer > 0 && chibiPourPose && chibiPourPose.pourEnv > 0.001) {
+          const p = chibiPourPose.pourEnv;
+          const bR = chibiPourPose.bR;
+          const bN = chibiPourPose.bN;
+          const bF = chibiPourPose.bF;
+          rVec = [
+            rVec[0] * (1.0 - p) + bR[0] * p,
+            rVec[1] * (1.0 - p) + bR[1] * p,
+            rVec[2] * (1.0 - p) + bR[2] * p
+          ];
+          nVec = [
+            nVec[0] * (1.0 - p) + bN[0] * p,
+            nVec[1] * (1.0 - p) + bN[1] * p,
+            nVec[2] * (1.0 - p) + bN[2] * p
+          ];
+          const nL = Math.hypot(nVec[0], nVec[1], nVec[2]) || 1.0;
+          nVec = [nVec[0] / nL, nVec[1] / nL, nVec[2] / nL];
+          // Orthonormalize rVec & fVec cleanly
+          const dotRN = rVec[0] * nVec[0] + rVec[1] * nVec[1] + rVec[2] * nVec[2];
+          rVec = [
+            rVec[0] - nVec[0] * dotRN,
+            rVec[1] - nVec[1] * dotRN,
+            rVec[2] - nVec[2] * dotRN
+          ];
+          const rL = Math.hypot(rVec[0], rVec[1], rVec[2]) || 1.0;
+          rVec = [rVec[0] / rL, rVec[1] / rL, rVec[2] / rL];
+          fVec = [
+            rVec[1] * nVec[2] - rVec[2] * nVec[1],
+            rVec[2] * nVec[0] - rVec[0] * nVec[2],
+            rVec[0] * nVec[1] - rVec[1] * nVec[0]
+          ];
+          const fL = Math.hypot(fVec[0], fVec[1], fVec[2]) || 1.0;
+          fVec = [fVec[0] / fL, fVec[1] / fL, fVec[2] / fL];
+          // Ensure fVec aligns with blended fVec/bF sign
+          const bFBlend = [
+            (1.0 - p) * fVec[0] + p * bF[0],
+            (1.0 - p) * fVec[1] + p * bF[1],
+            (1.0 - p) * fVec[2] + p * bF[2]
+          ];
+          if (fVec[0] * bFBlend[0] + fVec[1] * bFBlend[1] + fVec[2] * bFBlend[2] < 0) {
+            fVec = [-fVec[0], -fVec[1], -fVec[2]];
+          }
+          handleAngle = chibiPourPose.handleAngle * p;
+        }
+
         const dx = (typeof devOff.x === "number" ? devOff.x : 0.03) * itemScale;
         const dy = (typeof devOff.y === "number" ? devOff.y : 0.00) * itemScale;
         const dz = (typeof devOff.z === "number" ? devOff.z : 0.04) * itemScale;
@@ -3150,17 +3511,35 @@ window.characterVertexShaderSource = `#version 300 es
           handPos[1] + dy + offsetY,
           handPos[2] + dz + offsetZ
         ];
-        // Pivot bucket around its top handle grip (ny = 0.55 * bScale)
+        // Pivot bucket around its hinged top handle grip sleeve
+        const cosH = Math.cos(handleAngle);
+        const sinH = Math.sin(handleAngle);
+        const hDir = [
+          nVec[0] * cosH - fVec[0] * sinH,
+          nVec[1] * cosH - fVec[1] * sinH,
+          nVec[2] * cosH - fVec[2] * sinH
+        ];
+        const gripFromCenter = chibiMode
+          ? [
+              nVec[0] * (0.28 * bScale) + hDir[0] * (0.29 * bScale),
+              nVec[1] * (0.28 * bScale) + hDir[1] * (0.29 * bScale),
+              nVec[2] * (0.28 * bScale) + hDir[2] * (0.29 * bScale)
+            ]
+          : [
+              nVec[0] * (0.55 * bScale),
+              nVec[1] * (0.55 * bScale),
+              nVec[2] * (0.55 * bScale)
+            ];
         let centerPos = [
-          gripPos[0] - nVec[0] * 0.55 * bScale,
-          gripPos[1] - nVec[1] * 0.55 * bScale,
-          gripPos[2] - nVec[2] * 0.55 * bScale
+          gripPos[0] - gripFromCenter[0],
+          gripPos[1] - gripFromCenter[1],
+          gripPos[2] - gripFromCenter[2]
         ];
 
         let snappedSoilLocal = null;
         let snappedUpLocal = null;
 
-        // Temporary Snap to Planter Box during watering animation so water pours directly onto the box & sprout from above
+        // Locate planter soil target during watering animation (GLB snaps over box; Chibi pours from its own two hands)
         if (waterTimer > 0 && window.activeWateringAnimPlanter && window.activeWateringAnimPlanter.position && typeof getCharacterMatrix === "function") {
           const planter = window.activeWateringAnimPlanter;
           const pP = planter.position;
@@ -3191,112 +3570,111 @@ window.characterVertexShaderSource = `#version 300 es
             wDir[0] * cFwd[0] + wDir[1] * cFwd[1] + wDir[2] * cFwd[2]
           ];
 
-          // Horizontal direction from player to planter box center
-          const rawToBox = [pP[0] - charPos[0], pP[1] - charPos[1], pP[2] - charPos[2]];
-          const dotN = rawToBox[0] * pN[0] + rawToBox[1] * pN[1] + rawToBox[2] * pN[2];
-          const horizW = [rawToBox[0] - pN[0] * dotN, rawToBox[1] - pN[1] * dotN, rawToBox[2] - pN[2] * dotN];
-          const horizLen = Math.hypot(horizW[0], horizW[1], horizW[2]);
-          const pourDirW = horizLen > 0.001
-            ? [horizW[0] / horizLen, horizW[1] / horizLen, horizW[2] / horizLen]
-            : [pF[0], pF[1], pF[2]];
-
-          // Right-handed side axis: pN x pourDirW
-          let sideDirW = [
-            pN[1] * pourDirW[2] - pN[2] * pourDirW[1],
-            pN[2] * pourDirW[0] - pN[0] * pourDirW[2],
-            pN[0] * pourDirW[1] - pN[1] * pourDirW[0]
-          ];
-          const sideLen = Math.hypot(sideDirW[0], sideDirW[1], sideDirW[2]) || 1.0;
-          sideDirW = [sideDirW[0] / sideLen, sideDirW[1] / sideLen, sideDirW[2] / sideLen];
-
-          const upL = worldDirToLocal(pN);
-          const fwdL = worldDirToLocal(pourDirW);
-          const sideL = worldDirToLocal(sideDirW);
-          snappedUpLocal = upL;
-
-          // Pour tilt angle & vertical bob while snapped directly above the planter box
-          let pourTilt = 1.95; // ~112 degrees so bucket mouth points down into the planter box
-          let heightAboveBox = 0.24 * pS;
-          let backOffsetFromCenter = 0.045 * pS;
-          let snapBlend = 1.0;
-
-          if (tw < 0.20) {
-            const s = Math.sin((tw / 0.20) * (Math.PI * 0.5));
-            pourTilt = 0.75 + s * 1.20;
-            heightAboveBox = (0.26 - 0.02 * s) * pS;
-          } else if (tw <= 0.78) {
-            const u = (tw - 0.20) / 0.58;
-            pourTilt = 1.95 + Math.sin(u * Math.PI * 2.0) * 0.07;
-            heightAboveBox = (0.24 - Math.sin(u * Math.PI) * 0.012) * pS;
-          } else {
-            const v = (tw - 0.78) / 0.22;
-            const sv = v * v * (3.0 - 2.0 * v);
-            pourTilt = 1.95 * (1.0 - sv);
-            heightAboveBox = (0.24 + 0.03 * sv) * pS;
-            snapBlend = 1.0 - sv;
-          }
-
-          const cosP = Math.cos(pourTilt);
-          const sinP = Math.sin(pourTilt);
-
-          const snapRVec = [sideL[0], sideL[1], sideL[2]];
-          const snapNVec = [
-            upL[0] * cosP + fwdL[0] * sinP,
-            upL[1] * cosP + fwdL[1] * sinP,
-            upL[2] * cosP + fwdL[2] * sinP
-          ];
-          const snapFVec = [
-            -upL[0] * sinP + fwdL[0] * cosP,
-            -upL[1] * sinP + fwdL[1] * cosP,
-            -upL[2] * sinP + fwdL[2] * cosP
-          ];
-
           const soilWorld = [
             pP[0] + pN[0] * (0.095 * pS),
             pP[1] + pN[1] * (0.095 * pS),
             pP[2] + pN[2] * (0.095 * pS)
           ];
           snappedSoilLocal = worldToLocal(soilWorld);
+          snappedUpLocal = worldDirToLocal(pN);
 
-          const snapCenterWorld = [
-            pP[0] + pN[0] * heightAboveBox - pourDirW[0] * backOffsetFromCenter,
-            pP[1] + pN[1] * heightAboveBox - pourDirW[1] * backOffsetFromCenter,
-            pP[2] + pN[2] * heightAboveBox - pourDirW[2] * backOffsetFromCenter
-          ];
-          const snapCenterLocal = worldToLocal(snapCenterWorld);
+          if (!chibiMode) {
+            const rawToBox = [pP[0] - charPos[0], pP[1] - charPos[1], pP[2] - charPos[2]];
+            const dotN = rawToBox[0] * pN[0] + rawToBox[1] * pN[1] + rawToBox[2] * pN[2];
+            const horizW = [rawToBox[0] - pN[0] * dotN, rawToBox[1] - pN[1] * dotN, rawToBox[2] - pN[2] * dotN];
+            const horizLen = Math.hypot(horizW[0], horizW[1], horizW[2]);
+            const pourDirW = horizLen > 0.001
+              ? [horizW[0] / horizLen, horizW[1] / horizLen, horizW[2] / horizLen]
+              : [pF[0], pF[1], pF[2]];
 
-          centerPos = [
-            centerPos[0] * (1.0 - snapBlend) + snapCenterLocal[0] * snapBlend,
-            centerPos[1] * (1.0 - snapBlend) + snapCenterLocal[1] * snapBlend,
-            centerPos[2] * (1.0 - snapBlend) + snapCenterLocal[2] * snapBlend
-          ];
-          rVec = [
-            rVec[0] * (1.0 - snapBlend) + snapRVec[0] * snapBlend,
-            rVec[1] * (1.0 - snapBlend) + snapRVec[1] * snapBlend,
-            rVec[2] * (1.0 - snapBlend) + snapRVec[2] * snapBlend
-          ];
-          nVec = [
-            nVec[0] * (1.0 - snapBlend) + snapNVec[0] * snapBlend,
-            nVec[1] * (1.0 - snapBlend) + snapNVec[1] * snapBlend,
-            nVec[2] * (1.0 - snapBlend) + snapNVec[2] * snapBlend
-          ];
-          fVec = [
-            fVec[0] * (1.0 - snapBlend) + snapFVec[0] * snapBlend,
-            fVec[1] * (1.0 - snapBlend) + snapFVec[1] * snapBlend,
-            fVec[2] * (1.0 - snapBlend) + snapFVec[2] * snapBlend
-          ];
-          const rL = Math.hypot(rVec[0], rVec[1], rVec[2]) || 1.0;
-          const nL = Math.hypot(nVec[0], nVec[1], nVec[2]) || 1.0;
-          const fL = Math.hypot(fVec[0], fVec[1], fVec[2]) || 1.0;
-          rVec = [rVec[0] / rL, rVec[1] / rL, rVec[2] / rL];
-          nVec = [nVec[0] / nL, nVec[1] / nL, nVec[2] / nL];
-          fVec = [fVec[0] / fL, fVec[1] / fL, fVec[2] / fL];
+            let sideDirW = [
+              pN[1] * pourDirW[2] - pN[2] * pourDirW[1],
+              pN[2] * pourDirW[0] - pN[0] * pourDirW[2],
+              pN[0] * pourDirW[1] - pN[1] * pourDirW[0]
+            ];
+            const sideLen = Math.hypot(sideDirW[0], sideDirW[1], sideDirW[2]) || 1.0;
+            sideDirW = [sideDirW[0] / sideLen, sideDirW[1] / sideLen, sideDirW[2] / sideLen];
 
-          gripPos = [
-            centerPos[0] + nVec[0] * 0.55 * bScale,
-            centerPos[1] + nVec[1] * 0.55 * bScale,
-            centerPos[2] + nVec[2] * 0.55 * bScale
-          ];
+            const upL = snappedUpLocal;
+            const fwdL = worldDirToLocal(pourDirW);
+            const sideL = worldDirToLocal(sideDirW);
+
+            let pourTilt = 1.95;
+            let heightAboveBox = 0.24 * pS;
+            let backOffsetFromCenter = 0.045 * pS;
+            let snapBlend = 1.0;
+
+            if (tw < 0.20) {
+              const s = Math.sin((tw / 0.20) * (Math.PI * 0.5));
+              pourTilt = 0.75 + s * 1.20;
+              heightAboveBox = (0.26 - 0.02 * s) * pS;
+            } else if (tw <= 0.78) {
+              const u = (tw - 0.20) / 0.58;
+              pourTilt = 1.95 + Math.sin(u * Math.PI * 2.0) * 0.07;
+              heightAboveBox = (0.24 - Math.sin(u * Math.PI) * 0.012) * pS;
+            } else {
+              const v = (tw - 0.78) / 0.22;
+              const sv = v * v * (3.0 - 2.0 * v);
+              pourTilt = 1.95 * (1.0 - sv);
+              heightAboveBox = (0.24 + 0.03 * sv) * pS;
+              snapBlend = 1.0 - sv;
+            }
+
+            const cosP = Math.cos(pourTilt);
+            const sinP = Math.sin(pourTilt);
+
+            const snapRVec = [sideL[0], sideL[1], sideL[2]];
+            const snapNVec = [
+              upL[0] * cosP + fwdL[0] * sinP,
+              upL[1] * cosP + fwdL[1] * sinP,
+              upL[2] * cosP + fwdL[2] * sinP
+            ];
+            const snapFVec = [
+              -upL[0] * sinP + fwdL[0] * cosP,
+              -upL[1] * sinP + fwdL[1] * cosP,
+              -upL[2] * sinP + fwdL[2] * cosP
+            ];
+
+            const snapCenterWorld = [
+              pP[0] + pN[0] * heightAboveBox - pourDirW[0] * backOffsetFromCenter,
+              pP[1] + pN[1] * heightAboveBox - pourDirW[1] * backOffsetFromCenter,
+              pP[2] + pN[2] * heightAboveBox - pourDirW[2] * backOffsetFromCenter
+            ];
+            const snapCenterLocal = worldToLocal(snapCenterWorld);
+
+            centerPos = [
+              centerPos[0] * (1.0 - snapBlend) + snapCenterLocal[0] * snapBlend,
+              centerPos[1] * (1.0 - snapBlend) + snapCenterLocal[1] * snapBlend,
+              centerPos[2] * (1.0 - snapBlend) + snapCenterLocal[2] * snapBlend
+            ];
+            rVec = [
+              rVec[0] * (1.0 - snapBlend) + snapRVec[0] * snapBlend,
+              rVec[1] * (1.0 - snapBlend) + snapRVec[1] * snapBlend,
+              rVec[2] * (1.0 - snapBlend) + snapRVec[2] * snapBlend
+            ];
+            nVec = [
+              nVec[0] * (1.0 - snapBlend) + snapNVec[0] * snapBlend,
+              nVec[1] * (1.0 - snapBlend) + snapNVec[1] * snapBlend,
+              nVec[2] * (1.0 - snapBlend) + snapNVec[2] * snapBlend
+            ];
+            fVec = [
+              fVec[0] * (1.0 - snapBlend) + snapFVec[0] * snapBlend,
+              fVec[1] * (1.0 - snapBlend) + snapFVec[1] * snapBlend,
+              fVec[2] * (1.0 - snapBlend) + snapFVec[2] * snapBlend
+            ];
+            const rL = Math.hypot(rVec[0], rVec[1], rVec[2]) || 1.0;
+            const nL = Math.hypot(nVec[0], nVec[1], nVec[2]) || 1.0;
+            const fL = Math.hypot(fVec[0], fVec[1], fVec[2]) || 1.0;
+            rVec = [rVec[0] / rL, rVec[1] / rL, rVec[2] / rL];
+            nVec = [nVec[0] / nL, nVec[1] / nL, nVec[2] / nL];
+            fVec = [fVec[0] / fL, fVec[1] / fL, fVec[2] / fL];
+
+            gripPos = [
+              centerPos[0] + nVec[0] * 0.55 * bScale,
+              centerPos[1] + nVec[1] * 0.55 * bScale,
+              centerPos[2] + nVec[2] * 0.55 * bScale
+            ];
+          }
         }
 
         window._lastBucketGripLocalPos = [gripPos[0], gripPos[1], gripPos[2]];
@@ -3315,66 +3693,172 @@ window.characterVertexShaderSource = `#version 300 es
           rawV,
           rawC,
           rawI,
-          showWater
+          showWater,
+          handleAngle
         );
 
-        // Render pouring water stream directly from snapped bucket mouth down onto the planter box soil
-        if (waterTimer > 0 && tw >= 0.12 && tw <= 0.78 && typeof buildTaperedSegment === "function") {
-          const pourProgress = (tw - 0.12) / 0.66;
-          const mouthPos = [
-            centerPos[0] + nVec[0] * (0.24 * bScale),
-            centerPos[1] + nVec[1] * (0.24 * bScale),
-            centerPos[2] + nVec[2] * (0.24 * bScale)
+        // Render pouring water stream directly from lower bucket rim lip down onto the planter soil
+        if (waterTimer > 0 && tw >= 0.14 && tw <= 0.78 && typeof buildTaperedSegment === "function") {
+          const pourProgress = (tw - 0.14) / 0.64;
+          const upRef = snappedUpLocal || [0, 1, 0];
+          const dotUn = (-upRef[0]) * nVec[0] + (-upRef[1]) * nVec[1] + (-upRef[2]) * nVec[2];
+          let lipDir = [
+            -upRef[0] - nVec[0] * dotUn,
+            -upRef[1] - nVec[1] * dotUn,
+            -upRef[2] - nVec[2] * dotUn
           ];
-          let streamEnd;
-          if (snappedSoilLocal) {
-            const reachSoil = Math.min(1.0, pourProgress * 4.0);
-            streamEnd = [
-              mouthPos[0] + (snappedSoilLocal[0] - mouthPos[0]) * reachSoil,
-              mouthPos[1] + (snappedSoilLocal[1] - mouthPos[1]) * reachSoil,
-              mouthPos[2] + (snappedSoilLocal[2] - mouthPos[2]) * reachSoil
-            ];
-          } else {
-            const streamLen = 0.28 * itemScale * Math.sin(pourProgress * Math.PI);
-            streamEnd = [
-              mouthPos[0] + nVec[0] * (0.10 * bScale),
-              mouthPos[1] - streamLen,
-              mouthPos[2] + 0.06 * itemScale
-            ];
-          }
-          buildTaperedSegment(
-            mouthPos,
-            streamEnd,
-            0.15 * bScale,
-            0.08 * bScale,
-            6,
-            [0.24, 0.72, 0.98],
-            rawV,
-            rawC,
-            rawI,
-            true
-          );
+          const lipLen = Math.hypot(lipDir[0], lipDir[1], lipDir[2]);
+          lipDir = lipLen > 0.001
+            ? [lipDir[0] / lipLen, lipDir[1] / lipLen, lipDir[2] / lipLen]
+            : [0, -1, 0];
+          const mouthPos = chibiMode
+            ? [
+                centerPos[0] + nVec[0] * (0.24 * bScale) + lipDir[0] * (0.29 * bScale),
+                centerPos[1] + nVec[1] * (0.24 * bScale) + lipDir[1] * (0.29 * bScale),
+                centerPos[2] + nVec[2] * (0.24 * bScale) + lipDir[2] * (0.29 * bScale)
+              ]
+            : [
+                centerPos[0] + nVec[0] * (0.24 * bScale),
+                centerPos[1] + nVec[1] * (0.24 * bScale),
+                centerPos[2] + nVec[2] * (0.24 * bScale)
+              ];
 
-          // Water splash ring on the planter box soil surface around the sprout
-          if (snappedSoilLocal && snappedUpLocal && pourProgress > 0.15) {
-            const splashWave = Math.sin(((pourProgress - 0.15) / 0.85) * Math.PI);
-            const splashTop = [
-              snappedSoilLocal[0] + snappedUpLocal[0] * (0.025 * bScale),
-              snappedSoilLocal[1] + snappedUpLocal[1] * (0.025 * bScale),
-              snappedSoilLocal[2] + snappedUpLocal[2] * (0.025 * bScale)
-            ];
+          if (chibiMode) {
+            const reachSoil = Math.min(1.0, pourProgress * 3.5);
+            let horizVec, vertDrop;
+            if (snappedSoilLocal) {
+              const delta = [
+                snappedSoilLocal[0] - mouthPos[0],
+                snappedSoilLocal[1] - mouthPos[1],
+                snappedSoilLocal[2] - mouthPos[2]
+              ];
+              const deltaUp = delta[0] * upRef[0] + delta[1] * upRef[1] + delta[2] * upRef[2];
+              const rawHoriz = [
+                delta[0] - upRef[0] * deltaUp,
+                delta[1] - upRef[1] * deltaUp,
+                delta[2] - upRef[2] * deltaUp
+              ];
+              const hDist = Math.hypot(rawHoriz[0], rawHoriz[1], rawHoriz[2]);
+              const maxPourHoriz = 0.32 * itemScale;
+              const clampedHoriz = Math.min(hDist, maxPourHoriz);
+              horizVec = hDist > 0.001
+                ? [
+                    (rawHoriz[0] / hDist) * clampedHoriz,
+                    (rawHoriz[1] / hDist) * clampedHoriz,
+                    (rawHoriz[2] / hDist) * clampedHoriz
+                  ]
+                : [0, 0, 0.16 * itemScale];
+              vertDrop = Math.min(-0.10 * itemScale, deltaUp);
+            } else {
+              const yawDir = (chibiPourPose && chibiPourPose.fwd) ? chibiPourPose.fwd : [0, 0, 1];
+              horizVec = [yawDir[0] * 0.20 * itemScale, yawDir[1] * 0.20 * itemScale, yawDir[2] * 0.20 * itemScale];
+              vertDrop = -0.22 * itemScale;
+            }
+
+            const arcPt = (k) => {
+              const hk = Math.pow(k, 0.78);
+              const vk = k * k;
+              return [
+                mouthPos[0] + horizVec[0] * hk + upRef[0] * (vertDrop * vk),
+                mouthPos[1] + horizVec[1] * hk + upRef[1] * (vertDrop * vk),
+                mouthPos[2] + horizVec[2] * hk + upRef[2] * (vertDrop * vk)
+              ];
+            };
+
+            const segs = 4;
+            for (let sIdx = 0; sIdx < segs; sIdx++) {
+              const k0 = (sIdx / segs) * reachSoil;
+              const k1 = ((sIdx + 1) / segs) * reachSoil;
+              const p0 = arcPt(k0);
+              const p1 = arcPt(k1);
+              const r0 = (0.145 - 0.045 * (sIdx / segs)) * bScale;
+              const r1 = (0.145 - 0.045 * ((sIdx + 1) / segs)) * bScale;
+              buildTaperedSegment(
+                p0,
+                p1,
+                r0,
+                r1,
+                6,
+                [0.24, 0.72, 0.98],
+                rawV,
+                rawC,
+                rawI,
+                sIdx === 0 || sIdx === segs - 1
+              );
+            }
+
+            if (snappedSoilLocal && pourProgress > 0.18) {
+              const landingPt = arcPt(1.0);
+              const splashWave = Math.sin(((pourProgress - 0.18) / 0.82) * Math.PI);
+              const splashTop = [
+                landingPt[0] + upRef[0] * (0.025 * bScale),
+                landingPt[1] + upRef[1] * (0.025 * bScale),
+                landingPt[2] + upRef[2] * (0.025 * bScale)
+              ];
+              buildTaperedSegment(
+                landingPt,
+                splashTop,
+                0.22 * bScale * splashWave,
+                0.13 * bScale * splashWave,
+                8,
+                [0.36, 0.80, 1.0],
+                rawV,
+                rawC,
+                rawI,
+                true
+              );
+            }
+          } else {
+            let streamEnd;
+            if (snappedSoilLocal) {
+              const reachSoil = Math.min(1.0, pourProgress * 4.0);
+              streamEnd = [
+                mouthPos[0] + (snappedSoilLocal[0] - mouthPos[0]) * reachSoil,
+                mouthPos[1] + (snappedSoilLocal[1] - mouthPos[1]) * reachSoil,
+                mouthPos[2] + (snappedSoilLocal[2] - mouthPos[2]) * reachSoil
+              ];
+            } else {
+              const streamLen = 0.28 * itemScale * Math.sin(pourProgress * Math.PI);
+              streamEnd = [
+                mouthPos[0] + nVec[0] * (0.10 * bScale),
+                mouthPos[1] - streamLen,
+                mouthPos[2] + 0.06 * itemScale
+              ];
+            }
             buildTaperedSegment(
-              snappedSoilLocal,
-              splashTop,
-              0.24 * bScale * splashWave,
-              0.14 * bScale * splashWave,
-              8,
-              [0.36, 0.80, 1.0],
+              mouthPos,
+              streamEnd,
+              0.15 * bScale,
+              0.08 * bScale,
+              6,
+              [0.24, 0.72, 0.98],
               rawV,
               rawC,
               rawI,
               true
             );
+
+            // Water splash ring on the planter box soil surface around the sprout
+            if (snappedSoilLocal && snappedUpLocal && pourProgress > 0.15) {
+              const splashWave = Math.sin(((pourProgress - 0.15) / 0.85) * Math.PI);
+              const splashTop = [
+                snappedSoilLocal[0] + snappedUpLocal[0] * (0.025 * bScale),
+                snappedSoilLocal[1] + snappedUpLocal[1] * (0.025 * bScale),
+                snappedSoilLocal[2] + snappedUpLocal[2] * (0.025 * bScale)
+              ];
+              buildTaperedSegment(
+                snappedSoilLocal,
+                splashTop,
+                0.24 * bScale * splashWave,
+                0.14 * bScale * splashWave,
+                8,
+                [0.36, 0.80, 1.0],
+                rawV,
+                rawC,
+                rawI,
+                true
+              );
+            }
           }
         }
       }
@@ -3442,7 +3926,7 @@ window.characterVertexShaderSource = `#version 300 es
               }
             }
 
-            buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale);
+            buildWoodenArmCannonMesh(pElbow, pHand, rawV, rawC, rawI, itemScale * 0.85);
           }
         } else if (!isRag && heldItem && (heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.buildIronBucketModel === "function") {
           const rH = model.nodes.find(n => n && n.name === "RightHand");
@@ -3450,6 +3934,66 @@ window.characterVertexShaderSource = `#version 300 es
             ? [ rH.matrix[12] * scale, rH.matrix[13] * scale + yOffset, rH.matrix[14] * scale ]
             : [ 0.15 * itemScale, -0.09 + yOffset, 0.02 * itemScale ];
           buildHeldIronBucketMesh(pHand, itemScale, heldItem, rawV, rawC, rawI);
+        } else if (!isRag && heldItem && (heldItem.name === "TANTO" || heldItem.name === "tanto") && typeof window.buildTantoModel === "function") {
+          const rFA = model.nodes.find(n => n && n.name === "RightForeArm");
+          const rH = model.nodes.find(n => n && n.name === "RightHand");
+          if (rFA && rH && rFA.matrix && rH.matrix) {
+            const pElbow = [ rFA.matrix[12] * scale, rFA.matrix[13] * scale + yOffset, rFA.matrix[14] * scale ];
+            const pHand = [ rH.matrix[12] * scale, rH.matrix[13] * scale + yOffset, rH.matrix[14] * scale ];
+            const dx = pHand[0] - pElbow[0], dy = pHand[1] - pElbow[1], dz = pHand[2] - pElbow[2];
+            const dLen = Math.hypot(dx, dy, dz) || 1.0;
+            const dArm = [dx / dLen, dy / dLen, dz / dLen];
+            let palmIn = [-0.85, -0.15, -0.45];
+            const dotIn = palmIn[0] * dArm[0] + palmIn[1] * dArm[1] + palmIn[2] * dArm[2];
+            palmIn = [palmIn[0] - dArm[0] * dotIn, palmIn[1] - dArm[1] * dotIn, palmIn[2] - dArm[2] * dotIn];
+            const pLen = Math.hypot(palmIn[0], palmIn[1], palmIn[2]) || 1.0;
+            palmIn = [palmIn[0] / pLen, palmIn[1] / pLen, palmIn[2] / pLen];
+            let rKnuckle = [
+              palmIn[1] * dArm[2] - palmIn[2] * dArm[1],
+              palmIn[2] * dArm[0] - palmIn[0] * dArm[2],
+              palmIn[0] * dArm[1] - palmIn[1] * dArm[0]
+            ];
+            const rkLen = Math.hypot(rKnuckle[0], rKnuckle[1], rKnuckle[2]) || 1.0;
+            rKnuckle = [rKnuckle[0] / rkLen, rKnuckle[1] / rkLen, rKnuckle[2] / rkLen];
+            const gripCenter = [
+              pHand[0] + dArm[0] * 0.032 * itemScale + palmIn[0] * 0.014 * itemScale,
+              pHand[1] + dArm[1] * 0.032 * itemScale + palmIn[1] * 0.014 * itemScale,
+              pHand[2] + dArm[2] * 0.032 * itemScale + palmIn[2] * 0.014 * itemScale
+            ];
+            window.buildTantoModel(0.28 * itemScale, gripCenter, rKnuckle, dArm, palmIn, rawV, rawC, rawI);
+          }
+        } else if (!isRag && heldItem && (heldItem.name === "AEGIS_SHIFT" || heldItem.name === "aegis_shift") && typeof window.buildAegisShiftModel === "function") {
+          const rFA = model.nodes.find(n => n && n.name === "RightForeArm");
+          const rH = model.nodes.find(n => n && n.name === "RightHand");
+          if (rFA && rH && rFA.matrix && rH.matrix) {
+            const pElbow = [ rFA.matrix[12] * scale, rFA.matrix[13] * scale + yOffset, rFA.matrix[14] * scale ];
+            const pHand = [ rH.matrix[12] * scale, rH.matrix[13] * scale + yOffset, rH.matrix[14] * scale ];
+            const dx = pHand[0] - pElbow[0], dy = pHand[1] - pElbow[1], dz = pHand[2] - pElbow[2];
+            const dLen = Math.hypot(dx, dy, dz) || 1.0;
+            const dArm = [dx / dLen, dy / dLen, dz / dLen];
+            let palmIn = [-0.85, -0.15, -0.45];
+            const dotIn = palmIn[0] * dArm[0] + palmIn[1] * dArm[1] + palmIn[2] * dArm[2];
+            palmIn = [palmIn[0] - dArm[0] * dotIn, palmIn[1] - dArm[1] * dotIn, palmIn[2] - dArm[2] * dotIn];
+            const pLen = Math.hypot(palmIn[0], palmIn[1], palmIn[2]) || 1.0;
+            palmIn = [palmIn[0] / pLen, palmIn[1] / pLen, palmIn[2] / pLen];
+            let rKnuckle = [
+              palmIn[1] * dArm[2] - palmIn[2] * dArm[1],
+              palmIn[2] * dArm[0] - palmIn[0] * dArm[2],
+              palmIn[0] * dArm[1] - palmIn[1] * dArm[0]
+            ];
+            const rkLen = Math.hypot(rKnuckle[0], rKnuckle[1], rKnuckle[2]) || 1.0;
+            rKnuckle = [rKnuckle[0] / rkLen, rKnuckle[1] / rkLen, rKnuckle[2] / rkLen];
+            const gripCenter = [
+              pHand[0] + dArm[0] * 0.032 * itemScale + palmIn[0] * 0.014 * itemScale,
+              pHand[1] + dArm[1] * 0.032 * itemScale + palmIn[1] * 0.014 * itemScale,
+              pHand[2] + dArm[2] * 0.032 * itemScale + palmIn[2] * 0.014 * itemScale
+            ];
+            const aStChibi = (typeof window.aegisShiftState === "object") ? window.aegisShiftState : null;
+            const chibiAegisMode = (aStChibi && (aStChibi.mode === "charging" || aStChibi.mode === "dashing" || aStChibi.mode === "post_skill"))
+              ? "greatsword"
+              : ((aStChibi && aStChibi.toolMode === "axe") ? "axe" : "pickaxe");
+            window.buildAegisShiftModel(0.32 * itemScale, gripCenter, rKnuckle, dArm, palmIn, rawV, rawC, rawI, chibiAegisMode);
+          }
         }
 
         if (rawI.length > 0) {
@@ -3466,25 +4010,22 @@ window.characterVertexShaderSource = `#version 300 es
           uploadDynamicBuffer(gl, equipNormalBuffer, gl.ARRAY_BUFFER, flatEquip.normals instanceof Float32Array ? flatEquip.normals : new Float32Array(flatEquip.normals));
 
           if (!equipIndexBuffer) equipIndexBuffer = gl.createBuffer();
-          if (equipIndexBuffer._uploadedCount !== equipIndicesLength) {
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, equipIndexBuffer);
-            const idxData = (equipIndicesLength > 65535)
-              ? (flatEquip.indices instanceof Uint32Array ? flatEquip.indices : new Uint32Array(flatEquip.indices))
-              : (flatEquip.indices instanceof Uint16Array ? flatEquip.indices : new Uint16Array(flatEquip.indices));
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
-            equipIndexBuffer._uploadedCount = equipIndicesLength;
-          }
+          const idxData = (equipIndicesLength > 65535)
+            ? (flatEquip.indices instanceof Uint32Array ? flatEquip.indices : new Uint32Array(flatEquip.indices))
+            : (flatEquip.indices instanceof Uint16Array ? flatEquip.indices : new Uint16Array(flatEquip.indices));
+          uploadDynamicBuffer(gl, equipIndexBuffer, gl.ELEMENT_ARRAY_BUFFER, idxData);
+          equipIndexBuffer._uploadedCount = equipIndicesLength;
         } else {
           equipIndicesLength = 0;
         }
       }
       window.updateChibiEquipMesh = updateChibiEquipMesh;
 
-      function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0, cloneSwimFactor = 0.0, cloneSwimMove = 0.0) {
+      function updateCharacterMesh(phase, isClone = false, cloneWalkBlend = 1.0, cloneSwimFactor = 0.0, cloneSwimMove = 0.0, cloneState = null) {
         const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
         if (!activeGl) return;
         if (typeof gl === "undefined" || !gl) gl = activeGl;
-        if (typeof window !== "undefined" && window.characterModel === "chibi" && !isClone) {
+        if (typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi" && !isClone) {
           if (!window.chibiGlbTexture && typeof window.createChibiGlbTexture === "function") {
             window.createChibiGlbTexture(activeGl);
           }
@@ -3542,7 +4083,33 @@ window.characterVertexShaderSource = `#version 300 es
         resetCapsuleBufferPool();
         resetMergeBufferPool();
 
-        const heldItem = isClone ? null : getHeldItem();
+        const heldItem = isClone
+          ? (cloneState && cloneState.activeItem
+              ? cloneState.activeItem
+              : (cloneState && cloneState.equippedTool ? { name: cloneState.equippedTool } : null))
+          : getHeldItem();
+        const effectiveRidingBoat = isClone
+          ? (cloneState && cloneState.ridingBoat && cloneState.ridingBoat.active ? cloneState.ridingBoat : null)
+          : (typeof activeRidingBoat !== "undefined" ? activeRidingBoat : null);
+        const effectiveUseAnimTimer = isClone
+          ? (cloneState && typeof cloneState.actionAnim === "number" ? cloneState.actionAnim : 0)
+          : (typeof useAnimTimer !== "undefined" ? useAnimTimer : 0);
+        const effectiveIsUsingItem = isClone
+          ? (effectiveUseAnimTimer > 0)
+          : (typeof isUsingItem !== "undefined" && isUsingItem);
+        const effectiveArrowShot = isClone
+          ? !!(cloneState && cloneState.arrowShotInCurrentAnim)
+          : (typeof arrowShotInCurrentAnim !== "undefined" && !!arrowShotInCurrentAnim);
+        const effectiveBowCombo = isClone
+          ? !!(cloneState && cloneState.bowComboActive)
+          : (typeof bowComboActive !== "undefined" && !!bowComboActive);
+        const effectiveLastBowDrawPower = isClone
+          ? (cloneState && typeof cloneState.lastBowDrawPower === "number" ? cloneState.lastBowDrawPower : 1.0)
+          : (typeof lastBowDrawPower !== "undefined" ? lastBowDrawPower : 1.0);
+        const effectiveLastBowShootTime = isClone
+          ? (cloneState && cloneState.lastBowShootTime ? cloneState.lastBowShootTime : 0)
+          : (typeof lastBowShootTime !== "undefined" ? lastBowShootTime : 0);
+        const effectiveBowHoldArmTimer = (typeof bowHoldArmTimer !== "undefined" ? bowHoldArmTimer : 0.6);
         let chestP1,
           chestP2,
           pelvisP1,
@@ -3561,16 +4128,111 @@ window.characterVertexShaderSource = `#version 300 es
         let rightLegPivot, rightKneeRot, rightFootRot;
 
         const isPlayerRagdoll = !isClone && ragdollEnabled && ragdollInitialized;
-        const bOffset = isPlayerRagdoll
+        let bOffset = isPlayerRagdoll
           ? 0.0
           : Math.sin(waterAnimTime * 2.5) * 0.006;
         const bRadius = isPlayerRagdoll
           ? 0.0
           : Math.sin(waterAnimTime * 2.5) * 0.002;
 
+        const shirasayaSt = (!isClone && !isPlayerRagdoll && heldItem && (heldItem.name === "TANTO" || heldItem.name === "tanto") && typeof window !== "undefined" && window.tantoShirasayaState && window.tantoShirasayaState.mode !== "idle")
+          ? window.tantoShirasayaState
+          : null;
+        const shirasayaMode = shirasayaSt ? shirasayaSt.mode : "idle";
+        const shirasayaStep = shirasayaSt ? (shirasayaSt.comboStep || 1) : 1;
+        const shirasayaDashProg = (shirasayaMode === "dashing" && shirasayaSt)
+          ? (1.0 - Math.max(0.0, Math.min(1.0, (shirasayaSt.dashTimer || 0.0) / Math.max(0.01, shirasayaSt.dashDuration || 0.27))))
+          : 0.0;
+
+        const aegisSt = (!isClone && !isPlayerRagdoll && heldItem && (heldItem.name === "AEGIS_SHIFT" || heldItem.name === "aegis_shift") && typeof window !== "undefined" && window.aegisShiftState && window.aegisShiftState.mode !== "idle")
+          ? window.aegisShiftState
+          : null;
+        const aegisMode = aegisSt ? aegisSt.mode : "idle";
+        const aegisStep = aegisSt ? (aegisSt.comboStep || 1) : 1;
+        const aegisDashProg = (aegisMode === "dashing" && aegisSt)
+          ? (1.0 - Math.max(0.0, Math.min(1.0, (aegisSt.dashTimer || 0.0) / Math.max(0.01, aegisSt.dashDuration || 0.38))))
+          : 0.0;
+        const activeSkillMode = shirasayaSt ? shirasayaMode : aegisMode;
+
+        let shiraMem = null;
+        let shiraDt = 0.016;
+        if (!isClone && !isPlayerRagdoll && typeof window !== "undefined") {
+          if (!window._shiraPoseMem) {
+            window._shiraPoseMem = { initialized: false, armsInit: false, bladeInit: false, idleFade: 0.0, lastKey: "", transTimer: 0.0, lastMs: performance.now() };
+          }
+          shiraMem = window._shiraPoseMem;
+          const nowMs = performance.now();
+          const elSec = (nowMs - (shiraMem.lastMs || nowMs)) / 1000.0;
+          shiraMem.lastMs = nowMs;
+          shiraDt = (elSec > 0.0005) ? Math.min(0.05, elSec) : 0.0;
+          const curKey = aegisSt ? `aegis_${aegisMode}_${aegisStep}` : `${shirasayaMode}_${shirasayaStep}`;
+          if (activeSkillMode !== "idle") {
+            if (shiraMem.lastKey !== curKey) {
+              shiraMem.transTimer = 0.14;
+              shiraMem.lastKey = curKey;
+            }
+            shiraMem.transTimer = Math.max(0.0, shiraMem.transTimer - shiraDt);
+            shiraMem.idleFade = 1.0;
+          } else {
+            shiraMem.lastKey = "idle";
+            if (shiraMem.initialized) {
+              shiraMem.idleFade = Math.max(0.0, shiraMem.idleFade - shiraDt * 6.5);
+              if (shiraMem.idleFade <= 0.001) {
+                shiraMem.initialized = false;
+                shiraMem.armsInit = false;
+                shiraMem.bladeInit = false;
+                shiraMem.wInit = false;
+                shiraMem.wRInit = false;
+              }
+            }
+          }
+        }
+        const shirasayaChargeEnv = (shirasayaMode === "charging" && shirasayaSt)
+          ? Math.min(1.0, (shirasayaSt.chargeTime || 0.0) / 0.20)
+          : 0.0;
+        const shirasayaChargeSmooth = shirasayaChargeEnv * shirasayaChargeEnv * (3.0 - 2.0 * shirasayaChargeEnv);
+        const aegisChargeEnv = (aegisMode === "charging" && aegisSt)
+          ? Math.min(1.0, (aegisSt.chargeTime || 0.0) / 0.16)
+          : 0.0;
+        const aegisChargeSmooth = aegisChargeEnv * aegisChargeEnv * (3.0 - 2.0 * aegisChargeEnv);
+        if (shirasayaMode === "charging") {
+          bOffset -= 0.088 * shirasayaChargeSmooth;
+        } else if (shirasayaMode === "dashing") {
+          if (shirasayaStep === 1) {
+            bOffset -= 0.062;
+          } else if (shirasayaStep === 2) {
+            bOffset -= 0.095;
+          } else if (shirasayaStep === 3) {
+            const curl = shiraSm(0.0, 0.25, shirasayaDashProg) * (1.0 - 0.55 * shiraSm(0.76, 1.0, shirasayaDashProg));
+            bOffset += 0.028 * curl;
+          } else {
+            const drop = shiraSm(0.16, 0.34, shirasayaDashProg);
+            bOffset -= 0.015 * (1.0 - drop) + 0.082 * drop;
+          }
+        } else if (aegisMode === "charging") {
+          bOffset -= 0.055 * aegisChargeSmooth;
+        } else if (aegisMode === "dashing") {
+          if (aegisStep === 1) {
+            const dropA = shiraSm(0.14, 0.42, aegisDashProg);
+            const settleA = shiraSm(0.62, 1.0, aegisDashProg);
+            bOffset -= (0.024 * (1.0 - dropA) + 0.074 * dropA) * (1.0 - settleA) + 0.042 * settleA;
+          } else if (aegisStep === 2) {
+            const riseB = shiraSm(0.14, 0.56, aegisDashProg);
+            bOffset -= 0.068 * (1.0 - riseB) + 0.014 * riseB;
+          } else if (aegisStep === 3) {
+            bOffset -= 0.052;
+          } else {
+            const up4 = shiraSm(0.0, 0.26, aegisDashProg);
+            const slam4 = shiraSm(0.26, 0.52, aegisDashProg);
+            bOffset += 0.018 * up4 * (1.0 - slam4) - 0.086 * slam4;
+          }
+        } else if (aegisMode === "post_skill") {
+          bOffset -= 0.042;
+        }
+
         let torsoTilt = 0.0;
         const walkScale = isClone ? cloneWalkBlend : 1.0;
-        const armSwingAmp = isClone ? 0.28 : 0.8;
+        const armSwingAmp = 0.8; // Exact same swing amplitude for Player & Clones
         let armAngle = Math.sin(phase) * armSwingAmp * walkScale;
         let leftElbowFlex = 0.1 + Math.max(0, -armAngle * 0.5);
         let rightArmAngle = Math.sin(phase + Math.PI) * armSwingAmp * walkScale;
@@ -3581,9 +4243,9 @@ window.characterVertexShaderSource = `#version 300 es
         let rightLegAngle = Math.sin(phase) * 0.6 * walkScale;
         let rightKneeFlex = 0.1 + Math.max(0, rightLegAngle * 0.5);
 
-        if (!isClone && typeof activeRidingBoat !== "undefined" && activeRidingBoat) {
-          // Sitting and rowing pose
-          let isLandVehicle = activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0);
+        if (effectiveRidingBoat) {
+          // Sitting and rowing pose (shared by player and clones)
+          let isLandVehicle = effectiveRidingBoat.hasWheel || effectiveRidingBoat.hasWheels || (effectiveRidingBoat.wheelCount && effectiveRidingBoat.wheelCount > 0);
           if (isLandVehicle) {
             armAngle = -0.4;
             leftElbowFlex = 0.5;
@@ -3591,7 +4253,9 @@ window.characterVertexShaderSource = `#version 300 es
             rightElbowFlex = 0.5;
             torsoTilt = 0;
           } else {
-            const rowPhase = typeof boatRowTimer !== "undefined" ? boatRowTimer : 0;
+            const rowPhase = isClone
+              ? (cloneState && typeof cloneState.boatRowTimer === "number" ? cloneState.boatRowTimer : phase)
+              : (typeof boatRowTimer !== "undefined" ? boatRowTimer : 0);
             armAngle = Math.sin(rowPhase) * 0.5 - 0.5; // Arms forward and back
             leftElbowFlex = 0.3 + Math.cos(rowPhase) * 0.2;
             rightArmAngle = Math.sin(rowPhase) * 0.5 - 0.5; // Synchronized in-phase pull
@@ -3749,9 +4413,22 @@ window.characterVertexShaderSource = `#version 300 es
             torsoTilt = torsoTilt * (1.0 - jumpBlend) + (velFactor * 0.1) * jumpBlend;
         }
         
-        if (heldItem) {
-             if (heldItem.name === "BOW") {
-                 if (isUsingItem && useAnimTimer > 0) {
+        const isBucketHeld = !!(heldItem && (
+          heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" ||
+          heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket"
+        ));
+        const activeBucketScoop = (!isClone && isBucketHeld && typeof window.bucketScoopTimer === "number" && window.bucketScoopTimer > 0) ? window.bucketScoopTimer : 0;
+        const activeBucketWater = (!isClone && (isBucketHeld || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0) ? window.bucketWaterTimer : 0;
+        let bucketArmAbduct = 0.0;
+        let bucketArmYaw = 0.0;
+        let waterPourEnv = 0.0;
+        let waterTiltEnv = 0.0;
+        let waterPourBob = 0.0;
+        let waterAimYaw = 0.0;
+
+        if (heldItem || activeBucketWater > 0) {
+             if (heldItem && heldItem.name === "BOW") {
+                 if (effectiveIsUsingItem && effectiveUseAnimTimer > 0) {
                      armAngle = -1.57;
                      leftElbowFlex = 0.0;
                      rightArmAngle = 0;
@@ -3762,10 +4439,77 @@ window.characterVertexShaderSource = `#version 300 es
                      rightArmAngle = 0.2;
                      rightElbowFlex = 0.2;
                  }
+             } else if (isBucketHeld || activeBucketWater > 0) {
+                 if (activeBucketScoop > 0) {
+                     // Chibi performs the 3-stage water scoop animation physically with torso & right arm
+                     const t = 1.0 - Math.max(0.0, Math.min(1.0, activeBucketScoop));
+                     if (t < 0.40) {
+                         const s = Math.sin((t / 0.40) * (Math.PI * 0.5));
+                         torsoTilt += 0.36 * s;
+                         rightArmAngle = 0.04 * (1.0 - s) - 0.88 * s;
+                         rightElbowFlex = 0.12 + 0.14 * s;
+                         armAngle += 0.26 * s;
+                         bucketArmAbduct = 0.15 * (1.0 - s);
+                     } else if (t < 0.75) {
+                         const u = (t - 0.40) / 0.35;
+                         const su = u * u * (3.0 - 2.0 * u);
+                         torsoTilt += 0.36 * (1.0 - su);
+                         rightArmAngle = -0.88 * (1.0 - su) - 0.22 * su;
+                         rightElbowFlex = 0.26 + 0.30 * Math.sin(u * Math.PI);
+                         armAngle += 0.26 * (1.0 - su);
+                         bucketArmAbduct = 0.15 * su;
+                     } else {
+                         const v = (t - 0.75) / 0.25;
+                         const sv = v * v * (3.0 - 2.0 * v);
+                         rightArmAngle = -0.22 * (1.0 - sv) + 0.04 * sv;
+                         rightElbowFlex = 0.26 * (1.0 - sv) + 0.12 * sv;
+                         bucketArmAbduct = 0.15;
+                     }
+                 } else if (activeBucketWater > 0) {
+                     // Two-handed pour envelope: lift bucket above planter rim, tilt & pour, return smoothly to carry pose
+                     const tw = 1.0 - Math.max(0.0, Math.min(1.0, activeBucketWater));
+                     if (tw < 0.28) {
+                         const s = Math.sin((tw / 0.28) * (Math.PI * 0.5));
+                         waterPourEnv = s;
+                         waterTiltEnv = s * s;
+                     } else if (tw <= 0.75) {
+                         const u = (tw - 0.28) / 0.47;
+                         waterPourEnv = 1.0;
+                         waterTiltEnv = 1.0;
+                         waterPourBob = Math.sin(u * Math.PI * 2.0) * 0.06;
+                     } else {
+                         const v = (tw - 0.75) / 0.25;
+                         const sv = v * v * (3.0 - 2.0 * v);
+                         waterPourEnv = 1.0 - sv;
+                         waterTiltEnv = 1.0 - sv;
+                     }
+                     torsoTilt += 0.12 * waterPourEnv;
+                     rightArmAngle = rightArmAngle * 0.25 + 0.04;
+                     rightElbowFlex = 0.12;
+                     bucketArmAbduct = 0.15 * (1.0 - waterPourEnv);
+
+                     if (window.activeWateringAnimPlanter && window.activeWateringAnimPlanter.position && typeof getCharacterMatrix === "function") {
+                         const planterPos = window.activeWateringAnimPlanter.position;
+                         const charMat = getCharacterMatrix();
+                         const cScale = Math.hypot(charMat[0], charMat[1], charMat[2]) || 0.1;
+                         const dxW = planterPos[0] - charMat[12];
+                         const dyW = planterPos[1] - charMat[13];
+                         const dzW = planterPos[2] - charMat[14];
+                         const localX = (dxW * (charMat[0] / cScale) + dyW * (charMat[1] / cScale) + dzW * (charMat[2] / cScale)) / cScale;
+                         const localZ = (dxW * (charMat[8] / cScale) + dyW * (charMat[9] / cScale) + dzW * (charMat[10] / cScale)) / cScale;
+                         const aimYaw = Math.atan2(localX, Math.max(0.15, localZ));
+                         waterAimYaw = Math.max(-0.65, Math.min(0.65, aimYaw)) * waterPourEnv;
+                     }
+                 } else {
+                     // Natural lowered carry pose: relax arm down along side with gentle damped walk sway
+                     rightArmAngle = rightArmAngle * 0.25 + 0.04;
+                     rightElbowFlex = 0.12;
+                     bucketArmAbduct = 0.15;
+                 }
              } else {
-                 if (isUsingItem && useAnimTimer > 0) {
-                     // Swing animation for axe / pickaxe / shovel / items
-                     let swingPhase = useAnimTimer;
+                 if (effectiveIsUsingItem && effectiveUseAnimTimer > 0) {
+                     // Swing animation for axe / pickaxe / shovel / items (shared by player and clones)
+                     let swingPhase = effectiveUseAnimTimer;
                      let targetArmAngle = 0;
                      let targetElbowFlex = 0;
                      if (swingPhase > 0.8) {
@@ -3790,12 +4534,202 @@ window.characterVertexShaderSource = `#version 300 es
              }
         }
 
+        let legAngleSide = 0.0;
+        let rightLegAngleSide = 0.0;
+        if (shirasayaMode === "charging") {
+          torsoTilt = torsoTilt * (1.0 - shirasayaChargeSmooth) + 0.22 * shirasayaChargeSmooth;
+          legAngle = legAngle * (1.0 - shirasayaChargeSmooth) + 0.58 * shirasayaChargeSmooth;
+          leftKneeFlex = leftKneeFlex * (1.0 - shirasayaChargeSmooth) + 0.88 * shirasayaChargeSmooth;
+          rightLegAngle = rightLegAngle * (1.0 - shirasayaChargeSmooth) - 0.72 * shirasayaChargeSmooth;
+          rightKneeFlex = rightKneeFlex * (1.0 - shirasayaChargeSmooth) + 1.05 * shirasayaChargeSmooth;
+          legAngleSide = -0.32 * shirasayaChargeSmooth;
+          rightLegAngleSide = 0.28 * shirasayaChargeSmooth;
+        } else if (shirasayaMode === "dashing") {
+          if (shirasayaStep === 1) {
+            const p1 = shiraSm(0.0, 0.35, shirasayaDashProg);
+            torsoTilt = 0.28 + 0.16 * p1;
+            legAngle = 0.65 + 0.16 * p1;
+            leftKneeFlex = 0.62 - 0.18 * p1;
+            rightLegAngle = -0.74 - 0.10 * p1;
+            rightKneeFlex = 0.98;
+            legAngleSide = -0.15;
+            rightLegAngleSide = 0.15;
+          } else if (shirasayaStep === 2) {
+            // Skill 2 (Panel 1): deep low forward lunge, back leg stretched straight behind, front knee deeply bent
+            const p2 = shiraSm(0.0, 0.42, shirasayaDashProg);
+            torsoTilt = 0.44 + 0.16 * p2;
+            legAngle = 0.85 + 0.24 * p2;
+            leftKneeFlex = 0.32 - 0.20 * p2;
+            rightLegAngle = -0.92 - 0.20 * p2;
+            rightKneeFlex = 1.05 + 0.24 * p2;
+            legAngleSide = -0.18;
+            rightLegAngleSide = 0.16;
+          } else if (shirasayaStep === 3) {
+            // Skill 3 (Panel 2): mid-air spinning cyclone — curl knee up then prepare landing into Step 4
+            const prepLand = shiraSm(0.75, 1.0, shirasayaDashProg);
+            torsoTilt = 0.14 + 0.06 * prepLand;
+            legAngle = -1.32 * (1.0 - 0.55 * prepLand);
+            leftKneeFlex = 1.72 * (1.0 - 0.45 * prepLand);
+            rightLegAngle = 0.28 * (1.0 - 0.70 * prepLand);
+            rightKneeFlex = 0.52 + 0.25 * prepLand;
+            legAngleSide = -0.16;
+            rightLegAngleSide = 0.22;
+          } else {
+            // Skill 4 (Panel 3): heavy overhead windup -> planted forward ground slam cleave -> subtle recovery
+            const slamT = shiraSm(0.16, 0.36, shirasayaDashProg);
+            const recT = shiraSm(0.80, 1.0, shirasayaDashProg);
+            torsoTilt = 0.16 * (1.0 - slamT) + 0.52 * slamT - 0.12 * recT;
+            legAngle = 0.88 - 0.18 * recT;
+            leftKneeFlex = 0.22 + 0.15 * recT;
+            rightLegAngle = -0.96 + 0.20 * recT;
+            rightKneeFlex = 1.15 - 0.18 * recT;
+            legAngleSide = -0.20;
+            rightLegAngleSide = 0.18;
+          }
+        } else if (shirasayaMode === "post_skill") {
+          // Relax anatomical left arm at side while anatomical right arm holds reverse-grip Shirasaya
+          rightArmAngle = 0.08;
+          rightElbowFlex = 0.15;
+          armAngle = -0.38;
+          leftElbowFlex = 0.62;
+        } else if (aegisMode === "charging") {
+          const sA = aegisChargeSmooth;
+          torsoTilt = torsoTilt * (1.0 - sA) + 0.24 * sA;
+          legAngle = legAngle * (1.0 - sA) + 0.48 * sA;
+          leftKneeFlex = leftKneeFlex * (1.0 - sA) + 0.72 * sA;
+          rightLegAngle = rightLegAngle * (1.0 - sA) - 0.56 * sA;
+          rightKneeFlex = rightKneeFlex * (1.0 - sA) + 0.85 * sA;
+          legAngleSide = -0.22 * sA;
+          rightLegAngleSide = 0.22 * sA;
+        } else if (aegisMode === "dashing") {
+          if (aegisStep === 1) {
+            const cleaveBodyT = shiraSm(0.14, 0.44, aegisDashProg);
+            const settleBodyT = shiraSm(0.62, 1.0, aegisDashProg);
+            const lungeTorso = 0.14 * (1.0 - cleaveBodyT) + 0.48 * cleaveBodyT;
+            const lungeLeftLeg = 0.45 * (1.0 - cleaveBodyT) + 0.86 * cleaveBodyT;
+            const lungeLeftKnee = 0.45 - 0.18 * cleaveBodyT;
+            const lungeRightLeg = -0.52 * (1.0 - cleaveBodyT) - 0.88 * cleaveBodyT;
+            const lungeRightKnee = 0.72 + 0.34 * cleaveBodyT;
+            torsoTilt = lungeTorso * (1.0 - settleBodyT) + 0.26 * settleBodyT;
+            legAngle = lungeLeftLeg * (1.0 - settleBodyT) - 0.30 * settleBodyT;
+            leftKneeFlex = lungeLeftKnee * (1.0 - settleBodyT) + 0.36 * settleBodyT;
+            rightLegAngle = lungeRightLeg * (1.0 - settleBodyT) + 0.14 * settleBodyT;
+            rightKneeFlex = lungeRightKnee * (1.0 - settleBodyT) + 0.16 * settleBodyT;
+            legAngleSide = -0.16 * (1.0 - settleBodyT) - 0.21 * settleBodyT;
+            rightLegAngleSide = 0.16 * (1.0 - settleBodyT) + 0.20 * settleBodyT;
+          } else if (aegisStep === 2) {
+            // Skill 2 (Ref Figure 2): Low coiled right lunge -> Rising diagonal upward slash
+            const riseBodyT = shiraSm(0.14, 0.56, aegisDashProg);
+            torsoTilt = 0.34 * (1.0 - riseBodyT) + 0.12 * riseBodyT;
+            legAngle = 0.62 * (1.0 - riseBodyT) + 0.38 * riseBodyT;
+            leftKneeFlex = 0.72 * (1.0 - riseBodyT) + 0.42 * riseBodyT;
+            rightLegAngle = -0.68 * (1.0 - riseBodyT) - 0.46 * riseBodyT;
+            rightKneeFlex = 0.85 * (1.0 - riseBodyT) + 0.52 * riseBodyT;
+            legAngleSide = -0.22;
+            rightLegAngleSide = 0.22;
+          } else if (aegisStep === 3) {
+            // Skill 3 (Ref Figure 3): Wide grounded stance sweeping horizontal cleave across waist
+            const swBody3 = shiraSm(0.14, 0.58, aegisDashProg);
+            torsoTilt = 0.16 + 0.08 * swBody3;
+            legAngle = -0.36;
+            leftKneeFlex = 0.42;
+            rightLegAngle = 0.28;
+            rightKneeFlex = 0.36;
+            legAngleSide = -0.25;
+            rightLegAngleSide = 0.25;
+          } else {
+            // Skill 4 (Ref Figure 4): Overhead windup raise -> Heavy vertical ground slam -> settle
+            const raiseBody4 = shiraSm(0.0, 0.26, aegisDashProg);
+            const slamBody4 = shiraSm(0.26, 0.52, aegisDashProg);
+            const recBody4 = shiraSm(0.76, 1.0, aegisDashProg);
+            torsoTilt = (-0.06 * raiseBody4) * (1.0 - slamBody4) + (0.50 * slamBody4) * (1.0 - recBody4) + 0.26 * recBody4;
+            legAngle = (0.35 * (1.0 - slamBody4) + 0.86 * slamBody4) * (1.0 - recBody4) - 0.30 * recBody4;
+            leftKneeFlex = (0.45 * (1.0 - slamBody4) + 0.28 * slamBody4) * (1.0 - recBody4) + 0.36 * recBody4;
+            rightLegAngle = (-0.42 * (1.0 - slamBody4) - 0.92 * slamBody4) * (1.0 - recBody4) + 0.14 * recBody4;
+            rightKneeFlex = (0.52 * (1.0 - slamBody4) + 1.08 * slamBody4) * (1.0 - recBody4) + 0.16 * recBody4;
+            legAngleSide = -0.20;
+            rightLegAngleSide = 0.20;
+          }
+        } else if (aegisMode === "post_skill") {
+          // Two-handed heavy greatsword stance: wide braced legs, bent knees, slight forward lean supporting heavy blade
+          torsoTilt = 0.26;
+          legAngle = -0.30;
+          leftKneeFlex = 0.36;
+          rightLegAngle = 0.14;
+          rightKneeFlex = 0.16;
+          legAngleSide = -0.21;
+          rightLegAngleSide = 0.20;
+        }
+
+        if (shiraMem && (activeSkillMode !== "idle" || shiraMem.idleFade > 0.001)) {
+          if (activeSkillMode !== "idle") {
+            const bodyRate = (activeSkillMode === "dashing") ? 95.0 : 15.0;
+            const kB = (shiraDt > 0) ? (1.0 - Math.exp(-shiraDt * bodyRate)) : 1.0;
+            if (!shiraMem.initialized) {
+              shiraMem.bOffset = bOffset;
+              shiraMem.torsoTilt = torsoTilt;
+              shiraMem.legAngle = legAngle;
+              shiraMem.leftKneeFlex = leftKneeFlex;
+              shiraMem.rightLegAngle = rightLegAngle;
+              shiraMem.rightKneeFlex = rightKneeFlex;
+              shiraMem.legAngleSide = legAngleSide;
+              shiraMem.rightLegAngleSide = rightLegAngleSide;
+              shiraMem.armAngle = armAngle;
+              shiraMem.leftElbowFlex = leftElbowFlex;
+              shiraMem.rightArmAngle = rightArmAngle;
+              shiraMem.rightElbowFlex = rightElbowFlex;
+              shiraMem.initialized = true;
+            } else {
+              shiraMem.bOffset += (bOffset - shiraMem.bOffset) * kB;
+              shiraMem.torsoTilt += (torsoTilt - shiraMem.torsoTilt) * kB;
+              shiraMem.legAngle += (legAngle - shiraMem.legAngle) * kB;
+              shiraMem.leftKneeFlex += (leftKneeFlex - shiraMem.leftKneeFlex) * kB;
+              shiraMem.rightLegAngle += (rightLegAngle - shiraMem.rightLegAngle) * kB;
+              shiraMem.rightKneeFlex += (rightKneeFlex - shiraMem.rightKneeFlex) * kB;
+              shiraMem.legAngleSide += (legAngleSide - shiraMem.legAngleSide) * kB;
+              shiraMem.rightLegAngleSide += (rightLegAngleSide - shiraMem.rightLegAngleSide) * kB;
+              shiraMem.armAngle += (armAngle - shiraMem.armAngle) * kB;
+              shiraMem.leftElbowFlex += (leftElbowFlex - shiraMem.leftElbowFlex) * kB;
+              shiraMem.rightArmAngle += (rightArmAngle - shiraMem.rightArmAngle) * kB;
+              shiraMem.rightElbowFlex += (rightElbowFlex - shiraMem.rightElbowFlex) * kB;
+            }
+            bOffset = shiraMem.bOffset;
+            torsoTilt = shiraMem.torsoTilt;
+            legAngle = shiraMem.legAngle;
+            leftKneeFlex = shiraMem.leftKneeFlex;
+            rightLegAngle = shiraMem.rightLegAngle;
+            rightKneeFlex = shiraMem.rightKneeFlex;
+            legAngleSide = shiraMem.legAngleSide;
+            rightLegAngleSide = shiraMem.rightLegAngleSide;
+            armAngle = shiraMem.armAngle;
+            leftElbowFlex = shiraMem.leftElbowFlex;
+            rightArmAngle = shiraMem.rightArmAngle;
+            rightElbowFlex = shiraMem.rightElbowFlex;
+          } else if (shiraMem.initialized) {
+            // Smooth exit back into walk/idle stance when walking cancels post_skill
+            const f = shiraMem.idleFade;
+            bOffset = bOffset * (1.0 - f) + shiraMem.bOffset * f;
+            torsoTilt = torsoTilt * (1.0 - f) + shiraMem.torsoTilt * f;
+            legAngle = legAngle * (1.0 - f) + shiraMem.legAngle * f;
+            leftKneeFlex = leftKneeFlex * (1.0 - f) + shiraMem.leftKneeFlex * f;
+            rightLegAngle = rightLegAngle * (1.0 - f) + shiraMem.rightLegAngle * f;
+            rightKneeFlex = rightKneeFlex * (1.0 - f) + shiraMem.rightKneeFlex * f;
+            legAngleSide = legAngleSide * (1.0 - f) + shiraMem.legAngleSide * f;
+            rightLegAngleSide = rightLegAngleSide * (1.0 - f) + shiraMem.rightLegAngleSide * f;
+            armAngle = armAngle * (1.0 - f) + shiraMem.armAngle * f;
+            leftElbowFlex = leftElbowFlex * (1.0 - f) + shiraMem.leftElbowFlex * f;
+            rightArmAngle = rightArmAngle * (1.0 - f) + shiraMem.rightArmAngle * f;
+            rightElbowFlex = rightElbowFlex * (1.0 - f) + shiraMem.rightElbowFlex * f;
+          }
+        }
+
         const isRiding = activeRidingBoat || (typeof activeRidingMech !== "undefined" && activeRidingMech);
+        const hasUpperTilt = isRiding || Math.abs(torsoTilt) > 0.001;
 
         // Unified torso extends from pelvic floor / groin (-0.090) up to neck collar (0.170)
         chestP1 = [0, -0.090 + bOffset, 0];
         let defaultChestP2 = [0, 0.170 + bOffset, 0];
-        chestP2 = isRiding ? rotatePointX(chestP1, defaultChestP2, torsoTilt) : defaultChestP2;
+        chestP2 = hasUpperTilt ? rotatePointX(chestP1, defaultChestP2, torsoTilt) : defaultChestP2;
         
         pelvisP1 = [0, -0.090 + bOffset, 0];
         pelvisP2 = [0, -0.090 + bOffset, 0];
@@ -3805,9 +4739,9 @@ window.characterVertexShaderSource = `#version 300 es
         let defaultHeadP1 = [0, 0.336 + bOffset, 0];
         let defaultHeadP2 = [0, 0.336 + bOffset, 0];
         
-        neckP1 = isRiding ? rotatePointX(chestP1, defaultNeckP1, torsoTilt) : defaultNeckP1;
-        neckP2 = isRiding ? rotatePointX(chestP1, defaultNeckP2, torsoTilt) : defaultNeckP2;
-        headP1 = isRiding ? rotatePointX(chestP1, defaultHeadP1, torsoTilt) : defaultHeadP1;
+        neckP1 = hasUpperTilt ? rotatePointX(chestP1, defaultNeckP1, torsoTilt) : defaultNeckP1;
+        neckP2 = hasUpperTilt ? rotatePointX(chestP1, defaultNeckP2, torsoTilt) : defaultNeckP2;
+        headP1 = hasUpperTilt ? rotatePointX(chestP1, defaultHeadP1, torsoTilt) : defaultHeadP1;
         headP2 = headP1;
         
         let defaultLeftEarP1 = [-0.140, 0.268 + bOffset, -0.018];
@@ -3815,10 +4749,10 @@ window.characterVertexShaderSource = `#version 300 es
         let defaultRightEarP1 = [0.140, 0.268 + bOffset, -0.018];
         let defaultRightEarP2 = [0.145, 0.312 + bOffset, -0.024];
         
-        leftEarP1 = isRiding ? rotatePointX(chestP1, defaultLeftEarP1, torsoTilt) : defaultLeftEarP1;
-        leftEarP2 = isRiding ? rotatePointX(chestP1, defaultLeftEarP2, torsoTilt) : defaultLeftEarP2;
-        rightEarP1 = isRiding ? rotatePointX(chestP1, defaultRightEarP1, torsoTilt) : defaultRightEarP1;
-        rightEarP2 = isRiding ? rotatePointX(chestP1, defaultRightEarP2, torsoTilt) : defaultRightEarP2;
+        leftEarP1 = hasUpperTilt ? rotatePointX(chestP1, defaultLeftEarP1, torsoTilt) : defaultLeftEarP1;
+        leftEarP2 = hasUpperTilt ? rotatePointX(chestP1, defaultLeftEarP2, torsoTilt) : defaultLeftEarP2;
+        rightEarP1 = hasUpperTilt ? rotatePointX(chestP1, defaultRightEarP1, torsoTilt) : defaultRightEarP1;
+        rightEarP2 = hasUpperTilt ? rotatePointX(chestP1, defaultRightEarP2, torsoTilt) : defaultRightEarP2;
 
         // Arm joints firmly seated inside the torso shoulder contours (zero gap)
         let defaultLeftArmPivot = [-0.074, 0.124 + bOffset, 0];
@@ -3829,13 +4763,13 @@ window.characterVertexShaderSource = `#version 300 es
         let defaultRightElbowBase = [0.116, 0.012 + bOffset, -0.006];
         let defaultRightHandBase = [0.146, -0.095 + bOffset, 0.022];
 
-        leftArmPivot = isRiding ? rotatePointX(chestP1, defaultLeftArmPivot, torsoTilt) : defaultLeftArmPivot;
-        const leftElbowBase = isRiding ? rotatePointX(chestP1, defaultLeftElbowBase, torsoTilt) : defaultLeftElbowBase;
-        const leftHandBase = isRiding ? rotatePointX(chestP1, defaultLeftHandBase, torsoTilt) : defaultLeftHandBase;
+        leftArmPivot = hasUpperTilt ? rotatePointX(chestP1, defaultLeftArmPivot, torsoTilt) : defaultLeftArmPivot;
+        const leftElbowBase = hasUpperTilt ? rotatePointX(chestP1, defaultLeftElbowBase, torsoTilt) : defaultLeftElbowBase;
+        const leftHandBase = hasUpperTilt ? rotatePointX(chestP1, defaultLeftHandBase, torsoTilt) : defaultLeftHandBase;
 
-        rightArmPivot = isRiding ? rotatePointX(chestP1, defaultRightArmPivot, torsoTilt) : defaultRightArmPivot;
-        const rightElbowBase = isRiding ? rotatePointX(chestP1, defaultRightElbowBase, torsoTilt) : defaultRightElbowBase;
-        const rightHandBase = isRiding ? rotatePointX(chestP1, defaultRightHandBase, torsoTilt) : defaultRightHandBase;
+        rightArmPivot = hasUpperTilt ? rotatePointX(chestP1, defaultRightArmPivot, torsoTilt) : defaultRightArmPivot;
+        const rightElbowBase = hasUpperTilt ? rotatePointX(chestP1, defaultRightElbowBase, torsoTilt) : defaultRightElbowBase;
+        const rightHandBase = hasUpperTilt ? rotatePointX(chestP1, defaultRightHandBase, torsoTilt) : defaultRightHandBase;
 
         // Hip joints firmly seated inside the wide pelvic hip volume (zero gap, seamless leg transition)
         leftLegPivot = [-0.052, -0.068 + bOffset, 0];
@@ -3869,11 +4803,21 @@ window.characterVertexShaderSource = `#version 300 es
           rightHandLocal,
           rightArmAngle,
         );
+        if (Math.abs(bucketArmAbduct) > 0.001) {
+          rightElbowRot = rotatePointZ(rightArmPivot, rightElbowRot, bucketArmAbduct);
+          rightHandRot = rotatePointZ(rightArmPivot, rightHandRot, bucketArmAbduct);
+        }
+        if (Math.abs(bucketArmYaw) > 0.001) {
+          rightElbowRot = rotatePointY(rightArmPivot, rightElbowRot, bucketArmYaw);
+          rightHandRot = rotatePointY(rightArmPivot, rightHandRot, bucketArmYaw);
+        }
+        if (shirasayaMode === "post_skill") {
+          leftElbowRot = rotatePointZ(leftArmPivot, leftElbowRot, -0.16);
+          leftHandRot = rotatePointZ(leftArmPivot, leftHandRot, -0.16);
+        }
 
         let legAngleFwd = legAngle;
         let rightLegAngleFwd = rightLegAngle;
-        let legAngleSide = 0;
-        let rightLegAngleSide = 0;
         
         let isAimingBow = (typeof window !== "undefined" && !!window.isAimingBow);
         
@@ -3942,33 +4886,128 @@ window.characterVertexShaderSource = `#version 300 es
         const localRightEarP1 = [rightEarP1[0], rightEarP1[1], rightEarP1[2]];
         const localRightEarP2 = [rightEarP2[0], rightEarP2[1], rightEarP2[2]];
 
+        const getHandGripFrame = (elbowPt, handPt, isLeft, wristPose = null, shoulderPt = null) => {
+          if (window.CapsuleModel && typeof window.CapsuleModel.computeHandGripFrame === "function") {
+            return window.CapsuleModel.computeHandGripFrame(elbowPt, handPt, isLeft, wristPose, shoulderPt);
+          }
+          const dx = handPt[0] - elbowPt[0];
+          const dy = handPt[1] - elbowPt[1];
+          const dz = handPt[2] - elbowPt[2];
+          const len = Math.hypot(dx, dy, dz);
+          const dArm = len > 1e-4 ? [dx / len, dy / len, dz / len] : [0, -1, 0];
+          const inSign = isLeft ? 1.0 : -1.0;
+          let palmIn = [inSign * 0.85, -0.15, -0.45];
+          const dotIn = palmIn[0] * dArm[0] + palmIn[1] * dArm[1] + palmIn[2] * dArm[2];
+          palmIn = [
+            palmIn[0] - dArm[0] * dotIn,
+            palmIn[1] - dArm[1] * dotIn,
+            palmIn[2] - dArm[2] * dotIn,
+          ];
+          const inLen = Math.hypot(palmIn[0], palmIn[1], palmIn[2]) || 1.0;
+          palmIn = [palmIn[0] / inLen, palmIn[1] / inLen, palmIn[2] / inLen];
+          let rKnuckle = isLeft
+            ? [
+                dArm[1] * palmIn[2] - dArm[2] * palmIn[1],
+                dArm[2] * palmIn[0] - dArm[0] * palmIn[2],
+                dArm[0] * palmIn[1] - dArm[1] * palmIn[0],
+              ]
+            : [
+                palmIn[1] * dArm[2] - palmIn[2] * dArm[1],
+                palmIn[2] * dArm[0] - palmIn[0] * dArm[2],
+                palmIn[0] * dArm[1] - palmIn[1] * dArm[0],
+              ];
+          const rkLen = Math.hypot(rKnuckle[0], rKnuckle[1], rKnuckle[2]) || 1.0;
+          rKnuckle = [rKnuckle[0] / rkLen, rKnuckle[1] / rkLen, rKnuckle[2] / rkLen];
+          const gripCenter = [
+            handPt[0] + dArm[0] * 0.036 + palmIn[0] * 0.016,
+            handPt[1] + dArm[1] * 0.036 + palmIn[1] * 0.016,
+            handPt[2] + dArm[2] * 0.036 + palmIn[2] * 0.016,
+          ];
+          return { dArm, palmIn, rKnuckle, gripCenter };
+        };
+
         let axeHandleP1Rot, axeHandleP2Rot, axeBladeP1Rot, axeBladeP2Rot, axeBlade2P1Rot, axeBlade2P2Rot;
         let shovelD1Rot, shovelD2Rot, shovelLeftBranchRot, shovelRightBranchRot;
         let bowGripRot, bowUpperTipRot, bowLowerTipRot;
+        let rightGripPos, rightArmDir, rightPalmIn, rightKnuckleDir;
+        let skillWristLeft = null;
+        let skillWristRight = null;
+        let spineRigPose = { torsoYaw: 0.0, lockHeadYaw: false, headPitch: 0.0, headYaw: 0.0 };
+        let leftAnklePose = null;
+        let rightAnklePose = null;
+
+        if (typeof effectiveSwimFactor === "number" && effectiveSwimFactor > 0.01) {
+          leftAnklePose = { pitch: 0.35 * effectiveSwimFactor };
+          rightAnklePose = { pitch: 0.35 * effectiveSwimFactor };
+        } else if (!isClone && typeof jumpBlend === "number" && jumpBlend > 0.01) {
+          leftAnklePose = { pitch: 0.22 * jumpBlend };
+          rightAnklePose = { pitch: 0.22 * jumpBlend };
+        }
+
+        const computeRightHeldItemPoints = (itemName, elbowPt, handPt, wristPoseOverride = null) => {
+          const activeRightWrist = wristPoseOverride !== null ? wristPoseOverride : skillWristRight;
+          const { dArm, palmIn, rKnuckle, gripCenter } = getHandGripFrame(elbowPt, handPt, false, activeRightWrist, rightArmPivot);
+          rightGripPos = gripCenter;
+          rightArmDir = dArm;
+          rightPalmIn = palmIn;
+          rightKnuckleDir = rKnuckle;
+          const ptOffset = (dR, dA, dP) => [
+            gripCenter[0] + rKnuckle[0] * dR + dArm[0] * dA + palmIn[0] * dP,
+            gripCenter[1] + rKnuckle[1] * dR + dArm[1] * dA + palmIn[1] * dP,
+            gripCenter[2] + rKnuckle[2] * dR + dArm[2] * dA + palmIn[2] * dP,
+          ];
+          if (itemName === "SHOVEL") {
+            axeHandleP1Rot = ptOffset(-0.055, 0, 0);
+            axeHandleP2Rot = ptOffset(0.235, 0, 0);
+            axeBladeP1Rot = ptOffset(0.235, 0, 0);
+            axeBladeP2Rot = ptOffset(0.395, 0, 0);
+            shovelD1Rot = ptOffset(-0.055, 0, 0);
+            shovelD2Rot = ptOffset(-0.090, 0, 0);
+            shovelLeftBranchRot = ptOffset(-0.125, 0, 0.036);
+            shovelRightBranchRot = ptOffset(-0.125, 0, -0.036);
+          } else if (itemName === "BRANCH" || itemName === "branch") {
+            axeHandleP1Rot = ptOffset(-0.080, 0, 0);
+            axeHandleP2Rot = ptOffset(0.260, 0, 0);
+            axeBladeP1Rot = axeHandleP2Rot;
+            axeBladeP2Rot = axeHandleP2Rot;
+          } else if (itemName === "PICKAXE") {
+            axeHandleP1Rot = ptOffset(-0.065, 0, 0);
+            axeHandleP2Rot = ptOffset(0.215, 0, 0);
+            axeBladeP1Rot = ptOffset(0.180, 0, 0);
+            axeBladeP2Rot = ptOffset(0.180, 0.115, 0);
+            axeBlade2P1Rot = ptOffset(0.180, 0, 0);
+            axeBlade2P2Rot = ptOffset(0.180, -0.115, 0);
+          } else {
+            axeHandleP1Rot = ptOffset(-0.065, 0, 0);
+            axeHandleP2Rot = ptOffset(0.215, 0, 0);
+            axeBladeP1Rot = ptOffset(0.175, 0, 0);
+            axeBladeP2Rot = ptOffset(0.175, 0.115, 0);
+          }
+        };
         
-        if (heldItem) {
-             if (heldItem.name === "BOW") {
+        let chibiBucketPourPose = null;
+        if (heldItem || activeBucketWater > 0) {
+             if (heldItem && heldItem.name === "BOW") {
                  let t = 0.0;
                  let drawT = 0.0;
-                 if (arrowShotInCurrentAnim) {
-                     if (useAnimTimer > 0.3) {
+                 if (effectiveArrowShot) {
+                     if (effectiveUseAnimTimer > 0.3) {
                          t = 1.0;
-                         const holdStart = bowHoldArmTimer - 0.3;
-                         if (useAnimTimer > holdStart) {
-                             const p = lastBowDrawPower !== undefined ? lastBowDrawPower : 1.0;
-                             drawT = ((useAnimTimer - holdStart) / 0.3) * p;
+                         const holdStart = effectiveBowHoldArmTimer - 0.3;
+                         if (effectiveUseAnimTimer > holdStart) {
+                             drawT = ((effectiveUseAnimTimer - holdStart) / 0.3) * effectiveLastBowDrawPower;
                          } else {
                              drawT = 0.0;
             }
           } else {
-                         t = useAnimTimer / 0.3;
+                         t = effectiveUseAnimTimer / 0.3;
                          drawT = 0.0;
             }
           } else {
-                     t = Math.min(1.0, Math.max(0.0, (1.4 - useAnimTimer) / 1.1));
-                     if (bowComboActive) {
+                     t = Math.min(1.0, Math.max(0.0, (1.4 - effectiveUseAnimTimer) / 1.1));
+                     if (effectiveBowCombo) {
                          t = 1.0;
-                         drawT = Math.min(1.0, Math.max(0.0, (1.2 - useAnimTimer) / 0.9));
+                         drawT = Math.min(1.0, Math.max(0.0, (1.2 - effectiveUseAnimTimer) / 0.9));
                      } else {
                          drawT = t;
                      }
@@ -3976,6 +5015,8 @@ window.characterVertexShaderSource = `#version 300 es
 
                  // Torso rotates right so the character stands sideways like an archer
                  let currentYaw = 1.1 * t; 
+                 spineRigPose.torsoYaw = currentYaw;
+                 spineRigPose.lockHeadYaw = true;
 
                  const transformTorso = (pt) => {
                      return rotatePointY(chestP1, pt, currentYaw);
@@ -4068,7 +5109,7 @@ window.characterVertexShaderSource = `#version 300 es
 
                  let rightHandStart = transformTorso(rightHandRot); 
                  let rightElbowStart = transformTorso(rightElbowRot);
-                 if (bowComboActive) {
+                 if (effectiveBowCombo) {
                      // Reach for the bow string instead of dropping to hip
                      rightHandStart = [targetLeftHand[0] + 0.05, targetLeftHand[1], targetLeftHand[2]];
                      rightElbowStart = [
@@ -4101,13 +5142,15 @@ window.characterVertexShaderSource = `#version 300 es
                  if(rH_Len > 0.001) { rH_Dir = [rH_Dir[0]/rH_Len, rH_Dir[1]/rH_Len, rH_Dir[2]/rH_Len]; }
                  rightHandRot = [rightElbowRot[0] + rH_Dir[0]*l_lower, rightElbowRot[1] + rH_Dir[1]*l_lower, rightElbowRot[2] + rH_Dir[2]*l_lower];
 
-                 // BOW PLACEMENT
+                 // BOW PLACEMENT (seated inside left Chibi palm/finger curl)
                  let upVec = [-0.1, 1, 0.1]; 
                  let lenU = Math.sqrt(upVec[0]**2 + upVec[1]**2 + upVec[2]**2);
                  upVec = [upVec[0]/lenU, upVec[1]/lenU, upVec[2]/lenU];
 
                  let bowLength = 0.45;
-                 let targetBowGrip = [leftHandRot[0], leftHandRot[1], leftHandRot[2]];
+                 const leftStartFrame = getHandGripFrame(leftElbowStart, leftHandStart, true);
+                 const leftTargetFrame = getHandGripFrame(targetLeftElbow, targetLeftHand, true);
+                 let targetBowGrip = leftTargetFrame.gripCenter;
                  let targetBowUpper = [
                      targetBowGrip[0] + upVec[0] * bowLength,
                      targetBowGrip[1] + upVec[1] * bowLength,
@@ -4119,99 +5162,85 @@ window.characterVertexShaderSource = `#version 300 es
                      targetBowGrip[2] - upVec[2] * bowLength * 0.8
                  ];
 
-                 const bowGripBase = [-0.18, -0.09 + bOffset, 0.04];
-                 const bowUpperTipBase = [-0.18, -0.05 + bOffset, 0.49];
-                 const bowLowerTipBase = [-0.18, -0.05 + bOffset, -0.32];
-                 
-                 const bgL = rotatePointX(leftElbowBase, bowGripBase, -leftElbowFlex);
-                 const butL = rotatePointX(leftElbowBase, bowUpperTipBase, -leftElbowFlex);
-                 const bltL = rotatePointX(leftElbowBase, bowLowerTipBase, -leftElbowFlex);
-                 
-                 let bowGripStart = rotatePointX(originalLeftArmPivot, bgL, armAngle);
-                 let bowUpperStart = rotatePointX(originalLeftArmPivot, butL, armAngle);
-                 let bowLowerStart = rotatePointX(originalLeftArmPivot, bltL, armAngle);
+                 let bowGripStart = leftStartFrame.gripCenter;
+                 let bowUpperStart = [
+                     bowGripStart[0] + leftStartFrame.rKnuckle[0] * bowLength,
+                     bowGripStart[1] + leftStartFrame.rKnuckle[1] * bowLength,
+                     bowGripStart[2] + leftStartFrame.rKnuckle[2] * bowLength
+                 ];
+                 let bowLowerStart = [
+                     bowGripStart[0] - leftStartFrame.rKnuckle[0] * bowLength * 0.8,
+                     bowGripStart[1] - leftStartFrame.rKnuckle[1] * bowLength * 0.8,
+                     bowGripStart[2] - leftStartFrame.rKnuckle[2] * bowLength * 0.8
+                 ];
 
-                 bowGripRot = [
+                 const leftNowFrame = getHandGripFrame(leftElbowRot, leftHandRot, true);
+                 bowGripRot = leftNowFrame.gripCenter;
+                 const rawInterpGrip = [
                      bowGripStart[0] + (targetBowGrip[0] - bowGripStart[0]) * t,
                      bowGripStart[1] + (targetBowGrip[1] - bowGripStart[1]) * t,
                      bowGripStart[2] + (targetBowGrip[2] - bowGripStart[2]) * t
                  ];
+                 const gripFix = [
+                     bowGripRot[0] - rawInterpGrip[0],
+                     bowGripRot[1] - rawInterpGrip[1],
+                     bowGripRot[2] - rawInterpGrip[2]
+                 ];
                  bowUpperTipRot = [
-                     bowUpperStart[0] + (targetBowUpper[0] - bowUpperStart[0]) * t,
-                     bowUpperStart[1] + (targetBowUpper[1] - bowUpperStart[1]) * t,
-                     bowUpperStart[2] + (targetBowUpper[2] - bowUpperStart[2]) * t
+                     bowUpperStart[0] + (targetBowUpper[0] - bowUpperStart[0]) * t + gripFix[0],
+                     bowUpperStart[1] + (targetBowUpper[1] - bowUpperStart[1]) * t + gripFix[1],
+                     bowUpperStart[2] + (targetBowUpper[2] - bowUpperStart[2]) * t + gripFix[2]
                  ];
                  bowLowerTipRot = [
-                     bowLowerStart[0] + (targetBowLower[0] - bowLowerStart[0]) * t,
-                     bowLowerStart[1] + (targetBowLower[1] - bowLowerStart[1]) * t,
-                     bowLowerStart[2] + (targetBowLower[2] - bowLowerStart[2]) * t
+                     bowLowerStart[0] + (targetBowLower[0] - bowLowerStart[0]) * t + gripFix[0],
+                     bowLowerStart[1] + (targetBowLower[1] - bowLowerStart[1]) * t + gripFix[1],
+                     bowLowerStart[2] + (targetBowLower[2] - bowLowerStart[2]) * t + gripFix[2]
                  ];
                  
-                 if (typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && typeof rotationX !== "undefined") {
+                 const bowTargetNpc = isClone
+                   ? (cloneState && cloneState.targetAnimal ? cloneState.targetAnimal : null)
+                   : (typeof activeTargetNPC !== "undefined" ? activeTargetNPC : null);
+                 const isPlayerPitchCam = !isClone && typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && typeof rotationX !== "undefined";
+                 if (isPlayerPitchCam || (bowTargetNpc && bowTargetNpc.position)) {
                       // Pitch the whole upper body to aim at the target NPC if locked, else fallback to rotationX
-                      let currentPitch = rotationX;
-                      if (activeTargetNPC && activeTargetNPC.position) {
-                          const sinT_g = Math.sin(charTheta);
-                          const cosT_g = Math.cos(charTheta);
-                          const sinP_g = Math.sin(charPhi);
-                          const cosP_g = Math.cos(charPhi);
-                          const nx_g = sinT_g * cosP_g;
-                          const ny_g = cosT_g;
-                          const nz_g = sinT_g * sinP_g;
-                          const h_g = getVisualHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-                          const r_terrain_g = RADIUS + h_g * HEIGHT_SCALE;
-                          let r_g = r_terrain_g + 0.46 * playerScale;
-                          if (typeof playerCenterRadius !== "undefined" && playerCenterRadius !== null) {
-                              r_g = playerCenterRadius;
-                          }
-                          const player_world_x = r_g * nx_g;
-                          const player_world_y = r_g * ny_g;
-                          const player_world_z = r_g * nz_g;
-
-                          const East_g = [-sinP_g, 0, cosP_g];
-                          const North_g = [-cosT_g * cosP_g, sinT_g, -cosT_g * sinP_g];
-                          const cosH_g = Math.cos(charHeading);
-                          const sinH_g = Math.sin(charHeading);
-                          const F_g = [
-                              North_g[0] * cosH_g + East_g[0] * sinH_g,
-                              North_g[1] * cosH_g + East_g[1] * sinH_g,
-                              North_g[2] * cosH_g + East_g[2] * sinH_g,
-                          ];
-
-                          const npc = activeTargetNPC;
-                          const npc_pos = npc.position;
-                          const npcLen = Math.sqrt(npc_pos[0]**2 + npc_pos[1]**2 + npc_pos[2]**2);
-                          const n_npc = npcLen > 0.1 ? [npc_pos[0]/npcLen, npc_pos[1]/npcLen, npc_pos[2]/npcLen] : [nx_g, ny_g, nz_g];
-                          const N = npc.N || n_npc;
-                          const F = npc.F || [0, 0, 0];
-                          let upOffset = 0.0;
-                          let forwardOffset = 0.0;
-                          if (npc.type === "meganeura") {
-                              upOffset = 0.0;
-                              forwardOffset = -0.06;
-                          } else {
-                              upOffset = -0.02;
-                              forwardOffset = -0.12;
-                          }
-                          const target_g = [
-                              npc_pos[0] + N[0] * upOffset + F[0] * forwardOffset,
-                              npc_pos[1] + N[1] * upOffset + F[1] * forwardOffset,
-                              npc_pos[2] + N[2] * upOffset + F[2] * forwardOffset
-                          ];
-
-                          const dVec = [
-                              target_g[0] - player_world_x,
-                              target_g[1] - player_world_y,
-                              target_g[2] - player_world_z
-                          ];
-                          const d_up = dVec[0] * nx_g + dVec[1] * ny_g + dVec[2] * nz_g;
-                          const d_fwd = dVec[0] * F_g[0] + dVec[1] * F_g[1] + dVec[2] * F_g[2];
-                          const d_dist_planar = Math.sqrt(dVec[0]**2 + dVec[1]**2 + dVec[2]**2 - d_up**2);
-                          if (d_dist_planar > 0.05) {
-                              currentPitch = -Math.atan2(d_up, d_dist_planar);
+                      let currentPitch = isPlayerPitchCam ? rotationX : 0.0;
+                      if (bowTargetNpc && bowTargetNpc.position) {
+                          const basis = (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.getBasis === "function")
+                            ? window.ActorCore.getBasis(isClone ? cloneState : "player")
+                            : null;
+                          if (basis) {
+                              const npc = bowTargetNpc;
+                              const npc_pos = npc.position;
+                              const N = npc.N || basis.normal;
+                              const F = npc.F || [0, 0, 0];
+                              let upOffset = 0.0;
+                              let forwardOffset = 0.0;
+                              if (npc.type === "meganeura") {
+                                  upOffset = 0.0;
+                                  forwardOffset = -0.06;
+                              } else {
+                                  upOffset = -0.02;
+                                  forwardOffset = -0.12;
+                              }
+                              const target_g = [
+                                  npc_pos[0] + N[0] * upOffset + F[0] * forwardOffset,
+                                  npc_pos[1] + N[1] * upOffset + F[1] * forwardOffset,
+                                  npc_pos[2] + N[2] * upOffset + F[2] * forwardOffset
+                              ];
+                              const dVec = [
+                                  target_g[0] - basis.centerPos[0],
+                                  target_g[1] - basis.centerPos[1],
+                                  target_g[2] - basis.centerPos[2]
+                              ];
+                              const d_up = dVec[0] * basis.normal[0] + dVec[1] * basis.normal[1] + dVec[2] * basis.normal[2];
+                              const d_dist_planar = Math.sqrt(Math.max(0.0, dVec[0]**2 + dVec[1]**2 + dVec[2]**2 - d_up**2));
+                              if (d_dist_planar > 0.05) {
+                                  currentPitch = -Math.atan2(d_up, d_dist_planar);
+                              }
                           }
                       }
                       const pitchAngle = currentPitch * t;
+                      spineRigPose.headPitch = pitchAngle;
                       const applyPitch = (pt) => rotatePointX(chestP1, pt, pitchAngle);
                       
                       chestP2 = applyPitch(chestP2);
@@ -4235,74 +5264,61 @@ window.characterVertexShaderSource = `#version 300 es
                       bowUpperTipRot = applyPitch(bowUpperTipRot);
                       bowLowerTipRot = applyPitch(bowLowerTipRot);
             }
-          } else if (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON") {
+                 if (t > 0.05 && bowUpperTipRot && bowLowerTipRot) {
+                     skillWristLeft = {
+                         bladeDir: [
+                             bowUpperTipRot[0] - bowLowerTipRot[0],
+                             bowUpperTipRot[1] - bowLowerTipRot[1],
+                             bowUpperTipRot[2] - bowLowerTipRot[2]
+                         ],
+                         handBlend: 0.45 * t
+                     };
+                 }
+          } else if (heldItem && (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON")) {
                  // Classic humanoid model: Raise the right arm horizontally forward and hold it in place continuously
                  const l_upper = 0.155;
                  const l_lower = 0.145;
 
-                 // Calculate vertical aim pitch (from TPS camera rotationX or locked target NPC)
+                 // Calculate vertical aim pitch (same NPC aim pitch solver for Player & Clones)
                  let currentPitch = 0.0;
-                 if (typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && typeof rotationX !== "undefined") {
+                 const rangedTargetNpc = isClone
+                   ? (cloneState && cloneState.targetAnimal ? cloneState.targetAnimal : null)
+                   : (typeof activeTargetNPC !== "undefined" ? activeTargetNPC : null);
+                 if (!isClone && typeof cameraMode !== "undefined" && (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") && typeof rotationX !== "undefined") {
                      currentPitch = rotationX;
-                     if (activeTargetNPC && activeTargetNPC.position) {
-                         const sinT_g = Math.sin(charTheta);
-                         const cosT_g = Math.cos(charTheta);
-                         const sinP_g = Math.sin(charPhi);
-                         const cosP_g = Math.cos(charPhi);
-                         const nx_g = sinT_g * cosP_g;
-                         const ny_g = cosT_g;
-                         const nz_g = sinT_g * sinP_g;
-                         const h_g = getVisualHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
-                         const r_terrain_g = RADIUS + h_g * HEIGHT_SCALE;
-                         let r_g = r_terrain_g + 0.46 * playerScale;
-                         if (typeof playerCenterRadius !== "undefined" && playerCenterRadius !== null) {
-                             r_g = playerCenterRadius;
-                         }
-                         const player_world_x = r_g * nx_g;
-                         const player_world_y = r_g * ny_g;
-                         const player_world_z = r_g * nz_g;
-
-                         const East_g = [-sinP_g, 0, cosP_g];
-                         const North_g = [-cosT_g * cosP_g, sinT_g, -cosT_g * sinP_g];
-                         const cosH_g = Math.cos(charHeading);
-                         const sinH_g = Math.sin(charHeading);
-                         const F_g = [
-                             North_g[0] * cosH_g + East_g[0] * sinH_g,
-                             North_g[1] * cosH_g + East_g[1] * sinH_g,
-                             North_g[2] * cosH_g + East_g[2] * sinH_g,
-                         ];
-
-                         const npc = activeTargetNPC;
-                         const npc_pos = npc.position;
-                         const npcLen = Math.sqrt(npc_pos[0]**2 + npc_pos[1]**2 + npc_pos[2]**2);
-                         const n_npc = npcLen > 0.1 ? [npc_pos[0]/npcLen, npc_pos[1]/npcLen, npc_pos[2]/npcLen] : [nx_g, ny_g, nz_g];
-                         const N = npc.N || n_npc;
-                         const F = npc.F || [0, 0, 0];
-                         let upOffset = (npc.type === "meganeura") ? 0.0 : -0.02;
-                         let forwardOffset = (npc.type === "meganeura") ? -0.06 : -0.12;
+                 }
+                 if (rangedTargetNpc && rangedTargetNpc.position) {
+                     const basis = (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.getBasis === "function")
+                       ? window.ActorCore.getBasis(isClone ? cloneState : "player")
+                       : null;
+                     if (basis) {
+                         const npc_pos = rangedTargetNpc.position;
+                         const N = rangedTargetNpc.N || basis.normal;
+                         const F = rangedTargetNpc.F || [0, 0, 0];
+                         const upOffset = (rangedTargetNpc.type === "meganeura") ? 0.0 : -0.02;
+                         const forwardOffset = (rangedTargetNpc.type === "meganeura") ? -0.06 : -0.12;
                          const target_g = [
                              npc_pos[0] + N[0] * upOffset + F[0] * forwardOffset,
                              npc_pos[1] + N[1] * upOffset + F[1] * forwardOffset,
                              npc_pos[2] + N[2] * upOffset + F[2] * forwardOffset
                          ];
-
                          const dVec = [
-                             target_g[0] - player_world_x,
-                             target_g[1] - player_world_y,
-                             target_g[2] - player_world_z
+                             target_g[0] - basis.centerPos[0],
+                             target_g[1] - basis.centerPos[1],
+                             target_g[2] - basis.centerPos[2]
                          ];
-                         const d_up = dVec[0] * nx_g + dVec[1] * ny_g + dVec[2] * nz_g;
-                         const d_dist_planar = Math.sqrt(dVec[0]**2 + dVec[1]**2 + dVec[2]**2 - d_up**2);
+                         const d_up = dVec[0] * basis.normal[0] + dVec[1] * basis.normal[1] + dVec[2] * basis.normal[2];
+                         const d_dist_planar = Math.sqrt(Math.max(0.0, dVec[0]**2 + dVec[1]**2 + dVec[2]**2 - d_up**2));
                          if (d_dist_planar > 0.05) {
                              currentPitch = -Math.atan2(d_up, d_dist_planar);
                          }
                      }
                  }
 
-                 // Recoil kickback during firing recovery
+                 // Recoil kickback during firing recovery (identical 0.32s duration for Player & Clones)
                  let recoilZ = 0.0;
-                 if (arrowShotInCurrentAnim && useAnimTimer > 0) {
-                     const rP = Math.max(0.0, Math.min(1.0, useAnimTimer / 0.32));
+                 if (effectiveArrowShot && effectiveUseAnimTimer > 0) {
+                     const rP = Math.max(0.0, Math.min(1.0, effectiveUseAnimTimer / 0.32));
                      recoilZ = Math.sin(rP * Math.PI) * 0.035;
                  }
 
@@ -4323,6 +5339,7 @@ window.characterVertexShaderSource = `#version 300 es
                  rightHandRot = rotatePointX(rightArmPivot, targetRightHand, currentPitch);
 
                  // Apply slight upper body tilt if looking up/down
+                 spineRigPose.headPitch = currentPitch * 0.35;
                  const applyCannonPitch = (pt) => rotatePointX(chestP1, pt, currentPitch * 0.35);
                  neckP1 = applyCannonPitch(neckP1);
                  neckP2 = applyCannonPitch(neckP2);
@@ -4332,65 +5349,652 @@ window.characterVertexShaderSource = `#version 300 es
                  leftEarP2 = applyCannonPitch(leftEarP2);
                  rightEarP1 = applyCannonPitch(rightEarP1);
                  rightEarP2 = applyCannonPitch(rightEarP2);
-          } else {
-                 // Hand is at [0.18, -0.09 + bOffset, 0.04]
-                 // Handle goes forward (along Z axis) so it's perpendicular to the arm
-                 let axeHandleP1Base, axeHandleP2Base, axeBladeP1Base, axeBladeP2Base;
-                 if (heldItem.name === "SHOVEL") {
-                     // Shovel stick: continuous from Z = -0.04 to Z = 0.28
-                     axeHandleP1Base = [0.18, -0.09 + bOffset, -0.04];
-                     axeHandleP2Base = [0.18, -0.09 + bOffset, 0.28];
-                     // Shovel blade (scoop): extends forward from the handle along Z axis! (Z = 0.28 to Z = 0.44)
-                     axeBladeP1Base = [0.18, -0.09 + bOffset, 0.28];
-                     axeBladeP2Base = [0.18, -0.09 + bOffset, 0.44];
+          } else if (activeBucketWater > 0 && waterPourEnv > 0.001) {
+                 const solveTwoBoneIK = (shoulder, targetWrist, L1, L2, poleDir) => {
+                     const dx = targetWrist[0] - shoulder[0];
+                     const dy = targetWrist[1] - shoulder[1];
+                     const dz = targetWrist[2] - shoulder[2];
+                     let dist = Math.hypot(dx, dy, dz);
+                     if (dist < 1e-4) dist = 1e-4;
+                     const dir = [dx / dist, dy / dist, dz / dist];
+                     const maxReach = (L1 + L2) * 0.992;
+                     const minReach = Math.abs(L1 - L2) + 0.01;
+                     const d = Math.max(minReach, Math.min(maxReach, dist));
+                     const cosA = Math.max(-1.0, Math.min(1.0, (L1 * L1 + d * d - L2 * L2) / (2.0 * L1 * d)));
+                     const sinA = Math.sqrt(Math.max(0.0, 1.0 - cosA * cosA));
+                     const dotP = poleDir[0] * dir[0] + poleDir[1] * dir[1] + poleDir[2] * dir[2];
+                     let bend = [
+                         poleDir[0] - dir[0] * dotP,
+                         poleDir[1] - dir[1] * dotP,
+                         poleDir[2] - dir[2] * dotP
+                     ];
+                     let bLen = Math.hypot(bend[0], bend[1], bend[2]);
+                     if (bLen < 1e-4) {
+                         const fallback = [0, -1, 0];
+                         const dF = fallback[1] * dir[1];
+                         bend = [-dir[0] * dF, 1.0 - dir[1] * dF, -dir[2] * dF];
+                         bLen = Math.hypot(bend[0], bend[1], bend[2]) || 1.0;
+                     }
+                     bend = [bend[0] / bLen, bend[1] / bLen, bend[2] / bLen];
+                     const elbow = [
+                         shoulder[0] + (dir[0] * cosA + bend[0] * sinA) * L1,
+                         shoulder[1] + (dir[1] * cosA + bend[1] * sinA) * L1,
+                         shoulder[2] + (dir[2] * cosA + bend[2] * sinA) * L1
+                     ];
+                     const wrist = [
+                         shoulder[0] + dir[0] * d,
+                         shoulder[1] + dir[1] * d,
+                         shoulder[2] + dir[2] * d
+                     ];
+                     return { elbow, wrist };
+                 };
 
-                     // Handle D-Loop points at the back:
-                     const shovelD1Base = [0.18, -0.09 + bOffset, -0.04];
-                     const shovelD2Base = [0.18, -0.09 + bOffset, -0.08];
-                     const shovelLeftBase = [0.18 - 0.04, -0.09 + bOffset, -0.12];
-                     const shovelRightBase = [0.18 + 0.04, -0.09 + bOffset, -0.12];
-                     
-                     const d1L = rotatePointX(rightElbowBase, shovelD1Base, -rightElbowFlex);
-                     const d2L = rotatePointX(rightElbowBase, shovelD2Base, -rightElbowFlex);
-                     const dlL = rotatePointX(rightElbowBase, shovelLeftBase, -rightElbowFlex);
-                     const drL = rotatePointX(rightElbowBase, shovelRightBase, -rightElbowFlex);
-                     
-                     shovelD1Rot = rotatePointX(rightArmPivot, d1L, rightArmAngle);
-                     shovelD2Rot = rotatePointX(rightArmPivot, d2L, rightArmAngle);
-                      shovelLeftBranchRot = rotatePointX(rightArmPivot, dlL, rightArmAngle);
-                      shovelRightBranchRot = rotatePointX(rightArmPivot, drL, rightArmAngle);
-                  } else if (heldItem.name === "BRANCH" || heldItem.name === "branch") {
-                      // Natural branch in hand: extends slightly behind the grip and forward
-                      axeHandleP1Base = [0.18, -0.09 + bOffset, -0.08];
-                      axeHandleP2Base = [0.18, -0.09 + bOffset, 0.32];
-                      axeBladeP1Base = [0.18, -0.09 + bOffset, 0.32];
-                      axeBladeP2Base = [0.18, -0.09 + bOffset, 0.32];
-                  } else {
-                      axeHandleP1Base = [0.18, -0.09 + bOffset, -0.04];
-                      axeHandleP2Base = [0.18, -0.09 + bOffset, 0.26];
-                      axeBladeP1Base = [0.18, -0.09 + bOffset, 0.21];
-                      axeBladeP2Base = [0.18, -0.21 + bOffset, 0.21];
-                  }
-                 
-                 const p1L = rotatePointX(rightElbowBase, axeHandleP1Base, -rightElbowFlex);
-                 const p2L = rotatePointX(rightElbowBase, axeHandleP2Base, -rightElbowFlex);
-                 const b1L = rotatePointX(rightElbowBase, axeBladeP1Base, -rightElbowFlex);
-                 const b2L = rotatePointX(rightElbowBase, axeBladeP2Base, -rightElbowFlex);
-                 
-                 axeHandleP1Rot = rotatePointX(rightArmPivot, p1L, rightArmAngle);
-                 axeHandleP2Rot = rotatePointX(rightArmPivot, p2L, rightArmAngle);
-                 axeBladeP1Rot = rotatePointX(rightArmPivot, b1L, rightArmAngle);
-                 axeBladeP2Rot = rotatePointX(rightArmPivot, b2L, rightArmAngle);
+                 const fwd = [Math.sin(waterAimYaw), 0.0, Math.cos(waterAimYaw)];
+                 const right = [Math.cos(waterAimYaw), 0.0, -Math.sin(waterAimYaw)];
+                 const up = [0.0, 1.0, 0.0];
+                 const customBucketScale = (window.devBucketOffset && typeof window.devBucketOffset.scale === "number" && !isNaN(window.devBucketOffset.scale))
+                     ? window.devBucketOffset.scale
+                     : 1.0;
+                 const bScalePour = 0.22 * customBucketScale;
 
-                 if (heldItem.name === "PICKAXE") {
-                     const axeBlade2P1Base = [0.18, -0.09 + bOffset, 0.21]; // Base of blade (same)
-                     const axeBlade2P2Base = [0.18, 0.03 + bOffset, 0.21]; // Tip of blade (other side, UP)
-                     const b2_1L = rotatePointX(rightElbowBase, axeBlade2P1Base, -rightElbowFlex);
-                     const b2_2L = rotatePointX(rightElbowBase, axeBlade2P2Base, -rightElbowFlex);
-                     axeBlade2P1Rot = rotatePointX(rightArmPivot, b2_1L, rightArmAngle);
-                     axeBlade2P2Rot = rotatePointX(rightArmPivot, b2_2L, rightArmAngle);
+                 const pourTilt = 1.78 * waterTiltEnv + waterPourBob * waterPourEnv;
+                 const cosP = Math.cos(pourTilt);
+                 const sinP = Math.sin(pourTilt);
+                 const bR = right;
+                 const bN = [
+                     up[0] * cosP + fwd[0] * sinP,
+                     up[1] * cosP + fwd[1] * sinP,
+                     up[2] * cosP + fwd[2] * sinP
+                 ];
+                 const bF = [
+                     -up[0] * sinP + fwd[0] * cosP,
+                     -up[1] * sinP + fwd[1] * cosP,
+                     -up[2] * sinP + fwd[2] * cosP
+                 ];
+                 const handleAngle = Math.max(0.0, pourTilt - 0.14);
+                 const cosH = Math.cos(handleAngle);
+                 const sinH = Math.sin(handleAngle);
+                 const handleDir = [
+                     bN[0] * cosH - bF[0] * sinH,
+                     bN[1] * cosH - bF[1] * sinH,
+                     bN[2] * cosH - bF[2] * sinH
+                 ];
+
+                 // Bucket hovers high in front of chest & above planter rim
+                 const bucketPourCenter = [
+                     chestP1[0] + up[0] * 0.222 + fwd[0] * 0.236 + right[0] * 0.015,
+                     chestP1[1] + up[1] * 0.222 + fwd[1] * 0.236 + right[1] * 0.015,
+                     chestP1[2] + up[2] * 0.222 + fwd[2] * 0.236 + right[2] * 0.015
+                 ];
+                 // Top hand (right) holds hinged top handle grip
+                 const targetRightGrip = [
+                     bucketPourCenter[0] + bN[0] * (0.28 * bScalePour) + handleDir[0] * (0.29 * bScalePour),
+                     bucketPourCenter[1] + bN[1] * (0.28 * bScalePour) + handleDir[1] * (0.29 * bScalePour),
+                     bucketPourCenter[2] + bN[2] * (0.28 * bScalePour) + handleDir[2] * (0.29 * bScalePour)
+                 ];
+                 // Bottom hand (left) cradles lower-back belly of bucket
+                 const targetLeftGrip = [
+                     bucketPourCenter[0] - bN[0] * (0.18 * bScalePour) + bF[0] * (0.26 * bScalePour) - bR[0] * (0.16 * bScalePour),
+                     bucketPourCenter[1] - bN[1] * (0.18 * bScalePour) + bF[1] * (0.26 * bScalePour) - bR[1] * (0.16 * bScalePour),
+                     bucketPourCenter[2] - bN[2] * (0.18 * bScalePour) + bF[2] * (0.26 * bScalePour) - bR[2] * (0.16 * bScalePour)
+                 ];
+
+                 const rReach = [
+                     targetRightGrip[0] - rightArmPivot[0],
+                     targetRightGrip[1] - rightArmPivot[1],
+                     targetRightGrip[2] - rightArmPivot[2]
+                 ];
+                 const rRL = Math.hypot(rReach[0], rReach[1], rReach[2]) || 1.0;
+                 const targetRightWrist = [
+                     targetRightGrip[0] - (rReach[0] / rRL) * 0.036,
+                     targetRightGrip[1] - (rReach[1] / rRL) * 0.036 + 0.012,
+                     targetRightGrip[2] - (rReach[2] / rRL) * 0.036
+                 ];
+
+                 const lReach = [
+                     targetLeftGrip[0] - leftArmPivot[0],
+                     targetLeftGrip[1] - leftArmPivot[1],
+                     targetLeftGrip[2] - leftArmPivot[2]
+                 ];
+                 const lRL = Math.hypot(lReach[0], lReach[1], lReach[2]) || 1.0;
+                 const targetLeftWrist = [
+                     targetLeftGrip[0] - (lReach[0] / lRL) * 0.036,
+                     targetLeftGrip[1] - (lReach[1] / lRL) * 0.036,
+                     targetLeftGrip[2] - (lReach[2] / lRL) * 0.036
+                 ];
+
+                 const rightIK = solveTwoBoneIK(
+                     rightArmPivot,
+                     targetRightWrist,
+                     0.132,
+                     0.128,
+                     [0.48 * right[0] - 0.14 * fwd[0], -0.82, 0.48 * right[2] - 0.14 * fwd[2]]
+                 );
+                 const leftIK = solveTwoBoneIK(
+                     leftArmPivot,
+                     targetLeftWrist,
+                     0.122,
+                     0.118,
+                     [-0.58 * right[0] - 0.10 * fwd[0], -0.80, -0.58 * right[2] - 0.10 * fwd[2]]
+                 );
+
+                 const carryLE = [leftElbowRot[0], leftElbowRot[1], leftElbowRot[2]];
+                 const carryLH = [leftHandRot[0], leftHandRot[1], leftHandRot[2]];
+                 const carryRE = [rightElbowRot[0], rightElbowRot[1], rightElbowRot[2]];
+                 const carryRH = [rightHandRot[0], rightHandRot[1], rightHandRot[2]];
+
+                 const p = waterPourEnv;
+                 leftElbowRot = [
+                     carryLE[0] * (1.0 - p) + leftIK.elbow[0] * p,
+                     carryLE[1] * (1.0 - p) + leftIK.elbow[1] * p,
+                     carryLE[2] * (1.0 - p) + leftIK.elbow[2] * p
+                 ];
+                 leftHandRot = [
+                     carryLH[0] * (1.0 - p) + leftIK.wrist[0] * p,
+                     carryLH[1] * (1.0 - p) + leftIK.wrist[1] * p,
+                     carryLH[2] * (1.0 - p) + leftIK.wrist[2] * p
+                 ];
+                 rightElbowRot = [
+                     carryRE[0] * (1.0 - p) + rightIK.elbow[0] * p,
+                     carryRE[1] * (1.0 - p) + rightIK.elbow[1] * p,
+                     carryRE[2] * (1.0 - p) + rightIK.elbow[2] * p
+                 ];
+                 rightHandRot = [
+                     carryRH[0] * (1.0 - p) + rightIK.wrist[0] * p,
+                     carryRH[1] * (1.0 - p) + rightIK.wrist[1] * p,
+                     carryRH[2] * (1.0 - p) + rightIK.wrist[2] * p
+                 ];
+
+                 chibiBucketPourPose = {
+                     pourEnv: p,
+                     bR,
+                     bN,
+                     bF,
+                     fwd,
+                     handleAngle
+                 };
+                 skillWristLeft = {
+                     bladeDir: bF,
+                     handDir: bN,
+                     handBlend: 0.45 * p
+                 };
+                 skillWristRight = {
+                     bladeDir: [-bR[0], -bR[1], -bR[2]],
+                     handDir: [-handleDir[0], -handleDir[1], -handleDir[2]],
+                     handBlend: 0.50 * p
+                 };
+                 computeRightHeldItemPoints(heldItem ? heldItem.name : "IRON_BUCKET", rightElbowRot, rightHandRot);
+          } else if (shirasayaMode === "charging" || shirasayaMode === "dashing" || aegisMode === "charging" || aegisMode === "dashing" || aegisMode === "post_skill") {
+                 if (shirasayaMode === "charging") {
+                     // One-handed samurai ready guard (normal forward grip on anatomical right hand, left arm relaxed at side like Step 1):
+                     const targetRightHandWrist = [-0.042, 0.148 + bOffset, 0.156];
+                     const targetLeftHandWrist = [0.018, 0.072 + bOffset, 0.092];
+                     const rSwordIK = solveSwordIK(leftArmPivot, targetRightHandWrist, 0.128, 0.124, [-0.68, -0.42, 0.15]);
+                     const s = shirasayaChargeSmooth;
+                     leftElbowRot = [
+                         leftElbowRot[0] * (1.0 - s) + rSwordIK.elbow[0] * s,
+                         leftElbowRot[1] * (1.0 - s) + rSwordIK.elbow[1] * s,
+                         leftElbowRot[2] * (1.0 - s) + rSwordIK.elbow[2] * s
+                     ];
+                     leftHandRot = [
+                         leftHandRot[0] * (1.0 - s) + rSwordIK.wrist[0] * s,
+                         leftHandRot[1] * (1.0 - s) + rSwordIK.wrist[1] * s,
+                         leftHandRot[2] * (1.0 - s) + rSwordIK.wrist[2] * s
+                     ];
+                     const chargeAlong = [
+                         targetRightHandWrist[0] - targetLeftHandWrist[0],
+                         targetRightHandWrist[1] - targetLeftHandWrist[1],
+                         targetRightHandWrist[2] - targetLeftHandWrist[2]
+                     ];
+                     skillWristLeft = {
+                         bladeDir: chargeAlong,
+                         edgeDir: [-0.32, -0.62, 0.72],
+                         palmHint: [0.84, -0.38, 0.38],
+                         gripMode: "normal"
+                     };
+                 } else if (shirasayaMode === "dashing") {
+                     const dProg = shirasayaDashProg;
+                     if (shirasayaStep === 1) {
+                         // Skill 1 (Dash Thrust / Stabbing Dash): Clean forward thrust / stab along +Z into the target
+                         const s1 = 1.0 - Math.pow(1.0 - Math.min(1.0, dProg / 0.82), 2.2);
+                         const thrustWrist = [
+                             leftArmPivot[0] - 0.04 * (1.0 - s1) - 0.08 * s1,
+                             leftArmPivot[1] + 0.015,
+                             leftArmPivot[2] + 0.12 + 0.16 * s1
+                         ];
+                         const rDashIK = solveSwordIK(leftArmPivot, thrustWrist, 0.134, 0.130, [-0.55, 0.12, 0.82]);
+                         leftElbowRot = rDashIK.elbow;
+                         leftHandRot = rDashIK.wrist;
+                         // Blade points straight forward along +Z; palmIn faces inward (+X) and cutting edge faces down/forward
+                         skillWristLeft = {
+                             bladeDir: [0.04, 0.05, 0.99],
+                             edgeDir: [0.08, 0.99, -0.05],
+                             palmHint: [0.92, 0.28, 0.15],
+                             gripMode: "normal"
+                         };
+                     } else if (shirasayaStep === 2) {
+                         // Skill 2: Wide extended crescent sweep across front (+Z) with natural forward katana grip (matching Step 1 & ref 03-47-13)
+                         const rawSw = shiraSm(0.0, 0.68, dProg);
+                         const arcAng = 0.42 - rawSw * 0.94;
+                         const slashWrist = [
+                             leftArmPivot[0] + Math.sin(arcAng) * 0.242,
+                             leftArmPivot[1] + 0.012 + 0.018 * rawSw,
+                             leftArmPivot[2] + Math.cos(arcAng) * 0.242
+                         ];
+                         const rSweepIK = solveSwordIK(leftArmPivot, slashWrist, 0.132, 0.128, [-0.52, -0.58, 0.25]);
+                         leftElbowRot = rSweepIK.elbow;
+                         leftHandRot = rSweepIK.wrist;
+                         const bAng2 = 0.30 - rawSw * 1.08;
+                         // Unified forward grip family with Step 1 & Step 4: edgeDir leads the cut (-cos, -y, +sin) so palmIn faces inward-down (+X, -Y) and back of hand faces up/camera
+                         skillWristLeft = {
+                             bladeDir: [Math.sin(bAng2), 0.08, Math.cos(bAng2)],
+                             edgeDir: [-Math.cos(bAng2) * 0.52, -0.84, Math.sin(bAng2) * 0.52],
+                             palmHint: [Math.cos(bAng2) * 0.85, -0.52, -Math.sin(bAng2) * 0.85],
+                             gripMode: "normal"
+                         };
+                     } else if (shirasayaStep === 3) {
+                         // Skill 3: Mid-air 360-degree spinning cyclone -> smooth overhead transition into Step 4
+                         const s3Prep = shiraSm(0.80, 1.0, dProg);
+                         const spinPitch = 0.06 * (1.0 - s3Prep) + 0.88 * s3Prep;
+                         const spinYaw = -0.48 * (1.0 - s3Prep) - 0.12 * s3Prep;
+                         const spinWrist = [
+                             leftArmPivot[0] + Math.sin(spinYaw) * Math.cos(spinPitch) * 0.242,
+                             leftArmPivot[1] + Math.sin(spinPitch) * 0.242,
+                             leftArmPivot[2] + Math.cos(spinYaw) * Math.cos(spinPitch) * 0.242
+                         ];
+                         const rSpinIK = solveSwordIK(leftArmPivot, spinWrist, 0.132, 0.128, [-0.55, -0.45 * (1.0 - s3Prep) + 0.55 * s3Prep, 0.25]);
+                         leftElbowRot = rSpinIK.elbow;
+                         leftHandRot = rSpinIK.wrist;
+                         const bAng3 = -0.72 * (1.0 - s3Prep) - 0.12 * s3Prep;
+                         const bPitch3 = 0.08 * (1.0 - s3Prep) + 0.98 * s3Prep;
+                         const bDirSpin = [Math.sin(bAng3) * Math.cos(bPitch3), Math.sin(bPitch3), Math.cos(bAng3) * Math.cos(bPitch3)];
+                         const eDirSpin = [
+                             (-Math.cos(bAng3) * 0.52) * (1.0 - s3Prep) + Math.sin(bAng3) * Math.sin(bPitch3) * s3Prep,
+                             -0.84 * (1.0 - s3Prep) - Math.cos(bPitch3) * s3Prep,
+                             (Math.sin(bAng3) * 0.52) * (1.0 - s3Prep) + Math.cos(bAng3) * Math.sin(bPitch3) * s3Prep
+                         ];
+                         skillWristLeft = {
+                             bladeDir: bDirSpin,
+                             edgeDir: eDirSpin,
+                             palmHint: [
+                                 Math.cos(bAng3) * 0.85 * (1.0 - s3Prep) + Math.cos(bAng3) * s3Prep,
+                                 -0.52 * (1.0 - s3Prep) + 0.15 * s3Prep,
+                                 -Math.sin(bAng3) * 0.85 * (1.0 - s3Prep) - Math.sin(bAng3) * s3Prep
+                             ],
+                             gripMode: "normal"
+                         };
+                     } else {
+                         // Skill 4: Spherical-arc overhead vertical cleave -> forward ground slam in front of character (+Z)
+                         // Keeps arm at 95% extension (radius = 0.242) along a forward polar arc so the arm NEVER folds through the shoulder
+                         const slamEased = shiraSm(0.08, 0.34, dProg);
+                         const recEased = shiraSm(0.82, 1.0, dProg);
+                         const cleavePitch = 0.96 * (1.0 - slamEased) - 0.42 * slamEased + 0.16 * recEased;
+                         const cleaveYaw = -0.12 * (1.0 - slamEased) - 0.05 * slamEased;
+                         const slamWrist = [
+                             leftArmPivot[0] + Math.sin(cleaveYaw) * Math.cos(cleavePitch) * 0.242,
+                             leftArmPivot[1] + Math.sin(cleavePitch) * 0.242,
+                             leftArmPivot[2] + Math.cos(cleaveYaw) * Math.cos(cleavePitch) * 0.242
+                         ];
+                         const rSlamIK = solveSwordIK(leftArmPivot, slamWrist, 0.134, 0.130, [-0.52, 0.76, 0.22]);
+                         leftElbowRot = rSlamIK.elbow;
+                         leftHandRot = rSlamIK.wrist;
+                         const bPitch4 = 1.05 * (1.0 - slamEased) - 0.30 * slamEased + 0.14 * recEased;
+                         skillWristLeft = {
+                             bladeDir: [
+                                 Math.sin(cleaveYaw) * Math.cos(bPitch4),
+                                 Math.sin(bPitch4),
+                                 Math.cos(cleaveYaw) * Math.cos(bPitch4)
+                             ],
+                             edgeDir: [
+                                 Math.sin(cleaveYaw) * Math.sin(bPitch4),
+                                 -Math.cos(bPitch4),
+                                 Math.cos(cleaveYaw) * Math.sin(bPitch4)
+                             ],
+                             palmHint: [Math.cos(cleaveYaw), 0.15, -Math.sin(cleaveYaw)],
+                             gripMode: "normal"
+                         };
+                     }
+                 } else if (aegisMode === "charging" || aegisMode === "dashing" || aegisMode === "post_skill") {
+                     // Two-handed Aegis-Shift Greatsword shared rig solver (4-skill combo + downward carry stance)
+                     const nrmGs = _v3Nrm;
+                     const crsGs = _v3Crs;
+                     const dotGs = _v3Dot;
+                     const lerpV3 = _v3Lerp;
+                     const perpGs = _v3Perp;
+
+                     const shoulderMid = [
+                         0.5 * (leftArmPivot[0] + rightArmPivot[0]),
+                         0.5 * (leftArmPivot[1] + rightArmPivot[1]),
+                         0.5 * (leftArmPivot[2] + rightArmPivot[2])
+                     ];
+                     const carryHiltRel = [-0.020, -0.090, 0.180];
+                     const carryBladeDir = nrmGs([-0.38, -0.44, 0.81]);
+                     const carryEdgeRightDir = nrmGs([0.65, -0.20, 0.73]);
+                     const carryEdgeLeftDir = nrmGs([-0.88, 0.33, 0.33]);
+
+                     let targetHiltRel = carryHiltRel;
+                     let targetBladeDir = carryBladeDir;
+                     let trueEdge = perpGs(carryEdgeRightDir, carryBladeDir, [0, -1, 0]);
+                     let edgeWeightR = 0.85;
+                     let poleRight = [-0.78, -0.42, -0.25];
+                     let poleLeft = [0.78, -0.42, -0.25];
+
+                     const gsN1 = nrmGs([-0.92, -0.32, 0.22]);
+                     const gsN2 = nrmGs([-0.52, 0.42, -0.74]);
+                     const gsN3 = [0, 1, 0];
+
+                     if (aegisMode === "charging") {
+                         const sCh = aegisChargeSmooth;
+                         targetHiltRel = lerpV3(carryHiltRel, [-0.030, -0.045, 0.165], sCh);
+                         targetBladeDir = nrmGs(lerpV3(carryBladeDir, [-0.34, 0.36, 0.87], sCh));
+                         const carryEdgePerp = perpGs(carryEdgeRightDir, carryBladeDir, [0, -1, 0]);
+                         const guardEdge = perpGs(crsGs(targetBladeDir, gsN1), targetBladeDir, [0.4, -0.8, 0.4]);
+                         trueEdge = perpGs(lerpV3(carryEdgePerp, guardEdge, sCh), targetBladeDir, guardEdge);
+                         edgeWeightR = 0.85;
+                     } else if (aegisMode === "dashing") {
+                         if (aegisStep === 1) {
+                             // Skill 1: Dash Forward Diagonal Cleave (cutting edge strictly inside tilted cleave plane gsN1)
+                             const windT = shiraSm(0.0, 0.20, aegisDashProg);
+                             const cleaveT = shiraSm(0.16, 0.54, aegisDashProg);
+                             const settleT = (aegisSt && aegisSt.comboActive) ? shiraSm(0.76, 1.0, aegisDashProg) : shiraSm(0.60, 1.0, aegisDashProg);
+
+                             const hPitch = 0.58 * (1.0 - cleaveT) - 0.36 * cleaveT;
+                             const hYaw = -0.24 * (1.0 - cleaveT) + 0.16 * cleaveT;
+                             const cleaveHilt = [
+                                 Math.sin(hYaw) * Math.cos(hPitch) * 0.165,
+                                 Math.sin(hPitch) * 0.165,
+                                 Math.cos(hYaw) * Math.cos(hPitch) * 0.165 + 0.030
+                             ];
+                             const windStartHilt = [-0.025, 0.040, 0.175];
+                             const activeHilt = lerpV3(windStartHilt, cleaveHilt, windT);
+                             const endHilt1 = (aegisSt && aegisSt.comboActive) ? [-0.045, -0.065, 0.160] : carryHiltRel;
+                             const endBlade1 = (aegisSt && aegisSt.comboActive) ? nrmGs([-0.66, -0.54, 0.52]) : carryBladeDir;
+                             targetHiltRel = lerpV3(activeHilt, endHilt1, settleT);
+
+                             const bPitchWind = 0.48 * (1.0 - windT) + 0.98 * windT;
+                             const bPitch = bPitchWind * (1.0 - cleaveT) - 0.16 * cleaveT;
+                             const bYawWind = -0.28 * (1.0 - windT) - 0.42 * windT;
+                             const bYaw = bYawWind * (1.0 - cleaveT) + 0.34 * cleaveT;
+                             const activeBlade = [
+                                 Math.sin(bYaw) * Math.cos(bPitch),
+                                 Math.sin(bPitch),
+                                 Math.cos(bYaw) * Math.cos(bPitch)
+                             ];
+                             targetBladeDir = nrmGs(lerpV3(activeBlade, endBlade1, settleT));
+
+                             const activeEdge1 = perpGs(crsGs(activeBlade, gsN1), activeBlade, [0.35, -0.92, 0.10]);
+                             let endEdge1 = (aegisSt && aegisSt.comboActive)
+                                 ? perpGs(crsGs(endBlade1, gsN2), endBlade1, [0.19, -0.79, -0.58])
+                                 : perpGs(carryEdgeRightDir, carryBladeDir, [0.91, -0.01, 0.42]);
+                             if (dotGs(endEdge1, activeEdge1) < 0.0) {
+                                 endEdge1 = [-endEdge1[0], -endEdge1[1], -endEdge1[2]];
+                             }
+                             trueEdge = perpGs(lerpV3(activeEdge1, endEdge1, settleT), targetBladeDir, activeEdge1);
+                             edgeWeightR = 0.85;
+                         } else if (aegisStep === 2) {
+                             // Skill 2 (Ref Figure 2): Upward Diagonal Rising Slash (cutting edge strictly inside rising slash plane gsN2)
+                             const wind2 = shiraSm(0.0, 0.16, aegisDashProg);
+                             const slash2A = shiraSm(0.14, 0.36, aegisDashProg);
+                             const slash2B = shiraSm(0.36, 0.62, aegisDashProg);
+                             const prepNext = shiraSm(0.76, 1.0, aegisDashProg);
+
+                             const hStart2 = [-0.045, -0.065, 0.160];
+                             const hMid2 = [0.000, -0.015, 0.180];
+                             const hEnd2 = [0.035, 0.045, 0.155];
+                             const hNext2 = [0.045, -0.030, 0.150];
+                             let hPos2 = lerpV3(hStart2, hMid2, slash2A);
+                             hPos2 = lerpV3(hPos2, hEnd2, slash2B);
+                             targetHiltRel = lerpV3(lerpV3([-0.035, -0.055, 0.160], hPos2, wind2), hNext2, prepNext);
+
+                             const bStart2 = nrmGs([-0.66, -0.54, 0.52]);
+                             const bMid2 = nrmGs([0.05, 0.16, 0.98]);
+                             const bEnd2 = nrmGs([0.56, 0.68, 0.47]);
+                             const bNext2 = nrmGs([0.85, 0.06, 0.52]);
+                             let bDir2 = nrmGs(lerpV3(bStart2, bMid2, slash2A));
+                             bDir2 = nrmGs(lerpV3(bDir2, bEnd2, slash2B));
+                             targetBladeDir = nrmGs(lerpV3(bDir2, bNext2, prepNext));
+
+                             const activeEdge2 = perpGs(crsGs(gsN2, bDir2), bDir2, [0.55, 0.65, 0.52]);
+                             const nextEdge2 = perpGs(crsGs(gsN3, bNext2), bNext2, [0.52, 0.0, -0.85]);
+                             trueEdge = perpGs(lerpV3(activeEdge2, nextEdge2, prepNext), targetBladeDir, activeEdge2);
+                             edgeWeightR = 0.85;
+                             poleRight = lerpV3([-0.78, -0.42, -0.25], [-0.78, -0.25, -0.25], slash2B);
+                             poleLeft = lerpV3([0.78, -0.42, -0.25], [0.78, -0.25, -0.25], slash2B);
+                         } else if (aegisStep === 3) {
+                             // Skill 3 (Ref Figure 3): Wide Horizontal Waist Cleave (cutting edge strictly horizontal inside XZ plane gsN3 = [0,1,0])
+                             const wind3 = shiraSm(0.0, 0.16, aegisDashProg);
+                             const slash3A = shiraSm(0.14, 0.36, aegisDashProg);
+                             const slash3B = shiraSm(0.36, 0.60, aegisDashProg);
+                             const prepNext3 = shiraSm(0.76, 1.0, aegisDashProg);
+
+                             const hStart3 = [0.045, -0.030, 0.150];
+                             const hMid3 = [0.015, -0.035, 0.175];
+                             const hEnd3 = [0.042, -0.035, 0.148];
+                             const hNext3 = [-0.010, 0.125, 0.115];
+                             let hPos3 = lerpV3(hStart3, hMid3, slash3A);
+                             hPos3 = lerpV3(hPos3, hEnd3, slash3B);
+                             targetHiltRel = lerpV3(lerpV3(hStart3, hPos3, wind3), hNext3, prepNext3);
+
+                             const bStart3 = nrmGs([0.85, 0.06, 0.52]);
+                             const bMid3 = nrmGs([0.00, 0.04, 1.00]);
+                             const bEnd3 = nrmGs([-0.88, 0.04, 0.47]);
+                             const bNext3 = nrmGs([-0.22, 0.86, -0.25]);
+                             let bDir3 = nrmGs(lerpV3(bStart3, bMid3, slash3A));
+                             bDir3 = nrmGs(lerpV3(bDir3, bEnd3, slash3B));
+                             targetBladeDir = nrmGs(lerpV3(bDir3, bNext3, prepNext3));
+
+                             const activeEdge3 = perpGs(crsGs(gsN3, bDir3), bDir3, [1.0, 0.0, 0.0]);
+                             const nextEdge3 = perpGs(crsGs([1.0, 0.0, 0.0], bNext3), bNext3, [0.0, 0.28, 0.96]);
+                             trueEdge = perpGs(lerpV3(activeEdge3, nextEdge3, prepNext3), targetBladeDir, activeEdge3);
+                             edgeWeightR = 0.88;
+                             poleRight = lerpV3([-0.78, -0.42, -0.25], [-0.72, -0.42, -0.15], slash3B);
+                             poleRight = lerpV3(poleRight, [-0.78, 0.45, 0.15], prepNext3);
+                             poleLeft = lerpV3([0.78, -0.42, -0.25], [0.78, 0.45, 0.15], prepNext3);
+                         } else {
+                             // Skill 4 (Ref Figure 4): Overhead Vertical Slam Finisher (cutting edge strictly inside vertical sagittal plane YZ, Shirasaya Step 4 style)
+                             const up4 = shiraSm(0.0, 0.28, aegisDashProg);
+                             const over4 = shiraSm(0.24, 0.38, aegisDashProg);
+                             const slam4 = shiraSm(0.36, 0.56, aegisDashProg);
+                             const settle4 = shiraSm(0.72, 1.0, aegisDashProg);
+
+                             const hLowStart = [-0.010, 0.125, 0.115];
+                             const hTop4 = [-0.010, 0.185, 0.085];
+                             const hOver4 = [0.000, 0.180, 0.115];
+                             const hSlam4 = [0.000, -0.080, 0.185];
+                             let hPos4 = lerpV3(hLowStart, hTop4, up4);
+                             hPos4 = lerpV3(hPos4, hOver4, over4);
+                             hPos4 = lerpV3(hPos4, hSlam4, slam4);
+                             targetHiltRel = lerpV3(hPos4, carryHiltRel, settle4);
+
+                             const bTop4 = nrmGs([-0.22, 0.86, -0.46]);
+                             const bOver4 = nrmGs([0.00, 0.86, 0.51]);
+                             const bSlam4 = nrmGs([0.00, -0.28, 0.96]);
+                             let bDir4 = nrmGs(lerpV3(nrmGs([-0.22, 0.86, -0.25]), bTop4, up4));
+                             bDir4 = nrmGs(lerpV3(bDir4, bOver4, over4));
+                             bDir4 = nrmGs(lerpV3(bDir4, bSlam4, slam4));
+                             targetBladeDir = nrmGs(lerpV3(bDir4, carryBladeDir, settle4));
+
+                             const activeEdge4 = perpGs(crsGs([1.0, 0.0, 0.0], bDir4), bDir4, [0.0, -0.96, -0.28]);
+                             const endEdge4 = perpGs(carryEdgeRightDir, carryBladeDir, [0.91, -0.01, 0.42]);
+                             trueEdge = perpGs(lerpV3(activeEdge4, endEdge4, settle4), targetBladeDir, activeEdge4);
+                             edgeWeightR = 0.92;
+
+                             const topPoleR = [-0.78, 0.45, 0.15];
+                             const topPoleL = [0.78, 0.45, 0.15];
+                             const downPoleR = [-0.78, -0.42, -0.25];
+                             const downPoleL = [0.78, -0.42, -0.25];
+                             poleRight = lerpV3(topPoleR, downPoleR, slam4);
+                             poleLeft = lerpV3(topPoleL, downPoleL, slam4);
+                         }
+                     }
+
+                     const bDir = nrmGs(targetBladeDir, [0, 0, 1]);
+                     const hiltWorld = [
+                         shoulderMid[0] + targetHiltRel[0],
+                         shoulderMid[1] + targetHiltRel[1],
+                         shoulderMid[2] + targetHiltRel[2]
+                     ];
+                     const halfSpan = 0.036;
+                     const upperGripCenter = [
+                         hiltWorld[0] + bDir[0] * halfSpan,
+                         hiltWorld[1] + bDir[1] * halfSpan,
+                         hiltWorld[2] + bDir[2] * halfSpan
+                     ];
+                     const lowerGripCenter = [
+                         hiltWorld[0] - bDir[0] * halfSpan,
+                         hiltWorld[1] - bDir[1] * halfSpan,
+                         hiltWorld[2] - bDir[2] * halfSpan
+                     ];
+
+                     let eDirR, palmRight, eDirL, palmLeft, activeSwordEdge;
+                     if (aegisMode === "post_skill") {
+                         // Preserve verified downward carry grip orientations unchanged
+                         eDirR = perpGs(carryEdgeRightDir, bDir, [0, -1, 0]);
+                         palmRight = nrmGs(crsGs(bDir, eDirR), [1, 0, 0]);
+                         eDirL = perpGs(carryEdgeLeftDir, bDir, [-0.5, -0.5, 0.7]);
+                         palmLeft = nrmGs(crsGs(eDirL, bDir), [-1, 0, 0]);
+                     } else {
+                         // Forearm-safe two-handed grip + exact slash-plane sword cutting edge (zero wrist twist, 100% true edge orientation)
+                         const roughIKR = solveSwordIK(leftArmPivot, upperGripCenter, 0.132, 0.128, poleRight);
+                         const natER = perpGs([
+                             roughIKR.wrist[0] - roughIKR.elbow[0],
+                             roughIKR.wrist[1] - roughIKR.elbow[1],
+                             roughIKR.wrist[2] - roughIKR.elbow[2]
+                         ], bDir, [0, 0, 1]);
+                         let desER = perpGs(trueEdge, bDir, natER);
+                         activeSwordEdge = desER;
+                         if (dotGs(desER, natER) < 0.0) {
+                             desER = [-desER[0], -desER[1], -desER[2]];
+                         }
+                         eDirR = nrmGs([
+                             desER[0] * edgeWeightR + natER[0] * (1.0 - edgeWeightR),
+                             desER[1] * edgeWeightR + natER[1] * (1.0 - edgeWeightR),
+                             desER[2] * edgeWeightR + natER[2] * (1.0 - edgeWeightR)
+                         ], desER);
+                         palmRight = nrmGs(crsGs(bDir, eDirR), [1, 0, 0]);
+
+                         const roughIKL = solveSwordIK(rightArmPivot, lowerGripCenter, 0.132, 0.128, poleLeft);
+                         const natEL = perpGs([
+                             roughIKL.wrist[0] - roughIKL.elbow[0],
+                             roughIKL.wrist[1] - roughIKL.elbow[1],
+                             roughIKL.wrist[2] - roughIKL.elbow[2]
+                         ], bDir, [0, 0, 1]);
+                         const lBlend = (dotGs(eDirR, natEL) >= 0.0) ? 0.22 : 0.0;
+                         eDirL = nrmGs([
+                             eDirR[0] * lBlend + natEL[0] * (1.0 - lBlend),
+                             eDirR[1] * lBlend + natEL[1] * (1.0 - lBlend),
+                             eDirR[2] * lBlend + natEL[2] * (1.0 - lBlend)
+                         ], natEL);
+                         palmLeft = nrmGs(crsGs(eDirL, bDir), [-1, 0, 0]);
+                     }
+
+                     const upperWristTarget = [
+                         upperGripCenter[0] - eDirR[0] * 0.036 - palmRight[0] * 0.016,
+                         upperGripCenter[1] - eDirR[1] * 0.036 - palmRight[1] * 0.016,
+                         upperGripCenter[2] - eDirR[2] * 0.036 - palmRight[2] * 0.016
+                     ];
+                     const lowerWristTarget = [
+                         lowerGripCenter[0] - eDirL[0] * 0.036 - palmLeft[0] * 0.016,
+                         lowerGripCenter[1] - eDirL[1] * 0.036 - palmLeft[1] * 0.016,
+                         lowerGripCenter[2] - eDirL[2] * 0.036 - palmLeft[2] * 0.016
+                     ];
+                     const gsRightIK = solveSwordIK(leftArmPivot, upperWristTarget, 0.132, 0.128, poleRight);
+                     const gsLeftIK = solveSwordIK(rightArmPivot, lowerWristTarget, 0.132, 0.128, poleLeft);
+                     leftElbowRot = gsRightIK.elbow;
+                     leftHandRot = gsRightIK.wrist;
+                     rightElbowRot = gsLeftIK.elbow;
+                     rightHandRot = gsLeftIK.wrist;
+                     skillWristLeft = { bladeDir: bDir, edgeDir: eDirR, palmHint: palmRight, swordEdge: activeSwordEdge, gripMode: "normal" };
+                     skillWristRight = { bladeDir: bDir, edgeDir: eDirL, palmHint: palmLeft, gripMode: "normal" };
                  }
-             }
+                 computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot);
+          } else if (shirasayaMode === "post_skill") {
+                 skillWristLeft = { gripMode: "reverse" };
+                 if (heldItem) computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot);
+          } else if (heldItem) {
+                 // Tool swing wrist extension & flexion rig (AXE, PICKAXE, SHOVEL, BRANCH)
+                 // Note: Normal TANTO holding (shirasayaMode === "idle") is untouched!
+                 const isSwingingTool = !!(
+                   effectiveIsUsingItem &&
+                   effectiveUseAnimTimer > 0 &&
+                   heldItem.name !== "TANTO" &&
+                   heldItem.name !== "tanto" &&
+                   heldItem.name !== "AEGIS_SHIFT" &&
+                   heldItem.name !== "aegis_shift"
+                 );
+                 if (isSwingingTool) {
+                     const swP = effectiveUseAnimTimer;
+                     let wSnap = 0.0;
+                     if (swP > 0.8) {
+                         const tW = (1.0 - swP) / 0.2;
+                         wSnap = -0.45 * tW;
+                     } else if (swP > 0.4) {
+                         const tS = (0.8 - swP) / 0.4;
+                         wSnap = -0.45 + 1.05 * tS;
+                     } else {
+                         const tR = (0.4 - swP) / 0.4;
+                         wSnap = 0.60 * (1.0 - tR);
+                     }
+                     const faDx = rightHandRot[0] - rightElbowRot[0];
+                     const faDy = rightHandRot[1] - rightElbowRot[1];
+                     const faDz = rightHandRot[2] - rightElbowRot[2];
+                     const faL = Math.hypot(faDx, faDy, faDz) || 1.0;
+                     const faDir = [faDx / faL, faDy / faL, faDz / faL];
+                     const toolPitchAng = Math.atan2(faDir[2], -faDir[1]) + wSnap * 0.55;
+                     const toolDir = [
+                         faDir[0] * 0.25,
+                         Math.sin(toolPitchAng),
+                         Math.cos(toolPitchAng)
+                     ];
+                     skillWristRight = {
+                         bladeDir: toolDir,
+                         handDir: [
+                             faDir[0],
+                             faDir[1] * Math.cos(wSnap * 0.35) - faDir[2] * Math.sin(wSnap * 0.35),
+                             faDir[1] * Math.sin(wSnap * 0.35) + faDir[2] * Math.cos(wSnap * 0.35)
+                         ],
+                         handBlend: 0.55
+                     };
+                 }
+                 computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot, skillWristRight);
+          }
+
+          if (shiraMem && (activeSkillMode !== "idle" || shiraMem.idleFade > 0.001)) {
+            const relLE = [leftElbowRot[0] - leftArmPivot[0], leftElbowRot[1] - leftArmPivot[1], leftElbowRot[2] - leftArmPivot[2]];
+            const relLH = [leftHandRot[0] - leftArmPivot[0], leftHandRot[1] - leftArmPivot[1], leftHandRot[2] - leftArmPivot[2]];
+            const relRE = [rightElbowRot[0] - rightArmPivot[0], rightElbowRot[1] - rightArmPivot[1], rightElbowRot[2] - rightArmPivot[2]];
+            const relRH = [rightHandRot[0] - rightArmPivot[0], rightHandRot[1] - rightArmPivot[1], rightHandRot[2] - rightArmPivot[2]];
+            if (activeSkillMode !== "idle") {
+              // Exact spherical-arc tracking during dashing (kA = 1.0) so fast 150-deg swings never chord-shorten through the shoulder/chest
+              const kA = (activeSkillMode === "dashing") ? 1.0 : ((shiraDt > 0) ? (1.0 - Math.exp(-shiraDt * 18.0)) : 1.0);
+              if (!shiraMem.armsInit || kA >= 0.999) {
+                shiraMem.relLE = [...relLE];
+                shiraMem.relLH = [...relLH];
+                shiraMem.relRE = [...relRE];
+                shiraMem.relRH = [...relRH];
+                shiraMem.armsInit = true;
+              } else {
+                for (let j = 0; j < 3; j++) {
+                  shiraMem.relLE[j] += (relLE[j] - shiraMem.relLE[j]) * kA;
+                  shiraMem.relLH[j] += (relLH[j] - shiraMem.relLH[j]) * kA;
+                  shiraMem.relRE[j] += (relRE[j] - shiraMem.relRE[j]) * kA;
+                  shiraMem.relRH[j] += (relRH[j] - shiraMem.relRH[j]) * kA;
+                }
+              }
+              leftElbowRot = [leftArmPivot[0] + shiraMem.relLE[0], leftArmPivot[1] + shiraMem.relLE[1], leftArmPivot[2] + shiraMem.relLE[2]];
+              leftHandRot = [leftArmPivot[0] + shiraMem.relLH[0], leftArmPivot[1] + shiraMem.relLH[1], leftArmPivot[2] + shiraMem.relLH[2]];
+              rightElbowRot = [rightArmPivot[0] + shiraMem.relRE[0], rightArmPivot[1] + shiraMem.relRE[1], rightArmPivot[2] + shiraMem.relRE[2]];
+              rightHandRot = [rightArmPivot[0] + shiraMem.relRH[0], rightArmPivot[1] + shiraMem.relRH[1], rightArmPivot[2] + shiraMem.relRH[2]];
+              skillWristLeft = _smoothSkillWristPose(shiraMem, "wInit", "wLBlade", "wLHand", "wLEdge", "wLPalm", skillWristLeft, kA);
+              skillWristRight = _smoothSkillWristPose(shiraMem, "wRInit", "wRBlade", "wRHand", "wREdge", "wRPalm", skillWristRight, kA);
+            } else if (shiraMem.armsInit) {
+              const f = shiraMem.idleFade;
+              leftElbowRot = [leftArmPivot[0] + relLE[0] * (1 - f) + shiraMem.relLE[0] * f, leftArmPivot[1] + relLE[1] * (1 - f) + shiraMem.relLE[1] * f, leftArmPivot[2] + relLE[2] * (1 - f) + shiraMem.relLE[2] * f];
+              leftHandRot = [leftArmPivot[0] + relLH[0] * (1 - f) + shiraMem.relLH[0] * f, leftArmPivot[1] + relLH[1] * (1 - f) + shiraMem.relLH[1] * f, leftArmPivot[2] + relLH[2] * (1 - f) + shiraMem.relLH[2] * f];
+              rightElbowRot = [rightArmPivot[0] + relRE[0] * (1 - f) + shiraMem.relRE[0] * f, rightArmPivot[1] + relRE[1] * (1 - f) + shiraMem.relRE[1] * f, rightArmPivot[2] + relRE[2] * (1 - f) + shiraMem.relRE[2] * f];
+              rightHandRot = [rightArmPivot[0] + relRH[0] * (1 - f) + shiraMem.relRH[0] * f, rightArmPivot[1] + relRH[1] * (1 - f) + shiraMem.relRH[1] * f, rightArmPivot[2] + relRH[2] * (1 - f) + shiraMem.relRH[2] * f];
+            }
+          }
         }
 
         let R_rot = null, N_rot = null, F_rot = null;
@@ -4531,15 +6135,8 @@ window.characterVertexShaderSource = `#version 300 es
                   bowGripRot = sagLimbLocal(bowGripRot, 0.03, 0.08);
                   bowUpperTipRot = sagLimbLocal(bowUpperTipRot, 0.03, 0.08);
                   bowLowerTipRot = sagLimbLocal(bowLowerTipRot, 0.03, 0.08);
-              } else {
-                  axeHandleP1Rot = sagLimbLocal(axeHandleP1Rot, 0.03, 0.08);
-                  axeHandleP2Rot = sagLimbLocal(axeHandleP2Rot, 0.03, 0.08);
-                  axeBladeP1Rot = sagLimbLocal(axeBladeP1Rot, 0.04, 0.08);
-                  axeBladeP2Rot = sagLimbLocal(axeBladeP2Rot, 0.04, 0.08);
-                  if (heldItem.name === "PICKAXE") {
-                      axeBlade2P1Rot = sagLimbLocal(axeBlade2P1Rot, 0.04, 0.08);
-                      axeBlade2P2Rot = sagLimbLocal(axeBlade2P2Rot, 0.04, 0.08);
-                  }
+              } else if (heldItem.name !== "WOODEN_ARM_CANNON" && heldItem.name !== "ARM_CANNON") {
+                  computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot, skillWristRight);
               }
           }
         }
@@ -4550,6 +6147,37 @@ window.characterVertexShaderSource = `#version 300 es
               ? window.getCharacterEquippedClothingState(true)
               : { wearTop: true, wearShorts: true, wearShirt: false, wearLeggings: false })
           : null;
+
+        // Compute unified full-body rig (Spine/Head/Ears, UpperArm/ForeArm/Hand/Fingers, Thigh/Calf/Ankle/Foot/Toes)
+        const fullBodyRig = computeFullBodyRig({
+          chestP1,
+          chestP2,
+          headP1,
+          headP2,
+          leftArmPivot,
+          leftElbowRot,
+          leftHandRot,
+          rightArmPivot,
+          rightElbowRot,
+          rightHandRot,
+          leftLegPivot,
+          leftKneeRot,
+          leftFootRot,
+          rightLegPivot,
+          rightKneeRot,
+          rightFootRot,
+          spinePose: spineRigPose,
+          leftWristPose: skillWristLeft,
+          rightWristPose: skillWristRight,
+          leftAnklePose,
+          rightAnklePose,
+        });
+        const spineRig = fullBodyRig ? fullBodyRig.spine : null;
+        const leftRigFrame = fullBodyRig ? fullBodyRig.leftArm : getHandGripFrame(leftElbowRot, leftHandRot, true, skillWristLeft, leftArmPivot);
+        const rightRigFrame = fullBodyRig ? fullBodyRig.rightArm : getHandGripFrame(rightElbowRot, rightHandRot, false, skillWristRight, rightArmPivot);
+        const leftLegRig = fullBodyRig ? fullBodyRig.leftLeg : null;
+        const rightLegRig = fullBodyRig ? fullBodyRig.rightLeg : null;
+
         const chest = generateChibiTorso(
           chestP1,
           chestP2,
@@ -4559,24 +6187,28 @@ window.characterVertexShaderSource = `#version 300 es
           cloneEq ? cloneEq.wearShorts : null,
           cloneEq ? cloneEq.wearShirt : null,
           cloneEq ? cloneEq.wearLeggings : null,
+          spineRig ? spineRig.torsoBoneBasis : null,
         );
         const head = generateChibiHead(
           headP1,
           headP2,
           0.192 * scaleFactor,
           scaleFactor,
+          spineRig ? spineRig.headBoneBasis : null,
         );
         const leftEar = generateChibiEar(
           leftEarP1,
           leftEarP2,
           true,
           scaleFactor,
+          spineRig ? spineRig.leftEarBoneBasis : null,
         );
         const rightEar = generateChibiEar(
           rightEarP1,
           rightEarP2,
           false,
           scaleFactor,
+          spineRig ? spineRig.rightEarBoneBasis : null,
         );
 
         const leftArmUpper = generateChibiUpperArm(
@@ -4586,12 +6218,14 @@ window.characterVertexShaderSource = `#version 300 es
           scaleFactor,
           cloneEq ? cloneEq.wearTop : null,
           cloneEq ? cloneEq.wearShirt : null,
+          leftRigFrame ? leftRigFrame.upperArmBoneBasis : null,
         );
         const leftArmLower = generateChibiForeArm(
           leftElbowRot,
           leftHandRot,
           true,
           scaleFactor,
+          leftRigFrame ? leftRigFrame.forearmBoneBasis : null,
         );
 
         const rightArmUpper = generateChibiUpperArm(
@@ -4601,12 +6235,14 @@ window.characterVertexShaderSource = `#version 300 es
           scaleFactor,
           cloneEq ? cloneEq.wearTop : null,
           cloneEq ? cloneEq.wearShirt : null,
+          rightRigFrame ? rightRigFrame.upperArmBoneBasis : null,
         );
         const rightArmLower = generateChibiForeArm(
           rightElbowRot,
           rightHandRot,
           false,
           scaleFactor,
+          rightRigFrame ? rightRigFrame.forearmBoneBasis : null,
         );
 
         const leftLegUpper = generateChibiThigh(
@@ -4616,6 +6252,7 @@ window.characterVertexShaderSource = `#version 300 es
           scaleFactor,
           cloneEq ? cloneEq.wearShorts : null,
           cloneEq ? cloneEq.wearLeggings : null,
+          leftLegRig ? leftLegRig.thighBoneBasis : null,
         );
         const leftLegLower = generateChibiCalf(
           leftKneeRot,
@@ -4623,6 +6260,7 @@ window.characterVertexShaderSource = `#version 300 es
           true,
           scaleFactor,
           cloneEq ? cloneEq.wearLeggings : null,
+          leftLegRig ? leftLegRig.calfBoneBasis : null,
         );
 
         const rightLegUpper = generateChibiThigh(
@@ -4632,6 +6270,7 @@ window.characterVertexShaderSource = `#version 300 es
           scaleFactor,
           cloneEq ? cloneEq.wearShorts : null,
           cloneEq ? cloneEq.wearLeggings : null,
+          rightLegRig ? rightLegRig.thighBoneBasis : null,
         );
         const rightLegLower = generateChibiCalf(
           rightKneeRot,
@@ -4639,13 +6278,47 @@ window.characterVertexShaderSource = `#version 300 es
           false,
           scaleFactor,
           cloneEq ? cloneEq.wearLeggings : null,
+          rightLegRig ? rightLegRig.calfBoneBasis : null,
         );
 
-        // Build Chibi detailed hands, fingers, ankles, feet, toes
-        const leftHandParts = buildHandAndFingers(leftElbowRot, leftHandRot, true, scaleFactor);
-        const rightHandParts = buildHandAndFingers(rightElbowRot, rightHandRot, false, scaleFactor);
-        const leftFootParts = buildFootAnkleToes(leftKneeRot, leftFootRot, true, scaleFactor);
-        const rightFootParts = buildFootAnkleToes(rightKneeRot, rightFootRot, false, scaleFactor);
+        // Determine hand grip amount (0 = relaxed open hand, 0.55 = cupped orb/fruit grip, 1.0 = closed fist wrapping held handle)
+        let leftHandGrip = 0.0;
+        let rightHandGrip = 0.0;
+        if (heldItem || activeBucketWater > 0) {
+          if (shirasayaMode === "charging") {
+            leftHandGrip = 1.0;
+            rightHandGrip = 0.0;
+          } else if (shirasayaMode === "dashing") {
+            leftHandGrip = 1.0;
+            rightHandGrip = 0.0;
+          } else if (aegisMode === "post_skill" || aegisMode === "dashing" || aegisMode === "charging") {
+            // Two-handed heavy greatsword carry & combo: both hands closed tightly around the hilt
+            leftHandGrip = 1.0;
+            rightHandGrip = 1.0;
+          } else if (shirasayaMode === "post_skill") {
+            // Skill weapon held in anatomical RIGHT hand (leftArmPivot / -X)
+            leftHandGrip = 1.0;
+            rightHandGrip = 0.0;
+          } else if (heldItem && heldItem.name === "BOW") {
+            leftHandGrip = 1.0;
+            rightHandGrip = (!effectiveArrowShot && effectiveUseAnimTimer > 0) ? 0.85 : 0.0;
+          } else if (heldItem && (heldItem.name === "OBSIDIAN_FLUX" || heldItem.name === "DRAGON_FRUIT" || heldItem.name === "dragon_fruit")) {
+            rightHandGrip = 0.55;
+          } else {
+            rightHandGrip = 1.0;
+            if (activeBucketWater > 0) {
+              leftHandGrip = (chibiBucketPourPose && typeof chibiBucketPourPose.pourEnv === "number")
+                ? chibiBucketPourPose.pourEnv
+                : 0.85;
+            }
+          }
+        }
+
+        // Build Chibi detailed hands, fingers, ankles, feet, toes using unified rig frames
+        const leftHandParts = buildHandAndFingers(leftElbowRot, leftHandRot, true, scaleFactor, leftHandGrip, skillWristLeft, leftArmPivot);
+        const rightHandParts = buildHandAndFingers(rightElbowRot, rightHandRot, false, scaleFactor, rightHandGrip, skillWristRight, rightArmPivot);
+        const leftFootParts = buildFootAnkleToes(leftKneeRot, leftFootRot, true, scaleFactor, leftLegRig);
+        const rightFootParts = buildFootAnkleToes(rightKneeRot, rightFootRot, false, scaleFactor, rightLegRig);
 
         // === Build 3D Anime Hair for Player Character (High Performance Cached) ===
         if (!window._cachedHairState) {
@@ -4665,24 +6338,8 @@ window.characterVertexShaderSource = `#version 300 es
             return window._cachedHairState;
           }
 
-          const localV = [], c = [], i = [], flexW = [];
-          if (typeof window.build3DAnimeHair === "function") {
-            const headFit = 0.192 / 0.240;
-            const identityPtFn = (lx, ly, lz) => [lx * headFit, ly * headFit, lz * headFit];
-            window.build3DAnimeHair(
-              style,
-              color,
-              scaleFactor,
-              identityPtFn,
-              0, // headTilt
-              localV,
-              c,
-              i,
-              flexW
-            );
-          }
-
-          if (localV.length === 0) {
+          const built = _buildAnimeHairLocalAndNormals(style, color, scaleFactor, false);
+          if (built.localV.length === 0) {
             window._cachedHairState = {
               key,
               baseMesh: { localV: [], colors: [], normals: [], indices: [], flexW: [] },
@@ -4691,73 +6348,26 @@ window.characterVertexShaderSource = `#version 300 es
             return window._cachedHairState;
           }
 
-          const normals = new Float32Array(localV.length);
-          for (let k = 0; k < i.length; k += 3) {
-            const i0 = i[k], i1 = i[k+1], i2 = i[k+2];
-            if (i0 * 3 + 2 >= localV.length || i1 * 3 + 2 >= localV.length || i2 * 3 + 2 >= localV.length) continue;
-            const p0 = [localV[i0*3], localV[i0*3+1], localV[i0*3+2]];
-            const p1 = [localV[i1*3], localV[i1*3+1], localV[i1*3+2]];
-            const p2 = [localV[i2*3], localV[i2*3+1], localV[i2*3+2]];
-
-            const ux = p1[0]-p0[0], uy = p1[1]-p0[1], uz = p1[2]-p0[2];
-            const wx = p2[0]-p0[0], wy = p2[1]-p0[1], wz = p2[2]-p0[2];
-
-            const nx = uy*wz - uz*wy;
-            const ny = uz*wx - ux*wz;
-            const nz = ux*wy - uy*wx;
-
-            normals[i0*3] += nx; normals[i0*3+1] += ny; normals[i0*3+2] += nz;
-            normals[i1*3] += nx; normals[i1*3+1] += ny; normals[i1*3+2] += nz;
-            normals[i2*3] += nx; normals[i2*3+1] += ny; normals[i2*3+2] += nz;
-          }
-
-          for (let k = 0; k < normals.length; k += 3) {
-            const len = Math.sqrt(normals[k]**2 + normals[k+1]**2 + normals[k+2]**2);
-            if (len > 0.0001) {
-              normals[k] /= len;
-              normals[k+1] /= len;
-              normals[k+2] /= len;
-            } else {
-              normals[k+1] = 1.0;
-            }
-          }
-
-          const localDummyV = new Array(localV.length);
-          for (let k = 0; k < localV.length; k += 3) {
-            localDummyV[k] = localV[k];
-            localDummyV[k+1] = localV[k+1] - 1000.0;
-            localDummyV[k+2] = localV[k+2];
-          }
-
           window._cachedHairState = {
             key,
             baseMesh: {
-              localV,
-              colors: c,
-              normals: Array.from(normals),
-              indices: i,
-              flexW
+              localV: built.localV,
+              colors: built.colors,
+              normals: built.normals,
+              indices: built.indices,
+              flexW: built.flexW
             },
-            localDummyV
+            localDummyV: built.localDummyV
           };
 
           return window._cachedHairState;
         }
 
-        function createHairMesh(isLocal) {
+        function createHairMesh() {
           const cached = getBaseLocalHairMesh();
           const bm = cached.baseMesh;
           if (!bm || !bm.localV || bm.localV.length === 0) {
             return { vertices: [], colors: [], normals: [], indices: [] };
-          }
-
-          if (isLocal) {
-            return {
-              vertices: cached.localDummyV,
-              colors: bm.colors,
-              normals: bm.normals,
-              indices: bm.indices
-            };
           }
 
           const isRag = !!(!isClone && ragdollEnabled && ragdollInitialized && R_rot && N_rot && F_rot);
@@ -4982,8 +6592,8 @@ window.characterVertexShaderSource = `#version 300 es
           // Item / Tool swing action whip
           let actionZ = 0.0;
           let actionY = 0.0;
-          if (!isRag && typeof isUsingItem !== "undefined" && isUsingItem && typeof useAnimTimer !== "undefined") {
-            const swingFactor = Math.sin((1.0 - useAnimTimer) * Math.PI);
+          if (!isRag && effectiveIsUsingItem && effectiveUseAnimTimer > 0) {
+            const swingFactor = Math.sin((1.0 - effectiveUseAnimTimer) * Math.PI);
             actionZ = swingFactor * 0.015;
             actionY = -Math.abs(swingFactor) * 0.006;
           }
@@ -5131,38 +6741,20 @@ window.characterVertexShaderSource = `#version 300 es
           };
         }
 
-        const playerHairMesh = isClone ? null : createHairMesh(false);
+        const playerHairMesh = isClone ? null : createHairMesh();
         if (!isClone) window._lastPlayerHairMesh = playerHairMesh;
-        const playerLocalHairMesh = isClone ? null : createHairMesh(true);
+        const playerLocalHairDummyV = (!isClone && window._cachedHairState) ? window._cachedHairState.localDummyV : null;
 
         let cloneHoodieMesh = null;
-        let cloneLocalHoodieMesh = null;
         let cloneOpenHoodieMesh = null;
-        let cloneLocalOpenHoodieMesh = null;
         let cloneBootsMesh = null;
         let playerHoodieMesh = null;
-        let playerLocalHoodieMesh = null;
         let playerBootsMesh = null;
         let playerSkirtMesh = null;
         let playerShirtCollarMesh = null;
-
-        const shiftMeshX = (srcMesh, dx) => {
-          const srcV = srcMesh.vertices;
-          const n = srcV.length;
-          const dstV = new Float32Array(n);
-          for (let k = 0; k < n; k += 3) {
-            dstV[k]     = srcV[k] + dx;
-            dstV[k + 1] = srcV[k + 1];
-            dstV[k + 2] = srcV[k + 2];
-          }
-          return {
-            vertices: dstV,
-            normals: srcMesh.normals,
-            colors: srcMesh.colors,
-            texcoords: srcMesh.texcoords,
-            indices: srcMesh.indices
-          };
-        };
+        let playerSuitMesh = null;
+        let playerSlacksMesh = null;
+        let playerOperaCapeMesh = null;
 
         if (isClone) {
           window._cloneCurrentHeadP1 = [headP1[0], headP1[1], headP1[2]];
@@ -5172,51 +6764,95 @@ window.characterVertexShaderSource = `#version 300 es
           window._cloneAnimTick = (window._cloneAnimTick || 0) + 1;
 
           const isMoving = cloneWalkBlend > 0.05;
-          const cloneHeading = (typeof window.playerClonesState !== "undefined" && window.playerClonesState[0])
-            ? (window.playerClonesState[0].heading || 0.0)
-            : 0.0;
+          const cloneHeading = cloneState
+            ? (cloneState.heading || 0.0)
+            : ((typeof window.playerClonesState !== "undefined" && window.playerClonesState[0])
+              ? (window.playerClonesState[0].heading || 0.0)
+              : 0.0);
+
+          let cloneHoodiePhys = null;
+          if (cloneState) {
+            if (!cloneState._hoodiePhysics && typeof window !== "undefined" && window.CapsuleModel && typeof window.CapsuleModel.createHoodiePhysicsState === "function") {
+              cloneState._hoodiePhysics = window.CapsuleModel.createHoodiePhysicsState();
+            }
+            cloneHoodiePhys = cloneState._hoodiePhysics || null;
+          }
+
+          let clonePhysR = null, clonePhysN = null, clonePhysF = null, cloneWorldPos = null;
+          if (cloneState && typeof cloneState.theta === "number" && typeof cloneState.phi === "number") {
+            const cSinT = Math.sin(cloneState.theta), cCosT = Math.cos(cloneState.theta);
+            const cSinP = Math.sin(cloneState.phi), cCosP = Math.cos(cloneState.phi);
+            const cNx = cSinT * cCosP, cNy = cCosT, cNz = cSinT * cSinP;
+            const cEast = [-cSinP, 0, cCosP];
+            const cNorth = [-cCosT * cCosP, cSinT, -cCosT * cSinP];
+            const cCosH = Math.cos(cloneHeading), cSinH = Math.sin(cloneHeading);
+            clonePhysN = [cNx, cNy, cNz];
+            clonePhysR = [cEast[0] * cCosH - cNorth[0] * cSinH, cEast[1] * cCosH - cNorth[1] * cSinH, cEast[2] * cCosH - cNorth[2] * cSinH];
+            clonePhysF = [cNorth[0] * cCosH + cEast[0] * cSinH, cNorth[1] * cCosH + cEast[1] * cSinH, cNorth[2] * cCosH + cEast[2] * cSinH];
+            const rad = cloneState.centerRadius || (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+            cloneWorldPos = [rad * cNx, rad * cNy, rad * cNz];
+          }
+
           if (typeof updateChibiHoodiePhysics === "function") {
-            updateChibiHoodiePhysics(isMoving, false, phase, cloneHeading, { isClone: true });
+            updateChibiHoodiePhysics(isMoving, false, phase, cloneHeading, {
+              isClone: true,
+              hoodiePhysics: cloneHoodiePhys,
+              R: clonePhysR,
+              N: clonePhysN,
+              F: clonePhysF,
+              worldPos: cloneWorldPos,
+              torsoTilt: torsoTilt,
+              vertVel: cloneState ? (cloneState.verticalVel || 0.0) : 0.0,
+              isGrounded: cloneState ? (cloneState.isGrounded !== false) : true
+            });
           }
 
           const cloneClothCtx = {
             isClone: true,
+            hoodiePhysics: cloneHoodiePhys,
             leftLegPivot,
             leftKneeRot,
             leftFootRot,
             rightLegPivot,
             rightKneeRot,
-            rightFootRot
+            rightFootRot,
+            leftLegRig,
+            rightLegRig
           };
-          cloneHoodieMesh = buildTravelerHoodieCloakMesh(
-            headP1, headP2,
-            chestP1, chestP2,
-            neckP1, neckP2,
-            leftArmPivot, leftElbowRot, leftHandRot,
-            rightArmPivot, rightElbowRot, rightHandRot,
-            scaleFactor,
-            phase,
-            false,
-            leftFootRot, rightFootRot,
-            false,
-            cloneClothCtx
-          );
-          cloneLocalHoodieMesh = shiftMeshX(cloneHoodieMesh, 10.0);
+          const buildClosed = !cloneState || !cloneState.hoodOpen;
+          const buildOpen = !cloneState || !!cloneState.hoodOpen;
 
-          cloneOpenHoodieMesh = buildTravelerHoodieCloakMesh(
-            headP1, headP2,
-            chestP1, chestP2,
-            neckP1, neckP2,
-            leftArmPivot, leftElbowRot, leftHandRot,
-            rightArmPivot, rightElbowRot, rightHandRot,
-            scaleFactor,
-            phase,
-            false,
-            leftFootRot, rightFootRot,
-            true,
-            cloneClothCtx
-          );
-          cloneLocalOpenHoodieMesh = shiftMeshX(cloneOpenHoodieMesh, 10.0);
+          if (buildClosed) {
+            cloneHoodieMesh = buildTravelerHoodieCloakMesh(
+              headP1, headP2,
+              chestP1, chestP2,
+              neckP1, neckP2,
+              leftArmPivot, leftElbowRot, leftHandRot,
+              rightArmPivot, rightElbowRot, rightHandRot,
+              scaleFactor,
+              phase,
+              false,
+              leftFootRot, rightFootRot,
+              false,
+              cloneClothCtx
+            );
+          }
+
+          if (buildOpen) {
+            cloneOpenHoodieMesh = buildTravelerHoodieCloakMesh(
+              headP1, headP2,
+              chestP1, chestP2,
+              neckP1, neckP2,
+              leftArmPivot, leftElbowRot, leftHandRot,
+              rightArmPivot, rightElbowRot, rightHandRot,
+              scaleFactor,
+              phase,
+              false,
+              leftFootRot, rightFootRot,
+              true,
+              cloneClothCtx
+            );
+          }
 
           if (typeof buildTravelerBootsMesh === "function") {
             cloneBootsMesh = buildTravelerBootsMesh(leftFootRot, rightFootRot, scaleFactor, cloneClothCtx);
@@ -5225,7 +6861,7 @@ window.characterVertexShaderSource = `#version 300 es
           const playerEq = (typeof window.getCharacterEquippedClothingState === "function")
             ? window.getCharacterEquippedClothingState(false)
             : null;
-          const needClothPhys = !!(playerEq && (playerEq.wearHoodie || playerEq.wearSkirt));
+          const needClothPhys = !!(playerEq && (playerEq.wearHoodie || playerEq.wearSkirt || playerEq.wearSuit || playerEq.wearOperaCape));
           if (needClothPhys) {
             const isRag = !!(ragdollEnabled && ragdollInitialized && R_rot && N_rot && F_rot);
             const pMoving = !isRag && !!(
@@ -5279,8 +6915,23 @@ window.characterVertexShaderSource = `#version 300 es
             leftFootRot,
             rightLegPivot,
             rightKneeRot,
-            rightFootRot
+            rightFootRot,
+            leftLegRig,
+            rightLegRig,
+            wearSkirt: !!(playerEq && playerEq.wearSkirt),
+            wearHoodie: !!(playerEq && playerEq.wearHoodie)
           };
+
+          // Build skirt BEFORE hoodie so hoodie reuses the skirt's clamped crest envelope without clamping 108 skirt vertices twice
+          if (playerEq && playerEq.wearSkirt && typeof buildBlackPleatedSkirtMesh === "function") {
+            playerSkirtMesh = buildBlackPleatedSkirtMesh(
+              headP1,
+              chestP1, chestP2,
+              scaleFactor,
+              phase,
+              legClothCtx
+            );
+          }
 
           if (playerEq && playerEq.wearHoodie && typeof buildTravelerHoodieCloakMesh === "function") {
             const hoodOpenMode = (typeof window.playerHoodClosed !== "undefined") ? !window.playerHoodClosed : true;
@@ -5297,17 +6948,6 @@ window.characterVertexShaderSource = `#version 300 es
               hoodOpenMode,
               legClothCtx
             );
-            playerLocalHoodieMesh = shiftMeshX(playerHoodieMesh, 10.0);
-          }
-
-          if (playerEq && playerEq.wearSkirt && typeof buildBlackPleatedSkirtMesh === "function") {
-            playerSkirtMesh = buildBlackPleatedSkirtMesh(
-              headP1,
-              chestP1, chestP2,
-              scaleFactor,
-              phase,
-              legClothCtx
-            );
           }
 
           if (playerEq && playerEq.wearShirt && typeof buildWhiteShirtCollarMesh === "function") {
@@ -5316,6 +6956,48 @@ window.characterVertexShaderSource = `#version 300 es
               chestP1, chestP2,
               neckP1, neckP2,
               scaleFactor
+            );
+          }
+
+          if (playerEq && playerEq.wearSlacks && typeof buildBlackSlacksMesh === "function") {
+            playerSlacksMesh = buildBlackSlacksMesh(
+              headP1,
+              chestP1, chestP2,
+              leftLegPivot, leftKneeRot, leftFootRot,
+              rightLegPivot, rightKneeRot, rightFootRot,
+              scaleFactor,
+              phase,
+              legClothCtx
+            );
+          }
+
+          if (playerEq && playerEq.wearSuit && typeof buildDoubleBreastedSuitMesh === "function") {
+            playerSuitMesh = buildDoubleBreastedSuitMesh(
+              headP1,
+              chestP1, chestP2,
+              neckP1, neckP2,
+              leftArmPivot, leftElbowRot, leftHandRot,
+              rightArmPivot, rightElbowRot, rightHandRot,
+              scaleFactor,
+              phase,
+              false,
+              leftFootRot, rightFootRot,
+              legClothCtx
+            );
+          }
+
+          if (playerEq && playerEq.wearOperaCape && typeof buildOperaCapeMesh === "function") {
+            playerOperaCapeMesh = buildOperaCapeMesh(
+              headP1,
+              chestP1, chestP2,
+              neckP1, neckP2,
+              leftArmPivot, leftElbowRot, leftHandRot,
+              rightArmPivot, rightElbowRot, rightHandRot,
+              scaleFactor,
+              phase,
+              false,
+              leftFootRot, rightFootRot,
+              legClothCtx
             );
           }
 
@@ -5343,9 +7025,11 @@ window.characterVertexShaderSource = `#version 300 es
           ...(cloneBootsMesh ? [cloneBootsMesh] : [...leftFootParts, ...rightFootParts]),
         ]) : null;
 
+        const primaryCloneHoodie = (cloneState && cloneState.hoodOpen) ? cloneOpenHoodieMesh : cloneHoodieMesh;
+
         let meshesToMerge = isClone ? [
           cloneBaseWelded,
-          cloneHoodieMesh,
+          primaryCloneHoodie,
         ] : [
           chest,
           head,
@@ -5364,65 +7048,44 @@ window.characterVertexShaderSource = `#version 300 es
           ...rightHandParts,
           ...(playerBootsMesh ? [] : [...leftFootParts, ...rightFootParts]),
           ...(playerShirtCollarMesh ? [playerShirtCollarMesh] : []),
+          ...(playerSlacksMesh ? [playerSlacksMesh] : []),
           ...(playerSkirtMesh ? [playerSkirtMesh] : []),
+          ...(playerSuitMesh ? [playerSuitMesh] : []),
+          ...(playerOperaCapeMesh ? [playerOperaCapeMesh] : []),
           ...(playerHoodieMesh ? [playerHoodieMesh] : []),
           ...(playerBootsMesh ? [playerBootsMesh] : []),
         ];
-
-        let localMeshesToMerge = isClone ? [
-          cloneBaseWelded,
-          cloneLocalHoodieMesh,
-        ] : [
-          chest,
-          head,
-          playerLocalHairMesh,
-          leftEar,
-          rightEar,
-          leftArmUpper,
-          leftArmLower,
-          rightArmUpper,
-          rightArmLower,
-          leftLegUpper,
-          leftLegLower,
-          rightLegUpper,
-          rightLegLower,
-          ...leftHandParts,
-          ...rightHandParts,
-          ...(playerBootsMesh ? [] : [...leftFootParts, ...rightFootParts]),
-          ...(playerShirtCollarMesh ? [playerShirtCollarMesh] : []),
-          ...(playerSkirtMesh ? [playerSkirtMesh] : []),
-          ...(playerLocalHoodieMesh ? [playerLocalHoodieMesh] : []),
-          ...(playerBootsMesh ? [playerBootsMesh] : []),
-        ];
         
-        if (heldItem) {
-            const charMat = getCharacterMatrix();
+        const isWateringBucketAnim = (!isClone && typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0);
+        if (heldItem || isWateringBucketAnim) {
+            const charMat = (!isClone && typeof getCharacterMatrix === "function") ? getCharacterMatrix() : null;
             const transformPt = (p) => {
                 if (!p) return [0, 0, 0];
                 return [p[0], p[1], p[2]];
             };
+            const wOriginPt = transformPt([0, 0, 0]);
+            const xformDir = (v) => {
+                const tp = transformPt(v);
+                return [tp[0] - wOriginPt[0], tp[1] - wOriginPt[1], tp[2] - wOriginPt[2]];
+            };
 
             const rawV = [], rawC = [], rawI = [];
             
-            const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
-            const add = (a, b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
-            const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
-            const normalize = (v) => {
-                const l = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-                if (l < 1e-5) return [1,0,0];
-                return [v[0]/l, v[1]/l, v[2]/l];
-            };
-            const scale = (v, s) => [v[0]*s, v[1]*s, v[2]*s];
+            const sub = _v3Sub;
+            const add = _v3Add;
+            const cross = _v3Crs;
+            const normalize = (v) => _v3Nrm(v, [1, 0, 0]);
+            const scale = _v3Scale;
 
             const isRag = false;
             const itemScale = 1.0;
 
-            const addWedge = (pBase, pTip, widthBase, widthTip, thickness, color) => {
+            const addWedge = (pBase, pTip, widthBase, widthTip, thickness, color, thicknessDir = null) => {
                 const dir = sub(pTip, pBase);
                 const f = normalize(dir); // points from base to tip
-                const charX = [1, 0, 0];
+                const charX = thicknessDir || [1, 0, 0];
                 
-                // let's use charX as thickness direction
+                // thickness axis oriented to hand's local frame (or charX fallback)
                 const right = normalize(charX); 
                 const forward = normalize(cross(right, f)); // perpendicular to thickness and blade direction
 
@@ -5473,22 +7136,22 @@ window.characterVertexShaderSource = `#version 300 es
                 const wLowerTip = isRag ? bowLowerTipRot : transformPt(bowLowerTipRot);
                 
                 const bowScale = itemScale;
+                const rightDrawGrip = getHandGripFrame(rightElbowRot, rightHandRot, false).gripCenter;
                 let wNock;
-                if (!arrowShotInCurrentAnim && useAnimTimer > 0) {
-                    wNock = isRag ? rightHandRot : transformPt(rightHandRot);
+                if (!effectiveArrowShot && effectiveUseAnimTimer > 0) {
+                    wNock = isRag ? rightDrawGrip : transformPt(rightDrawGrip);
                 } else {
                     const wGripVal = wGrip;
-                    const wHandVal = isRag ? rightHandRot : transformPt(rightHandRot);
+                    const wHandVal = isRag ? rightDrawGrip : transformPt(rightDrawGrip);
                     const pullVec = [wHandVal[0] - wGripVal[0], wHandVal[1] - wGripVal[1], wHandVal[2] - wGripVal[2]];
                     const dist = Math.sqrt(pullVec[0]**2 + pullVec[1]**2 + pullVec[2]**2);
                     if (dist > 0.001) {
                         const pullDir = [pullVec[0] / dist, pullVec[1] / dist, pullVec[2] / dist];
                         let t_rel = 0;
-                        if (lastBowShootTime) {
-                            t_rel = (Date.now() - lastBowShootTime) / 1000.0;
+                        if (effectiveLastBowShootTime) {
+                            t_rel = (Date.now() - effectiveLastBowShootTime) / 1000.0;
                         }
-                        const drawP = typeof lastBowDrawPower !== "undefined" ? lastBowDrawPower : 1.0;
-                        const vibeAmp = 0.15 * bowScale * drawP * Math.cos(t_rel * 40.0) * Math.exp(-t_rel * 6.0);
+                        const vibeAmp = 0.15 * bowScale * effectiveLastBowDrawPower * Math.cos(t_rel * 40.0) * Math.exp(-t_rel * 6.0);
                         wNock = [wGripVal[0] + pullDir[0] * vibeAmp, wGripVal[1] + pullDir[1] * vibeAmp, wGripVal[2] + pullDir[2] * vibeAmp];
                     } else {
                         wNock = wGripVal;
@@ -5544,23 +7207,25 @@ window.characterVertexShaderSource = `#version 300 es
                 buildTaperedSegment(wUpperTip, wNock, 0.003 * bowScale, 0.003 * bowScale, 4, stringColor, rawV, rawC, rawI);
                 buildTaperedSegment(wLowerTip, wNock, 0.003 * bowScale, 0.003 * bowScale, 4, stringColor, rawV, rawC, rawI);
 
-                if (!arrowShotInCurrentAnim && useAnimTimer > 0) {
+                if (!effectiveArrowShot && effectiveUseAnimTimer > 0) {
                     const arrowDir = [wGrip[0] - wNock[0], wGrip[1] - wNock[1], wGrip[2] - wNock[2]];
                     const arrowLen = Math.sqrt(arrowDir[0]**2 + arrowDir[1]**2 + arrowDir[2]**2);
                     if (arrowLen > 0.001) {
                         arrowDir[0] /= arrowLen;
                         arrowDir[1] /= arrowLen;
                         arrowDir[2] /= arrowLen;
-                        window.lastBowGripPos = [
-                            charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
-                            charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
-                            charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
-                        ];
-                        window.lastBowAimDir = [
-                            charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
-                            charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
-                            charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
-                        ];
+                        if (!isClone && charMat) {
+                            window.lastBowGripPos = [
+                                charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
+                                charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
+                                charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
+                            ];
+                            window.lastBowAimDir = [
+                                charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
+                                charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
+                                charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
+                            ];
+                        }
                     }
                     const arrowTipPos = [
                         wGrip[0] + arrowDir[0] * 0.12 * bowScale,
@@ -5587,7 +7252,7 @@ window.characterVertexShaderSource = `#version 300 es
                     ];
                     addWedge(arrowTipPos, headEnd, 0.025 * bowScale, 0.002 * bowScale, 0.006 * bowScale, flintColor);
             }
-          } else if (heldItem.name === "GLOW_BATTERY" || heldItem.name === "GLOW_BATTERY_EMPTY") {
+          } else if (heldItem && (heldItem.name === "GLOW_BATTERY" || heldItem.name === "GLOW_BATTERY_EMPTY")) {
                 const wHandleP1 = transformPt(axeHandleP1Rot);
                 const wHandleP2 = transformPt(axeHandleP2Rot);
                 
@@ -5633,22 +7298,21 @@ window.characterVertexShaderSource = `#version 300 es
                 ];
                 
                 if (fillPercent > 0) {
-                   buildTaperedSegment(rodP1, rodFillEnd, 0.036 * itemScale, 0.036 * itemScale, 4, batteryColor, rawV, rawC, rawI, true);
+                   buildTaperedSegment(rodP1, rodFillEnd, 0.022 * itemScale, 0.022 * itemScale, 4, batteryColor, rawV, rawC, rawI, true);
                 }
                 if (fillPercent < 100) {
-                   buildTaperedSegment(rodFillEnd, rodP2, 0.036 * itemScale, 0.036 * itemScale, 4, emptyColor, rawV, rawC, rawI, true);
+                   buildTaperedSegment(rodFillEnd, rodP2, 0.022 * itemScale, 0.022 * itemScale, 4, emptyColor, rawV, rawC, rawI, true);
                 }
-          } else if (heldItem.name === "BRANCH" || heldItem.name === "branch") {
+          } else if (heldItem && (heldItem.name === "BRANCH" || heldItem.name === "branch")) {
                 const wHandleP1 = transformPt(axeHandleP1Rot);
                 const wHandleP2 = transformPt(axeHandleP2Rot);
                 const branchColor = [0.45, 0.3, 0.15];
-                // Match inventory preview: buildTaperedSegment([-0.35, -0.1, 0], [0.35, 0.1, 0], 0.04, 0.02, 5, [0.45, 0.3, 0.15])
-                // Natural tapered wooden branch (5-sided cylindrical cross-section, tapered base to tip, capped ends)
+                // Natural tapered wooden branch sized to fit inside Chibi curled hand grip
                 buildTaperedSegment(
                     wHandleP1,
                     wHandleP2,
-                    0.024 * itemScale,
-                    0.012 * itemScale,
+                    0.016 * itemScale,
+                    0.008 * itemScale,
                     5,
                     branchColor,
                     rawV,
@@ -5656,27 +7320,276 @@ window.characterVertexShaderSource = `#version 300 es
                     rawI,
                     true
                 );
-          } else if (heldItem.name === "AXE" || heldItem.name === "PICKAXE" || heldItem.name === "SHOVEL") {
+          } else if (heldItem && (heldItem.name === "TANTO" || heldItem.name === "tanto") && typeof window.buildTantoModel === "function") {
+                if (shirasayaMode !== "idle" && typeof window.buildShirasayaModel === "function") {
+                  // Held in anatomical RIGHT hand (leftArmPivot / -X in player.js) via Full-Body Rig Frame
+                  const anaRightFrame = leftRigFrame || getHandGripFrame(leftElbowRot, leftHandRot, true, skillWristLeft, leftArmPivot);
+                  if (shirasayaMode === "charging") {
+                    const anaLeftFrame = rightRigFrame || getHandGripFrame(rightElbowRot, rightHandRot, false, skillWristRight, rightArmPivot);
+                    const rawAlong = [
+                      anaRightFrame.gripCenter[0] - anaLeftFrame.gripCenter[0],
+                      anaRightFrame.gripCenter[1] - anaLeftFrame.gripCenter[1],
+                      anaRightFrame.gripCenter[2] - anaLeftFrame.gripCenter[2]
+                    ];
+                    const aLen = Math.hypot(rawAlong[0], rawAlong[1], rawAlong[2]) || 1.0;
+                    const alongDir = [rawAlong[0] / aLen, rawAlong[1] / aLen, rawAlong[2] / aLen];
+                    const shiraPos = [
+                      anaRightFrame.gripCenter[0] - alongDir[0] * 0.015 * itemScale,
+                      anaRightFrame.gripCenter[1] - alongDir[1] * 0.015 * itemScale,
+                      anaRightFrame.gripCenter[2] - alongDir[2] * 0.015 * itemScale
+                    ];
+                    const wGripPos = transformPt(shiraPos);
+                    const wAxisAlong = xformDir(alongDir);
+                    const wEdgeUp = xformDir(anaRightFrame.dArm);
+                    const wThickRight = xformDir(anaRightFrame.palmIn);
+                    window.buildShirasayaModel(0.31 * itemScale, wGripPos, wAxisAlong, wEdgeUp, wThickRight, rawV, rawC, rawI);
+                  } else if (shirasayaMode === "post_skill") {
+                    // Reverse grip (sakate-mochi) via WeaponSocket bone in reverse mode: handle sticks up out top of fist, blade points downward
+                    const ws = anaRightFrame.weaponSocket;
+                    const revAlong = ws ? ws.axisAlong : [-anaRightFrame.rKnuckle[0], -anaRightFrame.rKnuckle[1], -anaRightFrame.rKnuckle[2]];
+                    const revEdge = ws ? ws.edgeUp : [-anaRightFrame.dArm[0], -anaRightFrame.dArm[1], -anaRightFrame.dArm[2]];
+                    const shiraPos = [
+                      anaRightFrame.gripCenter[0] - revAlong[0] * 0.048 * itemScale,
+                      anaRightFrame.gripCenter[1] - revAlong[1] * 0.048 * itemScale,
+                      anaRightFrame.gripCenter[2] - revAlong[2] * 0.048 * itemScale
+                    ];
+                    const wGripPos = transformPt(shiraPos);
+                    const wAxisAlong = xformDir(revAlong);
+                    const wEdgeUp = xformDir(revEdge);
+                    const wThickRight = xformDir(anaRightFrame.palmIn);
+                    window.buildShirasayaModel(0.31 * itemScale, wGripPos, wAxisAlong, wEdgeUp, wThickRight, rawV, rawC, rawI);
+                  } else {
+                    // Dashing skills 1..4 in anatomical RIGHT hand: driven by Standard WeaponSocket Bone (cyan edge always leads cut)
+                    const ws = anaRightFrame.weaponSocket;
+                    const localAxisAlong = ws ? ws.axisAlong : anaRightFrame.rKnuckle;
+                    const localEdgeUp = ws ? ws.edgeUp : anaRightFrame.dArm;
+                    const localThickRight = ws ? ws.thickRight : anaRightFrame.palmIn;
+                    const baseOrigin = ws ? ws.origin : anaRightFrame.gripCenter;
+                    const shiraDashPos = [
+                      baseOrigin[0] + localAxisAlong[0] * 0.038 * itemScale,
+                      baseOrigin[1] + localAxisAlong[1] * 0.038 * itemScale,
+                      baseOrigin[2] + localAxisAlong[2] * 0.038 * itemScale
+                    ];
+                    const wGripPos = transformPt(shiraDashPos);
+                    const wAxisAlong = xformDir(localAxisAlong);
+                    const wEdgeUp = xformDir(localEdgeUp);
+                    const wThickRight = xformDir(localThickRight);
+                    window.buildShirasayaModel(0.31 * itemScale, wGripPos, wAxisAlong, wEdgeUp, wThickRight, rawV, rawC, rawI);
+
+                    // --- 3D Crescent Slash Ribbons & Ground Slam Impact VFX ---
+                    const fadeOut = Math.max(0.0, Math.min(1.0, (1.0 - shirasayaDashProg) / 0.28));
+                    if (shirasayaStep === 1 && shirasayaDashProg > 0.05 && shirasayaDashProg < 0.94) {
+                      // Step 1: Forward thrust spike / dash linear streak along +Z
+                      const thrustProg = Math.min(1.0, shirasayaDashProg / 0.75);
+                      const thrustStart = transformPt([-0.05, 0.06 + bOffset, 0.15]);
+                      const thrustTip = transformPt([-0.05, 0.06 + bOffset, 0.15 + 0.55 * thrustProg]);
+                      addWedge(thrustStart, thrustTip, 0.045 * fadeOut, 0.008, 0.022, [0.82, 0.96, 1.0], [0, 1, 0]);
+                    } else if (shirasayaStep === 2 && shirasayaDashProg > 0.05) {
+                      // Step 2: Wide horizontal crescent slash sweeping across the front (+Z) from Left (+X) to Right (-X)
+                      const arcGrow = Math.min(1.0, shirasayaDashProg / 0.42);
+                      _addSlashArcRibbon(
+                        rawV, rawC, rawI,
+                        transformPt([-0.03, 0.06 + bOffset, 0.08]),
+                        [0, 0, 1], [-1, 0, 0], [0, 1, 0],
+                        0.27, 0.27 + 0.31 * fadeOut,
+                        -0.45, -0.45 + 1.88 * arcGrow, 22, 0.012,
+                        [0.88, 0.99, 1.0], [0.20, 0.76, 1.0], 0.65, 0.35
+                      );
+                      _addSlashArcRibbon(
+                        rawV, rawC, rawI,
+                        transformPt([-0.03, 0.03 + bOffset, 0.08]),
+                        [0, 0, 1], [-1, 0, 0], [0, 1, 0],
+                        0.19, 0.19 + 0.14 * fadeOut,
+                        -0.30, -0.30 + 1.65 * arcGrow, 18, 0.008,
+                        [0.95, 1.0, 1.0], [0.35, 0.85, 1.0], 0.65, 0.35
+                      );
+                    } else if (shirasayaStep === 3) {
+                      // Step 3: Double tilted 360-degree spinning cyclone slash rings
+                      const ringSpin = shirasayaDashProg * Math.PI * 3.0;
+                      const tiltA = normalize([0.14, 0.97, -0.18]);
+                      const uA = normalize([Math.cos(ringSpin), -0.14 * Math.cos(ringSpin), Math.sin(ringSpin)]);
+                      const vA = normalize(cross(tiltA, uA));
+                      _addSlashArcRibbon(
+                        rawV, rawC, rawI,
+                        transformPt([0, 0.10 + bOffset, 0]),
+                        uA, vA, tiltA,
+                        0.30, 0.56,
+                        0.0, Math.PI * 1.82, 24, 0.011,
+                        [0.88, 0.99, 1.0], [0.22, 0.78, 1.0], 0.65, 0.35
+                      );
+                      const tiltB = normalize([-0.22, 0.94, 0.24]);
+                      const uB = normalize([Math.cos(ringSpin + 2.1), 0.18, Math.sin(ringSpin + 2.1)]);
+                      const vB = normalize(cross(tiltB, uB));
+                      _addSlashArcRibbon(
+                        rawV, rawC, rawI,
+                        transformPt([0, 0.02 + bOffset, 0]),
+                        uB, vB, tiltB,
+                        0.24, 0.44,
+                        0.0, Math.PI * 1.68, 20, 0.009,
+                        [0.94, 1.0, 1.0], [0.32, 0.84, 1.0], 0.65, 0.35
+                      );
+                    } else if (shirasayaStep === 4 && shirasayaDashProg >= 0.14) {
+                      // Step 4: Overhead-to-ground vertical cleave ribbon tracing the exact blade arc + ground shatter spikes at the blade tip
+                      const cleaveArcProg = Math.min(1.0, (shirasayaDashProg - 0.14) / 0.22);
+                      const cleaveOrigin = transformPt([-0.08, 0.04 + bOffset, 0.14]);
+                      _addSlashArcRibbon(
+                        rawV, rawC, rawI,
+                        cleaveOrigin,
+                        [0, 0, 1], [0, 1, 0], [-1, 0, 0],
+                        0.22, 0.22 + 0.28 * fadeOut,
+                        0.88 - 1.38 * cleaveArcProg, 0.88, 20, 0.012,
+                        [0.90, 0.99, 1.0], [0.18, 0.72, 1.0], 0.65, 0.35
+                      );
+                      if (shirasayaDashProg >= 0.26) {
+                        const waveProg = Math.min(1.0, (shirasayaDashProg - 0.26) / 0.22);
+                        const tipImpact = transformPt([-0.09, -0.34, 0.56]);
+                        const spikeDirs = [
+                          [-0.55, 0.65, 0.52], [-0.82, 0.42, 0.22], [-0.42, 0.78, -0.35],
+                          [0.58, 0.62, 0.48], [0.85, 0.45, 0.18], [0.38, 0.82, -0.30],
+                          [0.02, 0.88, 0.45]
+                        ];
+                        const spScale = (0.12 + 0.14 * waveProg) * Math.max(0.25, fadeOut);
+                        _emitGroundShatterSpikes(addWedge, tipImpact, spikeDirs, spScale, 0.032, 0.002, 0.014, [0.78, 0.96, 1.0], [0.22, 0.76, 1.0]);
+                      }
+                    }
+                  }
+                } else {
+                  const wGripPos = transformPt(rightGripPos);
+                  const wAxisAlong = xformDir(rightKnuckleDir);
+                  const wEdgeUp = xformDir(rightArmDir);
+                  const wThickRight = xformDir(rightPalmIn);
+                  window.buildTantoModel(0.28 * itemScale, wGripPos, wAxisAlong, wEdgeUp, wThickRight, rawV, rawC, rawI);
+                }
+          } else if (heldItem && (heldItem.name === "AEGIS_SHIFT" || heldItem.name === "aegis_shift") && typeof window.buildAegisShiftModel === "function") {
+                if (aegisMode !== "idle") {
+                  // Held 2-handed via WeaponSocket & dual-hand gripCenters (anatomical RIGHT upper = leftRigFrame, anatomical LEFT lower = rightRigFrame)
+                  const anaRightFrame = leftRigFrame || getHandGripFrame(leftElbowRot, leftHandRot, true, skillWristLeft, leftArmPivot);
+                  const anaLeftFrame = rightRigFrame || getHandGripFrame(rightElbowRot, rightHandRot, false, skillWristRight, rightArmPivot);
+                  const rawAlong = [
+                    anaRightFrame.gripCenter[0] - anaLeftFrame.gripCenter[0],
+                    anaRightFrame.gripCenter[1] - anaLeftFrame.gripCenter[1],
+                    anaRightFrame.gripCenter[2] - anaLeftFrame.gripCenter[2]
+                  ];
+                  const alongLen = Math.hypot(rawAlong[0], rawAlong[1], rawAlong[2]);
+                  const wsR = anaRightFrame.weaponSocket;
+                  const curAlong = (alongLen > 0.025)
+                    ? [rawAlong[0] / alongLen, rawAlong[1] / alongLen, rawAlong[2] / alongLen]
+                    : (wsR ? wsR.axisAlong : anaRightFrame.rKnuckle);
+                  const rawEdge = (skillWristLeft && skillWristLeft.swordEdge)
+                    ? skillWristLeft.swordEdge
+                    : ((wsR && wsR.edgeUp) ? wsR.edgeUp : anaRightFrame.dArm);
+                  const dotEA = rawEdge[0] * curAlong[0] + rawEdge[1] * curAlong[1] + rawEdge[2] * curAlong[2];
+                  const curEdge = normalize([
+                    rawEdge[0] - curAlong[0] * dotEA,
+                    rawEdge[1] - curAlong[1] * dotEA,
+                    rawEdge[2] - curAlong[2] * dotEA
+                  ]);
+                  const curThick = normalize(cross(curAlong, curEdge));
+                  const gsScale = 0.36 * itemScale;
+                  const midGrip = [
+                    0.5 * (anaLeftFrame.gripCenter[0] + anaRightFrame.gripCenter[0]),
+                    0.5 * (anaLeftFrame.gripCenter[1] + anaRightFrame.gripCenter[1]),
+                    0.5 * (anaLeftFrame.gripCenter[2] + anaRightFrame.gripCenter[2])
+                  ];
+                  const modelBaseLocal = [
+                    midGrip[0] + curAlong[0] * (0.04 * gsScale),
+                    midGrip[1] + curAlong[1] * (0.04 * gsScale),
+                    midGrip[2] + curAlong[2] * (0.04 * gsScale)
+                  ];
+                  const wGripPos = transformPt(modelBaseLocal);
+                  window.buildAegisShiftModel(gsScale, wGripPos, xformDir(curAlong), xformDir(curEdge), xformDir(curThick), rawV, rawC, rawI, "greatsword");
+
+                  if (aegisMode === "dashing") {
+                    const fadeOutGs = Math.max(0.0, Math.min(1.0, (1.0 - aegisDashProg) / 0.32));
+                    const gsC = [0.86, 0.99, 1.0], gsRim = [0.20, 0.86, 1.0];
+
+                    if (aegisStep === 1 && aegisDashProg >= 0.14 && aegisDashProg < 0.94) {
+                      // Step 1: Tilted diagonal cleave arc + ground spikes
+                      const arcGrowGs = Math.min(1.0, (aegisDashProg - 0.14) / 0.30);
+                      const gsCenter = transformPt([0.0, 0.04 + bOffset, 0.16]);
+                      const gsN = normalize([-0.92, -0.32, 0.22]);
+                      const gsU = normalize([0.16, -0.20, 0.96]);
+                      const gsV = normalize(cross(gsN, gsU));
+                      _addSlashArcRibbon(rawV, rawC, rawI, gsCenter, gsU, gsV, gsN, 0.28, 0.28 + 0.42 * fadeOutGs, 0.98 - 1.25 * arcGrowGs, 0.98, 24, 0.016, gsC, gsRim, 0.7, 0.3);
+                      if (aegisDashProg >= 0.32) {
+                        const waveGs = Math.min(1.0, (aegisDashProg - 0.32) / 0.22);
+                        const tipImpactGs = transformPt([0.04, -0.34, 0.58]);
+                        const spikeDirsGs = [
+                          [-0.55, 0.65, 0.52], [-0.82, 0.42, 0.22], [-0.42, 0.78, -0.35],
+                          [0.58, 0.62, 0.48], [0.85, 0.45, 0.18], [0.38, 0.82, -0.30],
+                          [0.02, 0.88, 0.45]
+                        ];
+                        const spScaleGs = (0.14 + 0.16 * waveGs) * Math.max(0.25, fadeOutGs);
+                        _emitGroundShatterSpikes(addWedge, tipImpactGs, spikeDirsGs, spScaleGs, 0.036, 0.002, 0.016, [0.78, 0.96, 1.0], [0.22, 0.76, 1.0]);
+                      }
+                    } else if (aegisStep === 2 && aegisDashProg >= 0.12 && aegisDashProg < 0.94) {
+                      // Step 2 (Ref Figure 2): Upward diagonal rising slash ribbon (lower-right -> front -> upper-left)
+                      const arcGrow2 = Math.min(1.0, (aegisDashProg - 0.12) / 0.34);
+                      const gsCenter2 = transformPt([0.0, 0.02 + bOffset, 0.14]);
+                      const gsN2 = normalize([-0.52, 0.42, -0.74]);
+                      const gsU2 = normalize([0.0, 0.0, 1.0]);
+                      const gsV2 = normalize(cross(gsN2, gsU2));
+                      _addSlashArcRibbon(rawV, rawC, rawI, gsCenter2, gsU2, gsV2, gsN2, 0.28, 0.28 + 0.44 * fadeOutGs, -1.05, -1.05 + 2.05 * arcGrow2, 24, 0.017, gsC, gsRim, 0.7, 0.3);
+                    } else if (aegisStep === 3 && aegisDashProg >= 0.12 && aegisDashProg < 0.94) {
+                      // Step 3 (Ref Figure 3): Wide horizontal waist-level cleave ribbon (+X -> +Z -> -X)
+                      const arcGrow3 = Math.min(1.0, (aegisDashProg - 0.12) / 0.34);
+                      const gsCenter3 = transformPt([0.0, -0.02 + bOffset, 0.10]);
+                      const gsN3 = [0, 1, 0];
+                      const gsU3 = [0, 0, 1];
+                      const gsV3 = [-1, 0, 0];
+                      _addSlashArcRibbon(rawV, rawC, rawI, gsCenter3, gsU3, gsV3, gsN3, 0.30, 0.30 + 0.46 * fadeOutGs, -0.95, -0.95 + 2.10 * arcGrow3, 26, 0.018, gsC, gsRim, 0.7, 0.3);
+                      _addSlashArcRibbon(rawV, rawC, rawI, transformPt([0.0, -0.05 + bOffset, 0.10]), gsU3, gsV3, gsN3, 0.22, 0.22 + 0.24 * fadeOutGs, -0.75, -0.75 + 1.80 * arcGrow3, 20, 0.011, gsC, gsRim, 0.7, 0.3);
+                    } else if (aegisStep === 4 && aegisDashProg >= 0.24 && aegisDashProg < 0.96) {
+                      // Step 4 (Ref Figure 4): Giant overhead vertical cleave ribbon + heavy ground shatter shockwave spikes
+                      const arcGrow4 = Math.min(1.0, (aegisDashProg - 0.24) / 0.24);
+                      const gsCenter4 = transformPt([0.0, 0.05 + bOffset, 0.14]);
+                      const gsN4 = [-1, 0, 0];
+                      const gsU4 = [0, 0, 1];
+                      const gsV4 = [0, 1, 0];
+                      _addSlashArcRibbon(rawV, rawC, rawI, gsCenter4, gsU4, gsV4, gsN4, 0.28, 0.28 + 0.46 * fadeOutGs, 1.05 - 1.48 * arcGrow4, 1.05, 24, 0.019, gsC, gsRim, 0.7, 0.3);
+                      if (aegisDashProg >= 0.38) {
+                        const wave4 = Math.min(1.0, (aegisDashProg - 0.38) / 0.22);
+                        const tipImpact4 = transformPt([0.0, -0.34, 0.62]);
+                        const spikeDirs4 = [
+                          [-0.65, 0.62, 0.44], [-0.88, 0.38, 0.15], [-0.45, 0.78, -0.32],
+                          [0.65, 0.62, 0.44], [0.88, 0.38, 0.15], [0.45, 0.78, -0.32],
+                          [0.0, 0.92, 0.38], [-0.25, 0.75, 0.60], [0.25, 0.75, 0.60]
+                        ];
+                        const spScale4 = (0.18 + 0.20 * wave4) * Math.max(0.25, fadeOutGs);
+                        _emitGroundShatterSpikes(addWedge, tipImpact4, spikeDirs4, spScale4, 0.044, 0.003, 0.020, [0.82, 0.98, 1.0], [0.20, 0.78, 1.0]);
+                      }
+                    }
+                  }
+                } else {
+                  const aStTool = (typeof window.aegisShiftState === "object") ? window.aegisShiftState : null;
+                  const subToolMode = (aStTool && aStTool.toolMode === "axe") ? "axe" : "pickaxe";
+                  const wGripPos = transformPt(rightGripPos);
+                  const wAxisAlong = xformDir(rightKnuckleDir);
+                  const wEdgeUp = xformDir(rightArmDir);
+                  const wThickRight = xformDir(rightPalmIn);
+                  window.buildAegisShiftModel(0.32 * itemScale, wGripPos, wAxisAlong, wEdgeUp, wThickRight, rawV, rawC, rawI, subToolMode);
+                }
+          } else if (heldItem && (heldItem.name === "AXE" || heldItem.name === "PICKAXE" || heldItem.name === "SHOVEL")) {
                 const wHandleP1 = transformPt(axeHandleP1Rot);
                 const wHandleP2 = transformPt(axeHandleP2Rot);
                 const wBladeBase = transformPt(axeBladeP1Rot);
                 const wBladeTip = transformPt(axeBladeP2Rot);
 
                 const handleColor = [0.4, 0.25, 0.15];
-                buildTaperedSegment(wHandleP1, wHandleP2, 0.015 * itemScale, 0.015 * itemScale, 5, handleColor, rawV, rawC, rawI);
+                buildTaperedSegment(wHandleP1, wHandleP2, 0.0115 * itemScale, 0.0115 * itemScale, 5, handleColor, rawV, rawC, rawI);
                 
                 const bladeColor = [0.65, 0.65, 0.65];
                 
                 if (heldItem.name === "AXE") {
                     // The wedge is wide at tip, narrow at base for axe
-                    addWedge(wBladeBase, wBladeTip, 0.04 * itemScale, 0.08 * itemScale, 0.01 * itemScale, bladeColor);
+                    addWedge(wBladeBase, wBladeTip, 0.04 * itemScale, 0.08 * itemScale, 0.01 * itemScale, bladeColor, rightPalmIn);
                 } else if (heldItem.name === "PICKAXE") {
                     // The wedge is pointy for pickaxe (narrow at tip)
-                    addWedge(wBladeBase, wBladeTip, 0.03 * itemScale, 0.005 * itemScale, 0.01 * itemScale, bladeColor);
+                    addWedge(wBladeBase, wBladeTip, 0.03 * itemScale, 0.005 * itemScale, 0.01 * itemScale, bladeColor, rightPalmIn);
                     
                     const wBlade2Base = transformPt(axeBlade2P1Rot);
                     const wBlade2Tip = transformPt(axeBlade2P2Rot);
-                    addWedge(wBlade2Base, wBlade2Tip, 0.03 * itemScale, 0.005 * itemScale, 0.01 * itemScale, bladeColor);
+                    addWedge(wBlade2Base, wBlade2Tip, 0.03 * itemScale, 0.005 * itemScale, 0.01 * itemScale, bladeColor, rightPalmIn);
                 } else if (heldItem.name === "SHOVEL") {
                     // 1. Draw D-handle components at the back of the handle
                     const wD1 = transformPt(shovelD1Rot);
@@ -5686,12 +7599,12 @@ window.characterVertexShaderSource = `#version 300 es
                     
                     const shovelPartsColor = [0.25, 0.25, 0.25]; // Charcoal/dark metal
                     // Stem of D-handle
-                    buildTaperedSegment(wD1, wD2, 0.012 * itemScale, 0.012 * itemScale, 5, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wD1, wD2, 0.0105 * itemScale, 0.0105 * itemScale, 5, shovelPartsColor, rawV, rawC, rawI);
                     // Left and right loop branches
-                    buildTaperedSegment(wD2, wLeft, 0.01 * itemScale, 0.01 * itemScale, 4, shovelPartsColor, rawV, rawC, rawI);
-                    buildTaperedSegment(wD2, wRight, 0.01 * itemScale, 0.01 * itemScale, 4, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wD2, wLeft, 0.009 * itemScale, 0.009 * itemScale, 4, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wD2, wRight, 0.009 * itemScale, 0.009 * itemScale, 4, shovelPartsColor, rawV, rawC, rawI);
                     // Grip bar
-                    buildTaperedSegment(wLeft, wRight, 0.011 * itemScale, 0.011 * itemScale, 5, shovelPartsColor, rawV, rawC, rawI);
+                    buildTaperedSegment(wLeft, wRight, 0.010 * itemScale, 0.010 * itemScale, 5, shovelPartsColor, rawV, rawC, rawI);
 
                     // 2. Draw shovel blade scoop
                     const wBladeSocketEnd = [
@@ -5706,26 +7619,24 @@ window.characterVertexShaderSource = `#version 300 es
                     ];
 
                     // Scoop neck/socket
-                    buildTaperedSegment(wBladeBase, wBladeSocketEnd, 0.016 * itemScale, 0.016 * itemScale, 5, [0.35, 0.35, 0.35], rawV, rawC, rawI);
+                    buildTaperedSegment(wBladeBase, wBladeSocketEnd, 0.014 * itemScale, 0.014 * itemScale, 5, [0.35, 0.35, 0.35], rawV, rawC, rawI);
                     // Scoop main plate
-                    addWedge(wBladeSocketEnd, wBladeMid, 0.07 * itemScale, 0.065 * itemScale, 0.012 * itemScale, bladeColor);
+                    addWedge(wBladeSocketEnd, wBladeMid, 0.07 * itemScale, 0.065 * itemScale, 0.012 * itemScale, bladeColor, rightArmDir);
                     // Scoop pointy tip
-                    addWedge(wBladeMid, wBladeTip, 0.065 * itemScale, 0.01 * itemScale, 0.01 * itemScale, bladeColor);
+                    addWedge(wBladeMid, wBladeTip, 0.065 * itemScale, 0.01 * itemScale, 0.01 * itemScale, bladeColor, rightArmDir);
                 }
             } else if ((heldItem.name === "OBSIDIAN_FLUX" || heldItem.name === "OBSIDIAN_FLUX") && typeof window.buildObsidianFluxModel === "function") {
-                const wHandleP1 = transformPt(axeHandleP1Rot);
-                const wHandleP2 = transformPt(axeHandleP2Rot);
-                const handPos = [
-                    (wHandleP1[0] + wHandleP2[0]) * 0.5,
-                    (wHandleP1[1] + wHandleP2[1]) * 0.5,
-                    (wHandleP1[2] + wHandleP2[2]) * 0.5
-                ];
+                const handPos = transformPt([
+                    rightGripPos[0] + rightPalmIn[0] * 0.022 * itemScale,
+                    rightGripPos[1] + rightPalmIn[1] * 0.022 * itemScale,
+                    rightGripPos[2] + rightPalmIn[2] * 0.022 * itemScale
+                ]);
                 window.buildObsidianFluxModel(
                     1234,
                     0,
                     false,
                     false,
-                    0.18 * itemScale,
+                    0.15 * itemScale,
                     handPos,
                     [1, 0, 0],
                     [0, 1, 0],
@@ -5735,45 +7646,39 @@ window.characterVertexShaderSource = `#version 300 es
                     rawI
                 );
             } else if ((heldItem.name === "DRAGON_FRUIT" || heldItem.name === "dragon_fruit") && typeof window.buildDragonFruitModel === "function") {
-                const wHandleP1 = transformPt(axeHandleP1Rot);
-                const wHandleP2 = transformPt(axeHandleP2Rot);
-                const handPos = [
-                    (wHandleP1[0] + wHandleP2[0]) * 0.5,
-                    (wHandleP1[1] + wHandleP2[1]) * 0.5,
-                    (wHandleP1[2] + wHandleP2[2]) * 0.5
-                ];
+                const handPos = transformPt([
+                    rightGripPos[0] + rightPalmIn[0] * 0.016 * itemScale + rightKnuckleDir[0] * 0.012 * itemScale,
+                    rightGripPos[1] + rightPalmIn[1] * 0.016 * itemScale + rightKnuckleDir[1] * 0.012 * itemScale,
+                    rightGripPos[2] + rightPalmIn[2] * 0.016 * itemScale + rightKnuckleDir[2] * 0.012 * itemScale
+                ]);
                 window.buildDragonFruitModel(
                     1234,
-                    0.26 * itemScale,
+                    0.24 * itemScale,
                     handPos,
-                    [1, 0, 0],
-                    [0, 1, 0],
-                    [0, 0, 1],
+                    rightArmDir,
+                    rightKnuckleDir,
+                    rightPalmIn,
                     rawV,
                     rawC,
                     rawI
                 );
-            } else if ((heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket" || (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0)) && typeof window.buildIronBucketModel === "function") {
-                const wHandleP1 = transformPt(axeHandleP1Rot);
-                const wHandleP2 = transformPt(axeHandleP2Rot);
-                const handPos = [
-                    (wHandleP1[0] + wHandleP2[0]) * 0.5,
-                    (wHandleP1[1] + wHandleP2[1]) * 0.5,
-                    (wHandleP1[2] + wHandleP2[2]) * 0.5
-                ];
-                buildHeldIronBucketMesh(handPos, itemScale, heldItem, rawV, rawC, rawI);
-            } else if ((heldItem.name === "COTTON_PLANT" || heldItem.name === "cotton_plant" || heldItem.name === "COTTON" || heldItem.name === "cotton") && typeof window.buildCottonPlant === "function") {
-                const wHandleP1 = transformPt(axeHandleP1Rot);
-                const wHandleP2 = transformPt(axeHandleP2Rot);
-                const handPos = [
-                    (wHandleP1[0] + wHandleP2[0]) * 0.5,
-                    (wHandleP1[1] + wHandleP2[1]) * 0.5,
-                    (wHandleP1[2] + wHandleP2[2]) * 0.5
-                ];
+            } else if (((heldItem && (heldItem.name === "IRON_BUCKET" || heldItem.name === "iron_bucket" || heldItem.name === "WATER_BUCKET" || heldItem.name === "water_bucket")) || isWateringBucketAnim) && typeof window.buildIronBucketModel === "function") {
+                const handPos = transformPt([
+                    rightGripPos[0] - 0.016 * itemScale,
+                    rightGripPos[1] + 0.031 * itemScale,
+                    rightGripPos[2] + 0.007 * itemScale
+                ]);
+                buildHeldIronBucketMesh(handPos, itemScale, heldItem, rawV, rawC, rawI, true, chibiBucketPourPose);
+            } else if (heldItem && (heldItem.name === "COTTON_PLANT" || heldItem.name === "cotton_plant" || heldItem.name === "COTTON" || heldItem.name === "cotton") && typeof window.buildCottonPlant === "function") {
+                const handPos = transformPt([
+                    rightGripPos[0] - rightKnuckleDir[0] * 0.03 * itemScale,
+                    rightGripPos[1] - rightKnuckleDir[1] * 0.03 * itemScale,
+                    rightGripPos[2] - rightKnuckleDir[2] * 0.03 * itemScale
+                ]);
                 window.buildCottonPlant(
                     handPos[0], handPos[1], handPos[2],
-                    0, 1, 0,
-                    [1, 0, 0], [0, 0, 1], [0, 1, 0],
+                    rightKnuckleDir[0], rightKnuckleDir[1], rightKnuckleDir[2],
+                    rightArmDir, rightPalmIn, rightKnuckleDir,
                     1234,
                     rawV, rawC, rawI,
                     false
@@ -5802,6 +7707,9 @@ window.characterVertexShaderSource = `#version 300 es
                   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxData, gl.DYNAMIC_DRAW);
                   equipIndexBuffer._uploadedCount = equipIndicesLength;
                 }
+            } else if (rawI.length > 0) {
+                const flatEquip = makeFlatShadedGeometry(rawV, rawC, rawI);
+                meshesToMerge.push(flatEquip);
             }
         } else {
             if (!isClone) {
@@ -5810,13 +7718,18 @@ window.characterVertexShaderSource = `#version 300 es
         }
 
         const merged = mergeMeshes(meshesToMerge);
-        const localMerged = mergeMeshes(localMeshesToMerge, true);
+        const localVertData = _buildPatchedLocalVerts(
+          merged.vertices,
+          meshesToMerge,
+          isClone ? null : playerHairMesh,
+          isClone ? null : playerLocalHairDummyV,
+          isClone ? primaryCloneHoodie : playerHoodieMesh
+        );
         if (isClone) {
-          const uploadCloneBufSet = (targetObj, mData, lmData) => {
+          const uploadCloneBufSet = (targetObj, mData, lVertData) => {
             targetObj.indicesLength = mData.indices.length;
 
             const vertData = mData.vertices instanceof Float32Array ? mData.vertices : new Float32Array(mData.vertices);
-            const localVertData = lmData.vertices instanceof Float32Array ? lmData.vertices : new Float32Array(lmData.vertices);
             const normData = mData.normals instanceof Float32Array ? mData.normals : new Float32Array(mData.normals);
             const colData = mData.colors instanceof Float32Array ? mData.colors : new Float32Array(mData.colors);
 
@@ -5824,7 +7737,7 @@ window.characterVertexShaderSource = `#version 300 es
             uploadDynamicBuffer(gl, targetObj.vertexBuffer, gl.ARRAY_BUFFER, vertData);
 
             if (!targetObj.localVertexBuffer) targetObj.localVertexBuffer = gl.createBuffer();
-            uploadDynamicBuffer(gl, targetObj.localVertexBuffer, gl.ARRAY_BUFFER, localVertData);
+            uploadDynamicBuffer(gl, targetObj.localVertexBuffer, gl.ARRAY_BUFFER, lVertData);
 
             if (!targetObj.normalBuffer) targetObj.normalBuffer = gl.createBuffer();
             uploadDynamicBuffer(gl, targetObj.normalBuffer, gl.ARRAY_BUFFER, normData);
@@ -5850,19 +7763,33 @@ window.characterVertexShaderSource = `#version 300 es
             }
           };
 
-          if (!window.cloneMeshBuffers) window.cloneMeshBuffers = {};
-          uploadCloneBufSet(window.cloneMeshBuffers, merged, localMerged);
+          if (cloneState) {
+            cloneState._headP1 = [headP1[0], headP1[1], headP1[2]];
+            cloneState._scale = scaleFactor;
+            cloneState._phase = phase;
+            cloneState._walkBlend = cloneWalkBlend;
+            cloneState._animTick = (cloneState._animTick || 0) + 1;
+            if (!cloneState._meshBuffers) cloneState._meshBuffers = {};
+            uploadCloneBufSet(cloneState._meshBuffers, merged, localVertData);
+            if (!window.cloneMeshBuffers) {
+              window.cloneMeshBuffers = cloneState._meshBuffers;
+            }
+          } else {
+            if (!window.cloneMeshBuffers) window.cloneMeshBuffers = {};
+            uploadCloneBufSet(window.cloneMeshBuffers, merged, localVertData);
 
-          if (cloneOpenHoodieMesh && cloneLocalOpenHoodieMesh) {
-            const openMerged = mergeMeshes([cloneBaseWelded, cloneOpenHoodieMesh]);
-            const openLocalMerged = mergeMeshes([cloneBaseWelded, cloneLocalOpenHoodieMesh], true);
-            if (!window.cloneOpenHoodieMeshBuffers) window.cloneOpenHoodieMeshBuffers = {};
-            uploadCloneBufSet(window.cloneOpenHoodieMeshBuffers, openMerged, openLocalMerged);
+            if (cloneOpenHoodieMesh) {
+              const openList = [cloneBaseWelded, cloneOpenHoodieMesh];
+              const openMerged = mergeMeshes(openList);
+              const openLocalVerts = _buildPatchedLocalVerts(openMerged.vertices, openList, null, null, cloneOpenHoodieMesh);
+              if (!window.cloneOpenHoodieMeshBuffers) window.cloneOpenHoodieMeshBuffers = {};
+              uploadCloneBufSet(window.cloneOpenHoodieMeshBuffers, openMerged, openLocalVerts);
+            }
           }
 
           if (!window.getCloneHairBuffers) {
             window._cloneHairBufferCache = new Map();
-            window.getCloneHairBuffers = function(glCtx, styleIdx, colorIdx, isHoodOpen) {
+            window.getCloneHairBuffers = function(glCtx, styleIdx, colorIdx, isHoodOpen, targetClone = null) {
               if (!glCtx || typeof window.build3DAnimeHair !== "function") return null;
               const numStyles = window.NUM_HAIR_STYLES || 9;
               const colors = window.ANIME_HAIR_COLORS || [[0.85, 0.90, 0.96]];
@@ -5873,112 +7800,13 @@ window.characterVertexShaderSource = `#version 300 es
 
               let entry = window._cloneHairBufferCache.get(key);
               if (!entry) {
-                const rawV = [], rawC = [], rawI = [], rawF = [];
-                const headFit = 0.192 / 0.240;
-                window.build3DAnimeHair(
-                  sIdx,
-                  colors[cIdx],
-                  1.0,
-                  (lx, ly, lz) => [lx * headFit, ly * headFit, lz * headFit],
-                  0,
-                  rawV,
-                  rawC,
-                  rawI,
-                  rawF
-                );
-
-                let finalV = rawV;
-                let finalC = rawC;
-                let finalI = rawI;
-                let finalF = rawF;
-
-                // When hood is closed ("แบบปิด"), keep front bangs/side-locks inside the hood aperture
-                // and cull/tuck rear/top/wide vertices so zero hair pokes through the closed white hood!
-                if (!isHoodOpen && rawV.length > 0) {
-                  const numVerts = (rawV.length / 3) | 0;
-                  const vKeep = new Uint8Array(numVerts);
-                  const clampedV = new Float32Array(rawV.length);
-                  const clampedF = new Float32Array(numVerts);
-
-                  for (let v = 0; v < numVerts; v++) {
-                    let lx = rawV[v * 3];
-                    let ly = rawV[v * 3 + 1];
-                    let lz = rawV[v * 3 + 2];
-                    const dy = ly - 0.025; // Relative to hood center hy
-                    const ellR = (lx * lx) / (0.235 * 0.235) + (dy * dy) / (0.265 * 0.265);
-
-                    if (lz >= 0.025 && ly <= 0.258 && ly >= -0.125 && ellR <= 1.12) {
-                      vKeep[v] = 1;
-                      if (ellR > 0.92) {
-                        const shrink = 0.92 / Math.sqrt(ellR);
-                        lx *= shrink;
-                        ly = 0.025 + dy * shrink;
-                      }
-                      lz = Math.min(0.258, lz);
-                    }
-                    clampedV[v * 3] = lx;
-                    clampedV[v * 3 + 1] = ly;
-                    clampedV[v * 3 + 2] = lz;
-                    clampedF[v] = (rawF[v] || 0.0) * 0.22;
-                  }
-
-                  const remap = new Int32Array(numVerts);
-                  remap.fill(-1);
-                  const fV = [], fC = [], fI = [], fF = [];
-
-                  for (let k = 0; k < rawI.length; k += 3) {
-                    const i0 = rawI[k], i1 = rawI[k + 1], i2 = rawI[k + 2];
-                    if (vKeep[i0] && vKeep[i1] && vKeep[i2]) {
-                      const tris = [i0, i1, i2];
-                      for (let ti = 0; ti < 3; ti++) {
-                        const oldIdx = tris[ti];
-                        let newIdx = remap[oldIdx];
-                        if (newIdx === -1) {
-                          newIdx = (fV.length / 3) | 0;
-                          remap[oldIdx] = newIdx;
-                          fV.push(clampedV[oldIdx * 3], clampedV[oldIdx * 3 + 1], clampedV[oldIdx * 3 + 2]);
-                          fC.push(rawC[oldIdx * 3], rawC[oldIdx * 3 + 1], rawC[oldIdx * 3 + 2]);
-                          fF.push(clampedF[oldIdx]);
-                        }
-                        fI.push(newIdx);
-                      }
-                    }
-                  }
-                  finalV = fV;
-                  finalC = fC;
-                  finalI = fI;
-                  finalF = fF;
-                }
-
-                const normals = new Float32Array(finalV.length);
-                for (let k = 0; k < finalI.length; k += 3) {
-                  const i0 = finalI[k], i1 = finalI[k + 1], i2 = finalI[k + 2];
-                  if (i0 * 3 + 2 >= finalV.length || i1 * 3 + 2 >= finalV.length || i2 * 3 + 2 >= finalV.length) continue;
-                  const p0x = finalV[i0 * 3], p0y = finalV[i0 * 3 + 1], p0z = finalV[i0 * 3 + 2];
-                  const ux = finalV[i1 * 3] - p0x, uy = finalV[i1 * 3 + 1] - p0y, uz = finalV[i1 * 3 + 2] - p0z;
-                  const wx = finalV[i2 * 3] - p0x, wy = finalV[i2 * 3 + 1] - p0y, wz = finalV[i2 * 3 + 2] - p0z;
-                  const nx = uy * wz - uz * wy;
-                  const ny = uz * wx - ux * wz;
-                  const nz = ux * wy - uy * wx;
-                  normals[i0 * 3] += nx; normals[i0 * 3 + 1] += ny; normals[i0 * 3 + 2] += nz;
-                  normals[i1 * 3] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
-                  normals[i2 * 3] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
-                }
-                for (let k = 0; k < normals.length; k += 3) {
-                  const l = Math.hypot(normals[k], normals[k + 1], normals[k + 2]);
-                  if (l > 0.0001) {
-                    normals[k] /= l; normals[k + 1] /= l; normals[k + 2] /= l;
-                  } else {
-                    normals[k + 1] = 1.0;
-                  }
-                }
-
-                const localDummyV = new Float32Array(finalV.length);
-                for (let k = 0; k < finalV.length; k += 3) {
-                  localDummyV[k] = finalV[k];
-                  localDummyV[k + 1] = finalV[k + 1] - 1000.0;
-                  localDummyV[k + 2] = finalV[k + 2];
-                }
+                const built = _buildAnimeHairLocalAndNormals(sIdx, colors[cIdx], 1.0, !isHoodOpen);
+                const finalV = built.localV;
+                const finalC = built.colors;
+                const finalI = built.indices;
+                const finalF = built.flexW;
+                const normals = built.normals;
+                const localDummyV = built.localDummyV;
 
                 const vertexBuffer = glCtx.createBuffer();
                 const localVertexBuffer = glCtx.createBuffer();
@@ -6015,13 +7843,14 @@ window.characterVertexShaderSource = `#version 300 es
                 window._cloneHairBufferCache.set(key, entry);
               }
 
-              if (entry.indicesLength > 0 && entry.lastAnimTick !== window._cloneAnimTick) {
-                entry.lastAnimTick = window._cloneAnimTick;
-                const hp = window._cloneCurrentHeadP1 || [0, 0.23, 0];
+              const curTick = targetClone ? `${targetClone.houseIndex || 0}_${targetClone._animTick || 0}` : window._cloneAnimTick;
+              if (entry.indicesLength > 0 && entry.lastAnimTick !== curTick) {
+                entry.lastAnimTick = curTick;
+                const hp = (targetClone && targetClone._headP1) ? targetClone._headP1 : (window._cloneCurrentHeadP1 || [0, 0.23, 0]);
                 const hx = hp[0], hy = hp[1], hz = hp[2];
-                const sc = window._cloneCurrentScale || 1.0;
-                const ph = window._cloneCurrentPhase || 0.0;
-                const walkBlend = window._cloneCurrentWalkBlend || 0.0;
+                const sc = (targetClone && targetClone._scale) ? targetClone._scale : (window._cloneCurrentScale || 1.0);
+                const ph = (targetClone && typeof targetClone._phase === "number") ? targetClone._phase : (window._cloneCurrentPhase || 0.0);
+                const walkBlend = (targetClone && typeof targetClone._walkBlend === "number") ? targetClone._walkBlend : (window._cloneCurrentWalkBlend || 0.0);
                 const walkX = Math.sin(ph) * 0.006 * walkBlend;
                 const walkZ = Math.cos(ph * 2.0) * 0.005 * walkBlend;
                 const walkY = -Math.abs(Math.sin(ph)) * 0.0035 * walkBlend;
@@ -6057,7 +7886,6 @@ window.characterVertexShaderSource = `#version 300 es
         charRawVertices = merged.vertices;
 
         const vertData = merged.vertices instanceof Float32Array ? merged.vertices : new Float32Array(merged.vertices);
-        const localVertData = localMerged.vertices instanceof Float32Array ? localMerged.vertices : new Float32Array(localMerged.vertices);
         const normData = merged.normals instanceof Float32Array ? merged.normals : new Float32Array(merged.normals);
         const colData = merged.colors instanceof Float32Array ? merged.colors : new Float32Array(merged.colors);
 
@@ -6172,7 +8000,9 @@ window.characterVertexShaderSource = `#version 300 es
           ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore)
           : { ground: RADIUS + height * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
         let terrainRadius = caveData.ground;
-        const waterRadius = RADIUS + waterLevel * 0.15;
+        const waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
+          ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
+          : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
         let wRadiusLocal = typeof getWaterRadiusAt === "function"
           ? getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore)
           : waterRadius;
@@ -6261,17 +8091,27 @@ window.characterVertexShaderSource = `#version 300 es
           }
         }
 
-        let px = groundRadius * nx;
-        let py = groundRadius * ny;
-        let pz = groundRadius * nz;
+        const shiraMatSt = (!ragdollEnabled && !activeRidingBoat && !(typeof activeRidingMech !== "undefined" && activeRidingMech)
+          && !(typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi")
+          && typeof window !== "undefined" && ((window.tantoShirasayaState && window.tantoShirasayaState.mode === "dashing") || (window.aegisShiftState && window.aegisShiftState.mode === "dashing")))
+          ? ((window.aegisShiftState && window.aegisShiftState.mode === "dashing") ? window.aegisShiftState : window.tantoShirasayaState)
+          : null;
+        const shiraAirLift = shiraMatSt ? (shiraMatSt.visualAirLift || 0.0) : 0.0;
+        const shiraSpinYaw = shiraMatSt ? (shiraMatSt.visualSpinYaw || 0.0) : 0.0;
+        const effectiveGroundRadius = groundRadius + shiraAirLift * charScale;
+
+        let px = effectiveGroundRadius * nx;
+        let py = effectiveGroundRadius * ny;
+        let pz = effectiveGroundRadius * nz;
 
         const N = [nx, ny, nz];
 
         const East = [-sinPhi, 0, cosPhi];
         const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
 
-        const cosH = Math.cos(charHeading);
-        const sinH = Math.sin(charHeading);
+        const effectiveCharHeading = charHeading + shiraSpinYaw;
+        const cosH = Math.cos(effectiveCharHeading);
+        const sinH = Math.sin(effectiveCharHeading);
 
         const R = [
           East[0] * cosH - North[0] * sinH,
@@ -6327,7 +8167,7 @@ window.characterVertexShaderSource = `#version 300 es
             pz = activeRidingBoat.position[2] + finalN[2] * 0.46 * charScale;
           }
         } else if (swimFactor > 0.0) {
-          const isChibi = typeof window !== "undefined" && window.characterModel === "chibi";
+          const isChibi = typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi";
           // Sinks neck-deep when stationary, tilts forward smoothly when swimming (for classic procedural model)
           // For GLB models (Chibi), Swim_Forward and Swim_Idle already have the body pitch baked into the skeletal animation,
           // so we don't add the procedural ~75-degree body tilt.
@@ -6784,6 +8624,8 @@ window.characterVertexShaderSource = `#version 300 es
               else if (item.type === "wooden_arm_cannon") { icon = "🪵🦾"; label = "WOODEN_ARM_CANNON"; }
               else if (item.type === "dragon_fruit") { icon = "🐉"; label = "DRAGON_FRUIT"; }
               else if (item.type === "cotton_plant") { icon = "☁️"; label = "COTTON_PLANT"; }
+              else if (item.type === "tanto") { icon = "🗡️"; label = "TANTO"; }
+              else if (item.type === "aegis_shift") { icon = "⛏️⚔️"; label = "AEGIS_SHIFT"; }
               
               const itemData = {
                 icon: icon,

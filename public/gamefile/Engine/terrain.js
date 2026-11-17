@@ -139,24 +139,43 @@
 
 
 
-      function isTargetWithinReach(itemPos, maxReach = actionReachDistance) {
+      function isTargetWithinReach(itemPos, maxReach = actionReachDistance, actorOrBasis = null) {
         if (!itemPos) return { valid: false, t: Infinity, perpSq: Infinity };
 
         if (actionReachMode === 1) {
           // Mode 1: Line-based Action Reach
-          return isTargetWithinActionLine(itemPos, maxReach);
-        } else if (actionReachMode === 2) {
-          // Mode 2: Circular-based Action Reach (around the feet)
+          return isTargetWithinActionLine(itemPos, maxReach, actorOrBasis);
+        }
+
+        let nx, ny, nz, r_terrain, r_feet, r_head, pScaleVal;
+        if (actorOrBasis) {
+          const basis = (actorOrBasis.normal && actorOrBasis.F)
+            ? actorOrBasis
+            : ((typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actorOrBasis) : null);
+          if (basis) {
+            nx = basis.normal[0]; ny = basis.normal[1]; nz = basis.normal[2];
+            r_terrain = basis.terrainRadius;
+            pScaleVal = basis.pScale || playerScale;
+            r_feet = basis.centerRadius - 0.46 * pScaleVal;
+            r_head = basis.centerRadius + 0.46 * pScaleVal;
+          }
+        }
+        if (typeof nx !== "number") {
           const sinTheta = Math.sin(charTheta);
           const cosTheta = Math.cos(charTheta);
           const sinPhi = Math.sin(charPhi);
           const cosPhi = Math.cos(charPhi);
-          const nx = sinTheta * cosPhi;
-          const ny = cosTheta;
-          const nz = sinTheta * sinPhi;
+          nx = sinTheta * cosPhi;
+          ny = cosTheta;
+          nz = sinTheta * sinPhi;
+          pScaleVal = playerScale;
+          r_terrain = RADIUS + (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere : getHeightOnSphere)(charTheta, charPhi, window.globalSeed) * HEIGHT_SCALE;
+          r_feet = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * pScaleVal) : r_terrain;
+          r_head = (playerCenterRadius !== null) ? (playerCenterRadius + 0.46 * pScaleVal) : (r_terrain + 1.16 * pScaleVal);
+        }
 
-          const r_terrain = RADIUS + (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere : getHeightOnSphere)(charTheta, charPhi, window.globalSeed) * HEIGHT_SCALE;
-          const r_feet = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * playerScale) : r_terrain;
+        if (actionReachMode === 2) {
+          // Mode 2: Circular-based Action Reach (around the feet)
           const feetPos = [nx * r_feet, ny * r_feet, nz * r_feet];
 
           const dx = itemPos[0] - feetPos[0];
@@ -169,28 +188,14 @@
           const dz_tangent = dz - d_normal * nz;
           const distSq = dx_tangent * dx_tangent + dy_tangent * dy_tangent + dz_tangent * dz_tangent;
 
-          // within the reach cylinder and within character's vertical space
           const heightDiff = Math.abs(d_normal);
-          const heightValid = heightDiff <= 1.2 * playerScale;
+          const heightValid = heightDiff <= 1.2 * pScaleVal;
 
           const valid = distSq <= maxReach * maxReach && heightValid;
           return { valid, t: Math.sqrt(distSq), perpSq: distSq };
         } else {
           // Mode 3: Capsule-based Action Reach (covering/around the character)
-          const sinTheta = Math.sin(charTheta);
-          const cosTheta = Math.cos(charTheta);
-          const sinPhi = Math.sin(charPhi);
-          const cosPhi = Math.cos(charPhi);
-          const nx = sinTheta * cosPhi;
-          const ny = cosTheta;
-          const nz = sinTheta * sinPhi;
-
-          const r_terrain = RADIUS + (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere : getHeightOnSphere)(charTheta, charPhi, window.globalSeed) * HEIGHT_SCALE;
-          const r_feet = (playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * playerScale) : r_terrain;
-          const r_head = (playerCenterRadius !== null) ? (playerCenterRadius + 0.46 * playerScale) : (r_terrain + 1.16 * playerScale);
-
           const A = [nx * r_feet, ny * r_feet, nz * r_feet];
-          const B = [nx * r_head, ny * r_head, nz * r_head];
           const L = r_head - r_feet;
 
           const AP = [itemPos[0] - A[0], itemPos[1] - A[1], itemPos[2] - A[2]];
@@ -291,35 +296,47 @@
         ];
       }
 
-      function isTargetWithinActionLine(itemPos, maxReach = actionReachDistance) {
+      function isTargetWithinActionLine(itemPos, maxReach = actionReachDistance, actorOrBasis = null) {
         if (!itemPos) return { valid: false, t: Infinity, perpSq: Infinity };
 
-        const sinTheta = Math.sin(charTheta);
-        const cosTheta = Math.cos(charTheta);
-        const sinPhi = Math.sin(charPhi);
-        const cosPhi = Math.cos(charPhi);
-
-        const nx = sinTheta * cosPhi;
-        const ny = cosTheta;
-        const nz = sinTheta * sinPhi;
-
-        const height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere : getHeightOnSphere)(charTheta, charPhi, window.globalSeed);
-        const terrainRadius = RADIUS + height * HEIGHT_SCALE;
+        let nx, ny, nz, terrainRadius, F, pScaleVal;
+        if (actorOrBasis) {
+          const basis = (actorOrBasis.normal && actorOrBasis.F)
+            ? actorOrBasis
+            : ((typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actorOrBasis) : null);
+          if (basis) {
+            nx = basis.normal[0]; ny = basis.normal[1]; nz = basis.normal[2];
+            terrainRadius = basis.terrainRadius;
+            F = basis.F;
+            pScaleVal = basis.pScale || playerScale;
+          }
+        }
+        if (typeof nx !== "number") {
+          const sinTheta = Math.sin(charTheta);
+          const cosTheta = Math.cos(charTheta);
+          const sinPhi = Math.sin(charPhi);
+          const cosPhi = Math.cos(charPhi);
+          nx = sinTheta * cosPhi;
+          ny = cosTheta;
+          nz = sinTheta * sinPhi;
+          pScaleVal = playerScale;
+          const height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere : getHeightOnSphere)(charTheta, charPhi, window.globalSeed);
+          terrainRadius = RADIUS + height * HEIGHT_SCALE;
+          const East = [-sinPhi, 0, cosPhi];
+          const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
+          const cosH = Math.cos(charHeading);
+          const sinH = Math.sin(charHeading);
+          F = [
+            North[0] * cosH + East[0] * sinH,
+            North[1] * cosH + East[1] * sinH,
+            North[2] * cosH + East[2] * sinH,
+          ];
+        }
 
         const start = [
           terrainRadius * nx + nx * 0.05,
           terrainRadius * ny + ny * 0.05,
           terrainRadius * nz + nz * 0.05
-        ];
-
-        const East = [-sinPhi, 0, cosPhi];
-        const North = [-cosTheta * cosPhi, sinTheta, -cosTheta * sinPhi];
-        const cosH = Math.cos(charHeading);
-        const sinH = Math.sin(charHeading);
-        const F = [
-          North[0] * cosH + East[0] * sinH,
-          North[1] * cosH + East[1] * sinH,
-          North[2] * cosH + East[2] * sinH,
         ];
 
         const dx = itemPos[0] - start[0];
@@ -341,12 +358,12 @@
         const perpSqTangent = rx * rx + ry * ry + rz * rz;
 
         // Tighter cylinder radius of 0.2 meters (perpSqTangent <= 0.04)
-        const inCylinder = perpSqTangent <= 0.04 * (playerScale / 0.1);
+        const inCylinder = perpSqTangent <= 0.04 * (pScaleVal / 0.1);
 
         // Horizontal angle check: must face/aim within 35 degrees of the item center (cosAngleTangent >= 0.819)
         // Bypassed if player is extremely close (distTangent <= 0.25 * (playerScale / 0.1))
         let angleValid = true;
-        if (distTangent > 0.25 * (playerScale / 0.1)) {
+        if (distTangent > 0.25 * (pScaleVal / 0.1)) {
           const cosAngleTangent = t / (distTangent || 1.0);
           angleValid = cosAngleTangent >= 0.819;
         }
@@ -569,12 +586,12 @@
 
             const t_proj = v_p[0] * dir_un[0] + v_p[1] * dir_un[1] + v_p[2] * dir_un[2];
             // Extend slightly past ends for smooth transition
-            const endMargin = other.type === "folding_ladder" ? 0.35 : 0.20;
+            const endMargin = other.type === "folding_ladder" ? 0.18 : 0.20;
             if (t_proj >= -endMargin && t_proj <= len_v + endMargin) {
               // Project sideways along stair/ladder tangent
               const stairR = (other.R && typeof other.R[0] === 'number') ? other.R : [1, 0, 0];
               const w_proj = v_p[0] * stairR[0] + v_p[1] * stairR[1] + v_p[2] * stairR[2];
-              const maxW = other.type === "folding_ladder" ? 0.45 : 0.35;
+              const maxW = other.type === "folding_ladder" ? 0.22 : 0.35;
               if (Math.abs(w_proj) <= maxW) {
                 const clampedT = Math.max(0, Math.min(len_v, t_proj));
                 const P_on_stair = [

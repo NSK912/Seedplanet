@@ -1990,6 +1990,12 @@
             if (cur >= 95) nextVal = 50;
             else if (cur <= 60) nextVal = 75;
             else nextVal = 100;
+          } else if (el.id === "uiScaleSlider") {
+            if (cur < 75) nextVal = 75;
+            else if (cur < 100) nextVal = 100;
+            else if (cur < 125) nextVal = 125;
+            else if (cur < 150) nextVal = 150;
+            else nextVal = 50;
           } else if (el.id === "shadowMapQualitySlider") {
             nextVal = cur >= max ? min : cur + 1;
           } else if (el.id === "mouseSensitivitySlider") {

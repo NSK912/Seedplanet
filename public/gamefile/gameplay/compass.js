@@ -43,11 +43,10 @@
         position: fixed;
         top: 10px;
         left: 50%;
-        transform: translateX(-50%);
-        width: min(560px, calc(100vw - 240px));
-        min-width: 180px;
-        max-width: 90vw;
-        height: 56px;
+        transform: translateX(-50%) scale(var(--ui-hud-scale, 1));
+        transform-origin: top center;
+        width: 400px;
+        height: 48px;
         z-index: 10000;
         pointer-events: none;
         display: flex;
@@ -71,8 +70,7 @@
       compassCanvas.height = 112;
       compassCanvas.style.cssText = `
         width: 100%;
-        height: auto;
-        max-height: 56px;
+        height: 100%;
         display: block;
         background: transparent;
       `;

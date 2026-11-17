@@ -198,7 +198,7 @@ const Physics = {
         // Check if sitting on constructed floors with precise bounding check
         centerTerrainRad = this.getFloorSurfaceRadiusAt(nx * centerTerrainRad, ny * centerTerrainRad, nz * centerTerrainRad, centerTerrainRad);
         
-        const waterRadius = rad + waterLevel * 0.15;
+        const waterRadius = this.getCanonicalWaterRadius(rad, waterLevel, hScale);
 
         let isInWater = false;
         if (typeof isInWaterArg === "boolean") {
@@ -388,6 +388,225 @@ const Physics = {
             F: newF,
             R: newR,
             wheelHeights: wHeights
+        };
+    },
+
+    getCanonicalWaterRadius: function(planetRadius, wLevel, hScale) {
+        const pR = typeof planetRadius === "number" ? planetRadius : (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+        const wl = typeof wLevel === "number" ? wLevel : (typeof waterLevel !== "undefined" ? waterLevel : 0.0);
+        const hs = typeof hScale === "number" ? hScale : (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : (0.6 * Math.pow(pR / 8.0, 0.70)));
+        return pR + wl * (hs * 0.25);
+    },
+
+    resolveEntitySurfaceAndWater: function({
+        theta,
+        phi,
+        nx,
+        ny,
+        nz,
+        feetRadius = null,
+        planetRadius = (typeof RADIUS !== "undefined" ? RADIUS : 32.0),
+        heightScale = (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1.0),
+        seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0),
+        waterEnabled: wEnabledArg = (typeof waterEnabled !== "undefined" ? waterEnabled : true),
+        waterLevel: wLevelArg = (typeof waterLevel !== "undefined" ? waterLevel : 0.0)
+    }) {
+        if (nx === undefined || ny === undefined || nz === undefined) {
+            const sinT = Math.sin(theta), cosT = Math.cos(theta);
+            const sinP = Math.sin(phi), cosP = Math.cos(phi);
+            nx = sinT * cosP;
+            ny = cosT;
+            nz = sinT * sinP;
+        }
+        const getH = (typeof getVisualHeightOnSphere === "function")
+            ? getVisualHeightOnSphere
+            : ((typeof getHeightOnSphere === "function") ? getHeightOnSphere : null);
+        const rawH = getH ? getH(theta, phi, seed) : 0;
+        const naturalSurfaceRad = planetRadius + rawH * heightScale;
+        const sampleFeetRad = (typeof feetRadius === "number" && !Number.isNaN(feetRadius) && feetRadius > 0.001)
+            ? feetRadius
+            : naturalSurfaceRad;
+
+        const caveData = (typeof getTerrainSurfaceAndCeiling === "function")
+            ? getTerrainSurfaceAndCeiling(nx, ny, nz, sampleFeetRad)
+            : { ground: naturalSurfaceRad, ceiling: Infinity, insideTunnel: false };
+        const terrainRad = caveData.ground;
+
+        const waterRadius = this.getCanonicalWaterRadius(planetRadius, wLevelArg, heightScale);
+        let wRadiusLocal = 0;
+        if (wEnabledArg) {
+            wRadiusLocal = (typeof getWaterRadiusAt === "function")
+                ? getWaterRadiusAt(nx * sampleFeetRad, ny * sampleFeetRad, nz * sampleFeetRad)
+                : waterRadius;
+            if (caveData.insideTunnel && wRadiusLocal === 0) {
+                wRadiusLocal = waterRadius;
+            }
+        }
+
+        return {
+            nx,
+            ny,
+            nz,
+            terrainRad,
+            naturalSurfaceRad,
+            caveData,
+            waterRadius,
+            wRadiusLocal,
+            isWaterPresent: !!(wEnabledArg && wRadiusLocal > 0 && terrainRad < wRadiusLocal),
+            waterDepth: (wEnabledArg && wRadiusLocal > 0 && terrainRad < wRadiusLocal) ? (wRadiusLocal - terrainRad) : 0
+        };
+    },
+
+    stepDrivenBoatOnSurface: function({
+        boat,
+        theta,
+        phi,
+        heading,
+        charScale = (typeof playerScale !== "undefined" ? playerScale : 0.1),
+        planetRadius = (typeof RADIUS !== "undefined" ? RADIUS : 32.0),
+        heightScale = (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1.0),
+        seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0),
+        wEnabled = (typeof waterEnabled !== "undefined" ? waterEnabled : true),
+        wLevel = (typeof waterLevel !== "undefined" ? waterLevel : 0.0),
+        wAnimTime = (typeof waterAnimTime !== "undefined" ? waterAnimTime : 0),
+        wStrength = (typeof waveStrength !== "undefined" ? waveStrength : 0),
+        timeScale = 1.0
+    }) {
+        const sinT = Math.sin(theta), cosT = Math.cos(theta);
+        const sinP = Math.sin(phi), cosP = Math.cos(phi);
+        const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+        const cEast = [-sinP, 0, cosP];
+        const cNorth = [-cosT * cosP, sinT, -cosT * sinP];
+        const cosH = Math.cos(heading || 0);
+        const sinH = Math.sin(heading || 0);
+
+        let bF = [
+            cNorth[0] * cosH + cEast[0] * sinH,
+            cNorth[1] * cosH + cEast[1] * sinH,
+            cNorth[2] * cosH + cEast[2] * sinH
+        ];
+        let bR_vec = [
+            cEast[0] * cosH - cNorth[0] * sinH,
+            cEast[1] * cosH - cNorth[1] * sinH,
+            cEast[2] * cosH - cNorth[2] * sinH
+        ];
+
+        const feetRef = (boat && typeof boat.currentRadius === "number") ? boat.currentRadius : null;
+        const surf = this.resolveEntitySurfaceAndWater({
+            theta, phi, nx, ny, nz,
+            feetRadius: feetRef,
+            planetRadius, heightScale, seed,
+            waterEnabled: wEnabled, waterLevel: wLevel
+        });
+        const tRadius = surf.terrainRad;
+        const wRadius = surf.wRadiusLocal > 0 ? surf.wRadiusLocal : surf.waterRadius;
+
+        const isBoatInWater = !!(wEnabled && surf.wRadiusLocal > 0 && tRadius < wRadius && ((wRadius - tRadius) > 0.3 * charScale));
+        let baseRadius = (wEnabled && surf.wRadiusLocal > 0 && tRadius < wRadius) ? wRadius : tRadius;
+        if (wEnabled && surf.wRadiusLocal > 0 && tRadius < wRadius && typeof getWaterWave === "function") {
+            const wave = getWaterWave(nx * wRadius, ny * wRadius, nz * wRadius, wAnimTime, wStrength);
+            const depth = wRadius - tRadius;
+            const fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
+            baseRadius += wave * fade;
+        }
+
+        const isWheeled = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
+        let bR;
+
+        if (isWheeled) {
+            const vehicleTransform = this.calculateLandBoatTransform({
+                position: [tRadius * nx, tRadius * ny, tRadius * nz],
+                nx, ny, nz,
+                F: bF,
+                R: bR_vec,
+                baseRadius: tRadius,
+                waterEnabled: wEnabled,
+                waterLevel: wLevel,
+                waterAnimTime: wAnimTime,
+                waveStrength: wStrength,
+                hasWheels: true,
+                isInWater: false
+            });
+            const targetGroundRadius = vehicleTransform.targetGroundRadius;
+            const waterDepth = (wEnabled && surf.wRadiusLocal > 0 && tRadius < wRadius) ? (wRadius - tRadius) : 0;
+            const targetWaterRadius = (wEnabled && waterDepth > 0) ? (baseRadius - 0.04) : -Infinity;
+            const targetSupportRadius = Math.max(targetGroundRadius, targetWaterRadius);
+
+            let buoyancyFactor = 0.0;
+            if (targetWaterRadius > -Infinity) {
+                const buoyancyRange = 0.20 * charScale;
+                buoyancyFactor = Math.min(1.0, Math.max(0.0, (targetWaterRadius - (targetGroundRadius - buoyancyRange)) / (buoyancyRange + 0.0001)));
+            }
+            if (boat.currentRadius === undefined) {
+                boat.currentRadius = targetSupportRadius;
+                boat.verticalVel = 0;
+                boat.isAirborne = false;
+                boat.pitchGrade = 0;
+                boat.normal = [nx, ny, nz];
+            }
+            const landNormal = vehicleTransform.normal || [nx, ny, nz];
+            const blendedNx = (1.0 - buoyancyFactor) * landNormal[0] + buoyancyFactor * nx;
+            const blendedNy = (1.0 - buoyancyFactor) * landNormal[1] + buoyancyFactor * ny;
+            const blendedNz = (1.0 - buoyancyFactor) * landNormal[2] + buoyancyFactor * nz;
+            const bLen = Math.hypot(blendedNx, blendedNy, blendedNz) || 1;
+            const groundedTargetNormal = [blendedNx / bLen, blendedNy / bLen, blendedNz / bLen];
+            const orientLerp = Math.min(1.0, 0.22 * timeScale);
+            const currN = boat.normal || [nx, ny, nz];
+            const bNx = currN[0] + (groundedTargetNormal[0] - currN[0]) * orientLerp;
+            const bNy = currN[1] + (groundedTargetNormal[1] - currN[1]) * orientLerp;
+            const bNz = currN[2] + (groundedTargetNormal[2] - currN[2]) * orientLerp;
+            const nLen = Math.hypot(bNx, bNy, bNz) || 1;
+            boat.normal = [bNx / nLen, bNy / nLen, bNz / nLen];
+            boat.currentRadius += (targetSupportRadius - boat.currentRadius) * Math.min(1.0, 0.30 * timeScale);
+            boat.pitchGrade = (boat.pitchGrade || 0) + ((1.0 - buoyancyFactor) * (vehicleTransform.pitchGrade || 0) - (boat.pitchGrade || 0)) * orientLerp;
+            boat.isAirborne = false;
+            boat.verticalVel = 0;
+            boat.isInWater = (buoyancyFactor > 0.5 && waterDepth > 0.25 * charScale);
+
+            const currNorm = boat.normal;
+            const dotFN = bF[0] * currNorm[0] + bF[1] * currNorm[1] + bF[2] * currNorm[2];
+            const alignedF = [bF[0] - currNorm[0] * dotFN, bF[1] - currNorm[1] * dotFN, bF[2] - currNorm[2] * dotFN];
+            const aFLen = Math.hypot(alignedF[0], alignedF[1], alignedF[2]) || 1;
+            bF = [alignedF[0] / aFLen, alignedF[1] / aFLen, alignedF[2] / aFLen];
+            bR_vec = [
+                currNorm[1] * bF[2] - currNorm[2] * bF[1],
+                currNorm[2] * bF[0] - currNorm[0] * bF[2],
+                currNorm[0] * bF[1] - currNorm[1] * bF[0]
+            ];
+            bR = boat.currentRadius;
+        } else if (isBoatInWater) {
+            bR = baseRadius - 0.04;
+            boat.currentRadius = bR;
+            boat.verticalVel = 0;
+            boat.pitchGrade = 0;
+            boat.normal = [nx, ny, nz];
+            boat.isAirborne = false;
+            boat.isInWater = true;
+        } else {
+            let landGroundRad = tRadius;
+            if (typeof this.getFloorSurfaceRadiusAt === "function") {
+                landGroundRad = this.getFloorSurfaceRadiusAt(nx * tRadius, ny * tRadius, nz * tRadius, tRadius);
+            }
+            bR = landGroundRad + 0.002;
+            boat.currentRadius = bR;
+            boat.verticalVel = 0;
+            boat.pitchGrade = 0;
+            boat.normal = [nx, ny, nz];
+            boat.isAirborne = false;
+            boat.isInWater = false;
+        }
+
+        boat.position = [bR * nx, bR * ny, bR * nz];
+        boat.angle = undefined;
+        boat.F = bF;
+        boat.R = bR_vec;
+        boat.isDynamic = true;
+        boat.vel = [0, 0, 0];
+
+        return {
+            bR,
+            centerRadius: bR + 0.46 * charScale,
+            isBoatInWater
         };
     }
 };
