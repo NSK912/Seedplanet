@@ -3,7 +3,7 @@
   "description": "SeedPlanet 3D Game",
   "author": "NSK-Natsuki",
   "private": true,
-  "version": "2.0.15",
+  "version": "2.0.16",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -14,10 +14,10 @@
     "lint": "tsc --noEmit",
     "generate-icons": "node scripts/generate-icons.js",
     "dev:electron": "electron .",
-    "build:electron": "vite build && electron-builder --linux AppImage",
-    "build:win-x64": "vite build && electron-builder --win nsis appx --x64",
-    "build:win-arm64": "vite build && electron-builder --win appx --arm64",
-    "build:win-all": "vite build && electron-builder --win nsis appx --x64 && electron-builder --win appx --arm64"
+    "build:electron": "npm run generate-icons && vite build && electron-builder --linux AppImage",
+    "build:win-x64": "npm run generate-icons && vite build && electron-builder --win nsis appx --x64",
+    "build:win-arm64": "npm run generate-icons && vite build && electron-builder --win appx --arm64",
+    "build:win-all": "npm run generate-icons && vite build && electron-builder --win nsis appx --x64 && electron-builder --win appx --arm64"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -58,6 +58,7 @@
     "appId": "NSK-Natsuki.SeedPlanet",
     "productName": "SeedPlanet",
     "directories": {
+      "buildResources": "build",
       "output": "dist-electron"
     },
     "files": [
@@ -92,6 +93,8 @@
       "publisher": "CN=F2BD52C0-1826-4F4C-953A-B27311D542C3",
       "publisherDisplayName": "NSK-Natsuki",
       "displayName": "SeedPlanet",
+      "backgroundColor": "#18212b",
+      "showNameOnTiles": true,
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "publish": {
