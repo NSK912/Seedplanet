@@ -50,17 +50,17 @@ function getOrCreateRawWoodenWheelTemplate(radius, thickness, isPreview) {
     const curr = i * 4;
     const next = (i + 1) * 4;
 
-    tempIndices.push(curr + 0, next + 0, next + 1, curr + 0, next + 1, next + 0);
-    tempIndices.push(curr + 0, next + 1, curr + 1, curr + 0, curr + 1, next + 1);
+    tempIndices.push(curr + 0, next + 0, next + 1);
+    tempIndices.push(curr + 0, next + 1, curr + 1);
 
-    tempIndices.push(curr + 2, curr + 3, next + 3, curr + 2, next + 3, curr + 3);
-    tempIndices.push(curr + 2, next + 3, next + 2, curr + 2, next + 2, next + 3);
+    tempIndices.push(curr + 2, next + 3, curr + 3);
+    tempIndices.push(curr + 2, next + 2, next + 3);
 
-    tempIndices.push(curr + 3, curr + 0, next + 0, curr + 3, next + 0, curr + 0);
-    tempIndices.push(curr + 3, next + 0, next + 3, curr + 3, next + 3, next + 0);
+    tempIndices.push(curr + 3, next + 0, curr + 0);
+    tempIndices.push(curr + 3, next + 3, next + 0);
 
-    tempIndices.push(curr + 1, curr + 2, next + 2, curr + 1, next + 2, curr + 2);
-    tempIndices.push(curr + 1, next + 2, next + 1, curr + 1, next + 1, next + 2);
+    tempIndices.push(curr + 1, next + 2, curr + 2);
+    tempIndices.push(curr + 1, next + 1, next + 2);
   }
 
   // Hub (slot 1)
@@ -89,8 +89,8 @@ function getOrCreateRawWoodenWheelTemplate(radius, thickness, isPreview) {
     const curr = hubBaseIdx + i * 2;
     const next = hubBaseIdx + (i + 1) * 2;
 
-    tempIndices.push(curr + 0, curr + 1, next + 1, curr + 0, next + 1, curr + 1);
-    tempIndices.push(curr + 0, next + 1, next + 0, curr + 0, next + 0, next + 1);
+    tempIndices.push(curr + 0, next + 1, curr + 1);
+    tempIndices.push(curr + 0, next + 0, next + 1);
   }
 
   const capRightIdx = tempVerts.length / 3;
@@ -107,8 +107,8 @@ function getOrCreateRawWoodenWheelTemplate(radius, thickness, isPreview) {
     const curr = hubBaseIdx + i * 2;
     const next = hubBaseIdx + (i + 1) * 2;
 
-    tempIndices.push(capRightIdx, curr + 0, next + 0, capRightIdx, next + 0, curr + 0);
-    tempIndices.push(capLeftIdx, next + 1, curr + 1, capLeftIdx, curr + 1, next + 1);
+    tempIndices.push(capRightIdx, next + 0, curr + 0);
+    tempIndices.push(capLeftIdx, curr + 1, next + 1);
   }
 
   // Spokes (slot 2)
@@ -164,8 +164,8 @@ function getOrCreateRawWoodenWheelTemplate(radius, thickness, isPreview) {
       const curr = ironBaseIdx + i * 2;
       const next = ironBaseIdx + (i + 1) * 2;
 
-      tempIndices.push(curr + 0, next + 0, next + 1, curr + 0, next + 1, next + 0);
-      tempIndices.push(curr + 0, next + 1, curr + 1, curr + 0, curr + 1, next + 1);
+      tempIndices.push(curr + 0, next + 0, next + 1);
+      tempIndices.push(curr + 0, next + 1, curr + 1);
     }
   }
 

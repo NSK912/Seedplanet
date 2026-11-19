@@ -867,28 +867,29 @@ const _devCharUIInitTimer = setInterval(() => {
   
   
   if (toggleControlsBtn) {
-    toggleControlsBtn.style.setProperty('top', 'auto', 'important');
-    toggleControlsBtn.style.setProperty('right', '50%', 'important');
-    toggleControlsBtn.style.setProperty('bottom', '20px', 'important');
-    toggleControlsBtn.style.setProperty('transform', 'translateX(50%)', 'important');
+    toggleControlsBtn.style.setProperty('top', 'calc(0.625rem + var(--ui-margin, 0rem))', 'important');
+    toggleControlsBtn.style.setProperty('bottom', 'auto', 'important');
+    toggleControlsBtn.style.setProperty('left', '50%', 'important');
+    toggleControlsBtn.style.setProperty('right', 'auto', 'important');
+    toggleControlsBtn.style.setProperty('transform', 'translateX(-50%)', 'important');
     toggleControlsBtn.style.setProperty('z-index', '9999', 'important');
   }
   
   if (mainControls) {
-    mainControls.style.setProperty('top', '50%', 'important');
+    mainControls.style.setProperty('top', 'calc(50% + 0.75rem)', 'important');
     mainControls.style.setProperty('right', '50%', 'important');
     mainControls.style.setProperty('transform', 'translate(50%, -50%)', 'important');
     mainControls.style.setProperty('width', '90vw', 'important');
     mainControls.style.setProperty('max-width', 'calc(80vh * 16 / 9)', 'important');
     mainControls.style.setProperty('aspect-ratio', '16/9', 'important');
     mainControls.style.setProperty('height', 'auto', 'important');
-    mainControls.style.setProperty('max-height', '90vh', 'important');
+    mainControls.style.setProperty('max-height', 'calc(100vh - 6rem)', 'important');
     mainControls.style.setProperty('overflow-y', 'auto', 'important');
-    mainControls.style.setProperty('padding', '24px', 'important');
+    mainControls.style.setProperty('padding', '1.5rem', 'important');
     mainControls.style.setProperty('box-sizing', 'border-box', 'important');
     mainControls.style.setProperty('background', 'rgba(10, 10, 15, 0.95)', 'important');
     mainControls.style.setProperty('border', '2px solid #dfb76c', 'important');
-    mainControls.style.setProperty('border-radius', '12px', 'important');
+    mainControls.style.setProperty('border-radius', '0.75rem', 'important');
     mainControls.style.setProperty('z-index', '9998', 'important');
     
     // CSS Grid layout for perfect responsive wrapping without empty spaces
@@ -896,7 +897,7 @@ const _devCharUIInitTimer = setInterval(() => {
     mainControls.style.setProperty('display', 'flex', 'important');
     mainControls.style.setProperty('flex-direction', 'row', 'important');
     mainControls.style.setProperty('flex-wrap', 'wrap', 'important');
-    mainControls.style.setProperty('gap', '16px', 'important');
+    mainControls.style.setProperty('gap', '1rem', 'important');
     mainControls.style.setProperty('align-content', 'flex-start', 'important');
     mainControls.style.setProperty('align-items', 'flex-start', 'important');
     
@@ -964,21 +965,6 @@ const _devCharUIInitTimer = setInterval(() => {
       }
     `;
     document.head.appendChild(styleEl);
-    
-    // Add a close button specifically for this new layout
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "❌ ปิด";
-    closeBtn.style.cssText = "position: absolute; top: 10px; right: 10px; background: #333; border: 1px solid #555; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; z-index: 10000;";
-    closeBtn.addEventListener("click", () => {
-      if (typeof window.toggleDevControls === "function") {
-        window.toggleDevControls(false);
-      } else {
-        controlsVisible = false;
-        mainControls.style.display = "none";
-        if (toggleControlsBtn) toggleControlsBtn.textContent = "⚙️ แสดงเมนู";
-      }
-    });
-    mainControls.appendChild(closeBtn);
   }
   if (toggleControlsBtn && mainControls && !toggleControlsBtn.dataset.hasToggleListener) {
     toggleControlsBtn.dataset.hasToggleListener = "true";

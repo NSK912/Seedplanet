@@ -263,13 +263,13 @@
 
     const renderAlphabetCards = () => {
       return alphabetList.map(letter => {
-        const svgIcon = getSingleLetterSVG(letter, "30px", "#dfb76c");
+        const svgIcon = getSingleLetterSVG(letter, "1.875rem", "#dfb76c");
         return `
-          <div class="seedian-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(223,183,108,0.25); padding: 12px 8px; gap: 8px; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); transition: transform 0.2s, border-color 0.2s;">
-            <div style="width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 6px rgba(223,183,108,0.4));">
+          <div class="seedian-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(223,183,108,0.25); padding: 0.75rem 0.5rem; gap: 0.5rem; --cut: 0.375rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); transition: transform 0.2s, border-color 0.2s;">
+            <div style="width: 2.125rem; height: 2.125rem; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 0.375rem rgba(223,183,108,0.4));">
               ${svgIcon}
             </div>
-            <div style="font-size: 14px; font-weight: 700; color: #ffffff; font-family: 'Google Sans', sans-serif; letter-spacing: 0.05em;">
+            <div style="font-size: 0.875rem; font-weight: 700; color: #ffffff; font-family: 'Google Sans', sans-serif; letter-spacing: 0.05em;">
               ${letter}
             </div>
           </div>
@@ -278,24 +278,24 @@
     };
 
     overlay.innerHTML = `
-      <div class="seedian-modal-box" style="position: relative; max-width: 680px; width: 92vw;">
+      <div class="seedian-modal-box" style="position: relative; max-width: 42.5rem; width: 92vw;">
         <!-- Scrollable Body -->
-        <div class="seedian-modal-body" style="padding-top: 20px;">
+        <div class="seedian-modal-body" style="padding-top: 1.25rem;">
           <!-- Live Interactive Translator -->
-          <div style="background: rgba(223,183,108,0.05); border: 1px solid rgba(223,183,108,0.25); --cut: 10px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); padding: 14px; margin-bottom: 16px;">
-            <div style="font-size: 13px; font-weight: 700; color: #dfb76c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-family: 'Google Sans', sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
+          <div style="background: rgba(223,183,108,0.05); border: 1px solid rgba(223,183,108,0.25); --cut: 0.625rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); padding: 0.875rem; margin-bottom: 1rem;">
+            <div style="font-size: 0.8125rem; font-weight: 700; color: #dfb76c; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.375rem; font-family: 'Google Sans', sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 0.375rem rgba(223,183,108,0.3);">
               <span>✦</span> ${toSeedian("TRY TYPING")} (พิมพ์ข้อความ A-Z)
             </div>
-            <div style="display: flex; gap: 10px; flex-direction: column;">
+            <div style="display: flex; gap: 0.625rem; flex-direction: column;">
               <input
                 id="seedianLiveInput"
                 type="text"
                 placeholder="พิมพ์ข้อความภาษาอังกฤษ เช่น SEEDPLANET / HELLO..."
                 value="SEEDPLANET"
-                style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; color: #ffffff; font-size: 14px; font-family: 'Google Sans', sans-serif; outline: none; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));"
+                style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem 0.75rem; color: #ffffff; font-size: 0.875rem; font-family: 'Google Sans', sans-serif; outline: none; --cut: 0.375rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));"
               />
-              <div style="background: rgba(0,0,0,0.7); border: 1px solid #dfb76c; padding: 12px 14px; min-height: 48px; display: flex; align-items: center; gap: 10px; --cut: 6px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));">
-                <div id="seedianLiveOutput" style="font-size: 24px; color: #dfb76c; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; word-break: break-all; filter: drop-shadow(0 0 8px rgba(223,183,108,0.5));">
+              <div style="background: rgba(0,0,0,0.7); border: 1px solid #dfb76c; padding: 0.75rem 0.875rem; min-height: 3rem; display: flex; align-items: center; gap: 0.625rem; --cut: 0.375rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));">
+                <div id="seedianLiveOutput" style="font-size: 1.5rem; color: #dfb76c; display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; word-break: break-all; filter: drop-shadow(0 0 0.5rem rgba(223,183,108,0.5));">
                   ${toSeedian("SEEDPLANET")}
                 </div>
               </div>
@@ -304,17 +304,17 @@
 
           <!-- Section: Genshin Teyvat-Style Alphabet Chart (A - Z) -->
           <div>
-            <div style="font-size: 14px; font-weight: 700; color: #dfb76c; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; font-family: 'Google Sans', sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 6px rgba(223,183,108,0.3);">
+            <div style="font-size: 0.875rem; font-weight: 700; color: #dfb76c; margin-bottom: 0.625rem; display: flex; align-items: center; gap: 0.375rem; font-family: 'Google Sans', sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 0.375rem rgba(223,183,108,0.3);">
               <span>✦</span> ตารางเทียบอักษรซีเดียน Vector Script (A - Z)
             </div>
-            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.625rem;">
               ${renderAlphabetCards()}
             </div>
           </div>
         </div>
 
         <!-- Footer with Game-Style Cut-Corner Close Button -->
-        <div class="seedian-modal-footer" style="margin-top: 16px;">
+        <div class="seedian-modal-footer" style="margin-top: 1rem;">
           <button id="bottomCloseSeedianBtn" class="seedian-footer-btn" style="letter-spacing: 0.12em; font-family: 'Google Sans', sans-serif;">
             CLOSE
           </button>
@@ -334,7 +334,7 @@
     const output = overlay.querySelector("#seedianLiveOutput");
     if (input && output) {
       input.addEventListener("input", () => {
-        output.innerHTML = toSeedian(input.value) || `<span style="color: rgba(255,255,255,0.4); font-size:14px;">(พิมพ์ข้อความ A-Z เพื่อแปล)</span>`;
+        output.innerHTML = toSeedian(input.value) || `<span style="color: rgba(255,255,255,0.4); font-size:0.875rem;">(พิมพ์ข้อความ A-Z เพื่อแปล)</span>`;
       });
     }
 

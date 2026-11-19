@@ -2,56 +2,47 @@
 
 window.ItemRegistry["arrow"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    const p = item.position;
-    const f = item.F;
+    const p = item.position || [0, 0, 0];
+    const f = item.F || [0, 0, 1];
     const s = typeof playerScale !== 'undefined' ? playerScale : 0.1;
+    const basis = window.DropTemplateCache.basisFromF(f);
 
     if (item.ammoType === "IRON_BULLET") {
-      const ironColor = [0.78, 0.81, 0.86];
-      if (typeof buildLowPolySphere === "function") {
-        buildLowPolySphere(p, 0.038 * s, 6, ironColor, 0, 0, vertices, colors, indices);
-      } else {
-        const pEnd = [p[0] + f[0] * 0.03 * s, p[1] + f[1] * 0.03 * s, p[2] + f[2] * 0.03 * s];
-        buildTaperedSegment(p, pEnd, 0.02 * s, 0.02 * s, 6, ironColor, vertices, colors, indices);
-      }
+      window.DropTemplateCache.render(
+        "arrow_iron_bullet",
+        { position: p, R: basis.R, normal: basis.N, F: basis.F, scale: s, yOff: 0.0 },
+        (tv, tc, ti) => {
+          const ironColor = [0.78, 0.81, 0.86];
+          if (typeof buildLowPolySphere === "function") {
+            buildLowPolySphere([0, 0, 0], 0.038, 6, ironColor, 0, 0, tv, tc, ti);
+          } else {
+            buildTaperedSegment([0, 0, 0], [0, 0, 0.03], 0.02, 0.02, 6, ironColor, tv, tc, ti);
+          }
+        },
+        vertices, colors, indices
+      );
       return;
     }
 
-    const shaftColor = [0.55, 0.4, 0.25];
-    const flintColor = [0.35, 0.35, 0.35];
-    const featherColor = [0.9, 0.2, 0.2];
-    
-    const L = 1.12 * s; // total length of the arrow
-    const hL = L / 2.0;
-    
-    const pNock = [
-      p[0] - f[0] * hL,
-      p[1] - f[1] * hL,
-      p[2] - f[2] * hL
-    ];
-    const pTipBase = [
-      p[0] + f[0] * hL,
-      p[1] + f[1] * hL,
-      p[2] + f[2] * hL
-    ];
-    const pFeatherEnd = [
-      pNock[0] + f[0] * 0.05 * s,
-      pNock[1] + f[1] * 0.05 * s,
-      pNock[2] + f[2] * 0.05 * s
-    ];
-    const pTipEnd = [
-      pTipBase[0] + f[0] * 0.04 * s,
-      pTipBase[1] + f[1] * 0.04 * s,
-      pTipBase[2] + f[2] * 0.04 * s
-    ];
+    window.DropTemplateCache.render(
+      "arrow_std",
+      { position: p, R: basis.R, normal: basis.N, F: basis.F, scale: s, yOff: 0.0 },
+      (tv, tc, ti) => {
+        const shaftColor = [0.55, 0.4, 0.25];
+        const flintColor = [0.35, 0.35, 0.35];
+        const featherColor = [0.9, 0.2, 0.2];
+        const hL = 0.56;
+        const pNock = [0, 0, -hL];
+        const pTipBase = [0, 0, hL];
+        const pFeatherEnd = [0, 0, -hL + 0.05];
+        const pTipEnd = [0, 0, hL + 0.04];
+        const th = 0.005;
 
-    const th = 0.005 * s;
-
-    // Shaft
-    buildTaperedSegment(pNock, pTipBase, th, th, 4, shaftColor, vertices, colors, indices);
-    // Feathers
-    buildTaperedSegment(pNock, pFeatherEnd, 0.015 * s, 0.006 * s, 4, featherColor, vertices, colors, indices);
-    // Tip
-    buildTaperedSegment(pTipBase, pTipEnd, 0.012 * s, 0.001 * s, 4, flintColor, vertices, colors, indices);
+        buildTaperedSegment(pNock, pTipBase, th, th, 4, shaftColor, tv, tc, ti);
+        buildTaperedSegment(pNock, pFeatherEnd, 0.015, 0.006, 4, featherColor, tv, tc, ti);
+        buildTaperedSegment(pTipBase, pTipEnd, 0.012, 0.001, 4, flintColor, tv, tc, ti);
+      },
+      vertices, colors, indices
+    );
   }
 };

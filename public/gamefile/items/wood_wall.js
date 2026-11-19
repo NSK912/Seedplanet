@@ -190,14 +190,14 @@ window.ItemRegistry["wood_wall"] = {
 
     let hasCoLocatedDoor = false;
     let hasCoLocatedWindow = false;
-    if (!item.isPreview && item._coFixtureColLen === colLen && item._coDoorCached !== undefined && item._coWinCached !== undefined) {
+    if (!item.isPreview && !item._coFixtureDirty && item._coDoorCached !== undefined && item._coWinCached !== undefined) {
       hasCoLocatedDoor = item._coDoorCached;
       hasCoLocatedWindow = item._coWinCached;
     } else {
       hasCoLocatedDoor = checkCoLocatedFixture("wood_door");
       hasCoLocatedWindow = (item.type === "wood_wall") ? checkCoLocatedFixture("wood_window") : false;
       if (!item.isPreview) {
-        item._coFixtureColLen = colLen;
+        item._coFixtureDirty = false;
         item._coDoorCached = hasCoLocatedDoor;
         item._coWinCached = hasCoLocatedWindow;
       }
@@ -218,9 +218,9 @@ window.ItemRegistry["wood_wall"] = {
     }
 
     function getTrimHeight(tOffset, defaultMax) {
-      if (!item._trimCache || item._trimColLen !== colLen) {
+      if (!item._trimCache || item._trimDirty) {
         item._trimCache = {};
-        item._trimColLen = colLen;
+        item._trimDirty = false;
       }
       const cacheKey = Math.round(tOffset * 1000);
       if (!item.isPreview && item._trimCache[cacheKey] !== undefined) {

@@ -45,7 +45,8 @@
         }
   `;
 
-  const waterFragmentShaderSource = `#version 300 es
+  function getWaterFragmentShaderSource() {
+    return `#version 300 es
         precision highp float;
         precision highp int;
         uniform vec3 uWaterColor;
@@ -262,6 +263,7 @@
             fragColor = vec4(finalColor, alpha);
         }
   `;
+  }
 
   // --- Internal State & WebGL Handles ---
   let glContext = null;
@@ -353,7 +355,7 @@
     supportUint32Ext = !!supportUint32;
 
     const vs = createShader(gl, waterVertexShaderSource, gl.VERTEX_SHADER);
-    const fs = createShader(gl, waterFragmentShaderSource, gl.FRAGMENT_SHADER);
+    const fs = createShader(gl, getWaterFragmentShaderSource(), gl.FRAGMENT_SHADER);
     waterProgram = gl.createProgram();
     gl.attachShader(waterProgram, vs);
     gl.attachShader(waterProgram, fs);

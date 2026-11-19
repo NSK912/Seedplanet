@@ -2,55 +2,34 @@
 
 window.ItemRegistry["branch"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    const bColor = item.color; // brown
+    const bColor = item.color || [0.50, 0.30, 0.15];
+    const p = item.position || [0, 0, 0];
+    const r = item.R || [1, 0, 0];
+    const f = item.F || [0, 0, 1];
+    const n = item.normal || [0, 1, 0];
+    const s = (typeof item.size === "number") ? item.size : 0.025;
 
-    const p = item.position;
-    const r = item.R,
-      f = item.F,
-      n = item.normal;
-    const s = item.size;
+    const rotAngle = (item.seed || 0) % (Math.PI * 2);
+    const rot = window.DropTemplateCache.rotateBasis(r, f, rotAngle);
+    const key = `branch_${window.DropTemplateCache.quantizeColor(bColor)}`;
 
-    const thickness = s * 0.12;
-    const length = s * 0.8;
-
-    const rotAngle = item.seed % (Math.PI * 2);
-    const cosA = Math.cos(rotAngle);
-    const sinA = Math.sin(rotAngle);
-
-    // Direction of the branch on the surface
-    const dirX = r[0] * cosA + f[0] * sinA;
-    const dirY = r[1] * cosA + f[1] * sinA;
-    const dirZ = r[2] * cosA + f[2] * sinA;
-
-    // Slight elevation so it rests nicely on the ground
-    const elevation = thickness * 0.6;
-    const center = [
-      p[0] + n[0] * elevation,
-      p[1] + n[1] * elevation,
-      p[2] + n[2] * elevation,
-    ];
-
-    const pStart = [
-      center[0] - dirX * length,
-      center[1] - dirY * length,
-      center[2] - dirZ * length,
-    ];
-    const pEnd = [
-      center[0] + dirX * length,
-      center[1] + dirY * length,
-      center[2] + dirZ * length,
-    ];
-
-    buildTaperedSegment(
-      pStart,
-      pEnd,
-      thickness,
-      thickness * 0.5,
-      5,
-      bColor,
-      vertices,
-      colors,
-      indices
+    window.DropTemplateCache.render(
+      key,
+      { position: p, R: rot.R, normal: n, F: rot.F, scale: s, yOff: 0.072 },
+      (tv, tc, ti) => {
+        buildTaperedSegment(
+          [-0.8, 0, 0],
+          [ 0.8, 0, 0],
+          0.12,
+          0.06,
+          5,
+          bColor,
+          tv,
+          tc,
+          ti
+        );
+      },
+      vertices, colors, indices
     );
   }
 };

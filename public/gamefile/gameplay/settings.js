@@ -299,13 +299,13 @@ function syncInputDeviceSettingsUI() {
   const btnKb = document.getElementById("btnBindingModeKb");
   const btnGp = document.getElementById("btnBindingModeGp");
   if (btnKb && btnGp) {
-    btnKb.style.borderRadius = "0px";
-    btnGp.style.borderRadius = "0px";
+    btnKb.style.borderRadius = "0";
+    btnGp.style.borderRadius = "0";
     if (isGp) {
       btnGp.style.background = "rgba(223, 183, 108, 0.22)";
       btnGp.style.borderColor = "#dfb76c";
       btnGp.style.color = "#dfb76c";
-      btnGp.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+      btnGp.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
 
       btnKb.style.background = "rgba(255, 255, 255, 0.05)";
       btnKb.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -315,7 +315,7 @@ function syncInputDeviceSettingsUI() {
       btnKb.style.background = "rgba(223, 183, 108, 0.22)";
       btnKb.style.borderColor = "#dfb76c";
       btnKb.style.color = "#dfb76c";
-      btnKb.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+      btnKb.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
 
       btnGp.style.background = "rgba(255, 255, 255, 0.05)";
       btnGp.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -370,14 +370,14 @@ function renderKeyBindingsUI() {
       const btnText = (typeof getGameLanguage === "function" && getGameLanguage() === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(rawBtnText) : rawBtnText;
       const itemLabel = (typeof t === "function") ? t("key_" + item.id) : item.label;
       html += `
-        <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 5px 8px; border: 1px solid rgba(223, 183, 108, 0.15); border-radius: 0px; transition: all 0.2s;">
-            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; color: #f1f5f9; pointer-events: none;">${itemLabel}</span>
+        <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 0.3125rem 0.5rem; border: 1px solid rgba(223, 183, 108, 0.15); border-radius: 0; transition: all 0.2s;">
+            <span style="font-size: 0.6875rem; font-family: 'Google Sans', 'Kanit', sans-serif; color: #f1f5f9; pointer-events: none;">${itemLabel}</span>
             ${isFixed ? `
-              <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 4px 10px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; border-radius: 0px; user-select: none;">
+              <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 0.25rem 0.625rem; font-size: 0.625rem; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 3.75rem; text-align: center; font-weight: bold; border-radius: 0; user-select: none;">
                 ${btnText}
               </div>
             ` : `
-              <button type="button" class="key-bind-btn game-ui gp-bind-btn" data-gpaction="${item.id}" style="background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; text-shadow: 0 0 6px rgba(223, 183, 108, 0.3); border-radius: 0px; cursor: pointer; transition: all 0.2s; outline: none;">
+              <button type="button" class="key-bind-btn game-ui gp-bind-btn" data-gpaction="${item.id}" style="background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 0.25rem 0.75rem; font-size: 0.625rem; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 3.75rem; text-align: center; font-weight: bold; text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.3); border-radius: 0; cursor: pointer; transition: all 0.2s; outline: none;">
                 ${btnText}
               </button>
             `}
@@ -429,14 +429,14 @@ function renderKeyBindingsUI() {
     const isLocked = key === "toggleMouse";
     const displayVal = value.replace("Key", "").replace("Arrow", "").replace("Left", "").replace("Right", "");
     html += `
-        <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 4px 8px; border: 1px solid rgba(255,255,255,0.05); border-radius: 0px; transition: all 0.2s;">
-            <span style="font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; pointer-events: none;">${label}</span>
+        <div class="key-bind-row-wrapper" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 0.25rem 0.5rem; border: 1px solid rgba(255,255,255,0.05); border-radius: 0; transition: all 0.2s;">
+            <span style="font-size: 0.6875rem; font-family: 'Google Sans', 'Kanit', sans-serif; pointer-events: none;">${label}</span>
             ${isLocked ? `
-              <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 4px 10px; font-size: 10px; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 60px; text-align: center; font-weight: bold; border-radius: 0px; user-select: none;">
+              <div class="fixed-bind-badge" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.45); padding: 0.25rem 0.625rem; font-size: 0.625rem; font-family: 'Google Sans', 'Kanit', sans-serif; min-width: 3.75rem; text-align: center; font-weight: bold; border-radius: 0; user-select: none;">
                 ${displayVal}
               </div>
             ` : `
-              <button class="key-bind-btn game-ui" data-key="${key}" style="background: rgba(223,183,108,0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 4px 12px; font-size: 11px; font-family: 'Google Sans', 'Kanit', sans-serif; cursor: pointer; min-width: 60px; text-align: center; border-radius: 0px; transition: all 0.2s; outline: none;">
+              <button class="key-bind-btn game-ui" data-key="${key}" style="background: rgba(223,183,108,0.15); border: 1px solid #dfb76c; color: #dfb76c; padding: 0.25rem 0.75rem; font-size: 0.6875rem; font-family: 'Google Sans', 'Kanit', sans-serif; cursor: pointer; min-width: 3.75rem; text-align: center; border-radius: 0; transition: all 0.2s; outline: none;">
                 ${displayVal}
               </button>
             `}
@@ -472,7 +472,7 @@ function startBindingAction(actionKey, isGamepadAction, btnElement) {
   btnElement.style.background = "rgba(239, 68, 68, 0.25)";
   btnElement.style.borderColor = "#ef4444";
   btnElement.style.color = "#ef4444";
-  btnElement.style.boxShadow = "0 0 12px rgba(239, 68, 68, 0.6)";
+  btnElement.style.boxShadow = "0 0 0.75rem rgba(239, 68, 68, 0.6)";
   btnElement.textContent = typeof t === "function" ? t("key_press_key") : "กดปุ่ม...";
 
   const finish = () => {
@@ -666,7 +666,7 @@ function syncInventorySettingsUI() {
       btnOn.style.background = "rgba(223, 183, 108, 0.15)";
       btnOn.style.borderColor = "#dfb76c";
       btnOn.style.color = "#dfb76c";
-      btnOn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+      btnOn.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
 
       btnOff.style.background = "rgba(255, 255, 255, 0.05)";
       btnOff.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -676,7 +676,7 @@ function syncInventorySettingsUI() {
       btnOff.style.background = "rgba(223, 183, 108, 0.15)";
       btnOff.style.borderColor = "#dfb76c";
       btnOff.style.color = "#dfb76c";
-      btnOff.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+      btnOff.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
 
       btnOn.style.background = "rgba(255, 255, 255, 0.05)";
       btnOn.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -708,12 +708,14 @@ function initSettingsEventListeners() {
       taauEnabled = true;
       window.fxaaEnabled = true;
       window.taauEnabled = true;
-      try {
-        const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
-        opt.fxaaEnabled = true;
-        opt.taauEnabled = true;
-        localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
-      } catch(err) {}
+      if (!((typeof isDevMode !== "undefined" && isDevMode) || (typeof window !== "undefined" && window.isDevMode))) {
+        try {
+          const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
+          opt.fxaaEnabled = true;
+          opt.taauEnabled = true;
+          localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
+        } catch(err) {}
+      }
       if (typeof updateFxaaUI === "function") updateFxaaUI();
       if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
       else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
@@ -726,12 +728,14 @@ function initSettingsEventListeners() {
       taauEnabled = false;
       window.fxaaEnabled = false;
       window.taauEnabled = false;
-      try {
-        const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
-        opt.fxaaEnabled = false;
-        opt.taauEnabled = false;
-        localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
-      } catch(err) {}
+      if (!((typeof isDevMode !== "undefined" && isDevMode) || (typeof window !== "undefined" && window.isDevMode))) {
+        try {
+          const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
+          opt.fxaaEnabled = false;
+          opt.taauEnabled = false;
+          localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
+        } catch(err) {}
+      }
       if (typeof updateFxaaUI === "function") updateFxaaUI();
       if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
       else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();

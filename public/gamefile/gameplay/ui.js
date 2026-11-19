@@ -37,13 +37,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           style="
             display: flex;
             flex-direction: row;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             justify-content: center;
             align-items: center;
-            gap: 16px;
+            gap: 1rem;
             z-index: 2;
             transition: opacity 0.5s ease-in-out;
-            width: 100%;
+            width: auto;
           "
         >
           <button class="start-btn game-ui" id="gameStartBtn" data-i18n="start_game">
@@ -54,8 +54,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             id="gameSettingsBtn"
             data-i18n="settings"
             style="
-              font-size: 16px;
-              padding: 14px 40px;
+              font-size: 1rem;
+              padding: 0.875rem 2.5rem;
               background: rgba(255, 255, 255, 0.05);
               border: 1px solid rgba(255, 255, 255, 0.25);
               color: rgba(255, 255, 255, 0.85);
@@ -70,8 +70,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             data-i18n="dev_mode"
             style="
               display: none;
-              font-size: 16px;
-              padding: 14px 40px;
+              font-size: 1rem;
+              padding: 0.875rem 2.5rem;
               background: rgba(255, 255, 255, 0.05);
               border: 1px solid rgba(255, 255, 255, 0.25);
               color: rgba(255, 255, 255, 0.85);
@@ -81,18 +81,18 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             โหมดผู้พัฒนา
           </button>
         </div>
-        <div id="startScreenSocialBar" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0; transition: opacity 0.4s ease; flex-wrap: wrap;">
+        <div id="startScreenSocialBar" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0; transition: opacity 0.4s ease; flex-wrap: nowrap; white-space: nowrap;">
           <!-- YouTube Icon Link -->
           <a
             href="https://www.youtube.com/@Nat_suki452"
             target="_blank"
             rel="noopener noreferrer"
-            style="width: 36px; height: 36px; background-color: rgba(220, 38, 38, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #ef4444; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); flex-shrink: 0;"
+            style="width: 2.25rem; height: 2.25rem; background-color: rgba(220, 38, 38, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; color: #ef4444; transition: all 0.2s; box-shadow: 0 0.25rem 0.375rem -0.0625rem rgba(0, 0, 0, 0.1), 0 0.125rem 0.25rem -0.0625rem rgba(0, 0, 0, 0.06); flex-shrink: 0;"
             title="YouTube"
             onmouseover="this.style.backgroundColor='rgba(220, 38, 38, 0.2)'"
             onmouseout="this.style.backgroundColor='rgba(220, 38, 38, 0.1)'"
           >
-            <svg style="width: 16px; height: 16px; fill: currentColor;" viewBox="0 0 24 24">
+            <svg style="width: 1rem; height: 1rem; fill: currentColor;" viewBox="0 0 24 24">
               <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
             </svg>
           </a>
@@ -102,12 +102,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             href="https://apps.microsoft.com/store/detail/9N9DKCK3XTF0?cid=DevShareMCLPCS"
             target="_blank"
             rel="noopener noreferrer"
-            style="height: 36px; padding: 0 12px; display: flex; align-items: center; gap: 8px; background-color: rgba(0, 164, 239, 0.1); border: 1px solid rgba(0, 164, 239, 0.3); color: #38bdf8; border-radius: 8px; font-weight: 500; font-size: 12px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); flex-shrink: 0; text-decoration: none;"
+            style="height: 2.25rem; padding: 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; background-color: rgba(0, 164, 239, 0.1); border: 1px solid rgba(0, 164, 239, 0.3); color: #38bdf8; border-radius: 0.5rem; font-weight: 500; font-size: 0.75rem; transition: all 0.2s; box-shadow: 0 0.25rem 0.375rem -0.0625rem rgba(0, 0, 0, 0.1), 0 0.125rem 0.25rem -0.0625rem rgba(0, 0, 0, 0.06); flex-shrink: 0; text-decoration: none;"
             title="Microsoft Store"
             onmouseover="this.style.backgroundColor='rgba(0, 164, 239, 0.2)'"
             onmouseout="this.style.backgroundColor='rgba(0, 164, 239, 0.1)'"
           >
-            <svg style="width: 15px; height: 15px; flex-shrink: 0;" viewBox="0 0 24 24">
+            <svg style="width: 0.9375rem; height: 0.9375rem; flex-shrink: 0;" viewBox="0 0 24 24">
               <path fill="#f25022" d="M1 1h10v10H1z"/>
               <path fill="#7fba00" d="M13 1h10v10H13z"/>
               <path fill="#00a4ef" d="M1 13h10v10H1z"/>
@@ -117,8 +117,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </a>
 
           <!-- Version Info -->
-          <div style="color: #64748b; font-size: 12px; font-weight: 500; font-family: 'Google Sans', sans-serif; margin-left: 8px;">
-            <span style="font-weight: 700; margin-right: 4px;">NSK App</span>
+          <div style="color: #64748b; font-size: 0.75rem; font-weight: 500; font-family: 'Google Sans', sans-serif; margin-left: 0.5rem;">
+            <span style="font-weight: 700; margin-right: 0.25rem;">NSK App</span>
             ver 2.0.16
           </div>
         </div>
@@ -134,12 +134,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <div
         class="inventory-panel game-ui lg"
         style="
-          max-width: 540px;
+          max-width: 33.75rem;
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 1rem;
           border: 1px solid rgba(223, 183, 108, 0.4);
-          box-shadow: 0 0 35px rgba(223, 183, 108, 0.25);
+          box-shadow: 0 0 2.1875rem rgba(223, 183, 108, 0.25);
           position: relative;
         "
       >
@@ -150,8 +150,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             justify-content: center;
             align-items: center;
             position: relative;
-            margin: 0 0 8px 0;
-            padding: 0 0 14px 0;
+            margin: 0 0 0.5rem 0;
+            padding: 0 0 0.875rem 0;
             border-bottom: 1px solid rgba(223, 183, 108, 0.25);
           "
         >
@@ -159,16 +159,16 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             data-i18n="select_save_slot"
             style="
               color: #dfb76c;
-              font-size: 18px;
+              font-size: 1.125rem;
               font-weight: bold;
               margin: 0;
-              text-shadow: 0 0 10px rgba(223, 183, 108, 0.4);
+              text-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.4);
               display: flex;
               align-items: center;
               justify-content: center;
-              gap: 8px;
+              gap: 0.5rem;
               font-family: 'Google Sans', sans-serif;
-              letter-spacing: 0.5px;
+              letter-spacing: 0.0313rem;
             "
           >
             📂 เลือกข้อมูลเซฟ
@@ -181,27 +181,26 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           style="
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            max-height: 50vh;
+            gap: 0.75rem;
             overflow-y: auto;
-            padding-right: 14px;
+            padding-right: 0.875rem;
           "
         >
           <!-- ช่องเซฟจะถูกสร้างด้วย JS ที่นี่ -->
         </div>
 
         <!-- Custom Sci-Fi DOM Virtual Scrollbar for Save Slots -->
-        <div id="saveSelectCustomScrollbar" class="custom-scrollbar-track game-ui clickable" style="top: 72px; bottom: 68px; right: 8px; width: 8px;">
+        <div id="saveSelectCustomScrollbar" class="custom-scrollbar-track game-ui clickable" style="top: 4.5rem; bottom: 4.25rem; right: 0.5rem; width: 0.5rem;">
           <div id="saveSelectCustomScrollbarThumb" class="custom-scrollbar-thumb game-ui clickable"></div>
         </div>
 
         <div
           style="
             display: flex;
-            gap: 12px;
-            margin-top: 8px;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding-top: 12px;
+            padding-top: 0.75rem;
             position: relative;
           "
         >
@@ -212,8 +211,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               background: rgba(239, 68, 68, 0.1);
               border: 1px solid rgba(239, 68, 68, 0.4);
               color: #fca5a5;
-              padding: 10px;
-              font-size: 11px;
+              padding: 0.625rem;
+              font-size: 0.6875rem;
               font-family: 'Google Sans', sans-serif;
               cursor: pointer;
               transition: all 0.2s;
@@ -227,12 +226,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               flex: 1;
               align-items: center;
               justify-content: center;
-              gap: 12px;
+              gap: 0.75rem;
               background: rgba(223, 183, 108, 0.05);
               border: 1px solid rgba(223, 183, 108, 0.2);
               color: #dfb76c;
-              padding: 10px;
-              font-size: 11px;
+              padding: 0.625rem;
+              font-size: 0.6875rem;
               font-family: 'Google Sans', sans-serif;
               font-weight: bold;">
             <div class="loading-squares">
@@ -250,12 +249,6 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <canvas id="glCanvas" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; pointer-events: none; background: transparent;"></canvas>
     <!-- 3D Bone Labels Floating Overlay -->
     <div id="devBoneLabelsOverlay" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; overflow: hidden; display: none;"></div>
-
-
-    <!-- Compass HUD -->
-    <div id="compassContainer" class="game-ui visible" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%) scale(var(--ui-hud-scale, 1)); transform-origin: top center; width: 400px; height: 48px; z-index: 10000; pointer-events: none; display: flex; align-items: center; justify-content: center; user-select: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border: none; box-shadow: none; clip-path: none;">
-      <canvas id="compassCanvas" width="1120" height="112" style="width: 100%; height: 100%; display: block; background: transparent;"></canvas>
-    </div>
 
     <!-- เมนูซ้ายบน -->
     <div class="top-left-menu game-ui">
@@ -275,7 +268,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             stroke-width="2.2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            style="display: block"
+            style="display: block; width: 1.125rem; height: 1.125rem;"
           >
             <path
               d="M4 20V10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
@@ -295,7 +288,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             stroke-width="2.2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            style="display: block"
+            style="display: block; width: 1.125rem; height: 1.125rem;"
           >
             <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
             <path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64" />
@@ -307,11 +300,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       <!-- FPS Counter -->
       <div class="fps-counter game-ui" id="fpsCounter">
         FPS: <span class="fps-value" id="fpsDisplay">0</span>
-        <span class="fps-lock"> | 120</span>
+        <span class="fps-lock">120</span>
       </div>
-
-      <!-- ปุ่มเต็มจอ -->
-      <button id="fullscreenBtn" class="fullscreen-btn" style="display: none;">📺 เต็มจอ</button>
     </div>
 
     <!-- ปุ่มเต็มจอส่วนเกมเพย์ มุมขวาบน (Gameplay Fullscreen Button Top-Right) -->
@@ -321,34 +311,34 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       title="เต็มจอ / ย่อจอ (Toggle Fullscreen)"
       style="
         position: fixed;
-        top: calc(10px + var(--ui-margin, 0px));
-        right: calc(10px + var(--ui-margin, 0px));
-        width: 36px;
-        height: 36px;
+        top: calc(0.625rem + var(--ui-margin, 0rem));
+        right: calc(0.625rem + var(--ui-margin, 0rem));
+        width: 2.25rem;
+        height: 2.25rem;
         z-index: 10001;
         background: rgba(10, 10, 15, 0.85);
         color: #dfb76c;
         border: 1px solid rgba(223, 183, 108, 0.4);
         border-radius: 0;
-        --cut: 6px;
+        --cut: 0.375rem;
         clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
         padding: 0;
         cursor: pointer;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(0.5rem);
+        -webkit-backdrop-filter: blur(0.5rem);
+        box-shadow: 0 0.25rem 0.9375rem rgba(0, 0, 0, 0.4);
         display: flex;
         align-items: center;
         justify-content: center;
         user-select: none;
-        transform: scale(var(--ui-hud-scale, 1));
-        transform-origin: top right;
+
+
         transition: background 0.2s, border-color 0.2s;
       "
       onmouseover="this.style.background='rgba(223, 183, 108, 0.25)'; this.style.borderColor='rgba(223, 183, 108, 0.8)';"
       onmouseout="this.style.background='rgba(10, 10, 15, 0.85)'; this.style.borderColor='rgba(223, 183, 108, 0.4)';"
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;">
         <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path>
       </svg>
     </button>
@@ -357,22 +347,22 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <div class="joystick-container game-ui" id="joystickContainer">
       <div class="joystick-base" id="joystickBase">
         <span class="joystick-dir up">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
             <polyline points="18 15 12 9 6 15"></polyline>
           </svg>
         </span>
         <span class="joystick-dir down">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </span>
         <span class="joystick-dir left">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </span>
         <span class="joystick-dir right">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </span>
@@ -382,58 +372,58 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
 
     <!-- Modal ยืนยันทำลายไอเทม (Contained inside Inventory / Chest Panel) -->
-    <div class="confirm-overlay" id="trashConfirmOverlay" onwheel="event.preventDefault(); event.stopPropagation();" ontouchmove="event.preventDefault(); event.stopPropagation();" style="display: none; position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.78) !important; z-index: 1000 !important; border-radius: inherit !important; align-items: center !important; justify-content: center !important; backdrop-filter: blur(4px) !important; pointer-events: auto !important;">
-      <div class="game-ui" style="background: #0a0a0f; border: 1px solid rgba(255, 60, 60, 0.4); padding: 24px; text-align: center; min-width: 280px; max-width: 320px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(255,60,60,0.08); position: relative;">
+    <div class="confirm-overlay" id="trashConfirmOverlay" onwheel="event.preventDefault(); event.stopPropagation();" ontouchmove="event.preventDefault(); event.stopPropagation();" style="display: none; position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.78) !important; z-index: 1000 !important; border-radius: inherit !important; align-items: center !important; justify-content: center !important; backdrop-filter: blur(0.25rem) !important; pointer-events: auto !important;">
+      <div class="game-ui" style="background: #0a0a0f; border: 1px solid rgba(255, 60, 60, 0.4); padding: 1.5rem; text-align: center; min-width: 17.5rem; max-width: 20rem; display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 0.625rem 1.875rem rgba(0,0,0,0.8), inset 0 0 1.25rem rgba(255,60,60,0.08); position: relative;">
         <!-- decorative corner accents -->
-        <div style="position: absolute; top: -1px; left: -1px; width: 8px; height: 8px; border-top: 2px solid #ff5555; border-left: 2px solid #ff5555;"></div>
-        <div style="position: absolute; bottom: -1px; right: -1px; width: 8px; height: 8px; border-bottom: 2px solid #ff5555; border-right: 2px solid #ff5555;"></div>
+        <div style="position: absolute; top: -0.0625rem; left: -0.0625rem; width: 0.5rem; height: 0.5rem; border-top: 2px solid #ff5555; border-left: 2px solid #ff5555;"></div>
+        <div style="position: absolute; bottom: -0.0625rem; right: -0.0625rem; width: 0.5rem; height: 0.5rem; border-bottom: 2px solid #ff5555; border-right: 2px solid #ff5555;"></div>
         
-        <h3 style="color: #ff5555; margin: 0; font-family: 'Google Sans', sans-serif; font-size: 14px; letter-spacing: 1px; display: flex; flex-direction: column; gap: 4px;">
+        <h3 style="color: #ff5555; margin: 0; font-family: 'Google Sans', sans-serif; font-size: 0.875rem; letter-spacing: 0.0625rem; display: flex; flex-direction: column; gap: 0.25rem;">
           <span>ทำลายไอเทม?</span>
-          <span style="font-size: 11px; opacity: 0.7;">DESTROY ITEM?</span>
+          <span style="font-size: 0.6875rem; opacity: 0.7;">DESTROY ITEM?</span>
         </h3>
         
-        <div class="game-ui" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-           <span id="trashConfirmIcon" style="font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 56px;">📦</span>
-           <span id="trashConfirmText" style="color: rgba(255, 255, 255, 0.7); font-size: 11px; font-family: 'Google Sans', sans-serif; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 500;">Item Name x1</span>
+        <div class="game-ui" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+           <span id="trashConfirmIcon" style="font-size: 1.75rem; line-height: 1; filter: drop-shadow(0 0.125rem 0.375rem rgba(0,0,0,0.5)); display: inline-flex; align-items: center; justify-content: center; min-width: 3.5rem; min-height: 3.5rem;">📦</span>
+           <span id="trashConfirmText" style="color: rgba(255, 255, 255, 0.7); font-size: 0.6875rem; font-family: 'Google Sans', sans-serif; letter-spacing: 0.0313rem; text-transform: uppercase; font-weight: 500;">Item Name x1</span>
         </div>
         
-        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 10px;">
-          <button id="trashCancelBtn" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" class="game-ui" style="flex: 1; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.15); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
+        <div style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 0.625rem;">
+          <button id="trashCancelBtn" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" class="game-ui" style="flex: 1; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.15); padding: 0.625rem 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.125rem; align-items: center; justify-content: center; transition: all 0.2s;">
             <span>ยกเลิก</span>
-            <span style="font-size: 9px; opacity: 0.6;">CANCEL</span>
+            <span style="font-size: 0.5625rem; opacity: 0.6;">CANCEL</span>
           </button>
           
-          <button id="trashConfirmBtn" onmouseover="this.style.background='rgba(255,60,60,0.18)'" onmouseout="this.style.background='rgba(255,60,60,0.1)'" class="game-ui" style="flex: 1; background: rgba(255, 60, 60, 0.1); color: #ff5555; border: 1px solid rgba(255,60,60,0.5); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; position: relative; overflow: hidden; user-select: none; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
+          <button id="trashConfirmBtn" onmouseover="this.style.background='rgba(255,60,60,0.18)'" onmouseout="this.style.background='rgba(255,60,60,0.1)'" class="game-ui" style="flex: 1; background: rgba(255, 60, 60, 0.1); color: #ff5555; border: 1px solid rgba(255,60,60,0.5); padding: 0.625rem 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 0.75rem; position: relative; overflow: hidden; user-select: none; display: flex; flex-direction: column; gap: 0.125rem; align-items: center; justify-content: center; transition: all 0.2s;">
             <div id="trashConfirmProgress" style="position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: rgba(255, 60, 60, 0.35); pointer-events: none;"></div>
             <span style="position: relative; z-index: 1;">กดค้าง (ลบ)</span>
-            <span style="position: relative; z-index: 1; font-size: 9px; opacity: 0.8;">HOLD TO DELETE</span>
+            <span style="position: relative; z-index: 1; font-size: 0.5625rem; opacity: 0.8;">HOLD TO DELETE</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- Modal ยืนยันรีโหลดเกมเมื่อเปิด/ปิด Anti-Aliasing -->
-    <div class="confirm-overlay" id="antialiasConfirmOverlay" onwheel="event.preventDefault(); event.stopPropagation();" ontouchmove="event.preventDefault(); event.stopPropagation();" style="display: none; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0, 0, 0, 0.85) !important; z-index: 2147483647 !important; align-items: center !important; justify-content: center !important; backdrop-filter: blur(4px) !important; pointer-events: auto !important;">
-      <div class="game-ui" style="background: #0a0a0f; border: 1px solid rgba(223, 183, 108, 0.3); padding: 24px; text-align: center; min-width: 300px; max-width: 340px; display: flex; flex-direction: column; gap: 16px; box-shadow: inset 0 0 20px rgba(223, 183, 108, 0.05); position: relative;">
+    <div class="confirm-overlay" id="antialiasConfirmOverlay" onwheel="event.preventDefault(); event.stopPropagation();" ontouchmove="event.preventDefault(); event.stopPropagation();" style="display: none; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0, 0, 0, 0.85) !important; z-index: 2147483647 !important; align-items: center !important; justify-content: center !important; backdrop-filter: blur(0.25rem) !important; pointer-events: auto !important;">
+      <div class="antialias-confirm-box game-ui" style="background: #0a0a0f; border: 1px solid rgba(223, 183, 108, 0.3); padding: 1.5rem; text-align: center; min-width: 18.75rem; max-width: 21.25rem; display: flex; flex-direction: column; gap: 1rem; box-shadow: inset 0 0 1.25rem rgba(223, 183, 108, 0.05); position: relative;">
         <!-- decorative corner accents -->
-        <div style="position: absolute; top: -1px; left: -1px; width: 8px; height: 8px; border-top: 2px solid #dfb76c; border-left: 2px solid #dfb76c;"></div>
-        <div style="position: absolute; bottom: -1px; right: -1px; width: 8px; height: 8px; border-bottom: 2px solid #dfb76c; border-right: 2px solid #dfb76c;"></div>
+        <div style="position: absolute; top: -0.0625rem; left: -0.0625rem; width: 0.5rem; height: 0.5rem; border-top: 2px solid #dfb76c; border-left: 2px solid #dfb76c;"></div>
+        <div style="position: absolute; bottom: -0.0625rem; right: -0.0625rem; width: 0.5rem; height: 0.5rem; border-bottom: 2px solid #dfb76c; border-right: 2px solid #dfb76c;"></div>
         
-        <h3 style="color: #dfb76c; margin: 0; font-family: 'Google Sans', sans-serif; font-size: 14px; letter-spacing: 1px; display: flex; flex-direction: column; gap: 4px; text-align: center;">
+        <h3 style="color: #dfb76c; margin: 0; font-family: 'Google Sans', sans-serif; font-size: 0.875rem; letter-spacing: 0.0625rem; display: flex; flex-direction: column; gap: 0.25rem; text-align: center;">
           <span>ลดรอยหยัก เปิด-ปิด</span>
-          <span style="font-size: 11px; opacity: 0.7;">ANTI-ALIASING ON/OFF</span>
+          <span style="font-size: 0.6875rem; opacity: 0.7;">ANTI-ALIASING ON/OFF</span>
         </h3>
         
-        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 10px;">
-          <button id="antialiasCancelBtn" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" class="game-ui" style="flex: 1; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s;">
+        <div style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 0.625rem;">
+          <button id="antialiasCancelBtn" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" class="game-ui" style="flex: 1; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 0.625rem 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.125rem; align-items: center; justify-content: center; transition: all 0.2s;">
             <span>ยกเลิก</span>
-            <span style="font-size: 9px; opacity: 0.6;">CANCEL</span>
+            <span style="font-size: 0.5625rem; opacity: 0.6;">CANCEL</span>
           </button>
           
-          <button id="antialiasConfirmBtn" onmouseover="this.style.background='rgba(223, 183, 108, 0.25)'" onmouseout="this.style.background='rgba(223, 183, 108, 0.15)'" class="game-ui" style="flex: 1; background: rgba(223, 183, 108, 0.15); color: #dfb76c; border: 1px solid rgba(223, 183, 108, 0.5); padding: 10px 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 12px; position: relative; overflow: hidden; user-select: none; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
+          <button id="antialiasConfirmBtn" onmouseover="this.style.background='rgba(223, 183, 108, 0.25)'" onmouseout="this.style.background='rgba(223, 183, 108, 0.15)'" class="game-ui" style="flex: 1; background: rgba(223, 183, 108, 0.15); color: #dfb76c; border: 1px solid rgba(223, 183, 108, 0.5); padding: 0.625rem 0; cursor: pointer; font-family: 'Google Sans', sans-serif; font-size: 0.75rem; position: relative; overflow: hidden; user-select: none; display: flex; flex-direction: column; gap: 0.125rem; align-items: center; justify-content: center; transition: all 0.2s; text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);">
             <span style="position: relative; z-index: 1;">ตกลง (รีโหลด)</span>
-            <span style="position: relative; z-index: 1; font-size: 9px; opacity: 0.8;">RELOAD</span>
+            <span style="position: relative; z-index: 1; font-size: 0.5625rem; opacity: 0.8;">RELOAD</span>
           </button>
         </div>
       </div>
@@ -441,7 +431,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <!-- หน้าต่างกระเป๋า -->
     <div class="inventory-overlay" id="inventoryOverlay">
       <div class="inventory-panel game-ui">
-        <div class="inventory-header">
+        <div class="inventory-header" id="inventoryDefaultHeader">
           <div class="inventory-tabs">
             <h2 id="tabCrafting">
               <svg
@@ -453,7 +443,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 stroke-width="2.2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="display: block"
+                style="display: block; width: 0.9375rem; height: 0.9375rem;"
               >
                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
               </svg>
@@ -469,7 +459,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="display: block"
+                style="display: block; width: 0.9375rem; height: 0.9375rem;"
               >
                 <path
                   d="M4 20V10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
@@ -489,7 +479,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="display: block"
+                style="display: block; width: 0.9375rem; height: 0.9375rem;"
               >
                 <polyline points="21 8 21 21 3 21 3 8" />
                 <rect x="1" y="3" width="22" height="5" />
@@ -507,7 +497,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="display: block"
+                style="display: block; width: 0.9375rem; height: 0.9375rem;"
               >
                 <circle cx="12" cy="12" r="3" />
                 <path
@@ -519,13 +509,24 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             <h2 id="tabCooking" style="display: none;">
               <span data-i18n="tab_cooking">COOKING</span>
             </h2>
+            <h2 id="tabChest" style="display: none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <span data-i18n="chest_storage">CHEST STORAGE</span>
+            </h2>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+          <div style="display: flex; gap: 0.5rem; align-items: center; height: 2rem;">
+            <button id="chestTakeAllBtn" data-i18n="chest_take_all" class="game-ui" style="display: none; height: 2rem; padding: 0 0.75rem; font-size: 0.6875rem; font-weight: bold; background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(223, 183, 108, 0.35); color: #dfb76c; cursor: pointer; transition: all 0.2s; align-items: center;">
+              Take All
+            </button>
             <button
               class="close-btn game-ui"
               id="quitGameBtn"
               style="
-                display: none !important;
                 color: #ff5555;
                 border-color: rgba(255, 60, 60, 0.4);
                 position: relative;
@@ -546,7 +547,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 "
               ></div>
               <svg
-                style="position: relative; z-index: 1"
+                style="position: relative; z-index: 1; width: 0.875rem; height: 0.875rem;"
                 width="14"
                 height="14"
                 viewBox="0 0 24 24"
@@ -567,11 +568,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
 
 
-        <div id="inventoryMainLayout" style="display: flex; gap: 16px; align-items: flex-start; justify-content: center; width: auto; margin: 16px auto; box-sizing: border-box;">
+        <div id="inventoryMainLayout" style="display: flex; gap: 0.75rem; align-items: flex-start; justify-content: center; width: auto; margin: 1rem auto; box-sizing: border-box;">
           <!-- ช่องสวมใส่เสื้อผ้าตัวละครด้านซ้ายหน้าต่างกระเป๋า (Character Equipment Slots) -->
-          <div id="inventoryEquipSlotsWrapper" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 72px; flex-shrink: 0; margin-top: 4px; border: none; padding: 0; position: relative;">
-            <div style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 9px; font-weight: bold; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; line-height: 1; pointer-events: none;">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+          <div id="inventoryEquipSlotsWrapper" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: center; align-self: stretch; width: auto; min-width: 4.5rem; flex-shrink: 0; margin-top: 0; border-right: 1px solid rgba(223, 183, 108, 0.22); padding-right: 0.75rem; position: relative;">
+            <div style="position: absolute; top: -0.9375rem; left: 0; width: 4.5rem; color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 0.5625rem; font-weight: bold; letter-spacing: 0.05rem; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 0.1875rem; white-space: nowrap; line-height: 1; pointer-events: none;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0; width: 0.625rem; height: 0.625rem;">
                 <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" fill="rgba(223, 183, 108, 0.25)"></path>
               </svg>
               <span data-i18n="character_equip_label">CHARACTER</span>
@@ -585,20 +586,40 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             </div>
           </div>
 
-          <!-- Left Vertical Divider line for Inventory Tab -->
-          <div id="inventoryLeftVerticalDivider" style="width: 1px; background: rgba(255, 255, 255, 0.1); margin: 0 4px; height: 312px; display: block;"></div>
-
-          <div class="inventory-grid" id="inventoryGrid" style="margin: 0;">
-            <!-- สร้างช่องกระเป๋าผ่าน JavaScript -->
+          <!-- ช่องเก็บของในกล่องด้านซ้าย (แสดงเฉพาะตอนเปิดกล่อง โดยใช้ #inventoryMainLayout ร่วมกับกระเป๋า) -->
+          <div id="chestGridWrapper" style="display: none; flex-direction: column; align-items: center; flex-shrink: 0; position: relative;">
+            <div style="position: absolute; top: -0.9375rem; left: 0; width: calc(100% - 0.75rem); color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 0.5625rem; font-weight: bold; letter-spacing: 0.05rem; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 0.1875rem; white-space: nowrap; line-height: 1; pointer-events: none;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0; width: 0.625rem; height: 0.625rem;">
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <span data-i18n="chest_storage">CHEST STORAGE</span>
+            </div>
+            <div class="inventory-grid" id="chestGrid" style="margin: 0;">
+              <!-- สร้างช่องเก็บของในกล่อง 20 ช่องผ่าน JavaScript -->
+            </div>
           </div>
 
-          <!-- Vertical Divider line for Inventory Tab -->
-          <div id="inventoryVerticalDivider" style="width: 1px; background: rgba(255, 255, 255, 0.1); margin: 0 4px; height: 312px; display: block;"></div>
+          <div id="inventoryGridWrapper" style="display: flex; flex-direction: column; align-items: center; flex-shrink: 0; position: relative;">
+            <div id="inventoryGridChestLabel" style="display: none; position: absolute; top: -0.9375rem; left: 50%; transform: translateX(-50%); color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 0.5625rem; font-weight: bold; letter-spacing: 0.05rem; text-transform: uppercase; opacity: 0.85; align-items: center; justify-content: center; gap: 0.1875rem; white-space: nowrap; line-height: 1; pointer-events: none;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0; width: 0.625rem; height: 0.625rem;">
+                <path d="M4 20V10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+                <rect x="9" y="10" width="6" height="5" rx="1"/>
+              </svg>
+              <span data-i18n="your_inventory">YOUR INVENTORY</span>
+            </div>
+            <div class="inventory-grid" id="inventoryGrid" style="margin: 0;">
+              <!-- สร้างช่องกระเป๋าผ่าน JavaScript -->
+            </div>
+          </div>
 
           <!-- ช่องแอคชั่นข้างหน้าต่างกระเป๋า (Inventory Action Slots) -->
-          <div id="inventoryActionSlotsWrapper" style="display: flex; flex-direction: column; gap: 8px; align-items: center; width: 72px; flex-shrink: 0; margin-top: 4px; border: none; padding: 0; position: relative;">
-            <div style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 9px; font-weight: bold; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; line-height: 1; pointer-events: none;">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+          <div id="inventoryActionSlotsWrapper" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: center; align-self: stretch; width: auto; min-width: 4.5rem; flex-shrink: 0; margin-top: 0; border-left: 1px solid rgba(223, 183, 108, 0.22); padding-left: 0.75rem; position: relative;">
+            <div style="position: absolute; top: -0.9375rem; left: 0.75rem; width: 4.5rem; color: #dfb76c; font-family: 'Google Sans', sans-serif; font-size: 0.5625rem; font-weight: bold; letter-spacing: 0.05rem; text-transform: uppercase; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 0.1875rem; white-space: nowrap; line-height: 1; pointer-events: none;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0; width: 0.625rem; height: 0.625rem;">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="rgba(223, 183, 108, 0.25)"></polygon>
               </svg>
               <span data-i18n="actions_label">ACTIONS</span>
@@ -617,51 +638,51 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
 
         <!-- 3 ปุ่มด้านล่างกระเป๋า -->
-        <div id="inventoryBottomButtons" class="game-ui" style="display: none; gap: 10px; align-items: center; justify-content: center; width: 100%; max-width: 480px; margin: 12px auto 0 auto; box-sizing: border-box;">
+        <div id="inventoryBottomButtons" class="game-ui" style="display: none; gap: 0.625rem; align-items: center; justify-content: center; width: 100%; max-width: 30rem; margin: 0.75rem auto 0 auto; box-sizing: border-box;">
           <button id="btnInventoryActionUI" class="game-ui clickable" style="
             flex: 1;
-            height: 38px;
+            height: 2.375rem;
             background: rgba(223, 183, 108, 0.12);
             border: 1px solid rgba(223, 183, 108, 0.45);
             color: #dfb76c;
             border-radius: 0 !important;
-            --cut: 8px;
+            --cut: 0.5rem;
             clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: bold;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 7px;
+            gap: 0.4375rem;
             transition: all 0.2s;
             font-family: 'Google Sans', sans-serif;
           ">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="rgba(223, 183, 108, 0.25)"></polygon>
             </svg>
             <span data-i18n="bottom_btn_action">แอคชั่น UI</span>
           </button>
           <button id="btnInventorySplit" class="game-ui clickable" style="
             flex: 1;
-            height: 38px;
+            height: 2.375rem;
             background: rgba(56, 189, 248, 0.12);
             border: 1px solid rgba(56, 189, 248, 0.45);
             color: #38bdf8;
             border-radius: 0 !important;
-            --cut: 8px;
+            --cut: 0.5rem;
             clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: bold;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 7px;
+            gap: 0.4375rem;
             transition: all 0.2s;
             font-family: 'Google Sans', sans-serif;
           ">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
               <!-- Back sci-fi square -->
               <rect x="8" y="3" width="13" height="13" rx="1.5" fill="rgba(56, 189, 248, 0.22)" stroke="#38bdf8" stroke-dasharray="2.5 2.5"></rect>
               <!-- Front sci-fi square overlapping -->
@@ -673,24 +694,24 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </button>
           <button id="btnInventoryDestroy" class="game-ui clickable" style="
             flex: 1;
-            height: 38px;
+            height: 2.375rem;
             background: rgba(239, 68, 68, 0.12);
             border: 1px solid rgba(239, 68, 68, 0.45);
             color: #ef4444;
             border-radius: 0 !important;
-            --cut: 8px;
+            --cut: 0.5rem;
             clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
-            font-size: 11px;
+            font-size: 0.6875rem;
             font-weight: bold;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 7px;
+            gap: 0.4375rem;
             transition: all 0.2s;
             font-family: 'Google Sans', sans-serif;
           ">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               <line x1="10" y1="11" x2="10" y2="17"></line>
@@ -704,8 +725,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           style="
             display: none;
             flex-direction: column;
-            gap: 12px;
-            margin-top: 15px;
+            gap: 0.75rem;
+            margin-top: 0.9375rem;
             color: #fff;
           "
         >
@@ -717,8 +738,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           style="
             display: none;
             flex-direction: column;
-            gap: 12px;
-            margin-top: 15px;
+            gap: 0.75rem;
+            margin-top: 0.9375rem;
             color: #fff;
           "
         >
@@ -728,51 +749,51 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           id="inventorySettings"
           style="
             display: none;
-            padding: 12px 4px;
+            padding: 0.75rem 0.25rem;
             color: #fff;
             flex-direction: column;
-            gap: 18px;
+            gap: 1.125rem;
           "
         >
           <!-- ภาษา (Language) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
               <span data-i18n="language_label">ภาษา (Language)</span>
             </div>
-            <div style="display: flex; gap: 6px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.375rem; align-items: center; height: 2rem;">
               <button
                 id="langThBtn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 ภาษาไทย
               </button>
               <button
                 id="langEnBtn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);"
               >
                 English
               </button>
               <button
                 id="langJaBtn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 日本語
               </button>
               <button
                 id="langSdBtn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 Seedian
               </button>
@@ -780,31 +801,31 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- เสียงเอฟเฟกต์รวม (SFX Volume) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
-              <span style="display: inline-flex; align-items: center; gap: 8px">
+              <span style="display: inline-flex; align-items: center; gap: 0.5rem">
                 <span data-i18n="sfx_volume">ระดับเสียงรวม</span>
                 <button
                   id="sfxMuteToggle"
                   style="
                     background: none;
                     border: none;
-                    padding: 4px;
+                    padding: 0.25rem;
                     color: #dfb76c;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     transition: all 0.2s;
                     outline: none;
-                    border-radius: 4px;
+                    border-radius: 0.25rem;
                   "
                   title="Mute/Unmute"
                   onmouseover="this.style.background = 'rgba(223,183,108,0.1)'"
@@ -819,7 +840,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
-                    style="display: block"
+                    style="display: block; width: 0.9375rem; height: 0.9375rem;"
                   >
                     <polygon
                       points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"
@@ -845,12 +866,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- สเกล เรนเดอร์ จอเกม (Render Scale) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
@@ -873,12 +894,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- สเกล UI เกม (UI Scale) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
@@ -901,12 +922,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- ระยะเรนเดอร์ LOD (LOD Distance) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
@@ -929,48 +950,48 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- FPS Limit -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
               <span data-i18n="fps_limit">จำกัดเฟรมเรต</span>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; height: 2rem;">
               <button
                 id="fps30Btn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 30 FPS
               </button>
               <button
                 id="fps60Btn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 60 FPS
               </button>
               <button
                 id="fps120Btn"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);"
               >
                 120 FPS
               </button>
             </div>
           </div>
           <!-- ความเร็วเมาส์ / อนาล็อกขวา (Mouse / Right Stick Sensitivity) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
+                font-size: 0.8125rem;
                 font-family: 'Google Sans', sans-serif;
               "
             >
@@ -993,11 +1014,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่าโหมดแสดงผล (Screen Mode) -->
-          <div id="screenModeSettingContainer" style="display: none !important; flex-direction: column; gap: 6px">
-            <span data-i18n="screen_mode" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+          <div id="screenModeSettingContainer" style="display: none !important; flex-direction: column; gap: 0.375rem">
+            <span data-i18n="screen_mode" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
               >โหมดแสดงผล</span
             >
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; height: 2rem;">
               <button
                 id="setModeWindowed"
                 data-i18n="mode_windowed"
@@ -1005,12 +1026,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
                   color: #dfb76c;
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;
-                  text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
+                  text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);">
                 โหมดหน้าต่าง
               </button>
               <button
@@ -1020,8 +1041,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
                   color: rgba(255, 255, 255, 0.6);
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;">
@@ -1031,11 +1052,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่าแสดงผล FPS (FPS UI Toggle) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
-            <span data-i18n="fps_display_toggle" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
+            <span data-i18n="fps_display_toggle" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
               >แสดงตัวนับ FPS</span
             >
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; height: 2rem;">
               <button
                 id="fpsToggleOn"
                 data-i18n="on"
@@ -1043,12 +1064,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
                   color: #dfb76c;
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;
-                  text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
+                  text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);">
                 เปิด
               </button>
               <button
@@ -1058,8 +1079,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
                   color: rgba(255, 255, 255, 0.6);
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;">
@@ -1069,12 +1090,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่า Shadow Map (Shadow Map Quality) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div style="display: flex; justify-content: space-between">
-              <span data-i18n="shadow_quality" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+              <span data-i18n="shadow_quality" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
                 >คุณภาพเงา</span
               >
-              <span id="shadowMapQualityVal" style="font-size: 13px; font-family: 'Google Sans', sans-serif; color: #dfb76c;">Medium</span>
+              <span id="shadowMapQualityVal" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif; color: #dfb76c;">Medium</span>
             </div>
             <input
               type="range"
@@ -1088,12 +1109,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่าความละเอียดการสะท้อนน้ำ SSR (SSR Reflection Quality & LOD) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div style="display: flex; justify-content: space-between">
-              <span data-i18n="ssr_quality" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+              <span data-i18n="ssr_quality" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
                 >ความละเอียดการสะท้อน (SSR)</span
               >
-              <span id="ssrQualityVal" style="font-size: 13px; font-family: 'Google Sans', sans-serif; color: #dfb76c;">กลาง</span>
+              <span id="ssrQualityVal" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif; color: #dfb76c;">กลาง</span>
             </div>
             <input
               type="range"
@@ -1109,23 +1130,23 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- การตั้งค่า Anti-Aliasing (Hidden) -->
           <div style="display: none !important;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+              <span style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
                 >Anti-Aliasing</span>
-              <span style="font-size: 10px; color: rgba(255, 255, 255, 0.4); font-family: 'Google Sans', sans-serif;">(ต้องการรีโหลด)</span>
+              <span style="font-size: 0.625rem; color: rgba(255, 255, 255, 0.4); font-family: 'Google Sans', sans-serif;">(ต้องการรีโหลด)</span>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; height: 2rem;">
               <button
                 id="antialiasToggleOn"
                 class="game-ui" style="flex: 1;
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
                   color: #dfb76c;
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;
-                  text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
+                  text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);">
                 เปิด
               </button>
               <button
@@ -1134,8 +1155,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
                   color: rgba(255, 255, 255, 0.6);
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;">
@@ -1145,13 +1166,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่า FXAA (Fast Approximate Anti-Aliasing) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span data-i18n="fxaa_label" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+              <span data-i18n="fxaa_label" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
                 >FXAA (Anti-Aliasing)</span>
-              <span data-i18n="fxaa_sub" style="font-size: 10px; color: rgba(223, 183, 108, 0.8); font-family: 'Google Sans', sans-serif;">(ลดรอยหยักภาพ)</span>
+              <span data-i18n="fxaa_sub" style="font-size: 0.625rem; color: rgba(223, 183, 108, 0.8); font-family: 'Google Sans', sans-serif;">(ลดรอยหยักภาพ)</span>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; height: 2rem;">
               <button
                 id="fxaaToggleOn"
                 data-i18n="on"
@@ -1159,12 +1180,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(223, 183, 108, 0.15);
                   border: 1px solid #dfb76c;
                   color: #dfb76c;
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;
-                  text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);">
+                  text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);">
                 เปิด
               </button>
               <button
@@ -1174,8 +1195,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                   background: rgba(255, 255, 255, 0.05);
                   border: 1px solid rgba(255, 255, 255, 0.2);
                   color: rgba(255, 255, 255, 0.6);
-                  padding: 6px 0;
-                  font-size: 11px;
+                  padding: 0.375rem 0;
+                  font-size: 0.6875rem;
                   font-family: 'Google Sans', sans-serif;
                   cursor: pointer;
                   transition: all 0.2s;">
@@ -1185,17 +1206,17 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
 
           <!-- การตั้งค่าโหมดตาบอดสี (Colorblind Mode) -->
-          <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 0.375rem">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span data-i18n="colorblind_mode" style="font-size: 13px; font-family: 'Google Sans', sans-serif;"
+              <span data-i18n="colorblind_mode" style="font-size: 0.8125rem; font-family: 'Google Sans', sans-serif;"
                 >โหมดตาบอดสี</span>
             </div>
-            <div style="display: flex; gap: 6px; align-items: center; height: 32px;">
+            <div style="display: flex; gap: 0.375rem; align-items: center; height: 2rem;">
               <button
                 id="cbNoneBtn"
                 data-i18n="cb_none"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 6px rgba(223, 183, 108, 0.4);"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(223, 183, 108, 0.15); border: 1px solid #dfb76c; color: #dfb76c; font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s; text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);"
               >
                 ปิด
               </button>
@@ -1203,7 +1224,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 id="cbProtanopiaBtn"
                 data-i18n="cb_protanopia"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 ตาบอดสีแดง
               </button>
@@ -1211,7 +1232,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 id="cbDeuteranopiaBtn"
                 data-i18n="cb_deuteranopia"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 ตาบอดสีเขียว
               </button>
@@ -1219,7 +1240,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 id="cbTritanopiaBtn"
                 data-i18n="cb_tritanopia"
                 class="game-ui"
-                style="flex: 1; padding: 6px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 11px; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
+                style="flex: 1; padding: 0.375rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); font-size: 0.6875rem; cursor: pointer; font-family: 'Google Sans', sans-serif; transition: all 0.2s;"
               >
                 น้ำเงิน-เหลือง
               </button>
@@ -1232,9 +1253,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             style="
               display: flex;
               flex-direction: column;
-              gap: 8px;
+              gap: 0.5rem;
               border-top: 1px solid rgba(255, 255, 255, 0.1);
-              padding-top: 12px;
+              padding-top: 0.75rem;
             "
           >
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1242,19 +1263,19 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 id="keyBindingsHeaderLabel"
                 data-i18n="key_bindings"
                 style="
-                  font-size: 13px;
+                  font-size: 0.8125rem;
                   font-family: 'Google Sans', sans-serif;
                   color: #dfb76c;
                   font-weight: bold;
                 "
               >ตั้งค่าปุ่มควบคุม</span>
-              <div style="display: flex; gap: 4px;">
+              <div style="display: flex; gap: 0.25rem;">
                 <button
                   id="btnBindingModeKb"
                   class="game-ui"
-                  style="background: rgba(223, 183, 108, 0.18); border: 1px solid #dfb76c; color: #dfb76c; padding: 2px 8px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; border-radius: 0px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;"
+                  style="background: rgba(223, 183, 108, 0.18); border: 1px solid #dfb76c; color: #dfb76c; padding: 0.125rem 0.5rem; font-size: 0.625rem; font-family: 'Google Sans', sans-serif; cursor: pointer; border-radius: 0px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.25rem;"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0; width: 0.75rem; height: 0.75rem;">
                     <rect x="2" y="4" width="20" height="16" rx="2"></rect>
                     <line x1="6" y1="8" x2="6.01" y2="8"></line>
                     <line x1="10" y1="8" x2="10.01" y2="8"></line>
@@ -1271,9 +1292,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 <button
                   id="btnBindingModeGp"
                   class="game-ui"
-                  style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); padding: 2px 8px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; border-radius: 0px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;"
+                  style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); padding: 0.125rem 0.5rem; font-size: 0.625rem; font-family: 'Google Sans', sans-serif; cursor: pointer; border-radius: 0px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.25rem;"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; flex-shrink: 0; width: 0.75rem; height: 0.75rem;">
                     <line x1="6" y1="12" x2="10" y2="12"></line>
                     <line x1="8" y1="10" x2="8" y2="14"></line>
                     <line x1="15" y1="13" x2="15.01" y2="13"></line>
@@ -1285,7 +1306,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
               </div>
             </div>
             <div
-              style="display: grid; grid-template-columns: 1fr; gap: 6px"
+              style="display: grid; grid-template-columns: 1fr; gap: 0.375rem"
               id="keyBindingsContainer"
             >
               <!-- ถูกสร้างด้วย JS -->
@@ -1297,10 +1318,10 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             style="
               display: flex;
               flex-direction: column;
-              gap: 6px;
+              gap: 0.375rem;
               border-top: 1px solid rgba(255, 255, 255, 0.1);
-              padding-top: 12px;
-              margin-top: 4px;
+              padding-top: 0.75rem;
+              margin-top: 0.25rem;
             "
           >
             <button
@@ -1311,8 +1332,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 background: rgba(239, 68, 68, 0.1);
                 border: 1px solid rgba(239, 68, 68, 0.4);
                 color: #fca5a5;
-                padding: 10px 0;
-                font-size: 11px;
+                padding: 0.625rem 0;
+                font-size: 0.6875rem;
                 font-family: 'Google Sans', sans-serif;
                 cursor: pointer;
                 transition: all 0.2s;
@@ -1320,8 +1341,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                gap: 6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0;">
+                gap: 0.375rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0; width: 0.875rem; height: 0.875rem;">
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
               </svg>
               <span data-i18n="restore_defaults">คืนค่าเริ่มต้น</span>
@@ -1334,8 +1355,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 background: rgba(223, 183, 108, 0.1);
                 border: 1px solid rgba(223, 183, 108, 0.4);
                 color: #dfb76c;
-                padding: 10px 0;
-                font-size: 11px;
+                padding: 0.625rem 0;
+                font-size: 0.6875rem;
                 font-family: 'Google Sans', sans-serif;
                 cursor: pointer;
                 transition: all 0.2s;
@@ -1343,8 +1364,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                gap: 6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0;">
+                gap: 0.375rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0; width: 0.875rem; height: 0.875rem;">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                 <polyline points="16 17 21 12 16 7"></polyline>
                 <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -1361,80 +1382,22 @@ document.body.insertAdjacentHTML("afterbegin", `<div
       </div>
     </div>
 
-    <!-- หน้าต่างกล่องไม้ (Wooden Chest Overlay) -->
-    <div class="inventory-overlay" id="chestOverlay">
-      <div class="inventory-panel game-ui">
-        <!-- Left Column: Chest Storage -->
-        <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0;">
-          <!-- Chest Header -->
-          <div class="inventory-header">
-            <div class="inventory-tabs">
-              <h2 class="active">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                  <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg>
-                <span data-i18n="chest_storage">CHEST STORAGE</span>
-              </h2>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
-              <button id="chestTakeAllBtn" data-i18n="chest_take_all" class="game-ui" style="height: 32px; padding: 0 12px; font-size: 11px; font-weight: bold; background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(223, 183, 108, 0.35); color: #dfb76c; cursor: pointer; transition: all 0.2s; display: flex; align-items: center;">
-                Take All
-              </button>
-            </div>
-          </div>
-
-          <!-- Chest Grid -->
-          <div class="inventory-grid" id="chestGrid">
-            <!-- สร้างช่องเก็บของในกล่อง 20 ช่องผ่าน JavaScript -->
-          </div>
-        </div>
-
-        <!-- Right Column: Player Inventory -->
-        <div style="display: flex; flex-direction: column; width: 392px; flex-shrink: 0; border-left: 1px solid rgba(255, 255, 255, 0.06); padding-left: 28px; position: relative;">
-          <!-- Player Inventory Header in Chest UI -->
-          <div class="inventory-header">
-            <div class="inventory-tabs">
-              <h2 class="active">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                  <path d="M4 20V10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
-                  <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
-                  <rect x="9" y="10" width="6" height="5" rx="1"/>
-                </svg>
-                <span data-i18n="your_inventory">YOUR INVENTORY</span>
-              </h2>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
-              <button class="close-btn game-ui" id="chestClose">✕</button>
-            </div>
-          </div>
-
-          <!-- Player Inventory Grid in Chest UI -->
-          <div class="inventory-grid" id="chestPlayerInventoryGrid">
-            <!-- สร้างช่องเก็บของกระเป๋าเดินทางในหน้านี้ผ่าน JavaScript -->
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- หน้าต่างวาร์ป (Warp UI Overlay - ใช้โครงสร้าง UI ชุดเดียวกับกระเป๋าและกล่อง) -->
     <div class="inventory-overlay" id="warpOverlay">
-      <div class="inventory-panel game-ui" style="width: 448px; max-width: 95vw;">
+      <div class="inventory-panel game-ui">
         <div style="display: flex; flex-direction: column; width: 100%; flex-shrink: 0;">
           <!-- Warp UI Header -->
           <div class="inventory-header">
             <div class="inventory-tabs">
               <h2 class="active">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
                   <circle cx="12" cy="12" r="10"></circle>
                   <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                 </svg>
                 <span data-i18n="warp_ui_title">Obsidian Flux</span>
               </h2>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; height: 100%;">
               <button class="close-btn game-ui" id="warpClose">✕</button>
             </div>
           </div>
@@ -1453,20 +1416,20 @@ document.body.insertAdjacentHTML("afterbegin", `<div
      class="game-ui" style="position: fixed; left: 0; top: 0; will-change: transform;
         background: rgba(10, 10, 15, 0.85);
         color: #dfb76c;
-        padding: 6px 14px;
+        padding: 0.375rem 0.875rem;
         font-family: 'Google Sans', sans-serif;
         font-weight: bold;
-        font-size: 11px;
-        letter-spacing: 1px;
+        font-size: 0.6875rem;
+        letter-spacing: 0.0625rem;
         text-transform: uppercase;
         border: 1px solid rgba(223, 183, 108, 0.35);
-        backdrop-filter: blur(8px);
+        backdrop-filter: blur(0.5rem);
         display: none;
         pointer-events: none;
         z-index: 100;
         transform: translate(-50%, -100%);
         
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);">
+        box-shadow: 0 0.25rem 0.9375rem rgba(0, 0, 0, 0.5);">
       [E]
     </div>
 
@@ -1476,8 +1439,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         position: fixed; left: 0; top: 0; will-change: transform;
         background: rgba(0, 0, 0, 0.8);
         color: white;
-        padding: 6px 12px;
-        border-radius: 8px;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.5rem;
         font-weight: bold;
         border: 1px solid rgba(255, 255, 255, 0.2);
         display: none;
@@ -1501,8 +1464,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         this.style.color = 'white';
       "
     >
-      <span style="display: inline-flex; align-items: center; gap: 6px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+      <span style="display: inline-flex; align-items: center; gap: 0.375rem;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; width: 0.875rem; height: 0.875rem;">
           <path d="M9 10h.01M15 10h.01" />
           <path d="M12 2a8 8 0 0 0-8 8v3a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-3a8 8 0 0 0-8-8z" />
           <path d="M10 17v3M14 17v3" />
@@ -1514,31 +1477,32 @@ document.body.insertAdjacentHTML("afterbegin", `<div
     <button id="toggleControlsBtn"
       style="
         position: fixed;
-        top: 0;
-        right: 0;
-        z-index: 20;
+        top: calc(0.625rem + var(--ui-margin, 0rem));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
         background: rgba(0, 0, 0, 0.7);
         color: white;
         border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 6px 12px;
-        border-radius: 8px;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.5rem;
         cursor: pointer;
-        font-size: 12px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); display: none;
+        font-size: 0.75rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5); display: none;
       "
     >
       ⚙️ ซ่อนเมนู
     </button>
 
-    <div id="bowCrosshair" style="display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; border: 1.5px solid white; pointer-events: none; z-index: 1000; box-shadow: 0 0 2px rgba(0,0,0,0.5);"></div>
-    <div id="targetCircle" style="display: none; position: absolute; left: 0; top: 0; will-change: transform; width: 22px; height: 22px; border: 1.5px solid white; border-radius: 50%; pointer-events: none; z-index: 999; transform: translate(-50%, -50%); box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>
+    <div id="bowCrosshair" style="display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 0.5rem; height: 0.5rem; border: 1.5px solid white; pointer-events: none; z-index: 1000; box-shadow: 0 0 0.125rem rgba(0,0,0,0.5);"></div>
+    <div id="targetCircle" style="display: none; position: absolute; left: 0; top: 0; will-change: transform; width: 1.375rem; height: 1.375rem; border: 1.5px solid white; border-radius: 50%; pointer-events: none; z-index: 999; transform: translate(-50%, -50%); box-shadow: 0 0 0.25rem rgba(0,0,0,0.6);"></div>
 
-    <div class="controls" id="mainControls" style="top: 45px; display: none;">
+    <div class="controls" id="mainControls" style="top: 2.8125rem; display: none;">
       <div class="control-group">
         <button class="btn-toggle" id="distanceToggle">ระยะทาง: ปิด</button>
       </div>
       <div class="control-group">
-        <div id="distanceInfo" style="display: none; color: #fff; font-family: 'Google Sans', sans-serif; font-size: 12px; margin-top: 5px;"></div>
+        <div id="distanceInfo" style="display: none; color: #fff; font-family: 'Google Sans', sans-serif; font-size: 0.75rem; margin-top: 0.3125rem;"></div>
       </div>
       <div class="control-group">
         <label>📐 ขนาดดาว (Grid)</label>
@@ -1556,12 +1520,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
       <div class="control-group">
         <label>🌍 รัศมีดาว (Planet Radius)</label>
-        <div style="display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap;">
-          <button class="btn-radius-preset" data-radius="32" style="flex: 1; padding: 4px 2px; font-size: 11px; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">32 (มาตรฐาน)</button>
-          <button class="btn-radius-preset" data-radius="64" style="flex: 1; padding: 4px 2px; font-size: 11px; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">64</button>
-          <button class="btn-radius-preset" data-radius="96" style="flex: 1; padding: 4px 2px; font-size: 11px; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">96</button>
-          <button class="btn-radius-preset" data-radius="128" style="flex: 1; padding: 4px 2px; font-size: 11px; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">128</button>
-          <button class="btn-radius-preset" data-radius="160" style="flex: 1; padding: 4px 2px; font-size: 11px; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">160</button>
+        <div style="display: flex; gap: 0.25rem; margin-bottom: 0.375rem; flex-wrap: wrap;">
+          <button class="btn-radius-preset" data-radius="32" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">32 (มาตรฐาน)</button>
+          <button class="btn-radius-preset" data-radius="64" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">64</button>
+          <button class="btn-radius-preset" data-radius="96" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">96</button>
+          <button class="btn-radius-preset" data-radius="128" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">128</button>
+          <button class="btn-radius-preset" data-radius="160" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">160</button>
         </div>
         <input
           type="range"
@@ -1593,8 +1557,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           value="#0066aa"
           style="
             width: 100%;
-            padding: 2px;
-            border-radius: 4px;
+            padding: 0.125rem;
+            border-radius: 0.25rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
             background: transparent;
             cursor: pointer;
@@ -1628,8 +1592,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           value="#4d94ff"
           style="
             width: 100%;
-            padding: 2px;
-            border-radius: 4px;
+            padding: 0.125rem;
+            border-radius: 0.25rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
             background: transparent;
             cursor: pointer;
@@ -1685,8 +1649,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           value="#ffffff"
           style="
             width: 100%;
-            padding: 2px;
-            border-radius: 4px;
+            padding: 0.125rem;
+            border-radius: 0.25rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
             background: transparent;
             cursor: pointer;
@@ -1696,40 +1660,40 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
       <div class="control-group">
         <label>👤 มุมมองกล้องสปริงอาร์ม (Camera Mode)</label>
-        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px; margin-bottom: 8px;">
-          <button class="btn-random" id="btnCameraModeTPS" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🎥 TPS (มุมมองข้างไหล่)</button>
-          <button class="btn-random" id="btnCameraModeThirdPerson" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🎥 มุมมองที่ 3 (ตรงกลาง)</button>
-          <button class="btn-random" id="btnCameraModeFPS" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 4px; font-size: 11px; text-align: left;">🎥 FPS (บุคคลที่ 1)</button>
+        <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem; margin-bottom: 0.5rem;">
+          <button class="btn-random" id="btnCameraModeTPS" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 0.25rem; font-size: 0.6875rem; text-align: left;">🎥 TPS (มุมมองข้างไหล่)</button>
+          <button class="btn-random" id="btnCameraModeThirdPerson" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 0.25rem; font-size: 0.6875rem; text-align: left;">🎥 มุมมองที่ 3 (ตรงกลาง)</button>
+          <button class="btn-random" id="btnCameraModeFPS" style="background-image: linear-gradient(135deg, #2e7d32, #4caf50); margin: 0; padding: 0.25rem; font-size: 0.6875rem; text-align: left;">🎥 FPS (บุคคลที่ 1)</button>
         </div>
         <button
           class="btn-toggle active"
           id="cameraCollisionToggle"
-          style="margin-bottom: 8px"
+          style="margin-bottom: 0.5rem"
         >
           🛡️ ระบบกันกล้องชนวัตถุ: เปิด
         </button>
         <button
           class="btn-toggle active"
           id="cameraWaterCollisionToggle"
-          style="margin-bottom: 8px"
+          style="margin-bottom: 0.5rem"
         >
           🌊 ระบบกันกล้องชนผิวน้ำ: เปิด
         </button>
         <button
           class="btn-toggle active"
           id="zoomLimitToggle"
-          style="margin-bottom: 8px"
+          style="margin-bottom: 0.5rem"
         >
           🔍 จำกัดระยะซูมออก: เปิด
         </button>
         <button
           class="btn-toggle"
           id="ragdollToggle"
-          style="margin-bottom: 8px"
+          style="margin-bottom: 0.5rem"
         >
           🦴 โหมด Ragdoll: ปิด
         </button>
-        <button class="btn-toggle" id="npcSummonBtn" style="margin-bottom: 8px">
+        <button class="btn-toggle" id="npcSummonBtn" style="margin-bottom: 0.5rem">
           🦕 เรียก NPC มาหา
         </button>
 
@@ -1740,7 +1704,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           min="5"
           max="150"
           value="5"
-          style="margin-bottom: 8px"
+          style="margin-bottom: 0.5rem"
         />
 
         <label>📏 ขนาดตัวละคร <span id="charScaleLabel">0.10</span></label>
@@ -1749,8 +1713,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <p
           style="
             color: #aaa;
-            font-size: 11px;
-            margin-top: 8px;
+            font-size: 0.6875rem;
+            margin-top: 0.5rem;
             line-height: 1.3;
             text-align: center;
           "
@@ -1777,23 +1741,23 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <button
           class="btn-toggle active"
           id="renderDistToggle"
-          style="margin-bottom: 8px"
+          style="margin-bottom: 0.5rem"
         >
           🛡️ จำกัดระยะเรนเดอร์: เปิด
         </button>
         <label>🌍 1. ระยะเรนเดอร์พื้น (Terrain Distance) <span id="terrainRenderDistLabel">32.00</span></label>
         <input type="range" id="terrainRenderDist" min="5" max="600" value="320" />
 
-        <label style="margin-top: 8px; display: block;">🌲 2. ระยะเรนเดอร์ต้นไม้และสิ่งก่อสร้าง (Landmarks/Trees/Houses) <span id="landmarkRenderDistLabel">20.00</span></label>
+        <label style="margin-top: 0.5rem; display: block;">🌲 2. ระยะเรนเดอร์ต้นไม้และสิ่งก่อสร้าง (Landmarks/Trees/Houses) <span id="landmarkRenderDistLabel">20.00</span></label>
         <input type="range" id="landmarkRenderDist" min="10" max="600" value="200" />
 
-        <label style="margin-top: 8px; display: block;">🌑 3. ระยะเรนเดอร์เงา (Shadow Distance LOD) <span id="shadowRenderDistLabel">14.00</span></label>
+        <label style="margin-top: 0.5rem; display: block;">🌑 3. ระยะเรนเดอร์เงา (Shadow Distance LOD) <span id="shadowRenderDistLabel">14.00</span></label>
         <input type="range" id="shadowRenderDist" min="2" max="500" value="140" />
 
-        <label style="margin-top: 8px; display: block;">📦 4. ระยะเรนเดอร์วัตถุชิ้นเล็ก (Small Objects & Dynamic Items) <span id="objectRenderDistLabel">6.00</span></label>
+        <label style="margin-top: 0.5rem; display: block;">📦 4. ระยะเรนเดอร์วัตถุชิ้นเล็ก (Small Objects & Dynamic Items) <span id="objectRenderDistLabel">6.00</span></label>
         <input type="range" id="objectRenderDist" min="5" max="300" value="60" />
 
-        <label style="margin-top: 8px; display: block;">🌾 5. ระยะเรนเดอร์หญ้า (Grass Detail Distance LOD) <span id="grassRenderDistLabel">4.50</span></label>
+        <label style="margin-top: 0.5rem; display: block;">🌾 5. ระยะเรนเดอร์หญ้า (Grass Detail Distance LOD) <span id="grassRenderDistLabel">4.50</span></label>
         <input type="range" id="grassRenderDist" min="5" max="200" value="45" />
       </div>
 
@@ -1872,14 +1836,14 @@ document.body.insertAdjacentHTML("afterbegin", `<div
 
       <div class="control-group">
         <button class="btn-random" id="randomBtn">🎲 สุ่มภูมิประเทศใหม่</button>
-        <button class="btn-random" id="randomCubesBtn" style="margin-top: 6px">
+        <button class="btn-random" id="randomCubesBtn" style="margin-top: 0.375rem">
           📦 สุ่มวัตถุ (50 ชิ้น)
         </button>
         <button
           class="btn-random"
           id="randomNatureBtn"
           style="
-            margin-top: 6px;
+            margin-top: 0.375rem;
             background-image: linear-gradient(135deg, #1b5e20, #4caf50);
           "
         >
@@ -1889,76 +1853,76 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           class="btn-toggle active"
           id="devGrassToggle"
           style="
-            margin-top: 6px;
+            margin-top: 0.375rem;
             background-image: linear-gradient(135deg, #2e7d32, #43a047);
           "
         >
           🌿 หญ้า: เปิด
         </button>
-        <label style="margin-top: 6px;">🌿 ความหนาแน่นหญ้า <span id="devGrassDensityLabel">100%</span></label>
+        <label style="margin-top: 0.375rem;">🌿 ความหนาแน่นหญ้า <span id="devGrassDensityLabel">100%</span></label>
         <input type="range" id="devGrassDensity" min="10" max="250" step="10" value="100" />
       </div>
 
       <div class="control-group">
         <label>🛠️ เครื่องมือพัฒนา (Dev Tools)</label>
-        <button class="btn-toggle" id="devInputModeToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #6a1b9a, #8e24aa);">
+        <button class="btn-toggle" id="devInputModeToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #6a1b9a, #8e24aa);">
           🎮 โหมดอินพุต: อัตโนมัติ (Auto)
         </button>
-        <button class="btn-toggle" id="screenModeVisibilityToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #0277bd, #039be5);">
+        <button class="btn-toggle" id="screenModeVisibilityToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #0277bd, #039be5);">
           🖥️ โหมดแสดงผล (Screen Mode): แสดง
         </button>
-        <button class="btn-toggle" id="hitboxToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #d32f2f, #f44336);">
+        <button class="btn-toggle" id="hitboxToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #d32f2f, #f44336);">
           🟥 แสดงโครงสร้างการชน (Show Hitboxes) ปิด
         </button>
-        <button class="btn-toggle" id="planetWireframeToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #00695c, #26a69a);">
+        <button class="btn-toggle" id="planetWireframeToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #00695c, #26a69a);">
           🌐 แสดงเส้นโครงสร้างดาว (Planet Wireframe) ปิด
         </button>
-        <button class="btn-toggle active" id="frustumCullingToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #2e7d32, #4caf50);">
+        <button class="btn-toggle active" id="frustumCullingToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #2e7d32, #4caf50);">
           👁️ Frustum Culling (คัดออกวัตถุนอกจอ) เปิด
         </button>
-        <button class="btn-toggle active" id="caveWaterToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #00acc1, #00838f);">
+        <button class="btn-toggle active" id="caveWaterToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #00acc1, #00838f);">
           💧 น้ำในถ้ำ (Cave Water) เปิด
         </button>
-        <label style="margin-top: 10px;">📏 ระยะคำนวณการชน <span id="colliderDistLabel">20.00</span></label>
+        <label style="margin-top: 0.625rem;">📏 ระยะคำนวณการชน <span id="colliderDistLabel">20.00</span></label>
         <input type="range" id="colliderDist" min="5" max="100" value="20" />
-        <label style="margin-top: 10px;">🔲 ระยะขอบ UI (UI Margin) <span id="uiMarginLabel">0</span>px</label>
+        <label style="margin-top: 0.625rem;">🔲 ระยะขอบ UI (UI Margin) <span id="uiMarginLabel">0</span>px</label>
         <input type="range" id="uiMarginDist" min="0" max="100" value="10" />
-        <label style="margin-top: 10px;">📏 ระยะทำการ (Action Reach) <span id="actionReachLabel">0.15</span></label>
+        <label style="margin-top: 0.625rem;">📏 ระยะทำการ (Action Reach) <span id="actionReachLabel">0.15</span></label>
         <input type="range" id="actionReachDist" min="0.1" max="10" step="0.05" value="0.15" />
-        <button class="btn-toggle active" id="actionReachToggle" style="margin-top: 6px; background-image: linear-gradient(135deg, #0288d1, #03a9f4);">
+        <button class="btn-toggle active" id="actionReachToggle" style="margin-top: 0.375rem; background-image: linear-gradient(135deg, #0288d1, #03a9f4);">
           ⚪ แสดงวงระยะทำการ (Show Action Reach) เปิด
         </button>
-        <label style="margin-top: 10px;">🎯 รูปแบบระยะทำการ (Action Reach Mode)</label>
-        <select id="actionReachModeSelect" style="margin-top: 4px; padding: 6px; border-radius: 4px; background: #1a1a1a; color: white; border: 1px solid #444; width: 100%;">
+        <label style="margin-top: 0.625rem;">🎯 รูปแบบระยะทำการ (Action Reach Mode)</label>
+        <select id="actionReachModeSelect" style="margin-top: 0.25rem; padding: 0.375rem; border-radius: 0.25rem; background: #1a1a1a; color: white; border: 1px solid #444; width: 100%;">
           <option value="1">Line (แบบเส้น)</option>
           <option value="2">Circle (แบบวง)</option>
           <option value="3" selected>Capsule (แบบแคปซูล)</option>
         </select>
-        <label style="margin-top: 10px;">🪵 ความสูงพื้นไม้ (Wood Floor Height) <span id="woodFloorHeightLabel">0.05</span></label>
+        <label style="margin-top: 0.625rem;">🪵 ความสูงพื้นไม้ (Wood Floor Height) <span id="woodFloorHeightLabel">0.05</span></label>
         <input type="range" id="woodFloorHeightSlider" min="0.0" max="5.0" step="0.05" value="0.05" />
-        <label style="margin-top: 10px;">������ ขนาดกองไฟ (Campfire Size) <span id="campfireSizeLabel">0.25</span></label>
+        <label style="margin-top: 0.625rem;">������ ขนาดกองไฟ (Campfire Size) <span id="campfireSizeLabel">0.25</span></label>
         <input type="range" id="campfireSizeSlider" min="0.1" max="5.0" step="0.05" value="0.25" />
-        <label style="margin-top: 10px;">🕳️ ขนาดหลุมสร้างอุโมงค์ (Voxel Hole Multiplier) <span id="voxelHoleRadiusLabel">2.0</span>x</label>
+        <label style="margin-top: 0.625rem;">🕳️ ขนาดหลุมสร้างอุโมงค์ (Voxel Hole Multiplier) <span id="voxelHoleRadiusLabel">2.0</span>x</label>
         <input type="range" id="voxelHoleRadiusSlider" min="0.2" max="5.0" step="0.1" value="2.0" />
-        <label style="margin-top: 10px;">🔍 ระยะซูมกล้อง (Camera Zoom) <span id="devCameraZoomLabel">3.5</span></label>
+        <label style="margin-top: 0.625rem;">🔍 ระยะซูมกล้อง (Camera Zoom) <span id="devCameraZoomLabel">3.5</span></label>
         <input type="range" id="devCameraZoomSlider" min="3.5" max="15.0" step="0.1" value="3.5" />
       </div>
 
       <div class="control-group">
         <label>🎯 <b>ตั้งค่าธนู (Bow Settings)</b></label>
-        <label style="margin-top: 5px;">⏱️ เวลายกแขนค้าง (วินาที) <span id="bowHoldArmLabel">3.3</span></label>
+        <label style="margin-top: 0.3125rem;">⏱️ เวลายกแขนค้าง (วินาที) <span id="bowHoldArmLabel">3.3</span></label>
         <input type="range" id="bowHoldArmSlider" min="0.5" max="10.0" step="0.1" value="3.3" />
         
-        <label style="margin-top: 5px;">⚡ ดีเลย์ Spam Click (วินาที) <span id="bowSpamClickDelayLabel">0.5</span></label>
+        <label style="margin-top: 0.3125rem;">⚡ ดีเลย์ Spam Click (วินาที) <span id="bowSpamClickDelayLabel">0.5</span></label>
         <input type="range" id="bowSpamClickDelaySlider" min="0.0" max="3.0" step="0.1" value="0.5" />
         
-        <label style="margin-top: 5px;">🎯 ระยะเล็งล็อกเป้าระยะไกล - ธนู/ปืน (เมตร/หน่วย) <span id="bowLockDistanceLabel">3.0</span></label>
+        <label style="margin-top: 0.3125rem;">🎯 ระยะเล็งล็อกเป้าระยะไกล - ธนู/ปืน (เมตร/หน่วย) <span id="bowLockDistanceLabel">3.0</span></label>
         <input type="range" id="bowLockDistanceSlider" min="2.0" max="20.0" step="0.5" value="3.0" />
       </div>
 
       <div class="control-group">
         <label>⚔️ <b>ตั้งค่าเป้าระยะประชิด (Melee Lock Settings)</b></label>
-        <label style="margin-top: 5px;">🗡️ ระยะล็อกเป้าระยะประชิด - มีด/ชิราซายะ/อีเตอร์/ดาบใหญ่ <span id="meleeLockDistanceLabel">0.25</span></label>
+        <label style="margin-top: 0.3125rem;">🗡️ ระยะล็อกเป้าระยะประชิด - มีด/ชิราซายะ/อีเตอร์/ดาบใหญ่ <span id="meleeLockDistanceLabel">0.25</span></label>
         <input type="range" id="meleeLockDistanceSlider" min="0.10" max="2.50" step="0.05" value="0.25" />
       </div>
 
@@ -1967,98 +1931,98 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <div id="devSpawnItemList" style="
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          margin-top: 6px;
-          max-height: 200px;
+          gap: 0.25rem;
+          margin-top: 0.375rem;
+          max-height: 12.5rem;
           overflow-y: auto;
-          padding-right: 4px;
+          padding-right: 0.25rem;
         ">
         </div>
       </div>
-      <div class="control-group" id="devDigTerrainContainer" style="margin-top: 8px;">
+      <div class="control-group" id="devDigTerrainContainer" style="margin-top: 0.5rem;">
         <label>🛠️ ระบบขุด/ถมพื้นดาว (Terrain Mod)</label>
-        <div style="display: flex; gap: 4px; margin-top: 6px;">
-          <button class="btn-random" id="devDigTerrainBtn" style="background-image: linear-gradient(135deg, #e53935, #ef5350); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
+        <div style="display: flex; gap: 0.25rem; margin-top: 0.375rem;">
+          <button class="btn-random" id="devDigTerrainBtn" style="background-image: linear-gradient(135deg, #e53935, #ef5350); flex: 1; margin: 0; padding: 0 0.25rem; font-size: 0.6875rem;">
             ⛏️ ขุดหลุม
           </button>
-          <button class="btn-random" id="devRaiseTerrainBtn" style="background-image: linear-gradient(135deg, #43a047, #66bb6a); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
+          <button class="btn-random" id="devRaiseTerrainBtn" style="background-image: linear-gradient(135deg, #43a047, #66bb6a); flex: 1; margin: 0; padding: 0 0.25rem; font-size: 0.6875rem;">
             ⛰️ ถมดิน
           </button>
         </div>
       </div>
       
-      <div class="control-group" id="devRenderDistContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+      <div class="control-group" id="devRenderDistContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem;">
         <label>👁️ ปรับระยะเรนเดอร์ 5 ระดับ (Render Distance & LOD)</label>
-        <label style="margin-top: 4px; display: block;">🌍 1. ระยะเรนเดอร์พื้น <span id="devTerrainRenderDistLabel">32.00</span></label>
-        <input type="range" id="devTerrainRenderDistSlider" min="5" max="600" value="320" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">🌍 1. ระยะเรนเดอร์พื้น <span id="devTerrainRenderDistLabel">32.00</span></label>
+        <input type="range" id="devTerrainRenderDistSlider" min="5" max="600" value="320" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 6px; display: block;">🌲 2. ระยะเรนเดอร์ต้นไม้และสิ่งก่อสร้าง <span id="devLandmarkRenderDistLabel">20.00</span></label>
-        <input type="range" id="devLandmarkRenderDistSlider" min="10" max="600" value="200" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.375rem; display: block;">🌲 2. ระยะเรนเดอร์ต้นไม้และสิ่งก่อสร้าง <span id="devLandmarkRenderDistLabel">20.00</span></label>
+        <input type="range" id="devLandmarkRenderDistSlider" min="10" max="600" value="200" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 6px; display: block;">🌑 3. ระยะเรนเดอร์เงา <span id="devShadowRenderDistLabel">14.00</span></label>
-        <input type="range" id="devShadowRenderDistSlider" min="2" max="500" value="140" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.375rem; display: block;">🌑 3. ระยะเรนเดอร์เงา <span id="devShadowRenderDistLabel">14.00</span></label>
+        <input type="range" id="devShadowRenderDistSlider" min="2" max="500" value="140" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 6px; display: block;">📦 4. ระยะเรนเดอร์วัตถุชิ้นเล็ก <span id="devObjectRenderDistLabel">6.00</span></label>
-        <input type="range" id="devObjectRenderDistSlider" min="5" max="300" value="60" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.375rem; display: block;">📦 4. ระยะเรนเดอร์วัตถุชิ้นเล็ก <span id="devObjectRenderDistLabel">6.00</span></label>
+        <input type="range" id="devObjectRenderDistSlider" min="5" max="300" value="60" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 6px; display: block;">🌾 5. ระยะเรนเดอร์หญ้า <span id="devGrassRenderDistLabel">4.50</span></label>
-        <input type="range" id="devGrassRenderDistSlider" min="5" max="200" value="45" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.375rem; display: block;">🌾 5. ระยะเรนเดอร์หญ้า <span id="devGrassRenderDistLabel">4.50</span></label>
+        <input type="range" id="devGrassRenderDistSlider" min="5" max="200" value="45" style="width: 100%; margin-top: 0.125rem;" />
       </div>
 
-            <div class="control-group" id="devCharModelContainer" style="margin-top: 8px;">
+            <div class="control-group" id="devCharModelContainer" style="margin-top: 0.5rem;">
         <label>👤 โมเดลตัวละคร (Character Model)</label>
-        <div style="display: flex; gap: 4px; margin-top: 6px;">
-          <button class="btn-random" id="devCharModelClassicBtn" style="background-image: linear-gradient(135deg, #0288d1, #29b6f6); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
+        <div style="display: flex; gap: 0.25rem; margin-top: 0.375rem;">
+          <button class="btn-random" id="devCharModelClassicBtn" style="background-image: linear-gradient(135deg, #0288d1, #29b6f6); flex: 1; margin: 0; padding: 0 0.25rem; font-size: 0.6875rem;">
             🧑 Classic (Base)
           </button>
-          <button class="btn-random" id="devCharModelChibiBtn" disabled style="background-image: linear-gradient(135deg, #424242, #616161); opacity: 0.45; cursor: not-allowed; flex: 1; margin: 0; padding: 0 4px; font-size: 11px;" title="ปิดใช้งานโมเดล GLB ชั่วคราว">
+          <button class="btn-random" id="devCharModelChibiBtn" disabled style="background-image: linear-gradient(135deg, #424242, #616161); opacity: 0.45; cursor: not-allowed; flex: 1; margin: 0; padding: 0 0.25rem; font-size: 0.6875rem;" title="ปิดใช้งานโมเดล GLB ชั่วคราว">
             ✨ Chibi White (GLB - ปิด)
           </button>
         </div>
 
-        <div id="devAnimContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px; display: none;">
+        <div id="devAnimContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem; display: none;">
         <label>🎬 อนิเมชั่น (Animation Override)</label>
-        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
-          <div id="devAnimList" style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; padding-right: 4px;">
-            <button class="dev-anim-btn" data-anim="Auto" style="width:100%; text-align:left; padding: 4px 6px; font-size: 11px; border-radius: 4px; border: 1px solid #3ba5e9; background: #2384c3; color: white; cursor: pointer;">🤖 Auto (ตามการเดิน/วิ่ง)</button>
-            <div id="devAnimListLoader" style="color: #ccc; font-size: 11px; padding: 4px;">กำลังโหลดข้อมูลอนิเมชั่น...</div>
+        <div style="display: flex; flex-direction: column; gap: 0.375rem; margin-top: 0.375rem;">
+          <div id="devAnimList" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 12.5rem; overflow-y: auto; padding-right: 0.25rem;">
+            <button class="dev-anim-btn" data-anim="Auto" style="width:100%; text-align:left; padding: 0.25rem 0.375rem; font-size: 0.6875rem; border-radius: 0.25rem; border: 1px solid #3ba5e9; background: #2384c3; color: white; cursor: pointer;">🤖 Auto (ตามการเดิน/วิ่ง)</button>
+            <div id="devAnimListLoader" style="color: #ccc; font-size: 0.6875rem; padding: 0.25rem;">กำลังโหลดข้อมูลอนิเมชั่น...</div>
           </div>
           
           <!-- Animation Controls -->
-          <div id="devAnimControls" style="display: none; flex-direction: column; gap: 4px; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px;">
+          <div id="devAnimControls" style="display: none; flex-direction: column; gap: 0.25rem; background: rgba(0,0,0,0.3); padding: 0.375rem; border-radius: 0.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span id="devAnimTimeLabel" style="font-size: 10px; color: #aaa;">0.00s / 0.00s</span>
-              <button id="devAnimPlayBtn" class="btn-random" style="margin: 0; padding: 2px 8px; font-size: 10px; min-width: 50px;">⏸️ Pause</button>
+              <span id="devAnimTimeLabel" style="font-size: 0.625rem; color: #aaa;">0.00s / 0.00s</span>
+              <button id="devAnimPlayBtn" class="btn-random" style="margin: 0; padding: 0.125rem 0.5rem; font-size: 0.625rem; min-width: 3.125rem;">⏸️ Pause</button>
             </div>
             
             <input type="range" id="devAnimScrubSlider" min="0" max="1000" value="0" style="width: 100%; accent-color: #3ba5e9;" title="Scrub Time">
             
-            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <label style="font-size: 9px; width: 30px; color: #4CAF50;">Start:</label>
+            <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem;">
+              <div style="display: flex; align-items: center; gap: 0.25rem;">
+                <label style="font-size: 0.5625rem; width: 1.875rem; color: #4CAF50;">Start:</label>
                 <input type="range" id="devAnimStartSlider" min="0" max="1000" value="0" style="flex: 1; accent-color: #4CAF50;">
-                <input type="number" id="devAnimStartInput" step="0.01" value="0" style="width: 40px; background: rgba(0,0,0,0.5); border: 1px solid #555; color: white; font-size: 9px; padding: 2px;">
+                <input type="number" id="devAnimStartInput" step="0.01" value="0" style="width: 2.5rem; background: rgba(0,0,0,0.5); border: 1px solid #555; color: white; font-size: 0.5625rem; padding: 0.125rem;">
               </div>
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <label style="font-size: 9px; width: 30px; color: #F44336;">End:</label>
+              <div style="display: flex; align-items: center; gap: 0.25rem;">
+                <label style="font-size: 0.5625rem; width: 1.875rem; color: #F44336;">End:</label>
                 <input type="range" id="devAnimEndSlider" min="0" max="1000" value="1000" style="flex: 1; accent-color: #F44336;">
-                <input type="number" id="devAnimEndInput" step="0.01" value="0" style="width: 40px; background: rgba(0,0,0,0.5); border: 1px solid #555; color: white; font-size: 9px; padding: 2px;">
+                <input type="number" id="devAnimEndInput" step="0.01" value="0" style="width: 2.5rem; background: rgba(0,0,0,0.5); border: 1px solid #555; color: white; font-size: 0.5625rem; padding: 0.125rem;">
               </div>
             </div>
           </div>
 
           <!-- Layered Animation Mixer (Upper / Lower Body) -->
-          <div id="devAnimMixerContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 6px;">
+          <div id="devAnimMixerContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.375rem;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="font-size: 11px; color: #ffca28; font-weight: bold;">🎭 โหมดผสมอนิเมชั่น (Upper/Lower Mix)</label>
-              <button id="devAnimMixToggleBtn" class="btn-random" style="margin: 0; padding: 2px 8px; font-size: 10px; background: #333; border: 1px solid #555;">
+              <label style="font-size: 0.6875rem; color: #ffca28; font-weight: bold;">🎭 โหมดผสมอนิเมชั่น (Upper/Lower Mix)</label>
+              <button id="devAnimMixToggleBtn" class="btn-random" style="margin: 0; padding: 0.125rem 0.5rem; font-size: 0.625rem; background: #333; border: 1px solid #555;">
                 โหมดผสม: OFF
               </button>
             </div>
-            <div id="devAnimMixControls" style="display: none; flex-direction: column; gap: 5px; margin-top: 6px; background: rgba(0,0,0,0.25); padding: 6px; border-radius: 4px;">
+            <div id="devAnimMixControls" style="display: none; flex-direction: column; gap: 0.3125rem; margin-top: 0.375rem; background: rgba(0,0,0,0.25); padding: 0.375rem; border-radius: 0.25rem;">
               <div>
-                <label style="font-size: 10px; color: #4fc3f7;">🦵 ส่วนล่าง (Lower Body - ขา & การเดิน):</label>
-                <select id="devAnimMixLowerSelect" style="width: 100%; background: #222; color: white; border: 1px solid #555; padding: 3px; font-size: 10px; border-radius: 3px; margin-top: 2px;">
+                <label style="font-size: 0.625rem; color: #4fc3f7;">🦵 ส่วนล่าง (Lower Body - ขา & การเดิน):</label>
+                <select id="devAnimMixLowerSelect" style="width: 100%; background: #222; color: white; border: 1px solid #555; padding: 0.1875rem; font-size: 0.625rem; border-radius: 0.1875rem; margin-top: 0.125rem;">
                   <option value="Walking">Walking (เดิน)</option>
                   <option value="Running">Running (วิ่ง)</option>
                   <option value="01a090e9-3d6d-7643-a07b-75e0e18cdc29">Idle (ยืนพัก)</option>
@@ -2068,8 +2032,8 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 </select>
               </div>
               <div>
-                <label style="font-size: 10px; color: #ffb74d;">💪 ส่วนบน (Upper Body - ลำตัว แขน หัว):</label>
-                <select id="devAnimMixUpperSelect" style="width: 100%; background: #222; color: white; border: 1px solid #555; padding: 3px; font-size: 10px; border-radius: 3px; margin-top: 2px;">
+                <label style="font-size: 0.625rem; color: #ffb74d;">💪 ส่วนบน (Upper Body - ลำตัว แขน หัว):</label>
+                <select id="devAnimMixUpperSelect" style="width: 100%; background: #222; color: white; border: 1px solid #555; padding: 0.1875rem; font-size: 0.625rem; border-radius: 0.1875rem; margin-top: 0.125rem;">
                   <option value="01a090f8-8c8f-75dc-8693-155f9574dac7">Tool Swing / Use Item (ฟัน/ขุด/ใช้ไอเทม)</option>
                   <option value="Walking">Walking (แกว่งแขนเดิน)</option>
                   <option value="Running">Running (แกว่งแขนวิ่ง)</option>
@@ -2079,11 +2043,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
                 </select>
               </div>
               <div>
-                <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.625rem;">
                   <span style="color: #bbb;">น้ำหนักส่วนบน (Upper Blend Weight):</span>
                   <span id="devAnimMixWeightLabel" style="color: #ffca28; font-weight: bold;">100%</span>
                 </div>
-                <input type="range" id="devAnimMixWeightSlider" min="0" max="100" value="100" style="width: 100%; accent-color: #ffca28; margin-top: 2px;">
+                <input type="range" id="devAnimMixWeightSlider" min="0" max="100" value="100" style="width: 100%; accent-color: #ffca28; margin-top: 0.125rem;">
               </div>
             </div>
           </div>
@@ -2091,273 +2055,273 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
 
         <!-- GLB Skeleton Bones & Mesh Parts Inspector -->
-        <div id="devSkeletonContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px; display: none;">
+        <div id="devSkeletonContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem; display: none;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
-            <label style="color: #ffca28; font-weight: bold; font-size: 11px; margin: 0;">🦴 โครงกระดูก & ชิ้นส่วนโมเดล GLB</label>
-            <span id="devBonesCountBadge" style="font-size: 10px; background: rgba(255,202,40,0.2); color: #ffca28; padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(255,202,40,0.4);">28 Bones</span>
+            <label style="color: #ffca28; font-weight: bold; font-size: 0.6875rem; margin: 0;">🦴 โครงกระดูก & ชิ้นส่วนโมเดล GLB</label>
+            <span id="devBonesCountBadge" style="font-size: 0.625rem; background: rgba(255,202,40,0.2); color: #ffca28; padding: 0.0625rem 0.375rem; border-radius: 0.625rem; border: 1px solid rgba(255,202,40,0.4);">28 Bones</span>
           </div>
 
           <!-- Toggles Bar -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px;">
-            <button id="devToggleBonesBtn" class="btn-random" style="margin: 0; padding: 4px; font-size: 10px; background: #333; border: 1px solid #555;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; margin-top: 0.375rem;">
+            <button id="devToggleBonesBtn" class="btn-random" style="margin: 0; padding: 0.25rem; font-size: 0.625rem; background: #333; border: 1px solid #555;">
               🦴 โครงกระดูก: OFF
             </button>
-            <button id="devToggleBoneLabelsBtn" class="btn-random" style="margin: 0; padding: 4px; font-size: 10px; background: #333; border: 1px solid #555;">
+            <button id="devToggleBoneLabelsBtn" class="btn-random" style="margin: 0; padding: 0.25rem; font-size: 0.625rem; background: #333; border: 1px solid #555;">
               🏷️ ป้ายชื่อกระดูก: OFF
             </button>
-            <button id="devToggleColorByPartsBtn" class="btn-random" style="margin: 0; padding: 4px; font-size: 10px; background: #333; border: 1px solid #555;">
+            <button id="devToggleColorByPartsBtn" class="btn-random" style="margin: 0; padding: 0.25rem; font-size: 0.625rem; background: #333; border: 1px solid #555;">
               🎨 แยกสีชิ้นส่วน: OFF
             </button>
-            <button id="devToggleWireframeBtn" class="btn-random" style="margin: 0; padding: 4px; font-size: 10px; background: #333; border: 1px solid #555;">
+            <button id="devToggleWireframeBtn" class="btn-random" style="margin: 0; padding: 0.25rem; font-size: 0.625rem; background: #333; border: 1px solid #555;">
               🕸️ ตาข่าย Wireframe: OFF
             </button>
           </div>
 
           <!-- Model Parts Visibility & Isolation -->
-          <div style="margin-top: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 6px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-              <span style="font-size: 10px; color: #ffca28; font-weight: bold;">🧩 เปิด/ปิดชิ้นส่วนโมเดล (Part Visibility):</span>
-              <button id="devResetPartsVisibilityBtn" style="background: none; border: none; color: #4fc3f7; font-size: 9px; cursor: pointer; text-decoration: underline;">เปิดทั้งหมด</button>
+          <div style="margin-top: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.25rem; padding: 0.375rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3125rem;">
+              <span style="font-size: 0.625rem; color: #ffca28; font-weight: bold;">🧩 เปิด/ปิดชิ้นส่วนโมเดล (Part Visibility):</span>
+              <button id="devResetPartsVisibilityBtn" style="background: none; border: none; color: #4fc3f7; font-size: 0.5625rem; cursor: pointer; text-decoration: underline;">เปิดทั้งหมด</button>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px;">
-              <label style="display: flex; align-items: center; gap: 4px; color: #ff8a65; cursor: pointer;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; font-size: 0.625rem;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #ff8a65; cursor: pointer;">
                 <input type="checkbox" id="devPartHead" checked style="accent-color: #ff6e40;"> 👤 ศีรษะ (Head)
               </label>
-              <label style="display: flex; align-items: center; gap: 4px; color: #4fc3f7; cursor: pointer;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #4fc3f7; cursor: pointer;">
                 <input type="checkbox" id="devPartTorso" checked style="accent-color: #00b0ff;"> 👕 ลำตัว (Torso)
               </label>
-              <label style="display: flex; align-items: center; gap: 4px; color: #69f0ae; cursor: pointer;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #69f0ae; cursor: pointer;">
                 <input type="checkbox" id="devPartLeftArm" checked style="accent-color: #00e676;"> 💪 แขนซ้าย (L-Arm)
               </label>
-              <label style="display: flex; align-items: center; gap: 4px; color: #ffd54f; cursor: pointer;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #ffd54f; cursor: pointer;">
                 <input type="checkbox" id="devPartRightArm" checked style="accent-color: #ffab00;"> 🦾 แขนขวา (R-Arm)
               </label>
-              <label style="display: flex; align-items: center; gap: 4px; color: #ea80fc; cursor: pointer;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #ea80fc; cursor: pointer;">
                 <input type="checkbox" id="devPartLeftLeg" checked style="accent-color: #d500f9;"> 🦵 ขาซ้าย (L-Leg)
               </label>
-              <label style="display: flex; align-items: center; gap: 4px; color: #ff80ab; cursor: pointer;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #ff80ab; cursor: pointer;">
                 <input type="checkbox" id="devPartRightLeg" checked style="accent-color: #f50057;"> 🦿 ขาขวา (R-Leg)
               </label>
-              <label style="display: flex; align-items: center; gap: 4px; color: #f48fb1; cursor: pointer; grid-column: span 2;">
+              <label style="display: flex; align-items: center; gap: 0.25rem; color: #f48fb1; cursor: pointer; grid-column: span 2;">
                 <input type="checkbox" id="devPartHair" checked style="accent-color: #e040fb;"> 💇‍♀️ ผมรวบ (Ponytail Hair)
               </label>
             </div>
 
             <!-- Hair Physics Controls -->
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.15);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <span style="font-size: 10px; color: #ea80fc; font-weight: bold;">💇‍♀️ ฟิสิกส์ผมรวบ (Hair Spring Physics):</span>
+            <div style="margin-top: 0.5rem; padding-top: 0.375rem; border-top: 1px dashed rgba(255,255,255,0.15);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.625rem; color: #ea80fc; font-weight: bold;">💇‍♀️ ฟิสิกส์ผมรวบ (Hair Spring Physics):</span>
               </div>
-              <div style="display: flex; gap: 4px; margin-bottom: 6px;">
-                <button id="devToggleHairPhysicsBtn" style="flex: 1; padding: 4px; font-size: 10px; border-radius: 4px; background: linear-gradient(135deg, #aa00ff, #ea80fc); border: 1px solid #e040fb; color: #fff; cursor: pointer; font-weight: bold;">
+              <div style="display: flex; gap: 0.25rem; margin-bottom: 0.375rem;">
+                <button id="devToggleHairPhysicsBtn" style="flex: 1; padding: 0.25rem; font-size: 0.625rem; border-radius: 0.25rem; background: linear-gradient(135deg, #aa00ff, #ea80fc); border: 1px solid #e040fb; color: #fff; cursor: pointer; font-weight: bold;">
                   ✨ ฟิสิกส์ผม: ON
                 </button>
-                <button id="devTestHairJiggleBtn" style="flex: 1; padding: 4px; font-size: 10px; border-radius: 4px; background: #333; border: 1px solid #777; color: #ffeb3b; cursor: pointer; font-weight: bold;">
+                <button id="devTestHairJiggleBtn" style="flex: 1; padding: 0.25rem; font-size: 0.625rem; border-radius: 0.25rem; background: #333; border: 1px solid #777; color: #ffeb3b; cursor: pointer; font-weight: bold;">
                   💫 สะบัดผมทดสอบ
                 </button>
               </div>
-              <div style="font-size: 9px; color: #ccc; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: 0.5625rem; color: #ccc; display: flex; flex-direction: column; gap: 0.25rem;">
                 <div>
                   <div style="display: flex; justify-content: space-between;">
                     <span>ความเด้ง/สปริง (Stiffness):</span>
                     <span id="devHairStiffnessVal" style="color: #ea80fc;">85</span>
                   </div>
-                  <input type="range" id="devHairStiffnessSlider" min="20" max="250" value="85" style="width: 100%; height: 4px; accent-color: #ea80fc;">
+                  <input type="range" id="devHairStiffnessSlider" min="20" max="250" value="85" style="width: 100%; height: 0.25rem; accent-color: #ea80fc;">
                 </div>
                 <div>
                   <div style="display: flex; justify-content: space-between;">
                     <span>แรงหนืดสปริง (Damping):</span>
                     <span id="devHairDampingVal" style="color: #ea80fc;">9</span>
                   </div>
-                  <input type="range" id="devHairDampingSlider" min="2" max="30" value="9" style="width: 100%; height: 4px; accent-color: #ea80fc;">
+                  <input type="range" id="devHairDampingSlider" min="2" max="30" value="9" style="width: 100%; height: 0.25rem; accent-color: #ea80fc;">
                 </div>
                 <div>
                   <div style="display: flex; justify-content: space-between;">
                     <span>แรงเฉื่อยการเคลื่อนไหว (Inertia):</span>
                     <span id="devHairInertiaVal" style="color: #ea80fc;">1.0</span>
                   </div>
-                  <input type="range" id="devHairInertiaSlider" min="0" max="25" value="10" style="width: 100%; height: 4px; accent-color: #ea80fc;">
+                  <input type="range" id="devHairInertiaSlider" min="0" max="25" value="10" style="width: 100%; height: 0.25rem; accent-color: #ea80fc;">
                 </div>
               </div>
             </div>
 
             <!-- Hand & Finger Pose Controls (กำมือ, แบมือ, แยกนิ้ว) -->
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.15);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <span style="font-size: 10px; color: #ffca28; font-weight: bold;">🖐️ ปรับมือนิ้ว (Hand & Finger Poses):</span>
-                <span id="devHandPoseTargetBadge" style="font-size: 9px; background: rgba(255,202,40,0.2); color: #ffca28; padding: 1px 4px; border-radius: 3px; border: 1px solid rgba(255,202,40,0.4);">สองข้าง (Both)</span>
+            <div style="margin-top: 0.5rem; padding-top: 0.375rem; border-top: 1px dashed rgba(255,255,255,0.15);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.625rem; color: #ffca28; font-weight: bold;">🖐️ ปรับมือนิ้ว (Hand & Finger Poses):</span>
+                <span id="devHandPoseTargetBadge" style="font-size: 0.5625rem; background: rgba(255,202,40,0.2); color: #ffca28; padding: 0.0625rem 0.25rem; border-radius: 0.1875rem; border: 1px solid rgba(255,202,40,0.4);">สองข้าง (Both)</span>
               </div>
 
               <!-- Quick Presets -->
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 3px; margin-bottom: 6px;">
-                <button id="devHandPresetRelaxed" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #2e7d32; border: 1px solid #4caf50;" title="มือธรรมชาติ">
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.1875rem; margin-bottom: 0.375rem;">
+                <button id="devHandPresetRelaxed" class="btn-random" style="margin: 0; padding: 0.1875rem 0.125rem; font-size: 0.5625rem; background: #2e7d32; border: 1px solid #4caf50;" title="มือธรรมชาติ">
                   🌿 ผ่อนคลาย
                 </button>
-                <button id="devHandPresetFist" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #c62828; border: 1px solid #ef5350;" title="กำมือแน่น">
+                <button id="devHandPresetFist" class="btn-random" style="margin: 0; padding: 0.1875rem 0.125rem; font-size: 0.5625rem; background: #c62828; border: 1px solid #ef5350;" title="กำมือแน่น">
                   ✊ กำมือ
                 </button>
-                <button id="devHandPresetOpen" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #0277bd; border: 1px solid #29b6f6;" title="แบมือตรง">
+                <button id="devHandPresetOpen" class="btn-random" style="margin: 0; padding: 0.1875rem 0.125rem; font-size: 0.5625rem; background: #0277bd; border: 1px solid #29b6f6;" title="แบมือตรง">
                   ✋ แบมือ
                 </button>
-                <button id="devHandPresetSpread" class="btn-random" style="margin: 0; padding: 3px 2px; font-size: 9px; background: #6a1b9a; border: 1px solid #ab47bc;" title="กางแยกนิ้วกว้าง">
+                <button id="devHandPresetSpread" class="btn-random" style="margin: 0; padding: 0.1875rem 0.125rem; font-size: 0.5625rem; background: #6a1b9a; border: 1px solid #ab47bc;" title="กางแยกนิ้วกว้าง">
                   🖐️ กางแยก
                 </button>
               </div>
 
               <!-- Target Hand Selector Buttons -->
-              <div style="display: flex; gap: 3px; margin-bottom: 6px;">
-                <button id="devHandTargetBothBtn" style="flex: 1; padding: 2px 4px; font-size: 9px; border-radius: 3px; background: #ffb300; color: #000; font-weight: bold; border: 1px solid #ffca28; cursor: pointer;">
+              <div style="display: flex; gap: 0.1875rem; margin-bottom: 0.375rem;">
+                <button id="devHandTargetBothBtn" style="flex: 1; padding: 0.125rem 0.25rem; font-size: 0.5625rem; border-radius: 0.1875rem; background: #ffb300; color: #000; font-weight: bold; border: 1px solid #ffca28; cursor: pointer;">
                   👐 สองข้าง
                 </button>
-                <button id="devHandTargetRightBtn" style="flex: 1; padding: 2px 4px; font-size: 9px; border-radius: 3px; background: #333; color: #ccc; border: 1px solid #555; cursor: pointer;">
+                <button id="devHandTargetRightBtn" style="flex: 1; padding: 0.125rem 0.25rem; font-size: 0.5625rem; border-radius: 0.1875rem; background: #333; color: #ccc; border: 1px solid #555; cursor: pointer;">
                   🦾 มือขวา
                 </button>
-                <button id="devHandTargetLeftBtn" style="flex: 1; padding: 2px 4px; font-size: 9px; border-radius: 3px; background: #333; color: #ccc; border: 1px solid #555; cursor: pointer;">
+                <button id="devHandTargetLeftBtn" style="flex: 1; padding: 0.125rem 0.25rem; font-size: 0.5625rem; border-radius: 0.1875rem; background: #333; color: #ccc; border: 1px solid #555; cursor: pointer;">
                   💪 มือซ้าย
                 </button>
               </div>
 
               <!-- Detailed Sliders -->
-              <div style="font-size: 9px; color: #ccc; display: flex; flex-direction: column; gap: 5px;">
+              <div style="font-size: 0.5625rem; color: #ccc; display: flex; flex-direction: column; gap: 0.3125rem;">
                 <div>
                   <div style="display: flex; justify-content: space-between;">
                     <span>✊ กำมือ ↔ ✋ แบมือ (Curl):</span>
                     <span id="devHandCurlVal" style="color: #ffca28; font-weight: bold;">0% (ผ่อนคลาย)</span>
                   </div>
-                  <input type="range" id="devHandCurlSlider" min="-50" max="100" value="0" style="width: 100%; height: 4px; accent-color: #ffca28;">
+                  <input type="range" id="devHandCurlSlider" min="-50" max="100" value="0" style="width: 100%; height: 0.25rem; accent-color: #ffca28;">
                 </div>
                 <div>
                   <div style="display: flex; justify-content: space-between;">
                     <span>🤏 หุบนิ้ว ↔ 🖐️ แยกนิ้ว (Spread):</span>
                     <span id="devHandSpreadVal" style="color: #4fc3f7; font-weight: bold;">0% (ปกติ)</span>
                   </div>
-                  <input type="range" id="devHandSpreadSlider" min="-100" max="100" value="0" style="width: 100%; height: 4px; accent-color: #4fc3f7;">
+                  <input type="range" id="devHandSpreadSlider" min="-100" max="100" value="0" style="width: 100%; height: 0.25rem; accent-color: #4fc3f7;">
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Selected Bone Inspector Card -->
-          <div id="devSelectedBoneCard" style="display: none; margin-top: 6px; background: rgba(33, 150, 243, 0.15); border: 1px solid rgba(33, 150, 243, 0.4); border-radius: 4px; padding: 6px;">
+          <div id="devSelectedBoneCard" style="display: none; margin-top: 0.375rem; background: rgba(33, 150, 243, 0.15); border: 1px solid rgba(33, 150, 243, 0.4); border-radius: 0.25rem; padding: 0.375rem;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span id="devSelectedBoneName" style="font-size: 11px; font-weight: bold; color: #4fc3f7;">🦴 Bone Name</span>
-              <button id="devClearSelectedBoneBtn" style="background: none; border: none; color: #ccc; font-size: 10px; cursor: pointer;">✕ ปิด</button>
+              <span id="devSelectedBoneName" style="font-size: 0.6875rem; font-weight: bold; color: #4fc3f7;">🦴 Bone Name</span>
+              <button id="devClearSelectedBoneBtn" style="background: none; border: none; color: #ccc; font-size: 0.625rem; cursor: pointer;">✕ ปิด</button>
             </div>
-            <div id="devSelectedBoneDetails" style="font-size: 9px; color: #ddd; font-family: 'Google Sans', sans-serif; margin-top: 4px; line-height: 1.4;"></div>
+            <div id="devSelectedBoneDetails" style="font-size: 0.5625rem; color: #ddd; font-family: 'Google Sans', sans-serif; margin-top: 0.25rem; line-height: 1.4;"></div>
           </div>
 
           <!-- Bone Hierarchy Tree Accordion -->
-          <details id="devBoneTreeDetails" style="margin-top: 6px; background: rgba(0,0,0,0.25); border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);">
-            <summary style="font-size: 10px; color: #ffca28; padding: 5px 8px; cursor: pointer; user-select: none;">
+          <details id="devBoneTreeDetails" style="margin-top: 0.375rem; background: rgba(0,0,0,0.25); border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.08);">
+            <summary style="font-size: 0.625rem; color: #ffca28; padding: 0.3125rem 0.5rem; cursor: pointer; user-select: none;">
               🌳 ผังลำดับกระดูกทั้งหมด (Bone Tree Hierarchy)
             </summary>
-            <div id="devBoneTreeList" style="max-height: 220px; overflow-y: auto; padding: 4px; font-size: 10px; font-family: 'Google Sans', sans-serif;">
+            <div id="devBoneTreeList" style="max-height: 13.75rem; overflow-y: auto; padding: 0.25rem; font-size: 0.625rem; font-family: 'Google Sans', sans-serif;">
               <!-- Populated dynamically -->
             </div>
           </details>
         </div>
       </div>
-      <div class="control-group" id="devGenerationContainer" style="margin-top: 8px;">
+      <div class="control-group" id="devGenerationContainer" style="margin-top: 0.5rem;">
         <label>🌍 ระบบสร้างดาว (Generation)</label>
-        <div style="display: flex; gap: 4px; margin-top: 6px;">
-          <button class="btn-random" id="devToggleNpcBtn" style="background-image: linear-gradient(135deg, #0288d1, #29b6f6); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
+        <div style="display: flex; gap: 0.25rem; margin-top: 0.375rem;">
+          <button class="btn-random" id="devToggleNpcBtn" style="background-image: linear-gradient(135deg, #0288d1, #29b6f6); flex: 1; margin: 0; padding: 0 0.25rem; font-size: 0.6875rem;">
             🤖 NPCs: ON
           </button>
-          <button class="btn-random" id="devToggleEnvBtn" style="background-image: linear-gradient(135deg, #43a047, #66bb6a); flex: 1; margin: 0; padding: 0 4px; font-size: 11px;">
+          <button class="btn-random" id="devToggleEnvBtn" style="background-image: linear-gradient(135deg, #43a047, #66bb6a); flex: 1; margin: 0; padding: 0 0.25rem; font-size: 0.6875rem;">
             🌲 Env: ON
           </button>
         </div>
       </div>
 
-      <div class="control-group" id="devNpcTeleportContainer" style="margin-top: 8px;">
+      <div class="control-group" id="devNpcTeleportContainer" style="margin-top: 0.5rem;">
         <label>👀 ย้ายกล้องไปหา NPC</label>
         <div id="devNpcList" style="
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          margin-top: 6px;
-          max-height: 200px;
+          gap: 0.25rem;
+          margin-top: 0.375rem;
+          max-height: 12.5rem;
           overflow-y: auto;
-          padding-right: 4px;
+          padding-right: 0.25rem;
         ">
         </div>
       </div>
 
-      <div class="control-group" id="devClouds3DContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+      <div class="control-group" id="devClouds3DContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem;">
         <label>☁️ ปรับระยะห่าง Clouds3D จากดาว <span id="devCloud3DDistanceLabel">12.00</span></label>
-        <input type="range" id="devCloud3DDistanceSlider" min="50" max="3000" value="1200" style="width: 100%; margin-top: 4px;" />
+        <input type="range" id="devCloud3DDistanceSlider" min="50" max="3000" value="1200" style="width: 100%; margin-top: 0.25rem;" />
 
-        <label style="margin-top: 8px; display: block;">🌀 ความเร็วอนิเมชั่น Clouds3D <span id="devCloud3DAnimSpeedLabel">0.10</span>x</label>
-        <input type="range" id="devCloud3DAnimSpeedSlider" min="0" max="500" value="10" style="width: 100%; margin-top: 4px;" />
+        <label style="margin-top: 0.5rem; display: block;">🌀 ความเร็วอนิเมชั่น Clouds3D <span id="devCloud3DAnimSpeedLabel">0.10</span>x</label>
+        <input type="range" id="devCloud3DAnimSpeedSlider" min="0" max="500" value="10" style="width: 100%; margin-top: 0.25rem;" />
 
-        <label style="margin-top: 8px; display: block;">🌍 ความเร็วการเคลื่อนที่รอบดาว <span id="devCloud3DOrbitSpeedLabel">0.10</span>x</label>
-        <input type="range" id="devCloud3DOrbitSpeedSlider" min="0" max="500" value="10" style="width: 100%; margin-top: 4px;" />
+        <label style="margin-top: 0.5rem; display: block;">🌍 ความเร็วการเคลื่อนที่รอบดาว <span id="devCloud3DOrbitSpeedLabel">0.10</span>x</label>
+        <input type="range" id="devCloud3DOrbitSpeedSlider" min="0" max="500" value="10" style="width: 100%; margin-top: 0.25rem;" />
       </div>
 
-      <div class="control-group" id="devMechSeatingContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+      <div class="control-group" id="devMechSeatingContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem;">
         <label>🤖 ปรับระยะที่นั่งตัวละครในหุ่น <span id="devMechSeatHeightLabel">0.71</span></label>
-        <input type="range" id="devMechSeatHeightSlider" min="50" max="150" value="71" style="width: 100%; margin-top: 4px;" />
+        <input type="range" id="devMechSeatHeightSlider" min="50" max="150" value="71" style="width: 100%; margin-top: 0.25rem;" />
       </div>
 
-      <div class="control-group" id="devMechCameraContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+      <div class="control-group" id="devMechCameraContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem;">
         <label>📷 ปรับระยะกล้องขับหุ่น <span id="devMechCameraDistLabel">0.50</span></label>
-        <input type="range" id="devMechCameraDistSlider" min="0" max="1500" value="50" style="width: 100%; margin-top: 4px;" />
+        <input type="range" id="devMechCameraDistSlider" min="0" max="1500" value="50" style="width: 100%; margin-top: 0.25rem;" />
       </div>
 
-      <div class="control-group" id="devBoatCameraContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
+      <div class="control-group" id="devBoatCameraContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem;">
         <label>⛵ ปรับระยะกล้องขับเรือ <span id="devBoatCameraDistLabel">0.37</span></label>
-        <input type="range" id="devBoatCameraDistSlider" min="0" max="1500" value="37" style="width: 100%; margin-top: 4px;" />
+        <input type="range" id="devBoatCameraDistSlider" min="0" max="1500" value="37" style="width: 100%; margin-top: 0.25rem;" />
       </div>
 
-      <div class="control-group" id="devWheelAxleContainer" style="margin-top: 8px; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 8px;">
-        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 4px;">🛞 ปรับล้อไม้ (Wooden Wheel)</div>
+      <div class="control-group" id="devWheelAxleContainer" style="margin-top: 0.5rem; border-top: 1px dashed rgba(223, 183, 108, 0.3); padding-top: 0.5rem;">
+        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 0.25rem;">🛞 ปรับล้อไม้ (Wooden Wheel)</div>
         <label>ขนาดย่อขยายล้อ (Scale) <span id="devWheelScaleLabel">0.56</span>x</label>
-        <input type="range" id="devWheelScaleSlider" min="10" max="300" value="56" style="width: 100%; margin-top: 2px; margin-bottom: 10px;" />
+        <input type="range" id="devWheelScaleSlider" min="10" max="300" value="56" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.625rem;" />
 
-        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 4px;">🔋 ปรับเครื่องยนต์ไฟฟ้า (Electric Engine)</div>
+        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 0.25rem;">🔋 ปรับเครื่องยนต์ไฟฟ้า (Electric Engine)</div>
         <label>ขนาดเครื่องยนต์ (Scale) <span id="devElectricEngineScaleLabel">0.36</span>x</label>
-        <input type="range" id="devElectricEngineScaleSlider" min="10" max="300" value="36" style="width: 100%; margin-top: 2px;" />
+        <input type="range" id="devElectricEngineScaleSlider" min="10" max="300" value="36" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">ตำแหน่งหน้า-หลัง Forward <span id="devElectricEngineFwdOffsetLabel">-0.11</span></label>
-        <input type="range" id="devElectricEngineFwdOffsetSlider" min="0" max="200" value="39" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">ตำแหน่งหน้า-หลัง Forward <span id="devElectricEngineFwdOffsetLabel">-0.11</span></label>
+        <input type="range" id="devElectricEngineFwdOffsetSlider" min="0" max="200" value="39" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">ตำแหน่งสูง-ต่ำ Up <span id="devElectricEngineUpOffsetLabel">0.05</span></label>
-        <input type="range" id="devElectricEngineUpOffsetSlider" min="0" max="200" value="55" style="width: 100%; margin-top: 2px; margin-bottom: 10px;" />
+        <label style="margin-top: 0.25rem; display: block;">ตำแหน่งสูง-ต่ำ Up <span id="devElectricEngineUpOffsetLabel">0.05</span></label>
+        <input type="range" id="devElectricEngineUpOffsetSlider" min="0" max="200" value="55" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.625rem;" />
 
-        <label style="margin-top: 4px; display: block;">หมุนก้ม-เงย Pitch (X) <span id="devElectricEnginePitchLabel">0.00</span></label>
-        <input type="range" id="devElectricEnginePitchSlider" min="-314" max="314" value="0" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">หมุนก้ม-เงย Pitch (X) <span id="devElectricEnginePitchLabel">0.00</span></label>
+        <input type="range" id="devElectricEnginePitchSlider" min="-314" max="314" value="0" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">หมุนซ้าย-ขวา Yaw (Y) <span id="devElectricEngineYawLabel">1.57</span></label>
-        <input type="range" id="devElectricEngineYawSlider" min="-314" max="314" value="157" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">หมุนซ้าย-ขวา Yaw (Y) <span id="devElectricEngineYawLabel">1.57</span></label>
+        <input type="range" id="devElectricEngineYawSlider" min="-314" max="314" value="157" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">หมุนเอียง Roll (Z) <span id="devElectricEngineRollLabel">0.00</span></label>
-        <input type="range" id="devElectricEngineRollSlider" min="-314" max="314" value="0" style="width: 100%; margin-top: 2px; margin-bottom: 10px;" />
+        <label style="margin-top: 0.25rem; display: block;">หมุนเอียง Roll (Z) <span id="devElectricEngineRollLabel">0.00</span></label>
+        <input type="range" id="devElectricEngineRollSlider" min="-314" max="314" value="0" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.625rem;" />
 
-        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 4px;">🛞 ปรับคู่ล้อหน้า (Front Pair)</div>
+        <div style="font-weight: bold; color: #dfb76c; margin-bottom: 0.25rem;">🛞 ปรับคู่ล้อหน้า (Front Pair)</div>
         <label>ยาวเพาล้อหน้า <span id="devWheelFrontAxleLengthLabel">0.28</span></label>
-        <input type="range" id="devWheelFrontAxleLengthSlider" min="5" max="100" value="28" style="width: 100%; margin-top: 2px;" />
+        <input type="range" id="devWheelFrontAxleLengthSlider" min="5" max="100" value="28" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">ระยะล้อหน้า ซ้าย-ขวา <span id="devWheelFrontSideOffsetLabel">0.14</span></label>
-        <input type="range" id="devWheelFrontSideOffsetSlider" min="0" max="60" value="14" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">ระยะล้อหน้า ซ้าย-ขวา <span id="devWheelFrontSideOffsetLabel">0.14</span></label>
+        <input type="range" id="devWheelFrontSideOffsetSlider" min="0" max="60" value="14" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">ตำแหน่งล้อหน้า Forward <span id="devWheelFrontFwdOffsetLabel">0.16</span></label>
-        <input type="range" id="devWheelFrontFwdOffsetSlider" min="0" max="80" value="16" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">ตำแหน่งล้อหน้า Forward <span id="devWheelFrontFwdOffsetLabel">0.16</span></label>
+        <input type="range" id="devWheelFrontFwdOffsetSlider" min="0" max="80" value="16" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">สูง-ต่ำล้อหน้า Up <span id="devWheelFrontUpOffsetLabel">0.01</span></label>
-        <input type="range" id="devWheelFrontUpOffsetSlider" min="0" max="100" value="51" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">สูง-ต่ำล้อหน้า Up <span id="devWheelFrontUpOffsetLabel">0.01</span></label>
+        <input type="range" id="devWheelFrontUpOffsetSlider" min="0" max="100" value="51" style="width: 100%; margin-top: 0.125rem;" />
 
-        <div style="font-weight: bold; color: #dfb76c; margin-top: 10px; margin-bottom: 4px;">🛞 ปรับคู่ล้อหลัง (Rear Pair)</div>
+        <div style="font-weight: bold; color: #dfb76c; margin-top: 0.625rem; margin-bottom: 0.25rem;">🛞 ปรับคู่ล้อหลัง (Rear Pair)</div>
         <label>ยาวเพาล้อหลัง <span id="devWheelRearAxleLengthLabel">0.28</span></label>
-        <input type="range" id="devWheelRearAxleLengthSlider" min="5" max="100" value="28" style="width: 100%; margin-top: 2px;" />
+        <input type="range" id="devWheelRearAxleLengthSlider" min="5" max="100" value="28" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">ระยะล้อหลัง ซ้าย-ขวา <span id="devWheelRearSideOffsetLabel">0.14</span></label>
-        <input type="range" id="devWheelRearSideOffsetSlider" min="0" max="60" value="14" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">ระยะล้อหลัง ซ้าย-ขวา <span id="devWheelRearSideOffsetLabel">0.14</span></label>
+        <input type="range" id="devWheelRearSideOffsetSlider" min="0" max="60" value="14" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">ตำแหน่งล้อหลัง Forward <span id="devWheelRearFwdOffsetLabel">0.16</span></label>
-        <input type="range" id="devWheelRearFwdOffsetSlider" min="0" max="80" value="16" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">ตำแหน่งล้อหลัง Forward <span id="devWheelRearFwdOffsetLabel">0.16</span></label>
+        <input type="range" id="devWheelRearFwdOffsetSlider" min="0" max="80" value="16" style="width: 100%; margin-top: 0.125rem;" />
 
-        <label style="margin-top: 4px; display: block;">สูง-ต่ำล้อหลัง Up <span id="devWheelRearUpOffsetLabel">0.01</span></label>
-        <input type="range" id="devWheelRearUpOffsetSlider" min="0" max="100" value="51" style="width: 100%; margin-top: 2px;" />
+        <label style="margin-top: 0.25rem; display: block;">สูง-ต่ำล้อหลัง Up <span id="devWheelRearUpOffsetLabel">0.01</span></label>
+        <input type="range" id="devWheelRearUpOffsetSlider" min="0" max="100" value="51" style="width: 100%; margin-top: 0.125rem;" />
       </div>
     </div>
 
@@ -2374,7 +2338,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <div class="action-slots-title game-ui" id="actionSlotsTitle">Slots Touch</div>
         <div class="touch-btn game-ui" id="btnTouchQ">
           <div class="touch-btn-icon" id="btnTouchQIcon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
           </div>
@@ -2383,7 +2347,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
         <div class="touch-btn game-ui" id="btnTouchE">
           <div class="touch-btn-icon" id="btnTouchEIcon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;">
               <path d="M12 11V3a2 2 0 1 1 4 0v8h1a2 2 0 0 1 2 2v2a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-2a2 2 0 0 1 2-2h1V7a2 2 0 1 1 4 0v4h2z"/>
             </svg>
           </div>
@@ -2392,7 +2356,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
         <div class="touch-btn game-ui" id="btnTouchRightClick">
           <div class="touch-btn-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;">
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
             </svg>
           </div>
@@ -2401,7 +2365,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         </div>
         <div class="touch-btn game-ui" id="btnTouchLeftClick">
           <div class="touch-btn-icon" id="btnTouchLCIcon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;">
               <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline>
               <line x1="13" y1="19" x2="19" y2="13"></line>
               <line x1="16" y1="20" x2="20" y2="16"></line>
@@ -2412,11 +2376,15 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <span class="touch-btn-label">ตี-ใช้/ซ้าย</span>
         </div>
       </div>
+    </div>
 
-      <!-- Player HP Minimalist Vertical -->
-      <div class="player-hp-vertical-container game-ui" id="playerHpVerticalContainer">
-        <!-- Dynamically populated -->
+    <!-- Player HP + Compass + Hunger Unified Bottom-Center HUD -->
+    <div class="player-hp-vertical-container game-ui" id="playerHpVerticalContainer" style="display: none;">
+      <div class="player-hp-slots-group" id="playerHpSlotsGroup"></div>
+      <div id="compassContainer" class="compass-embedded">
+        <canvas id="compassCanvas" width="400" height="60" style="width: 100%; height: 100%; display: block; background: transparent;"></canvas>
       </div>
+      <div class="player-hunger-slots-group" id="playerHungerSlotsGroup"></div>
     </div>
 
     <!-- Mech Stand System UI (8 horizontal slots in 2 rows, bottom-center) -->
@@ -3088,17 +3056,14 @@ window.addEventListener("keyup", (e) => {
       let quitHoldProgress = 0;
       let quitHoldInterval = null;
       const quitGameBtn = document.getElementById("quitGameBtn");
-        if (typeof isAndroidProfile !== "undefined" && isAndroidProfile && quitGameBtn) {
-          // Keep it hidden everywhere
-          // quitGameBtn.style.display = "none";
-        }
-        if (quitGameBtn) {
-          quitGameBtn.style.display = "none !important";
-        }
+      if (quitGameBtn) {
+        quitGameBtn.style.removeProperty("display");
+      }
       const quitGameProgress = document.getElementById("quitGameProgress");
 
       function startQuitHold(e) {
         if (e) e.preventDefault();
+        if (!quitGameProgress) return;
         quitHoldProgress = 0;
         quitGameProgress.style.transition = "none";
         quitGameProgress.style.width = "0%";
@@ -3109,7 +3074,16 @@ window.addEventListener("keyup", (e) => {
           quitGameProgress.style.width = quitHoldProgress + "%";
           if (quitHoldProgress >= 100) {
             clearInterval(quitHoldInterval);
-            if (window.__TAURI__) {
+            if (typeof saveSettingsToLocalStorage === "function" && !(typeof isDevMode !== "undefined" && isDevMode)) {
+              try {
+                saveSettingsToLocalStorage();
+              } catch (err) {}
+            }
+            if (window.electronAPI && typeof window.electronAPI.quitApp === "function") {
+              Promise.resolve(window.electronAPI.quitApp()).catch(() => {
+                window.close();
+              });
+            } else if (window.__TAURI__) {
               let closed = false;
               // 1. Try webviewWindow.getCurrentWebviewWindow().close() (Tauri v2 standard)
               try {
@@ -3160,8 +3134,8 @@ window.addEventListener("keyup", (e) => {
               // Fallback if inside a normal browser window
               if (!closed) {
                 window.close();
-            }
-          } else {
+              }
+            } else {
               window.close();
             }
           }
@@ -3213,10 +3187,6 @@ window.addEventListener("keyup", (e) => {
 
         const mainLayout = document.getElementById("inventoryMainLayout");
         if (mainLayout) mainLayout.style.display = "none";
-        const divider = document.getElementById("inventoryVerticalDivider");
-        if (divider) divider.style.display = "none";
-        const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
-        if (leftDivider) leftDivider.style.display = "none";
         const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
         if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
         const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
@@ -3228,6 +3198,20 @@ window.addEventListener("keyup", (e) => {
       function switchInventoryTab(tabName) {
         activeTab = tabName;
         if (typeof window.setActiveTab === "function") window.setActiveTab(tabName);
+
+        const overlayEl = document.getElementById("inventoryOverlay");
+        const chestGridWrapper = document.getElementById("chestGridWrapper");
+        const invChestLabel = document.getElementById("inventoryGridChestLabel");
+        const tabChest = document.getElementById("tabChest");
+        const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+        if (tabName !== "chest") {
+          if (overlayEl) overlayEl.classList.remove("mode-chest");
+          if (chestGridWrapper) chestGridWrapper.style.display = "none";
+          if (invChestLabel) invChestLabel.style.display = "none";
+          if (tabChest) { tabChest.classList.remove("active"); tabChest.style.display = "none"; }
+          if (chestTakeAllBtn) chestTakeAllBtn.style.display = "none";
+          if (typeof currentOpenChest !== "undefined") currentOpenChest = null;
+        }
 
         const tabCrafting = document.getElementById("tabCrafting");
         const tabInventory = document.getElementById("tabInventory");
@@ -3250,8 +3234,6 @@ window.addEventListener("keyup", (e) => {
         const cookingList = document.getElementById("cookingList");
         const bottomBtns = document.getElementById("inventoryBottomButtons");
         const mainLayout = document.getElementById("inventoryMainLayout");
-        const divider = document.getElementById("inventoryVerticalDivider");
-        const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
         const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
         const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
 
@@ -3262,8 +3244,6 @@ window.addEventListener("keyup", (e) => {
           if (cookingList) cookingList.style.display = "none";
           if (bottomBtns) bottomBtns.style.display = "flex";
           if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
-          if (divider) divider.style.display = "block";
-          if (leftDivider) leftDivider.style.display = "block";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "flex";
           if (typeof renderInventory === "function") renderInventory();
@@ -3275,8 +3255,6 @@ window.addEventListener("keyup", (e) => {
           if (cookingList) cookingList.style.display = "none";
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) mainLayout.style.display = "none";
-          if (divider) divider.style.display = "none";
-          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           if (typeof renderCrafting === "function") renderCrafting();
@@ -3288,8 +3266,6 @@ window.addEventListener("keyup", (e) => {
           if (cookingList) cookingList.style.display = "none";
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) mainLayout.style.display = "none";
-          if (divider) divider.style.display = "none";
-          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           syncInventorySettingsUI();
@@ -3300,8 +3276,6 @@ window.addEventListener("keyup", (e) => {
           if (cookingList) cookingList.style.display = "none";
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
-          if (divider) divider.style.display = "block";
-          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           if (typeof renderInventory === "function") renderInventory();
@@ -3313,8 +3287,6 @@ window.addEventListener("keyup", (e) => {
           if (cookingList) cookingList.style.display = "flex";
           if (bottomBtns) bottomBtns.style.display = "none";
           if (mainLayout) mainLayout.style.display = "none";
-          if (divider) divider.style.display = "none";
-          if (leftDivider) leftDivider.style.display = "none";
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
           if (typeof renderCooking === "function") renderCooking();
@@ -3559,7 +3531,7 @@ window.addEventListener("keyup", (e) => {
             btnFullscreen.style.background = "rgba(223,183,108,0.15)";
             btnFullscreen.style.borderColor = "#dfb76c";
             btnFullscreen.style.color = "#dfb76c";
-            btnFullscreen.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btnFullscreen.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           }
           if (btnWindowed) {
             btnWindowed.style.background = "rgba(255,255,255,0.05)";
@@ -3572,7 +3544,7 @@ window.addEventListener("keyup", (e) => {
             btnWindowed.style.background = "rgba(223,183,108,0.15)";
             btnWindowed.style.borderColor = "#dfb76c";
             btnWindowed.style.color = "#dfb76c";
-            btnWindowed.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btnWindowed.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           }
           if (btnFullscreen) {
             btnFullscreen.style.background = "rgba(255,255,255,0.05)";
@@ -3588,8 +3560,8 @@ window.addEventListener("keyup", (e) => {
             gameplayFullscreenBtn.style.setProperty("display", "none", "important");
           } else {
             gameplayFullscreenBtn.innerHTML = isFullscreen
-              ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h5V3M20 8h-5V3M4 16h5v5M20 16h-5v5"></path></svg>`
-              : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>`;
+              ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;"><path d="M4 8h5V3M20 8h-5V3M4 16h5v5M20 16h-5v5"></path></svg>`
+              : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1.125rem; height: 1.125rem;"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>`;
           }
         }
         if (typeof saveSettingsToLocalStorage === "function") {
@@ -3617,7 +3589,7 @@ window.addEventListener("keyup", (e) => {
           btn.style.background = "rgba(223, 183, 108, 0.15)";
           btn.style.borderColor = "#dfb76c";
           btn.style.color = "#dfb76c";
-          btn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+          btn.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
         };
 
         const setInactive = (btn) => {
@@ -3681,7 +3653,7 @@ window.addEventListener("keyup", (e) => {
             btnOn.style.background = "rgba(223,183,108,0.15)";
             btnOn.style.borderColor = "#dfb76c";
             btnOn.style.color = "#dfb76c";
-            btnOn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btnOn.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           }
           if (btnOff) {
             btnOff.style.background = "rgba(255,255,255,0.05)";
@@ -3695,7 +3667,7 @@ window.addEventListener("keyup", (e) => {
             btnOff.style.background = "rgba(223,183,108,0.15)";
             btnOff.style.borderColor = "#dfb76c";
             btnOff.style.color = "#dfb76c";
-            btnOff.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btnOff.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           }
           if (btnOn) {
             btnOn.style.background = "rgba(255,255,255,0.05)";
@@ -3769,7 +3741,7 @@ window.addEventListener("keyup", (e) => {
             btnOn.style.background = "rgba(223,183,108,0.15)";
             btnOn.style.borderColor = "#dfb76c";
             btnOn.style.color = "#dfb76c";
-            btnOn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btnOn.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           }
           if (btnOff) {
             btnOff.style.background = "rgba(255,255,255,0.05)";
@@ -3782,7 +3754,7 @@ window.addEventListener("keyup", (e) => {
             btnOff.style.background = "rgba(223,183,108,0.15)";
             btnOff.style.borderColor = "#dfb76c";
             btnOff.style.color = "#dfb76c";
-            btnOff.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btnOff.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           }
           if (btnOn) {
             btnOn.style.background = "rgba(255,255,255,0.05)";
@@ -3822,19 +3794,19 @@ window.addEventListener("keyup", (e) => {
         } else {
           const toast = document.createElement("div");
           toast.style.position = "fixed";
-          toast.style.bottom = "120px";
+          toast.style.bottom = "7.5rem";
           toast.style.left = "50%";
           toast.style.transform = "translateX(-50%)";
           toast.style.background = "rgba(15, 15, 20, 0.95)";
           toast.style.color = "#dfb76c";
           toast.style.border = "1px solid #dfb76c";
-          toast.style.padding = "12px 24px";
-          toast.style.borderRadius = "8px";
+          toast.style.padding = "0.75rem 1.5rem";
+          toast.style.borderRadius = "0.5rem";
           toast.style.fontFamily = "'Google Sans', sans-serif";
-          toast.style.fontSize = "13px";
+          toast.style.fontSize = "0.8125rem";
           toast.style.zIndex = "999999";
           toast.style.pointerEvents = "none";
-          toast.style.boxShadow = "0 8px 32px rgba(0,0,0,0.8)";
+          toast.style.boxShadow = "0 0.5rem 2rem rgba(0,0,0,0.8)";
           toast.style.transition = "opacity 0.3s";
           toast.textContent = msg;
           document.body.appendChild(toast);
@@ -3938,7 +3910,7 @@ window.addEventListener("keyup", (e) => {
           btnOn.style.background = "rgba(223, 183, 108, 0.15)";
           btnOn.style.borderColor = "#dfb76c";
           btnOn.style.color = "#dfb76c";
-          btnOn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+          btnOn.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
 
           btnOff.style.background = "rgba(255, 255, 255, 0.05)";
           btnOff.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -3948,7 +3920,7 @@ window.addEventListener("keyup", (e) => {
           btnOff.style.background = "rgba(223, 183, 108, 0.15)";
           btnOff.style.borderColor = "#dfb76c";
           btnOff.style.color = "#dfb76c";
-          btnOff.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+          btnOff.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
 
           btnOn.style.background = "rgba(255, 255, 255, 0.05)";
           btnOn.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -3969,12 +3941,14 @@ window.addEventListener("keyup", (e) => {
           if (typeof taauEnabled !== "undefined") taauEnabled = true;
           window.fxaaEnabled = true;
           window.taauEnabled = true;
-          try {
-            const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
-            opt.fxaaEnabled = true;
-            opt.taauEnabled = true;
-            localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
-          } catch(err) {}
+          if (!((typeof isDevMode !== "undefined" && isDevMode) || (typeof window !== "undefined" && window.isDevMode))) {
+            try {
+              const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
+              opt.fxaaEnabled = true;
+              opt.taauEnabled = true;
+              localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
+            } catch(err) {}
+          }
           if (typeof window.updateFxaaUI === "function") window.updateFxaaUI();
           if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
           else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
@@ -3986,12 +3960,14 @@ window.addEventListener("keyup", (e) => {
           if (typeof taauEnabled !== "undefined") taauEnabled = false;
           window.fxaaEnabled = false;
           window.taauEnabled = false;
-          try {
-            const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
-            opt.fxaaEnabled = false;
-            opt.taauEnabled = false;
-            localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
-          } catch(err) {}
+          if (!((typeof isDevMode !== "undefined" && isDevMode) || (typeof window !== "undefined" && window.isDevMode))) {
+            try {
+              const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
+              opt.fxaaEnabled = false;
+              opt.taauEnabled = false;
+              localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
+            } catch(err) {}
+          }
           if (typeof window.updateFxaaUI === "function") window.updateFxaaUI();
           if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
           else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
@@ -4062,7 +4038,7 @@ window.addEventListener("keyup", (e) => {
             btn.style.background = "rgba(223, 183, 108, 0.15)";
             btn.style.borderColor = "#dfb76c";
             btn.style.color = "#dfb76c";
-            btn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
+            btn.style.textShadow = "0 0 0.375rem rgba(223, 183, 108, 0.4)";
           } else {
             btn.style.background = "rgba(255, 255, 255, 0.05)";
             btn.style.borderColor = "rgba(255, 255, 255, 0.2)";
@@ -4076,11 +4052,13 @@ window.addEventListener("keyup", (e) => {
         const validMode = ["none", "protanopia", "deuteranopia", "tritanopia"].includes(mode) ? mode : "none";
         if (typeof colorblindMode !== "undefined") colorblindMode = validMode;
         window.colorblindMode = validMode;
-        try {
-          const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
-          opt.colorblindMode = validMode;
-          localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
-        } catch (err) {}
+        if (!((typeof isDevMode !== "undefined" && isDevMode) || (typeof window !== "undefined" && window.isDevMode))) {
+          try {
+            const opt = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
+            opt.colorblindMode = validMode;
+            localStorage.setItem("seedplanet_options_config", JSON.stringify(opt));
+          } catch (err) {}
+        }
         if (typeof window.updateColorblindUI === "function") window.updateColorblindUI();
         if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
         else if (typeof window.saveSettingsToLocalStorage === "function") window.saveSettingsToLocalStorage();
@@ -4182,14 +4160,6 @@ window.addEventListener("keyup", (e) => {
         }
       }
 
-      const fullscreenBtn = document.getElementById("fullscreenBtn");
-      if (fullscreenBtn) {
-        fullscreenBtn?.addEventListener("click", () => {
-          initAudio();
-          toggleFullscreen();
-        });
-      }
-
       const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
       if (gameplayFullscreenBtn) {
         gameplayFullscreenBtn?.addEventListener("click", () => {
@@ -4287,7 +4257,6 @@ window.addEventListener("keyup", (e) => {
                // Empty hand right click: do nothing (terrain modification disabled)
              } else if (!isAltAction) {
                performSmashAction();
-               smashInterval = setInterval(performSmashAction, 600);
              }
           }
         }
@@ -4366,10 +4335,6 @@ window.addEventListener("keyup", (e) => {
           if (smashInterval) {
             clearInterval(smashInterval);
             smashInterval = null;
-            // Ensure state resets
-            isUsingItem = false;
-            isSmashing = false;
-            activeItem = originalItem;
           }
         } else if (e.button === 2) {
           window.isAltActionDown = false;
@@ -4577,7 +4542,7 @@ window.addEventListener("keyup", (e) => {
             if (isWingBoat) {
               if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("flightThrottle");
               setBtnLabel(btnQLabel, "touch_fly");
-              if (btnQIcon) btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
+              if (btnQIcon) btnQIcon.innerHTML = `<span style="font-size: 1rem; line-height: 1;">🪽</span>`;
             } else if (inWater) {
               if (btnQKey) btnQKey.textContent = gpCtrl.getButtonLabel("swimUp");
               setBtnLabel(btnQLabel, "touch_swim_up");
@@ -4657,7 +4622,7 @@ window.addEventListener("keyup", (e) => {
               if (btnQKey) btnQKey.textContent = "Shift";
               setBtnLabel(btnQLabel, "touch_fly");
               if (btnQIcon) {
-                btnQIcon.innerHTML = `<span style="font-size: 16px; line-height: 1;">🪽</span>`;
+                btnQIcon.innerHTML = `<span style="font-size: 1rem; line-height: 1;">🪽</span>`;
               }
             } else if (inWater) {
               if (btnQKey) btnQKey.textContent = "Shift";
@@ -5332,24 +5297,28 @@ window.addEventListener("keyup", (e) => {
           const actionSlots = document.querySelector(".action-slots");
           const toggleControlsBtn = document.getElementById("toggleControlsBtn");
           const devByNskLink = document.getElementById("devByNskLink");
-          const compassContainer = document.getElementById("compassContainer");
+          const playerHpContainer = document.getElementById("playerHpVerticalContainer");
           const gameplayFullscreenBtn = document.getElementById("gameplayFullscreenBtn");
 
-          document.documentElement.style.setProperty("--ui-margin", margin + "px");
-          if (topLeftMenu) { topLeftMenu.style.top = margin + "px"; topLeftMenu.style.left = margin + "px"; }
-          if (mainControls) { mainControls.style.top = (margin > 0 ? margin + 35 : 45) + "px"; mainControls.style.right = margin + "px"; }
-          if (toggleControlsBtn) { toggleControlsBtn.style.top = margin + "px"; toggleControlsBtn.style.right = margin + "px"; }
-          if (joystickContainer) { joystickContainer.style.bottom = margin + "px"; joystickContainer.style.left = margin + "px"; }
-          if (actionSlots) { actionSlots.style.bottom = margin + "px"; actionSlots.style.right = margin + "px"; }
-          if (devByNskLink) { devByNskLink.style.bottom = margin + "px"; devByNskLink.style.right = margin + "px"; }
-          if (compassContainer) { compassContainer.style.top = (margin + 10) + "px"; }
+          const marginRem = `${(margin / 16).toFixed(4)}rem`;
+          const marginPlus10Rem = `${((margin + 10) / 16).toFixed(4)}rem`;
+          const mainControlsTopRem = `${((margin > 0 ? margin + 35 : 45) / 16).toFixed(4)}rem`;
+
+          document.documentElement.style.setProperty("--ui-margin", marginRem);
+          if (topLeftMenu) { topLeftMenu.style.top = marginRem; topLeftMenu.style.left = marginRem; }
+          if (mainControls) { mainControls.style.top = mainControlsTopRem; mainControls.style.right = marginRem; }
+          if (toggleControlsBtn) { toggleControlsBtn.style.setProperty("top", marginPlus10Rem, "important"); }
+          if (joystickContainer) { joystickContainer.style.bottom = marginRem; joystickContainer.style.left = marginRem; }
+          if (actionSlots) { actionSlots.style.bottom = marginRem; actionSlots.style.right = marginRem; }
+          if (devByNskLink) { devByNskLink.style.bottom = marginRem; devByNskLink.style.right = marginRem; }
+          if (playerHpContainer) { playerHpContainer.style.bottom = marginPlus10Rem; }
           if (gameplayFullscreenBtn) {
             if (isMobileOrTouchDevice() || isElectronApp()) {
               gameplayFullscreenBtn.style.setProperty("display", "none", "important");
             } else {
               gameplayFullscreenBtn.style.setProperty("display", "flex", "important");
-              gameplayFullscreenBtn.style.top = (margin + 10) + "px";
-              gameplayFullscreenBtn.style.right = (margin + 10) + "px";
+              gameplayFullscreenBtn.style.top = marginPlus10Rem;
+              gameplayFullscreenBtn.style.right = marginPlus10Rem;
             }
           }
         };
@@ -5603,36 +5572,33 @@ window.addEventListener("keyup", (e) => {
         // Compact vertical spacing inside Inventory Panel on all screens so layout & margins match small-screen layout
         const mainLayout = document.getElementById("inventoryMainLayout");
         if (mainLayout) {
-          mainLayout.style.margin = "10px auto 4px auto";
-          mainLayout.style.paddingTop = "12px";
+          mainLayout.style.margin = "0.5rem auto 0.25rem auto";
+          mainLayout.style.paddingTop = "1.125rem";
         }
         const bottomBtns = document.getElementById("inventoryBottomButtons");
         if (bottomBtns) {
-          bottomBtns.style.marginTop = "6px";
+          bottomBtns.style.marginTop = "0.375rem";
         }
 
-        // Apply the exact same fit-to-viewport formula across all modal panels & HUD
+        // Single unified rem root scaling (940x544 reference) driving all HUD, Start Menu, and Modals cleanly
+        const baseFitScale = calcResponsiveFitScale(availW, availH, 940, 544);
+        const rootScale = Math.max(0.25, baseFitScale * userUiScale);
+        const rootFontPx = 16 * rootScale;
+        document.documentElement.style.fontSize = `${rootFontPx.toFixed(4)}px`;
+
         const panelConfigs = [
-          { selector: "#inventoryOverlay .inventory-panel", baseW: 684, baseH: 464, padY: "16px", padX: "24px" },
-          { selector: "#chestOverlay .inventory-panel", baseW: 860, baseH: 428, padY: "18px", padX: "24px" },
-          { selector: "#saveSelectOverlay .inventory-panel", baseW: 520, baseH: 420, padY: "18px" },
-          { selector: "#warpOverlay .inventory-panel", baseW: 448, baseH: 428, padY: "18px" },
+          { selector: "#inventoryOverlay .inventory-panel", baseH: 544, padY: "1rem", padX: "1.5rem" },
+          { selector: "#saveSelectOverlay .inventory-panel", baseH: 480, padY: "1rem", padX: "1.5rem" },
+          { selector: "#warpOverlay .inventory-panel", baseH: 428, padY: "1rem", padX: "1.5rem" },
         ];
 
         panelConfigs.forEach((cfg) => {
           const panel = document.querySelector(cfg.selector);
           if (!panel) return;
-          panel.style.setProperty("--panel-base-h", `${cfg.baseH}px`);
+          panel.style.setProperty("--panel-base-h", `${parseFloat((cfg.baseH / 16).toFixed(4))}rem`);
           if (cfg.padY) panel.style.setProperty("--panel-pad-y", cfg.padY);
           if (cfg.padX) panel.style.setProperty("--panel-pad-x", cfg.padX);
-          const fitScale = calcResponsiveFitScale(availW, availH, cfg.baseW, cfg.baseH);
-          panel.style.setProperty("--ui-panel-scale", fitScale.toFixed(4));
         });
-
-        // HUD uses the exact same calcResponsiveFitScale formula against a 940x540 reference canvas + user UI scale
-        const hudFitScale = calcResponsiveFitScale(availW, availH, 940, 540);
-        const hudScale = Math.max(0.25, hudFitScale * userUiScale);
-        document.documentElement.style.setProperty("--ui-hud-scale", hudScale.toFixed(4));
 
         if (typeof window.updateActionSlotsPosition === "function") {
           window.updateActionSlotsPosition();
@@ -5650,7 +5616,7 @@ window.addEventListener("keyup", (e) => {
         const uiScaleObserver = new MutationObserver(() => {
           updateResponsiveUIScale();
         });
-        ["inventoryOverlay", "chestOverlay", "saveSelectOverlay", "warpOverlay"].forEach((id) => {
+        ["inventoryOverlay", "saveSelectOverlay", "warpOverlay"].forEach((id) => {
           const el = document.getElementById(id);
           if (el) uiScaleObserver.observe(el, { attributes: true, attributeFilter: ["class", "style"] });
         });

@@ -107,6 +107,447 @@ function syncTreeAttachedFruits() {
 }
 window.syncTreeAttachedFruits = syncTreeAttachedFruits;
 
+// =========================================================================
+// UNIFIED ULTRA-LIGHTWEIGHT GROUND DROP SYSTEM (Single codepath for ALL drops:
+// tough_meat, leather, log, branch, rock, ores, dragon_fruit, grass, cloth, etc.)
+// =========================================================================
+(function initGroundDropSystem() {
+  const DROP_META = {
+    tough_meat:        { label: "TOUGH_MEAT",        icon: "🥩",  size: 0.16,  color: [0.60, 0.16, 0.18], floatInWater: false },
+    leather:           { label: "LEATHER",           icon: "🟫",  size: 0.16,  color: [0.35, 0.38, 0.42], floatInWater: false },
+    hide:              { label: "LEATHER",           icon: "🟫",  size: 0.16,  color: [0.35, 0.38, 0.42], floatInWater: false },
+    log:               { label: "LOG",               icon: "🪵",  size: 0.085, color: [0.50, 0.30, 0.15], floatInWater: true  },
+    branch:            { label: "BRANCH",            icon: "🌿",  size: 0.025, color: [0.50, 0.30, 0.15], floatInWater: true  },
+    rock:              { label: "ROCK",              icon: "🪨",  size: 0.025, color: [0.50, 0.50, 0.50], floatInWater: false },
+    big_rock:          { label: "BIG_ROCK",          icon: "🪨",  size: 0.055, color: [0.48, 0.48, 0.48], floatInWater: false },
+    dirt:              { label: "DIRT",              icon: "🟫",  size: 0.035, color: [0.42, 0.30, 0.18], floatInWater: false },
+    iron_ore:          { label: "IRON_ORE",          icon: "🟥",  size: 0.04,  color: [0.65, 0.35, 0.30], floatInWater: false },
+    gold_ore:          { label: "GOLD_ORE",          icon: "🪙",  size: 0.04,  color: [0.85, 0.72, 0.20], floatInWater: false },
+    glow_ore:          { label: "GLOW_ORE",          icon: "✨",  size: 0.04,  color: [0.30, 0.90, 0.85], floatInWater: false },
+    glow_battery:      { label: "GLOW_BATTERY",      icon: "🔋",  size: 0.06,  color: [0.30, 0.90, 0.85], floatInWater: false },
+    dragon_fruit:      { label: "DRAGON_FRUIT",      icon: "🐉",  size: 0.038, color: [0.92, 0.14, 0.46], floatInWater: false },
+    cotton_plant:      { label: "COTTON_PLANT",      icon: "☁️",  size: 0.06,  color: [0.96, 0.96, 0.94], floatInWater: false },
+    crown_flower:      { label: "CROWN_FLOWER",      icon: "💮",  size: 0.06,  color: [0.92, 0.90, 0.96], floatInWater: false },
+    grass:             { label: "GRASS",             icon: "🌱",  size: 0.14,  color: [0.35, 0.62, 0.24], floatInWater: true  },
+    cloth:             { label: "CLOTH",             icon: "⬜",  size: 0.08,  color: [0.94, 0.93, 0.90], floatInWater: false },
+    rubber_block:      { label: "RUBBER_BLOCK",      icon: "⬛",  size: 0.08,  color: [0.18, 0.18, 0.20], floatInWater: false },
+    fried_bug:         { label: "FRIED_BUG",         icon: "🍤",  size: 0.08,  color: [0.78, 0.48, 0.20], floatInWater: false },
+    isopod_item:       { label: "ISOPOD",            icon: "🦐",  size: 0.10,  color: [0.55, 0.50, 0.46], floatInWater: false },
+    meganeura_item:    { label: "MEGANEURA",         icon: "🦟",  size: 0.10,  color: [0.35, 0.65, 0.40], floatInWater: false },
+    obsidian_cube_item:{ label: "OBSIDIAN_CUBE",     icon: "🟪",  size: 0.08,  color: [0.22, 0.12, 0.35], floatInWater: false },
+    obsidian_flux_item:{ label: "OBSIDIAN_FLUX",     icon: "🟣",  size: 0.08,  color: [0.55, 0.22, 0.85], floatInWater: false },
+    axe:               { label: "AXE",               icon: "🪓",  size: 0.12,  color: [0.60, 0.60, 0.65], floatInWater: false },
+    pickaxe:           { label: "PICKAXE",           icon: "⛏️", size: 0.12,  color: [0.60, 0.60, 0.65], floatInWater: false },
+    shovel:            { label: "SHOVEL",            icon: "🪏",  size: 0.12,  color: [0.60, 0.60, 0.65], floatInWater: false },
+    tanto:             { label: "TANTO",             icon: "🗡️", size: 0.12,  color: [0.85, 0.85, 0.90], floatInWater: false },
+    aegis_shift:       { label: "AEGIS_SHIFT",       icon: "⛏️⚔️", size: 0.14, color: [0.75, 0.78, 0.88], floatInWater: false }
+  };
+
+  function normalizeDropType(type) {
+    return String(type || "").toLowerCase();
+  }
+
+  function isGroundDropType(type) {
+    if (!type) return false;
+    return Object.prototype.hasOwnProperty.call(DROP_META, normalizeDropType(type));
+  }
+
+  function isGroundDrop(item) {
+    if (!item || !item.type) return false;
+    if (item.isGroundDrop) return true;
+    return isGroundDropType(item.type);
+  }
+
+  function getMeta(type) {
+    const key = normalizeDropType(type);
+    if (Object.prototype.hasOwnProperty.call(DROP_META, key)) {
+      return DROP_META[key];
+    }
+    return {
+      label: key ? key.toUpperCase() : "BRANCH",
+      icon: "🌿",
+      size: 0.05,
+      color: [0.6, 0.6, 0.6],
+      floatInWater: false
+    };
+  }
+
+  // Always returns a clean right-handed orthonormal basis (R x N = F, det(R,N,F) = +1)
+  function computeSurfaceBasis(pos, normal, tangent, bitangent) {
+    let nx, ny, nz;
+    if (normal && normal.length >= 3) {
+      const nLen = Math.hypot(normal[0], normal[1], normal[2]) || 1;
+      nx = normal[0] / nLen; ny = normal[1] / nLen; nz = normal[2] / nLen;
+    } else if (pos && pos.length >= 3) {
+      const pLen = Math.hypot(pos[0], pos[1], pos[2]) || 1;
+      nx = pos[0] / pLen; ny = pos[1] / pLen; nz = pos[2] / pLen;
+    } else {
+      nx = 0; ny = 1; nz = 0;
+    }
+
+    let fx, fy, fz;
+    if (bitangent && bitangent.length >= 3) {
+      const dot = bitangent[0] * nx + bitangent[1] * ny + bitangent[2] * nz;
+      fx = bitangent[0] - dot * nx;
+      fy = bitangent[1] - dot * ny;
+      fz = bitangent[2] - dot * nz;
+      const fLen = Math.hypot(fx, fy, fz);
+      if (fLen > 0.001) {
+        fx /= fLen; fy /= fLen; fz /= fLen;
+      } else {
+        fx = 0; fy = 0; fz = 0;
+      }
+    } else if (tangent && tangent.length >= 3) {
+      // Cross tangent with N to get orthogonal F
+      fx = tangent[1] * nz - tangent[2] * ny;
+      fy = tangent[2] * nx - tangent[0] * nz;
+      fz = tangent[0] * ny - tangent[1] * nx;
+      const fLen = Math.hypot(fx, fy, fz);
+      if (fLen > 0.001) {
+        fx /= fLen; fy /= fLen; fz /= fLen;
+      } else {
+        fx = 0; fy = 0; fz = 0;
+      }
+    } else {
+      fx = 0; fy = 0; fz = 0;
+    }
+
+    if (fx === 0 && fy === 0 && fz === 0) {
+      const ax = Math.abs(nx) > 0.85 ? 0 : 1;
+      const ay = Math.abs(nx) > 0.85 ? 1 : 0;
+      const az = 0;
+      fx = ny * az - nz * ay;
+      fy = nz * ax - nx * az;
+      fz = nx * ay - ny * ax;
+      const fLen = Math.hypot(fx, fy, fz) || 1;
+      fx /= fLen; fy /= fLen; fz /= fLen;
+    }
+
+    // R = N x F -> guarantees (R x N) · F = +1 (right-handed)
+    const rx = ny * fz - nz * fy;
+    const ry = nz * fx - nx * fz;
+    const rz = nx * fy - ny * fx;
+    return {
+      normal: [nx, ny, nz],
+      R: [rx, ry, rz],
+      F: [fx, fy, fz]
+    };
+  }
+
+  const STACK_THRESHOLD = 5;
+  const STACK_MERGE_RADIUS = 0.30;
+
+  function isStackableDropType(type, opts) {
+    const key = normalizeDropType(type);
+    if (!key) return false;
+    if (key === "cotton_plant" || key === "crown_flower") return false;
+    if (opts && opts.extra && opts.extra.isAttachedToTree) return false;
+    return isGroundDropType(key);
+  }
+
+  function findNearbyMatchingDrops(colList, pos, dropType, radius) {
+    const rSq = radius * radius;
+    const candidates = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+      ? SpatialGrid.queryRadius(pos[0], pos[1], pos[2], radius)
+      : colList;
+    const matched = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const d = candidates[i];
+      if (!d || d.active === false || !d.isDynamic || d.isPreview || d.isAttachedToTree) continue;
+      if (normalizeDropType(d.type) !== dropType) continue;
+      if (!d.position) continue;
+      const dx = d.position[0] - pos[0];
+      const dy = d.position[1] - pos[1];
+      const dz = d.position[2] - pos[2];
+      const distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq <= rSq) {
+        matched.push({ drop: d, distSq });
+      }
+    }
+    if (matched.length > 1) {
+      matched.sort((a, b) => a.distSq - b.distSq);
+    }
+    return matched;
+  }
+
+  function spawn(opts) {
+    if (!opts || !opts.position) return null;
+    const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles))
+      ? collectibles
+      : (typeof window !== "undefined" && Array.isArray(window.collectibles) ? window.collectibles : null);
+    if (!colList) return null;
+
+    const dropType = normalizeDropType(opts.type);
+    if (!dropType) return null;
+    const meta = getMeta(dropType);
+    const addCount = Math.max(1, Math.floor(typeof opts.count === "number" ? opts.count : 1));
+    const p = opts.position;
+
+    // Stack Drop system: if adding > 5 items, or > 5 drops of the same type pile up nearby,
+    // collapse/merge into a single drop entity carrying drop.count (eliminates excess physics & VBO meshes)
+    const allowMerge = opts.allowStackMerge !== false && isStackableDropType(dropType, opts);
+    if (allowMerge) {
+      const nearby = findNearbyMatchingDrops(colList, p, dropType, STACK_MERGE_RADIUS);
+      if (nearby.length > 0) {
+        let hostEntry = nearby.find(m => (m.drop.count || 1) > 1);
+        let nearbyTotal = 0;
+        for (let i = 0; i < nearby.length; i++) {
+          nearbyTotal += Math.max(1, nearby[i].drop.count || 1);
+        }
+        if (hostEntry) {
+          const host = hostEntry.drop;
+          host.count = Math.max(1, host.count || 1) + addCount;
+          return host;
+        }
+        if (addCount > STACK_THRESHOLD || (nearbyTotal + addCount) > STACK_THRESHOLD) {
+          const host = nearby[0].drop;
+          host.count = nearbyTotal + addCount;
+          for (let i = 1; i < nearby.length; i++) {
+            markCollected(nearby[i].drop);
+          }
+          return host;
+        }
+      }
+    }
+
+    const basis = opts.rawBasis
+      ? {
+          normal: opts.normal ? [opts.normal[0], opts.normal[1], opts.normal[2]] : [0, 1, 0],
+          R: opts.R ? [opts.R[0], opts.R[1], opts.R[2]] : [1, 0, 0],
+          F: opts.F ? [opts.F[0], opts.F[1], opts.F[2]] : [0, 0, 1]
+        }
+      : computeSurfaceBasis(opts.position, opts.normal, opts.R || opts.tangent, opts.F || opts.bitangent);
+
+    let dx = 0, dy = 0, dz = 0;
+    if (opts.applyScatter !== false) {
+      const offR = (typeof opts.offsetR === "number")
+        ? opts.offsetR
+        : ((opts.scatterRadius || 0.004) * Math.cos(opts.scatterAngle !== undefined ? opts.scatterAngle : Math.random() * Math.PI * 2));
+      const offF = (typeof opts.offsetF === "number")
+        ? opts.offsetF
+        : ((opts.scatterRadius || 0.004) * Math.sin(opts.scatterAngle !== undefined ? opts.scatterAngle : Math.random() * Math.PI * 2));
+      const lift = (typeof opts.scatterLift === "number") ? opts.scatterLift : (0.005 + Math.random() * 0.01);
+      dx = basis.R[0] * offR + basis.F[0] * offF + basis.normal[0] * lift;
+      dy = basis.R[1] * offR + basis.F[1] * offF + basis.normal[1] * lift;
+      dz = basis.R[2] * offR + basis.F[2] * offF + basis.normal[2] * lift;
+    }
+
+    const drop = {
+      type: dropType,
+      position: [p[0] + dx, p[1] + dy, p[2] + dz],
+      normal: basis.normal,
+      R: basis.R,
+      F: basis.F,
+      U: basis.normal,
+      color: opts.color || meta.color,
+      size: (typeof opts.size === "number") ? opts.size : meta.size,
+      active: true,
+      isDynamic: true,
+      isGroundDrop: true,
+      _dropSettled: false,
+      _settleFrames: 0,
+      seed: (typeof opts.seed === "number") ? opts.seed : Math.random()
+    };
+    if (addCount > 1) {
+      drop.count = addCount;
+    }
+
+    if (opts.vel && opts.vel.length >= 3) {
+      drop.vel = [opts.vel[0], opts.vel[1], opts.vel[2]];
+    } else if (opts.isHand) {
+      drop.vel = [
+        dx * 0.01 + (Math.random() - 0.5) * 0.001,
+        dy * 0.01 + (Math.random() - 0.5) * 0.001,
+        dz * 0.01 + (Math.random() - 0.5) * 0.001
+      ];
+    } else {
+      const vOut = (typeof opts.popOut === "number") ? opts.popOut : (0.0018 + Math.random() * 0.0025);
+      const vUp = (typeof opts.popUp === "number") ? opts.popUp : (0.0025 + Math.random() * 0.0035);
+      const ang = (typeof opts.scatterAngle === "number") ? opts.scatterAngle : Math.random() * Math.PI * 2;
+      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      drop.vel = [
+        (basis.R[0] * cosA + basis.F[0] * sinA) * vOut + basis.normal[0] * vUp,
+        (basis.R[1] * cosA + basis.F[1] * sinA) * vOut + basis.normal[1] * vUp,
+        (basis.R[2] * cosA + basis.F[2] * sinA) * vOut + basis.normal[2] * vUp
+      ];
+    }
+
+    if (opts.spin) drop.spin = [opts.spin[0], opts.spin[1], opts.spin[2]];
+    if (typeof opts.spinSpeed === "number") {
+      drop.spinSpeed = opts.spinSpeed;
+    } else if (opts.isHand) {
+      drop.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05];
+      drop.spinSpeed = 0.01 + Math.random() * 0.02;
+    }
+
+    if (opts.extra && typeof opts.extra === "object") {
+      Object.assign(drop, opts.extra);
+    }
+
+    colList.push(drop);
+    if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.insert === "function") {
+      SpatialGrid.insert(drop);
+    }
+    if (!opts.skipRefresh && typeof window !== "undefined") {
+      window.pendingDynamicCollectibleRefresh = true;
+    }
+    return drop;
+  }
+
+  function spawnBatch(origin, entries, opts) {
+    if (!origin || !Array.isArray(entries) || entries.length === 0) return [];
+    const o = opts || {};
+    const basis = computeSurfaceBasis(origin, o.normal, o.R || o.tangent, o.F || o.bitangent);
+    const spawned = [];
+
+    for (let eIdx = 0; eIdx < entries.length; eIdx++) {
+      const entry = entries[eIdx];
+      if (!entry) continue;
+      const count = Math.max(1, Math.floor(entry.count || 1));
+      const dropType = normalizeDropType(entry.type || entry.name);
+      if (!dropType) continue;
+
+      const allowStack = o.allowStackMerge !== false && entry.allowStackMerge !== false && isStackableDropType(dropType, { extra: entry.extra });
+      if (allowStack && count > STACK_THRESHOLD) {
+        const ang = o.ringScatter
+          ? ((eIdx / Math.max(1, entries.length)) * Math.PI * 2)
+          : Math.random() * Math.PI * 2;
+        const rad = o.ringScatter
+          ? (o.baseRadius || 0.08)
+          : ((o.minRadius || 0.002) + Math.random() * (o.radiusJitter || 0.005));
+        const d = spawn({
+          type: dropType,
+          count: count,
+          position: origin,
+          normal: basis.normal,
+          R: basis.R,
+          F: basis.F,
+          rawBasis: true,
+          color: entry.color,
+          size: entry.size,
+          isHand: !!(entry.isHand || o.isHand),
+          scatterAngle: ang,
+          scatterRadius: rad,
+          scatterLift: (typeof o.lift === "number") ? o.lift : (0.005 + Math.random() * 0.01),
+          popOut: o.popOut,
+          popUp: o.popUp,
+          vel: entry.vel,
+          spin: entry.spin,
+          spinSpeed: entry.spinSpeed,
+          extra: entry.extra,
+          allowStackMerge: true,
+          skipRefresh: true
+        });
+        if (d && spawned.indexOf(d) === -1) spawned.push(d);
+        continue;
+      }
+
+      for (let k = 0; k < count; k++) {
+        const ang = o.ringScatter
+          ? (((eIdx * 13 + k) / Math.max(1, count)) * Math.PI * 2)
+          : Math.random() * Math.PI * 2;
+        const rad = o.ringScatter
+          ? ((o.baseRadius || 0.08) + (k % 3) * (o.ringStep || 0.04))
+          : ((o.minRadius || 0.002) + Math.random() * (o.radiusJitter || 0.005));
+        const d = spawn({
+          type: dropType,
+          count: 1,
+          position: origin,
+          normal: basis.normal,
+          R: basis.R,
+          F: basis.F,
+          rawBasis: true,
+          color: entry.color,
+          size: entry.size,
+          isHand: !!(entry.isHand || o.isHand),
+          scatterAngle: ang,
+          scatterRadius: rad,
+          scatterLift: (typeof o.lift === "number") ? o.lift : (0.005 + Math.random() * 0.01),
+          popOut: o.popOut,
+          popUp: o.popUp,
+          vel: entry.vel,
+          spin: entry.spin,
+          spinSpeed: entry.spinSpeed,
+          extra: entry.extra,
+          allowStackMerge: entry.allowStackMerge !== undefined ? entry.allowStackMerge : o.allowStackMerge,
+          skipRefresh: true
+        });
+        if (d && spawned.indexOf(d) === -1) spawned.push(d);
+      }
+    }
+
+    if (spawned.length > 0 && !o.skipRefresh && typeof window !== "undefined") {
+      window.pendingDynamicCollectibleRefresh = true;
+    }
+    return spawned;
+  }
+
+  function takeFromDrop(item, maxTake) {
+    if (!item || item.active === false) return 0;
+    const total = Math.max(1, Math.floor(item.count || 1));
+    const take = (typeof maxTake === "number") ? Math.min(total, Math.max(0, Math.floor(maxTake))) : total;
+    if (take <= 0) return 0;
+    if (take >= total) {
+      item.count = 0;
+      markCollected(item);
+      return total;
+    }
+    item.count = total - take;
+    return take;
+  }
+
+  function markCollected(item) {
+    if (!item) return false;
+    item.active = false;
+    if (item.cottonId) {
+      const obsId = parseInt(String(item.cottonId).replace("cotton_", ""), 10);
+      const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
+      const obs = natureList.find(o => o && o.id === obsId);
+      if (obs) obs.active = false;
+    } else if (item.crownFlowerId) {
+      const obsId = parseInt(String(item.crownFlowerId).replace("crown_flower_", ""), 10);
+      const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
+      const obs = natureList.find(o => o && o.id === obsId);
+      if (obs) obs.active = false;
+    }
+
+    if (item.isDynamic) {
+      if (
+        !window.pendingDynamicCollectibleRefresh &&
+        typeof window.hideDynamicCollectibleInVBO === "function" &&
+        window.hideDynamicCollectibleInVBO(item)
+      ) {
+        // Fast surgical GPU sub-buffer zero-out (0ms, no full dynamic VBO rebuild!)
+      } else {
+        if (typeof pendingDynamicCollectibleRefresh !== "undefined") pendingDynamicCollectibleRefresh = true;
+        window.pendingDynamicCollectibleRefresh = true;
+      }
+    } else if (typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(item)) {
+      // Fast surgical GPU sub-buffer zero-out for static collectibles
+    } else {
+      if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+      window.pendingCollectibleRefresh = true;
+    }
+    return true;
+  }
+
+  window.GroundDropSystem = {
+    META: DROP_META,
+    STACK_THRESHOLD,
+    STACK_MERGE_RADIUS,
+    normalizeDropType,
+    isGroundDropType,
+    isGroundDrop,
+    isStackableDropType,
+    getMeta,
+    computeSurfaceBasis,
+    spawn,
+    spawnBatch,
+    takeFromDrop,
+    markCollected
+  };
+})();
+
 // Shared function to detach dragon fruits from white-red trees (Used by Player and PlayerClones)
 function detachTreeAttachedFruits(tree) {
   if (!tree) return false;
@@ -115,43 +556,71 @@ function detachTreeAttachedFruits(tree) {
 
   const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []);
   let detachedAny = false;
+  let detachedStaticFromMain = false;
+
+  const computeInwardVel = (pos, fallbackNorm) => {
+    let nx = 0, ny = 1, nz = 0;
+    if (pos) {
+      const rLen = Math.hypot(pos[0], pos[1], pos[2]);
+      if (rLen > 0.001) {
+        nx = pos[0] / rLen; ny = pos[1] / rLen; nz = pos[2] / rLen;
+      }
+    } else if (fallbackNorm) {
+      nx = fallbackNorm[0]; ny = fallbackNorm[1]; nz = fallbackNorm[2];
+    }
+    return [
+      -nx * 0.012 + (Math.random() - 0.5) * 0.004,
+      -ny * 0.012 + (Math.random() - 0.5) * 0.004,
+      -nz * 0.012 + (Math.random() - 0.5) * 0.004
+    ];
+  };
 
   for (let c of colList) {
     if (c && c.active !== false && c.isAttachedToTree && c.treeId === tree.id) {
+      if (!c.isDynamic) detachedStaticFromMain = true;
       c.isAttachedToTree = false;
       c.isDynamic = true;
-      c.vel = [(Math.random() - 0.5) * 0.006, -0.015, (Math.random() - 0.5) * 0.006];
+      c.isGroundDrop = true;
+      c._dropSettled = false;
+      c._settleFrames = 0;
+      c.vel = computeInwardVel(c.position, tree.normal);
       c.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05];
       c.spinSpeed = 0.02;
+      if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.insert === "function") {
+        SpatialGrid.insert(c);
+      }
       detachedAny = true;
     }
   }
 
-  // If tree has fruitPositions but some or none were in colList yet, spawn them directly as dynamic drops
+  // If tree has fruitPositions but some or none were in colList yet, spawn via unified GroundDropSystem
   if (tree.fruitPositions && tree.fruitPositions.length > 0) {
     for (let fIdx = 0; fIdx < tree.fruitPositions.length; fIdx++) {
       const fInfo = tree.fruitPositions[fIdx];
       const fruitId = "df_" + tree.id + "_" + fIdx;
       const existing = colList.find(c => c.fruitId === fruitId || (c.treeId === tree.id && c.fruitIdx === fIdx));
       if (!existing) {
-        colList.push({
+        window.GroundDropSystem.spawn({
           type: "dragon_fruit",
-          position: [fInfo.pos[0], fInfo.pos[1], fInfo.pos[2]],
-          normal: fInfo.normal ? [fInfo.normal[0], fInfo.normal[1], fInfo.normal[2]] : [0, -1, 0],
-          R: fInfo.R ? [fInfo.R[0], fInfo.R[1], fInfo.R[2]] : [1, 0, 0],
-          F: fInfo.F ? [fInfo.F[0], fInfo.F[1], fInfo.F[2]] : [0, 0, 1],
-          active: true,
+          position: fInfo.pos,
+          normal: fInfo.normal || [0, -1, 0],
+          R: fInfo.R || [1, 0, 0],
+          F: fInfo.F || [0, 0, 1],
+          rawBasis: true,
+          applyScatter: false,
           size: 0.035,
           seed: 1234 + tree.id * 10 + fIdx,
           color: [0.92, 0.14, 0.46],
-          isAttachedToTree: false,
-          isDynamic: true,
-          vel: [(Math.random() - 0.5) * 0.006, -0.015, (Math.random() - 0.5) * 0.006],
+          vel: computeInwardVel(fInfo.pos, fInfo.normal || tree.normal),
           spin: [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05],
           spinSpeed: 0.02,
-          treeId: tree.id,
-          fruitIdx: fIdx,
-          fruitId: fruitId
+          extra: {
+            isAttachedToTree: false,
+            treeId: tree.id,
+            fruitIdx: fIdx,
+            fruitId: fruitId
+          },
+          skipRefresh: true
         });
         detachedAny = true;
       }
@@ -160,9 +629,11 @@ function detachTreeAttachedFruits(tree) {
   }
 
   if (detachedAny) {
-    if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+    if (detachedStaticFromMain) {
+      if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+      if (typeof window !== "undefined") window.pendingCollectibleRefresh = true;
+    }
     if (typeof window !== "undefined") {
-      window.pendingCollectibleRefresh = true;
       window.pendingDynamicCollectibleRefresh = true;
     }
   }
@@ -170,68 +641,254 @@ function detachTreeAttachedFruits(tree) {
 }
 window.detachTreeAttachedFruits = detachTreeAttachedFruits;
 
+// Shared local-space mesh template cache & ultra-fast emitter helper for ALL droppable items
+// (Explicitly invoked by each item file — NO Auto-Cache magic)
+const _groundDropTemplateCache = window._groundDropTemplateCache || (window._groundDropTemplateCache = {});
+
+function _emitCachedDropTemplate(tpl, p, r, n, f, s, yOff, vertices, colors, indices, colorTransform) {
+  if (!tpl) return;
+  const tv = tpl.verts;
+  const tc = tpl.cols;
+  const ti = tpl.inds;
+  const vCount = tv.length / 3;
+  const vBase = vertices.length / 3;
+
+  const px = p[0], py = p[1], pz = p[2];
+  const rx = r[0] * s, ry = r[1] * s, rz = r[2] * s;
+  const nx = n[0] * s, ny = n[1] * s, nz = n[2] * s;
+  const fx = f[0] * s, fy = f[1] * s, fz = f[2] * s;
+  const ox = px + nx * yOff;
+  const oy = py + ny * yOff;
+  const oz = pz + nz * yOff;
+
+  if (typeof colorTransform === "function") {
+    for (let i = 0; i < vCount; i++) {
+      const o = i * 3;
+      const lx = tv[o], ly = tv[o + 1], lz = tv[o + 2];
+      vertices.push(
+        ox + rx * lx + nx * ly + fx * lz,
+        oy + ry * lx + ny * ly + fy * lz,
+        oz + rz * lx + nz * ly + fz * lz
+      );
+      const enc = colorTransform(tc[o], tc[o + 1], tc[o + 2]);
+      colors.push(enc[0], enc[1], enc[2]);
+    }
+  } else if (Array.isArray(colorTransform) && colorTransform.length >= 3) {
+    const oc0 = colorTransform[0], oc1 = colorTransform[1], oc2 = colorTransform[2];
+    for (let i = 0; i < vCount; i++) {
+      const o = i * 3;
+      const lx = tv[o], ly = tv[o + 1], lz = tv[o + 2];
+      vertices.push(
+        ox + rx * lx + nx * ly + fx * lz,
+        oy + ry * lx + ny * ly + fy * lz,
+        oz + rz * lx + nz * ly + fz * lz
+      );
+      colors.push(oc0, oc1, oc2);
+    }
+  } else {
+    for (let i = 0; i < vCount; i++) {
+      const o = i * 3;
+      const lx = tv[o], ly = tv[o + 1], lz = tv[o + 2];
+      vertices.push(
+        ox + rx * lx + nx * ly + fx * lz,
+        oy + ry * lx + ny * ly + fy * lz,
+        oz + rz * lx + nz * ly + fz * lz
+      );
+      colors.push(tc[o], tc[o + 1], tc[o + 2]);
+    }
+  }
+
+  // Flip triangle winding if basis (R, N, F) is left-handed so backface culling never hides faces
+  const det =
+    (r[1] * n[2] - r[2] * n[1]) * f[0] +
+    (r[2] * n[0] - r[0] * n[2]) * f[1] +
+    (r[0] * n[1] - r[1] * n[0]) * f[2];
+  if (det < 0) {
+    if (tpl.indsFlip) {
+      const tif = tpl.indsFlip;
+      for (let i = 0; i < tif.length; i++) {
+        indices.push(vBase + tif[i]);
+      }
+    } else {
+      for (let i = 0; i < ti.length; i += 3) {
+        indices.push(vBase + ti[i], vBase + ti[i + 2], vBase + ti[i + 1]);
+      }
+    }
+  } else {
+    for (let i = 0; i < ti.length; i++) {
+      indices.push(vBase + ti[i]);
+    }
+  }
+}
+window._emitCachedDropTemplate = _emitCachedDropTemplate;
+
+window.DropTemplateCache = {
+  cache: _groundDropTemplateCache,
+  quantizeColor: function(col) {
+    if (!col || col.length < 3) return "def";
+    return `${Math.round(col[0] * 100)}_${Math.round(col[1] * 100)}_${Math.round(col[2] * 100)}`;
+  },
+  rotateBasis: function(r, f, angle) {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    return {
+      R: [r[0] * cosA + f[0] * sinA, r[1] * cosA + f[1] * sinA, r[2] * cosA + f[2] * sinA],
+      F: [r[0] * -sinA + f[0] * cosA, r[1] * -sinA + f[1] * cosA, r[2] * -sinA + f[2] * cosA]
+    };
+  },
+  basisFromF: function(fVec) {
+    let fx = fVec ? fVec[0] : 0, fy = fVec ? fVec[1] : 0, fz = fVec ? fVec[2] : 1;
+    const fLen = Math.hypot(fx, fy, fz) || 1;
+    fx /= fLen; fy /= fLen; fz /= fLen;
+    const refX = Math.abs(fy) < 0.9 ? 0 : 1;
+    const refY = Math.abs(fy) < 0.9 ? 1 : 0;
+    const refZ = 0;
+    let rx = refY * fz - refZ * fy;
+    let ry = refZ * fx - refX * fz;
+    let rz = refX * fy - refY * fx;
+    const rLen = Math.hypot(rx, ry, rz) || 1;
+    rx /= rLen; ry /= rLen; rz /= rLen;
+    const nx = fy * rz - fz * ry;
+    const ny = fz * rx - fx * rz;
+    const nz = fx * ry - fy * rx;
+    return {
+      R: [rx, ry, rz],
+      N: [nx, ny, nz],
+      F: [fx, fy, fz]
+    };
+  },
+  bake: function(buildLocalFn) {
+    const tv = [], tc = [], ti = [];
+    buildLocalFn(tv, tc, ti);
+    if (ti.length === 0) return null;
+    const vCount = tv.length / 3;
+    const IdxArr = vCount > 65535 ? Uint32Array : Uint16Array;
+    const indsFlip = new IdxArr(ti.length);
+    for (let i = 0; i < ti.length; i += 3) {
+      indsFlip[i] = ti[i];
+      indsFlip[i + 1] = ti[i + 2];
+      indsFlip[i + 2] = ti[i + 1];
+    }
+    return {
+      verts: new Float32Array(tv),
+      cols: new Float32Array(tc),
+      inds: new IdxArr(ti),
+      indsFlip
+    };
+  },
+  getOrBake: function(key, buildLocalFn) {
+    if (_groundDropTemplateCache[key]) return _groundDropTemplateCache[key];
+    const tpl = this.bake(buildLocalFn);
+    if (tpl) {
+      _groundDropTemplateCache[key] = tpl;
+    }
+    return tpl;
+  },
+  emit: _emitCachedDropTemplate,
+  render: function(key, opts, buildLocalFn, vertices, colors, indices) {
+    const tpl = this.getOrBake(key, buildLocalFn);
+    if (!tpl) return false;
+    _emitCachedDropTemplate(
+      tpl,
+      opts.position || [0, 0, 0],
+      opts.R || [1, 0, 0],
+      opts.normal || [0, 1, 0],
+      opts.F || [0, 0, 1],
+      (typeof opts.scale === "number") ? opts.scale : 1.0,
+      (typeof opts.yOff === "number") ? opts.yOff : 0.0,
+      vertices,
+      colors,
+      indices,
+      opts.colorTransform
+    );
+    return true;
+  }
+};
+
 // Initialize ItemRegistry
 window.ItemRegistry = window.ItemRegistry || window.ITEM_DEFINITIONS || {};
 
-// Register "cotton_plant" item 3D renderer
+// Register "cotton_plant" item 3D renderer (explicit DropTemplateCache)
 window.ItemRegistry["cotton_plant"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     if (typeof window.buildCottonPlant !== "function") return;
+    const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
     const p = item.position || [0, 0, 0];
     const n = item.normal || [0, 1, 0];
     const r = item.R || [1, 0, 0];
     const f = item.F || [0, 0, 1];
     const seed = typeof item.seed === "number" ? item.seed : 123.45;
-    const prevDisable = window._disableTreeColorEncoding;
-    if (targetBuffer === "preview") {
-      window._disableTreeColorEncoding = true;
-    }
-    try {
-      window.buildCottonPlant(
-        p[0], p[1], p[2],
-        n[0], n[1], n[2],
-        r, f, n,
-        seed,
-        vertices, colors, indices,
-        targetBuffer === "preview" || !!item.isIconPreview
-      );
-    } finally {
-      window._disableTreeColorEncoding = prevDisable;
-    }
+    const bucket = Math.abs(Math.floor(seed * 7.13)) % 8;
+    const key = `cotton_plant_${isIcon ? "icon" : "world"}_v${bucket}`;
+
+    window.DropTemplateCache.render(
+      key,
+      { position: p, R: r, normal: n, F: f, scale: 1.0, yOff: 0.0 },
+      (tv, tc, ti) => {
+        const prevDisable = window._disableTreeColorEncoding;
+        if (isIcon) {
+          window._disableTreeColorEncoding = true;
+        }
+        try {
+          window.buildCottonPlant(
+            0, 0, 0,
+            0, 1, 0,
+            [1, 0, 0], [0, 0, 1], [0, 1, 0],
+            seed,
+            tv, tc, ti,
+            isIcon
+          );
+        } finally {
+          window._disableTreeColorEncoding = prevDisable;
+        }
+      },
+      vertices, colors, indices
+    );
   }
 };
 window.ItemRegistry["COTTON_PLANT"] = window.ItemRegistry["cotton_plant"];
 
-// Register "crown_flower" item 3D renderer
+// Register "crown_flower" item 3D renderer (explicit DropTemplateCache)
 window.ItemRegistry["crown_flower"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     if (typeof window.buildCrownFlowerPlant !== "function") return;
+    const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
     const p = item.position || [0, 0, 0];
     const n = item.normal || [0, 1, 0];
     const r = item.R || [1, 0, 0];
     const f = item.F || [0, 0, 1];
     const seed = typeof item.seed === "number" ? item.seed : 123.45;
-    const prevDisable = window._disableTreeColorEncoding;
-    if (targetBuffer === "preview") {
-      window._disableTreeColorEncoding = true;
-    }
-    try {
-      window.buildCrownFlowerPlant(
-        p[0], p[1], p[2],
-        n[0], n[1], n[2],
-        r, f, n,
-        seed,
-        vertices, colors, indices,
-        targetBuffer === "preview" || !!item.isIconPreview
-      );
-    } finally {
-      window._disableTreeColorEncoding = prevDisable;
-    }
+    const bucket = Math.abs(Math.floor(seed * 7.13)) % 8;
+    const key = `crown_flower_${isIcon ? "icon" : "world"}_v${bucket}`;
+
+    window.DropTemplateCache.render(
+      key,
+      { position: p, R: r, normal: n, F: f, scale: 1.0, yOff: 0.0 },
+      (tv, tc, ti) => {
+        const prevDisable = window._disableTreeColorEncoding;
+        if (isIcon) {
+          window._disableTreeColorEncoding = true;
+        }
+        try {
+          window.buildCrownFlowerPlant(
+            0, 0, 0,
+            0, 1, 0,
+            [1, 0, 0], [0, 0, 1], [0, 1, 0],
+            seed,
+            tv, tc, ti,
+            isIcon
+          );
+        } finally {
+          window._disableTreeColorEncoding = prevDisable;
+        }
+      },
+      vertices, colors, indices
+    );
   }
 };
 window.ItemRegistry["CROWN_FLOWER"] = window.ItemRegistry["crown_flower"];
 
-// Build a single 3D grass blade model using the exact 1-triangle geometry & botColor->topColor gradient from addGrassTuft in terrain.js
+// Build a single 3D grass blade model (explicit DropTemplateCache for both icon & world blade variants)
 window.buildGrassBladeModel = function(item, vertices, colors, indices, targetBuffer) {
   const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
   const p = (item && item.position) ? item.position : [0, 0, 0];
@@ -239,80 +896,73 @@ window.buildGrassBladeModel = function(item, vertices, colors, indices, targetBu
   const n = (item && item.normal) ? item.normal : [0, 1, 0];
   const f = (item && item.F) ? item.F : [0, 0, 1];
 
-  // Match addGrassTuft color calculation in terrain.js (lines 4830-4845)
   const hasGreenColor = !!(item && item.color && item.color.length === 3 && item.color[1] > item.color[0]);
   const topColor = hasGreenColor ? item.color : [0.13, 0.65, 0.15];
   const botColor = (item && item.botColor && item.botColor.length === 3)
     ? item.botColor
     : [topColor[0] * 0.35, topColor[1] * 0.42, topColor[2] * 0.35];
 
+  const colKey = window.DropTemplateCache.quantizeColor(topColor);
+
   if (isIcon) {
-    // Exact 1-triangle grass blade (p1, p2, topSimple) from addGrassTuft standing upright for inventory icon
-    const gHeight = 0.145;
-    const gWidth = 0.016;
-    const curve = 0.35;
-
-    const p1 = [-gWidth, -gHeight * 0.5, 0.0];
-    const p2 = [ gWidth, -gHeight * 0.5, 0.0];
-    const topSimple = [gWidth * curve, gHeight * 0.5, 0.0];
-
-    const vOff = vertices.length / 3;
-    vertices.push(
-      p1[0], p1[1], p1[2],
-      p2[0], p2[1], p2[2],
-      topSimple[0], topSimple[1], topSimple[2]
+    window.DropTemplateCache.render(
+      `grass_icon_${colKey}`,
+      { position: p, R: r, normal: n, F: f, scale: 1.0, yOff: 0.0 },
+      (tv, tc, ti) => {
+        const gHeight = 0.145;
+        const gWidth = 0.016;
+        const curve = 0.35;
+        tv.push(
+          -gWidth, -gHeight * 0.5, 0.0,
+           gWidth, -gHeight * 0.5, 0.0,
+           gWidth * curve, gHeight * 0.5, 0.0
+        );
+        tc.push(
+          botColor[0], botColor[1], botColor[2],
+          botColor[0], botColor[1], botColor[2],
+          topColor[0], topColor[1], topColor[2]
+        );
+        ti.push(0, 1, 2);
+      },
+      vertices, colors, indices
     );
-    colors.push(
-      botColor[0], botColor[1], botColor[2],
-      botColor[0], botColor[1], botColor[2],
-      topColor[0], topColor[1], topColor[2]
-    );
-    indices.push(vOff, vOff + 1, vOff + 2);
     return;
   }
 
-  // World detached grass blade: exact 1-triangle (p1, p2, topSimple) from the cut tuft
   const gHeight = (item && typeof item.bladeHeight === "number") ? item.bladeHeight : 0.145;
   const gWidth = (item && typeof item.bladeWidth === "number") ? Math.max(0.013, item.bladeWidth) : 0.016;
   const curve = (item && typeof item.bladeCurve === "number") ? item.bladeCurve : 0.35;
-  const lift = 0.005;
+  const hScale = gHeight / 0.145;
+  const qCurve = Math.round(curve * 10) / 10;
+  const qWidth = Math.round(gWidth * 1000) / 1000;
 
-  const p1 = [
-    p[0] + r[0] * gWidth + n[0] * lift,
-    p[1] + r[1] * gWidth + n[1] * lift,
-    p[2] + r[2] * gWidth + n[2] * lift
-  ];
-  const p2 = [
-    p[0] - r[0] * gWidth + n[0] * lift,
-    p[1] - r[1] * gWidth + n[1] * lift,
-    p[2] - r[2] * gWidth + n[2] * lift
-  ];
-  const topSimple = [
-    p[0] + f[0] * gHeight + r[0] * (gWidth * curve) + n[0] * (lift + 0.006),
-    p[1] + f[1] * gHeight + r[1] * (gWidth * curve) + n[1] * (lift + 0.006),
-    p[2] + f[2] * gHeight + r[2] * (gWidth * curve) + n[2] * (lift + 0.006)
-  ];
-
-  const vOff = vertices.length / 3;
-  // Encode negative R (-color[0] - 10.0) just like addGrassTuft so the WebGL shader shades it as isGrass = true
-  // and push both front and back faces so the single triangle is two-sided like Grass.js
-  vertices.push(
-    p1[0], p1[1], p1[2],
-    p2[0], p2[1], p2[2],
-    topSimple[0], topSimple[1], topSimple[2],
-    p1[0], p1[1], p1[2],
-    topSimple[0], topSimple[1], topSimple[2],
-    p2[0], p2[1], p2[2]
+  window.DropTemplateCache.render(
+    `grass_world_${colKey}_w${qWidth}_c${qCurve}`,
+    { position: p, R: r, normal: n, F: f, scale: hScale, yOff: 0.0 },
+    (tv, tc, ti) => {
+      const lift = 0.005 / (hScale || 1);
+      const liftTop = 0.011 / (hScale || 1);
+      const baseH = 0.145;
+      tv.push(
+         qWidth, lift, 0.0,
+        -qWidth, lift, 0.0,
+         qWidth * qCurve, liftTop, baseH,
+         qWidth, lift, 0.0,
+         qWidth * qCurve, liftTop, baseH,
+        -qWidth, lift, 0.0
+      );
+      tc.push(
+        -botColor[0] - 10.0, botColor[1], botColor[2],
+        -botColor[0] - 10.0, botColor[1], botColor[2],
+        -topColor[0] - 10.0, topColor[1], topColor[2],
+        -botColor[0] - 10.0, botColor[1], botColor[2],
+        -topColor[0] - 10.0, topColor[1], topColor[2],
+        -botColor[0] - 10.0, botColor[1], botColor[2]
+      );
+      ti.push(0, 1, 2, 3, 4, 5);
+    },
+    vertices, colors, indices
   );
-  colors.push(
-    -botColor[0] - 10.0, botColor[1], botColor[2],
-    -botColor[0] - 10.0, botColor[1], botColor[2],
-    -topColor[0] - 10.0, topColor[1], topColor[2],
-    -botColor[0] - 10.0, botColor[1], botColor[2],
-    -topColor[0] - 10.0, topColor[1], topColor[2],
-    -botColor[0] - 10.0, botColor[1], botColor[2]
-  );
-  indices.push(vOff, vOff + 1, vOff + 2, vOff + 3, vOff + 4, vOff + 5);
 };
 
 window.ItemRegistry["grass"] = {
@@ -322,651 +972,40 @@ window.ItemRegistry["grass"] = {
 };
 window.ItemRegistry["GRASS"] = window.ItemRegistry["grass"];
 
-// Build a 3D folded white woven cloth stack model (matching reference image: 2 stacked folded layers with woven grid texture & dark crease gap)
-window.buildClothModel = function(item, vertices, colors, indices, targetBuffer) {
-  const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
-  const p = (item && item.position) ? item.position : [0, 0, 0];
-  const r = (item && item.R) ? item.R : [1, 0, 0];
-  const n = (item && item.normal) ? item.normal : [0, 1, 0];
-  const f = (item && item.F) ? item.F : [0, 0, 1];
-  const s = isIcon ? 1.0 : ((item && typeof item.size === "number") ? item.size : 0.18);
+// (tough_meat & leather are now registered in gamefile/items/tough_meat.js and gamefile/items/leather.js)
 
-  const toWorld = (lx, ly, lz) => [
-    p[0] + r[0] * lx * s + n[0] * ly * s + f[0] * lz * s,
-    p[1] + r[1] * lx * s + n[1] * ly * s + f[1] * lz * s,
-    p[2] + r[2] * lx * s + n[2] * ly * s + f[2] * lz * s
-  ];
-
-  // Auto-oriented quad helper enforcing CW outward winding matching addBox & create3DIconCanvas
-  const addOrientedQuad = (a, b, c, d, col, outDir) => {
-    const ux = c[0] - a[0], uy = c[1] - a[1], uz = c[2] - a[2];
-    const vx = b[0] - a[0], vy = b[1] - a[1], vz = b[2] - a[2];
-    const nx = uy * vz - uz * vy;
-    const ny = uz * vx - ux * vz;
-    const nz = ux * vy - uy * vx;
-    const wDir = [
-      r[0] * outDir[0] + n[0] * outDir[1] + f[0] * outDir[2],
-      r[1] * outDir[0] + n[1] * outDir[1] + f[1] * outDir[2],
-      r[2] * outDir[0] + n[2] * outDir[1] + f[2] * outDir[2]
-    ];
-    const dot = nx * wDir[0] + ny * wDir[1] + nz * wDir[2];
-
-    const i0 = vertices.length / 3;
-    const pts = [toWorld(a[0], a[1], a[2]), toWorld(b[0], b[1], b[2]), toWorld(c[0], c[1], c[2]), toWorld(d[0], d[1], d[2])];
-    for (let k = 0; k < 4; k++) {
-      vertices.push(pts[k][0], pts[k][1], pts[k][2]);
-      colors.push(col[0], col[1], col[2]);
-    }
-    if (dot >= 0) {
-      indices.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
-    } else {
-      indices.push(i0, i0 + 3, i0 + 2, i0, i0 + 2, i0 + 1);
-    }
-  };
-
-  // Reference dimensions (in local preview space)
-  const hx = 0.30;  // Half width
-  const hz = 0.255; // Half depth
-  const yOffset = isIcon ? 0.0 : 0.095;
-
-  // Color palette matching crisp woven white cloth with subtle weave variation & deep fold crease
-  const colTopA   = [0.98, 0.98, 0.99];
-  const colTopB   = [0.90, 0.91, 0.94];
-  const colWeaveA = [0.94, 0.95, 0.97];
-  const colWeaveB = [0.78, 0.80, 0.84];
-  const colSideA  = [0.89, 0.90, 0.93];
-  const colSideB  = [0.76, 0.78, 0.82];
-  const colGap    = [0.42, 0.44, 0.48];
-  const colBottom = [0.74, 0.76, 0.80];
-
-  // Gentle pillow-like surface height across the top surface of a folded cloth layer
-  const getPillowLift = (u, v) => {
-    const cu = Math.max(0, 1.0 - (u * 2 - 1) * (u * 2 - 1));
-    const cv = Math.max(0, 1.0 - (v * 2 - 1) * (v * 2 - 1));
-    return 0.015 * cu * cv;
-  };
-  // Slight organic trapezoid taper toward the back edge (-Z) like the folded cloth in the photo
-  const widthAtZ = (nzCoord) => hx * (1.0 - 0.055 * (1.0 - nzCoord) * 0.5);
-
-  // Build one folded cloth layer with woven top/bottom faces, rounded front fold lip (+Z),
-  // woven left/right cut edges (±X), and curved fold profile
-  const buildFoldedLayer = (yBottom, yTop, zShift, xScale, isTopLayer) => {
-    const wGrid = 8;
-    const dGrid = 8;
-
-    // 1. Top woven surface (with gentle cushion arch)
-    for (let iz = 0; iz < dGrid; iz++) {
-      const v0 = iz / dGrid;
-      const v1 = (iz + 1) / dGrid;
-      const nz0 = -1 + v0 * 2;
-      const nz1 = -1 + v1 * 2;
-      const z0 = nz0 * hz + zShift;
-      const z1 = nz1 * hz + zShift;
-      const w0 = widthAtZ(nz0) * xScale;
-      const w1 = widthAtZ(nz1) * xScale;
-
-      for (let ix = 0; ix < wGrid; ix++) {
-        const u0 = ix / wGrid;
-        const u1 = (ix + 1) / wGrid;
-        const nx0 = -1 + u0 * 2;
-        const nx1 = -1 + u1 * 2;
-
-        const y00 = yTop + yOffset + (isTopLayer ? getPillowLift(u0, v0) : 0.004 * Math.sin(u0 * Math.PI));
-        const y10 = yTop + yOffset + (isTopLayer ? getPillowLift(u1, v0) : 0.004 * Math.sin(u1 * Math.PI));
-        const y11 = yTop + yOffset + (isTopLayer ? getPillowLift(u1, v1) : 0.004 * Math.sin(u1 * Math.PI));
-        const y01 = yTop + yOffset + (isTopLayer ? getPillowLift(u0, v1) : 0.004 * Math.sin(u0 * Math.PI));
-
-        const p00 = [nx0 * w0, y00, z0];
-        const p10 = [nx1 * w0, y10, z0];
-        const p11 = [nx1 * w1, y11, z1];
-        const p01 = [nx0 * w1, y01, z1];
-
-        const checker = ((ix + iz) & 1) === 0;
-        const cellCol = isTopLayer ? (checker ? colTopA : colTopB) : (checker ? colWeaveA : colWeaveB);
-        addOrientedQuad(p00, p10, p11, p01, cellCol, [0, 1, 0]);
-      }
-    }
-
-    // 2. Bottom surface of the layer
-    {
-      const wb = widthAtZ(-1) * xScale;
-      const wf = widthAtZ(1) * xScale;
-      const zBack = -hz + zShift;
-      const zFront = hz + zShift;
-      const yb = yBottom + yOffset;
-      addOrientedQuad(
-        [-wb, yb, zBack], [-wf, yb, zFront], [wf, yb, zFront], [wb, yb, zBack],
-        colBottom, [0, -1, 0]
-      );
-    }
-
-    // 3. Rounded front folded lip (+Z) with 4 curved arc segments & woven check pattern
-    const arcSegs = 4;
-    const lipRadius = (yTop - yBottom) * 0.5;
-    const yMid = (yTop + yBottom) * 0.5 + yOffset;
-    const zFrontBase = hz + zShift;
-    const wf = widthAtZ(1) * xScale;
-
-    for (let sIdx = 0; sIdx < arcSegs; sIdx++) {
-      const a0 = (sIdx / arcSegs) * Math.PI - Math.PI * 0.5;       // -pi/2 (bottom) to +pi/2 (top)
-      const a1 = ((sIdx + 1) / arcSegs) * Math.PI - Math.PI * 0.5;
-      const sin0 = Math.sin(a0), cos0 = Math.cos(a0);
-      const sin1 = Math.sin(a1), cos1 = Math.cos(a1);
-
-      const zA = zFrontBase + cos0 * lipRadius * 1.15;
-      const yA = yMid + sin0 * lipRadius;
-      const zB = zFrontBase + cos1 * lipRadius * 1.15;
-      const yB = yMid + sin1 * lipRadius;
-
-      const midA = (a0 + a1) * 0.5;
-      const outN = [0, Math.sin(midA), Math.cos(midA)];
-
-      for (let ix = 0; ix < wGrid; ix++) {
-        const u0 = ix / wGrid;
-        const u1 = (ix + 1) / wGrid;
-        const x0 = (-1 + u0 * 2) * wf;
-        const x1 = (-1 + u1 * 2) * wf;
-        const lipLift0 = (sIdx === arcSegs - 1 && isTopLayer) ? getPillowLift(u0, 1.0) : 0;
-        const lipLift1 = (sIdx === arcSegs - 1 && isTopLayer) ? getPillowLift(u1, 1.0) : 0;
-
-        const checker = ((ix + sIdx) & 1) === 0;
-        const cLip = checker ? colWeaveA : colWeaveB;
-        addOrientedQuad(
-          [x0, yB + lipLift0, zB],
-          [x1, yB + lipLift1, zB],
-          [x1, yA, zA],
-          [x0, yA, zA],
-          cLip,
-          outN
-        );
-      }
-    }
-
-    // 4. Back face (-Z) with woven ribs
-    {
-      const wb = widthAtZ(-1) * xScale;
-      const zBack = -hz + zShift;
-      for (let ix = 0; ix < wGrid; ix++) {
-        const x0 = (-1 + (ix / wGrid) * 2) * wb;
-        const x1 = (-1 + ((ix + 1) / wGrid) * 2) * wb;
-        const checker = ((ix + (isTopLayer ? 0 : 1)) & 1) === 0;
-        addOrientedQuad(
-          [x0, yTop + yOffset, zBack],
-          [x1, yTop + yOffset, zBack],
-          [x1, yBottom + yOffset, zBack],
-          [x0, yBottom + yOffset, zBack],
-          checker ? colSideA : colSideB,
-          [0, 0, -1]
-        );
-      }
-    }
-
-    // 5. Left (-X) & Right (+X) side edges with woven strips
-    for (let iz = 0; iz < dGrid; iz++) {
-      const v0 = iz / dGrid;
-      const v1 = (iz + 1) / dGrid;
-      const nz0 = -1 + v0 * 2;
-      const nz1 = -1 + v1 * 2;
-      const z0 = nz0 * hz + zShift;
-      const z1 = nz1 * hz + zShift;
-      const w0 = widthAtZ(nz0) * xScale;
-      const w1 = widthAtZ(nz1) * xScale;
-      const checker = ((iz + (isTopLayer ? 0 : 1)) & 1) === 0;
-      const sCol = checker ? colSideA : colSideB;
-
-      const yTopL0 = yTop + yOffset + (isTopLayer ? getPillowLift(0, v0) : 0);
-      const yTopL1 = yTop + yOffset + (isTopLayer ? getPillowLift(0, v1) : 0);
-      const yTopR0 = yTop + yOffset + (isTopLayer ? getPillowLift(1, v0) : 0);
-      const yTopR1 = yTop + yOffset + (isTopLayer ? getPillowLift(1, v1) : 0);
-
-      // Left side (-X)
-      addOrientedQuad(
-        [-w0, yTopL0, z0], [-w1, yTopL1, z1], [-w1, yBottom + yOffset, z1], [-w0, yBottom + yOffset, z0],
-        sCol, [-1, 0, 0]
-      );
-      // Right side (+X)
-      addOrientedQuad(
-        [w1, yTopR1, z1], [w0, yTopR0, z0], [w0, yBottom + yOffset, z0], [w1, yBottom + yOffset, z1],
-        sCol, [1, 0, 0]
-      );
-    }
-  };
-
-  // Lower folded cloth layer
-  buildFoldedLayer(-0.088, -0.016, -0.008, 0.96, false);
-
-  // Dark inner fold shadow core tucked between lower and upper layers (creates the deep crease seen in the photo)
-  const gX = hx * 0.92;
-  const gZ = hz * 0.94;
-  const gyB = -0.020 + yOffset;
-  const gyT =  0.012 + yOffset;
-  addOrientedQuad([-gX, gyT,  gZ], [ gX, gyT,  gZ], [ gX, gyB,  gZ], [-gX, gyB,  gZ], colGap, [0, 0, 1]);
-  addOrientedQuad([ gX, gyT, -gZ], [-gX, gyT, -gZ], [-gX, gyB, -gZ], [ gX, gyB, -gZ], colGap, [0, 0, -1]);
-  addOrientedQuad([-gX, gyT, -gZ], [-gX, gyT,  gZ], [-gX, gyB,  gZ], [-gX, gyB, -gZ], colGap, [-1, 0, 0]);
-  addOrientedQuad([ gX, gyT,  gZ], [ gX, gyT, -gZ], [ gX, gyB, -gZ], [ gX, gyB,  gZ], colGap, [1, 0, 0]);
-
-  // Smooth U-fold spine along the back (-Z) connecting the bottom layer up into the top layer
-  {
-    const spineSegs = 4;
-    const spineMidY = -0.002 + yOffset;
-    const spineR = 0.082;
-    const wb = widthAtZ(-1) * 0.96;
-    const zBackSpine = -hz - 0.004;
-    for (let sIdx = 0; sIdx < spineSegs; sIdx++) {
-      const a0 = Math.PI * 0.5 + (sIdx / spineSegs) * Math.PI;
-      const a1 = Math.PI * 0.5 + ((sIdx + 1) / spineSegs) * Math.PI;
-      const zA = zBackSpine + Math.cos(a0) * 0.045;
-      const yA = spineMidY - Math.sin(a0) * spineR * 0.5;
-      const zB = zBackSpine + Math.cos(a1) * 0.045;
-      const yB = spineMidY - Math.sin(a1) * spineR * 0.5;
-      addOrientedQuad(
-        [-wb, yA, zA], [wb, yA, zA], [wb, yB, zB], [-wb, yB, zB],
-        (sIdx & 1) === 0 ? colSideA : colWeaveB,
-        [0, 0, -1]
-      );
-    }
-  }
-
-  // Upper folded cloth layer (broader, crisp white woven top & plump rounded front lip)
-  buildFoldedLayer(0.004, 0.086, 0.004, 1.0, true);
-};
-
-window.ItemRegistry["cloth"] = {
-  render: function(item, vertices, colors, indices, targetBuffer) {
-    window.buildClothModel(item, vertices, colors, indices, targetBuffer);
-  }
-};
-window.ItemRegistry["CLOTH"] = window.ItemRegistry["cloth"];
-
-// Build a 3D matte dark-charcoal rubber block model (matching reference image: wide low-profile rectangular block with subtle molded chamfer & matte face shading)
-window.buildRubberBlockModel = function(item, vertices, colors, indices, targetBuffer) {
-  const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
-  const p = (item && item.position) ? item.position : [0, 0, 0];
-  const r = (item && item.R) ? item.R : [1, 0, 0];
-  const n = (item && item.normal) ? item.normal : [0, 1, 0];
-  const f = (item && item.F) ? item.F : [0, 0, 1];
-  const s = isIcon ? 1.0 : ((item && typeof item.size === "number") ? item.size : 0.18);
-
-  const toWorld = (lx, ly, lz) => [
-    p[0] + r[0] * lx * s + n[0] * ly * s + f[0] * lz * s,
-    p[1] + r[1] * lx * s + n[1] * ly * s + f[1] * lz * s,
-    p[2] + r[2] * lx * s + n[2] * ly * s + f[2] * lz * s
-  ];
-
-  const addOrientedQuad = (a, b, c, d, col, outDir) => {
-    const ux = c[0] - a[0], uy = c[1] - a[1], uz = c[2] - a[2];
-    const vx = b[0] - a[0], vy = b[1] - a[1], vz = b[2] - a[2];
-    const nx = uy * vz - uz * vy;
-    const ny = uz * vx - ux * vz;
-    const nz = ux * vy - uy * vx;
-    const wDir = [
-      r[0] * outDir[0] + n[0] * outDir[1] + f[0] * outDir[2],
-      r[1] * outDir[0] + n[1] * outDir[1] + f[1] * outDir[2],
-      r[2] * outDir[0] + n[2] * outDir[1] + f[2] * outDir[2]
-    ];
-    const dot = nx * wDir[0] + ny * wDir[1] + nz * wDir[2];
-
-    const i0 = vertices.length / 3;
-    const pts = [toWorld(a[0], a[1], a[2]), toWorld(b[0], b[1], b[2]), toWorld(c[0], c[1], c[2]), toWorld(d[0], d[1], d[2])];
-    for (let k = 0; k < 4; k++) {
-      vertices.push(pts[k][0], pts[k][1], pts[k][2]);
-      colors.push(col[0], col[1], col[2]);
-    }
-    if (dot >= 0) {
-      indices.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
-    } else {
-      indices.push(i0, i0 + 3, i0 + 2, i0, i0 + 2, i0 + 1);
-    }
-  };
-
-  const addOrientedTri = (a, b, c, col, outDir) => {
-    const ux = c[0] - a[0], uy = c[1] - a[1], uz = c[2] - a[2];
-    const vx = b[0] - a[0], vy = b[1] - a[1], vz = b[2] - a[2];
-    const nx = uy * vz - uz * vy;
-    const ny = uz * vx - ux * vz;
-    const nz = ux * vy - uy * vx;
-    const wDir = [
-      r[0] * outDir[0] + n[0] * outDir[1] + f[0] * outDir[2],
-      r[1] * outDir[0] + n[1] * outDir[1] + f[1] * outDir[2],
-      r[2] * outDir[0] + n[2] * outDir[1] + f[2] * outDir[2]
-    ];
-    const dot = nx * wDir[0] + ny * wDir[1] + nz * wDir[2];
-
-    const i0 = vertices.length / 3;
-    const pts = [toWorld(a[0], a[1], a[2]), toWorld(b[0], b[1], b[2]), toWorld(c[0], c[1], c[2])];
-    for (let k = 0; k < 3; k++) {
-      vertices.push(pts[k][0], pts[k][1], pts[k][2]);
-      colors.push(col[0], col[1], col[2]);
-    }
-    if (dot >= 0) {
-      indices.push(i0, i0 + 1, i0 + 2);
-    } else {
-      indices.push(i0, i0 + 2, i0 + 1);
-    }
-  };
-
-  // สัดส่วนก้อนยางสี่เหลี่ยมสีดำด้านตามภาพเรฟ
-  const hx = 0.29;
-  const hz = 0.28;
-  const hy = 0.135;
-  const bev = 0.014;
-  const yOff = isIcon ? 0.0 : hy;
-
-  const yB = -hy + yOff;
-  const yT0 = hy - bev + yOff;
-  const yT1 = hy + yOff;
-  const ix = hx - bev;
-  const iz = hz - bev;
-
-  // โทนสีดำถ่านด้าน (Matte charcoal black rubber)
-  const colTop     = [0.22, 0.22, 0.23];
-  const colBevel   = [0.26, 0.26, 0.28];
-  const colSideA   = [0.16, 0.16, 0.17];
-  const colSideB   = [0.14, 0.14, 0.15];
-  const colMold    = [0.12, 0.12, 0.13];
-  const colBottom  = [0.10, 0.10, 0.11];
-
-  // Top flat matte face (slight 2x2 grid for subtle rubber texture shading)
-  const midY = yT1 + 0.002;
-  addOrientedQuad([-ix, yT1, -iz], [0, midY, -iz], [0, midY, 0], [-ix, yT1, 0], colTop, [0, 1, 0]);
-  addOrientedQuad([0, midY, -iz], [ix, yT1, -iz], [ix, yT1, 0], [0, midY, 0], colBevel, [0, 1, 0]);
-  addOrientedQuad([-ix, yT1, 0], [0, midY, 0], [0, midY, iz], [-ix, yT1, iz], colBevel, [0, 1, 0]);
-  addOrientedQuad([0, midY, 0], [ix, yT1, 0], [ix, yT1, iz], [0, midY, iz], colTop, [0, 1, 0]);
-
-  // Top chamfer bevel rim
-  addOrientedQuad([-hx, yT0,  hz], [ hx, yT0,  hz], [ ix, yT1,  iz], [-ix, yT1,  iz], colBevel, [0, 0.7,  0.7]);
-  addOrientedQuad([ hx, yT0, -hz], [-hx, yT0, -hz], [-ix, yT1, -iz], [ ix, yT1, -iz], colBevel, [0, 0.7, -0.7]);
-  addOrientedQuad([-hx, yT0, -hz], [-hx, yT0,  hz], [-ix, yT1,  iz], [-ix, yT1, -iz], colBevel, [-0.7, 0.7, 0]);
-  addOrientedQuad([ hx, yT0,  hz], [ hx, yT0, -hz], [ ix, yT1, -iz], [ ix, yT1,  iz], colBevel, [ 0.7, 0.7, 0]);
-
-  // Helper to build a side face with the subtle trapezoidal mold-seam geometry visible on the block in the reference photo
-  const addMoldedSideFace = (isFrontBack, sign) => {
-    const cMain = sign > 0 ? colSideA : colSideB;
-    const midYLine = (yB + yT0) * 0.5;
-    if (isFrontBack) {
-      const z = sign * hz;
-      const inX = hx * 0.55;
-      // Top & bottom trapezoids + left/right triangles + subtle center seam strip
-      addOrientedQuad([-hx, yT0, z], [hx, yT0, z], [inX, midYLine, z], [-inX, midYLine, z], cMain, [0, 0, sign]);
-      addOrientedQuad([-inX, midYLine, z], [inX, midYLine, z], [hx, yB, z], [-hx, yB, z], colMold, [0, 0, sign]);
-      addOrientedTri([-hx, yT0, z], [-inX, midYLine, z], [-hx, yB, z], colSideB, [0, 0, sign]);
-      addOrientedTri([hx, yT0, z], [hx, yB, z], [inX, midYLine, z], colSideB, [0, 0, sign]);
-    } else {
-      const x = sign * hx;
-      const inZ = hz * 0.55;
-      addOrientedQuad([x, yT0, -hz], [x, yT0, hz], [x, midYLine, inZ], [x, midYLine, -inZ], cMain, [sign, 0, 0]);
-      addOrientedQuad([x, midYLine, -inZ], [x, midYLine, inZ], [x, yB, hz], [x, yB, -hz], colMold, [sign, 0, 0]);
-      addOrientedTri([x, yT0, -hz], [x, midYLine, -inZ], [x, yB, -hz], colSideB, [sign, 0, 0]);
-      addOrientedTri([x, yT0, hz], [x, yB, hz], [x, midYLine, inZ], colSideB, [sign, 0, 0]);
-    }
-  };
-
-  addMoldedSideFace(true,  1);
-  addMoldedSideFace(true, -1);
-  addMoldedSideFace(false,  1);
-  addMoldedSideFace(false, -1);
-
-  // Bottom face
-  addOrientedQuad([-hx, yB, -hz], [hx, yB, -hz], [hx, yB, hz], [-hx, yB, hz], colBottom, [0, -1, 0]);
-};
-
-window.ItemRegistry["rubber_block"] = {
-  render: function(item, vertices, colors, indices, targetBuffer) {
-    window.buildRubberBlockModel(item, vertices, colors, indices, targetBuffer);
-  }
-};
-window.ItemRegistry["RUBBER_BLOCK"] = window.ItemRegistry["rubber_block"];
-
-// Build a 3D Tough Meat cut model reusing GeorgiacetusPalette & continuous-spine primitives from terrain/georgiacetus.js
-window.buildToughMeatModel = function(item, vertices, colors, indices, targetBuffer) {
-  const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
-  const p = (item && item.position) ? item.position : [0, 0, 0];
-  const r = (item && item.R) ? item.R : [1, 0, 0];
-  const n = (item && item.normal) ? item.normal : [0, 1, 0];
-  const f = (item && item.F) ? item.F : [0, 0, 1];
-  const s = isIcon ? 1.0 : ((item && typeof item.size === "number") ? item.size : 0.16);
-  const yOff = isIcon ? 0.0 : 0.08;
-
-  const toWorld = (lx, ly, lz) => [
-    p[0] + r[0] * lx * s + n[0] * (ly + yOff) * s + f[0] * lz * s,
-    p[1] + r[1] * lx * s + n[1] * (ly + yOff) * s + f[1] * lz * s,
-    p[2] + r[2] * lx * s + n[2] * (ly + yOff) * s + f[2] * lz * s
-  ];
-
-  const pal = (typeof window !== "undefined" && window.GeorgiacetusPalette) ? window.GeorgiacetusPalette : {
-    darkGrey: [0.25, 0.28, 0.32],
-    lightGrey: [0.65, 0.68, 0.72],
-    bellyColor: [0.75, 0.78, 0.82],
-    muscleRed: [0.60, 0.16, 0.18],
-    muscleDark: [0.44, 0.11, 0.13],
-    sinewCream: [0.88, 0.83, 0.76],
-    boneWhite: [0.92, 0.90, 0.85]
-  };
-
-  // Blend Georgiacetus outer skin tone with rich crimson meat colors
-  const colRindDark = [
-    pal.darkGrey[0] * 0.55 + 0.18,
-    pal.darkGrey[1] * 0.35 + 0.04,
-    pal.darkGrey[2] * 0.35 + 0.05
-  ];
-  const colMeatMain = pal.muscleRed || [0.60, 0.16, 0.18];
-  const colMeatDeep = pal.muscleDark || [0.44, 0.11, 0.13];
-  const colSinew = pal.sinewCream || [0.88, 0.83, 0.76];
-  const colBone = pal.boneWhite || [0.92, 0.90, 0.85];
-
-  if (typeof buildContinuousSpine === "function" && typeof buildLowPolySphere === "function") {
-    // 1. Thick curved whale-flank meat slab (reusing continuous spine cross-section like georgiacetus.js)
-    const meatPts = [
-      toWorld(-0.22, -0.02, -0.10),
-      toWorld(-0.10,  0.01, -0.04),
-      toWorld( 0.04,  0.02,  0.02),
-      toWorld( 0.18,  0.00,  0.08),
-      toWorld( 0.26, -0.03,  0.12)
-    ];
-    const meatRadii = [0.07, 0.125, 0.145, 0.12, 0.06].map(v => v * s);
-    buildContinuousSpine(meatPts, meatRadii, 8, colMeatMain, vertices, colors, indices, n);
-    buildLowPolySphere(meatPts[0], meatRadii[0], 2, colMeatDeep, 0, 0, vertices, colors, indices);
-    buildLowPolySphere(meatPts[4], meatRadii[4], 2, colMeatDeep, 0, 0, vertices, colors, indices);
-
-    // 2. Dark outer tough whale skin/fascia crust along dorsal ridge
-    const rindPts = [
-      toWorld(-0.19, 0.04, -0.09),
-      toWorld(-0.04, 0.09, -0.01),
-      toWorld( 0.12, 0.08,  0.06),
-      toWorld( 0.23, 0.02,  0.11)
-    ];
-    const rindRadii = [0.05, 0.085, 0.075, 0.045].map(v => v * s);
-    buildContinuousSpine(rindPts, rindRadii, 6, colRindDark, vertices, colors, indices, n);
-
-    // 3. Tough white sinew / marbling bands across the muscle cut
-    if (typeof buildTaperedSegment === "function") {
-      buildTaperedSegment(toWorld(-0.14, 0.07, -0.01), toWorld(-0.04, -0.06, 0.09), 0.022 * s, 0.016 * s, 5, colSinew, vertices, colors, indices);
-      buildTaperedSegment(toWorld(0.02, 0.09, -0.04), toWorld(0.11, -0.05, 0.12), 0.024 * s, 0.016 * s, 5, colSinew, vertices, colors, indices);
-      buildTaperedSegment(toWorld(-0.08, 0.05, -0.10), toWorld(0.14, 0.05, 0.01), 0.018 * s, 0.014 * s, 5, colSinew, vertices, colors, indices);
-    }
-
-    // 4. Protruding bone/cartilage core from one end so it immediately reads as a meat cut
-    const pBoneStart = toWorld(-0.16, -0.01, -0.05);
-    const pBoneEnd = toWorld(-0.29, -0.04, -0.13);
-    if (typeof buildTaperedSegment === "function") {
-      buildTaperedSegment(pBoneStart, pBoneEnd, 0.042 * s, 0.036 * s, 6, colBone, vertices, colors, indices);
-    }
-    buildLowPolySphere(pBoneEnd, 0.044 * s, 2, colBone, 0, 0, vertices, colors, indices);
-  }
-};
-
-window.ItemRegistry["tough_meat"] = {
-  render: function(item, vertices, colors, indices, targetBuffer) {
-    window.buildToughMeatModel(item, vertices, colors, indices, targetBuffer);
-  }
-};
-window.ItemRegistry["TOUGH_MEAT"] = window.ItemRegistry["tough_meat"];
-
-// Build a 3D stretched whale-hide Leather sheet model directly reusing Georgiacetus dorsal/flank/belly colors
-window.buildLeatherModel = function(item, vertices, colors, indices, targetBuffer) {
-  const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
-  const p = (item && item.position) ? item.position : [0, 0, 0];
-  const r = (item && item.R) ? item.R : [1, 0, 0];
-  const n = (item && item.normal) ? item.normal : [0, 1, 0];
-  const f = (item && item.F) ? item.F : [0, 0, 1];
-  const s = isIcon ? 1.0 : ((item && typeof item.size === "number") ? item.size : 0.18);
-  const yOff = isIcon ? 0.0 : 0.045;
-
-  const toWorld = (lx, ly, lz) => [
-    p[0] + r[0] * lx * s + n[0] * (ly + yOff) * s + f[0] * lz * s,
-    p[1] + r[1] * lx * s + n[1] * (ly + yOff) * s + f[1] * lz * s,
-    p[2] + r[2] * lx * s + n[2] * (ly + yOff) * s + f[2] * lz * s
-  ];
-
-  const pal = (typeof window !== "undefined" && window.GeorgiacetusPalette) ? window.GeorgiacetusPalette : {
-    darkGrey: [0.25, 0.28, 0.32],
-    lightGrey: [0.65, 0.68, 0.72],
-    bellyColor: [0.75, 0.78, 0.82]
-  };
-  const colOuter = pal.darkGrey;    // Dorsal Georgiacetus dark slate hide
-  const colFlank = pal.lightGrey;   // Flank Georgiacetus grey hide
-  const colTrim  = pal.bellyColor;  // Inner/belly silver-tan edge trim
-  const colBack  = [0.46, 0.44, 0.42]; // Warm cured underside
-
-  const addOrientedQuad = (a, b, c, d, col, outDir) => {
-    const ux = c[0] - a[0], uy = c[1] - a[1], uz = c[2] - a[2];
-    const vx = b[0] - a[0], vy = b[1] - a[1], vz = b[2] - a[2];
-    const nx = uy * vz - uz * vy;
-    const ny = uz * vx - ux * vz;
-    const nz = ux * vy - uy * vx;
-    const wDir = [
-      r[0] * outDir[0] + n[0] * outDir[1] + f[0] * outDir[2],
-      r[1] * outDir[0] + n[1] * outDir[1] + f[1] * outDir[2],
-      r[2] * outDir[0] + n[2] * outDir[1] + f[2] * outDir[2]
-    ];
-    const dot = nx * wDir[0] + ny * wDir[1] + nz * wDir[2];
-    const i0 = vertices.length / 3;
-    const pts = [toWorld(a[0], a[1], a[2]), toWorld(b[0], b[1], b[2]), toWorld(c[0], c[1], c[2]), toWorld(d[0], d[1], d[2])];
-    for (let k = 0; k < 4; k++) {
-      vertices.push(pts[k][0], pts[k][1], pts[k][2]);
-      colors.push(col[0], col[1], col[2]);
-    }
-    if (dot >= 0) {
-      indices.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
-    } else {
-      indices.push(i0, i0 + 3, i0 + 2, i0, i0 + 2, i0 + 1);
-    }
-  };
-
-  // Sculpted 3x3 undulating stretched pelt grid with protruding hide corner tabs
-  const th = 0.022;
-  const xs = [-0.26, -0.09, 0.09, 0.26];
-  const zs = [-0.22, -0.07, 0.07, 0.22];
-  const getH = (ix, iz) => {
-    const cornerFlare = ((ix === 0 || ix === 3) && (iz === 0 || iz === 3)) ? 0.024 : 0.0;
-    const arch = (ix === 1 || ix === 2) && (iz === 1 || iz === 2) ? 0.018 : 0.0;
-    return cornerFlare + arch;
-  };
-  const getWarpX = (ix, iz) => {
-    const x = xs[ix];
-    if ((ix === 0 || ix === 3) && (iz === 0 || iz === 3)) return x * 1.18;
-    if ((ix === 0 || ix === 3) && (iz === 1 || iz === 2)) return x * 0.78;
-    return x;
-  };
-  const getWarpZ = (ix, iz) => {
-    const z = zs[iz];
-    if ((ix === 0 || ix === 3) && (iz === 0 || iz === 3)) return z * 1.18;
-    if ((iz === 0 || iz === 3) && (ix === 1 || ix === 2)) return z * 0.76;
-    return z;
-  };
-
-  for (let ix = 0; ix < 3; ix++) {
-    for (let iz = 0; iz < 3; iz++) {
-      const p00 = [getWarpX(ix, iz),     getH(ix, iz),     getWarpZ(ix, iz)];
-      const p10 = [getWarpX(ix + 1, iz), getH(ix + 1, iz), getWarpZ(ix + 1, iz)];
-      const p11 = [getWarpX(ix + 1, iz + 1), getH(ix + 1, iz + 1), getWarpZ(ix + 1, iz + 1)];
-      const p01 = [getWarpX(ix, iz + 1), getH(ix, iz + 1), getWarpZ(ix, iz + 1)];
-
-      const b00 = [p00[0], p00[1] - th, p00[2]];
-      const b10 = [p10[0], p10[1] - th, p10[2]];
-      const b11 = [p11[0], p11[1] - th, p11[2]];
-      const b01 = [p01[0], p01[1] - th, p01[2]];
-
-      const isCenterSpine = (ix === 1);
-      const isCornerTab = (ix !== 1 && iz !== 1);
-      const topCol = isCenterSpine ? colOuter : (isCornerTab ? colTrim : colFlank);
-
-      addOrientedQuad(p00, p10, p11, p01, topCol, [0, 1, 0]);
-      addOrientedQuad(b00, b01, b11, b10, colBack, [0, -1, 0]);
-      if (ix === 0) addOrientedQuad(p00, p01, b01, b00, colOuter, [-1, 0, 0]);
-      if (ix === 2) addOrientedQuad(p11, p10, b10, b11, colOuter, [1, 0, 0]);
-      if (iz === 0) addOrientedQuad(p10, p00, b00, b10, colOuter, [0, 0, -1]);
-      if (iz === 2) addOrientedQuad(p01, p11, b11, b01, colOuter, [0, 0, 1]);
-    }
-  }
-
-  // Subtle raised dorsal ridge cord running along center spine using buildContinuousSpine
-  if (typeof buildContinuousSpine === "function") {
-    const ridgePts = [toWorld(0, 0.025, -0.14), toWorld(0, 0.032, 0), toWorld(0, 0.025, 0.14)];
-    buildContinuousSpine(ridgePts, [0.018 * s, 0.024 * s, 0.018 * s], 5, colOuter, vertices, colors, indices, n);
-  }
-};
-
-window.ItemRegistry["leather"] = {
-  render: function(item, vertices, colors, indices, targetBuffer) {
-    window.buildLeatherModel(item, vertices, colors, indices, targetBuffer);
-  }
-};
-window.ItemRegistry["LEATHER"] = window.ItemRegistry["leather"];
-window.ItemRegistry["hide"] = window.ItemRegistry["leather"];
-window.ItemRegistry["HIDE"] = window.ItemRegistry["leather"];
-
-// Register "log" item 3D renderer
+// Register "log" item 3D renderer (explicit DropTemplateCache)
 window.ItemRegistry["log"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    // Log (thicker branch)
-    const lColor = item.color; // brown
-    const p = item.position;
-    const r = item.R, f = item.F, n = item.normal;
-    const s = item.size;
-
-    const thickness = s * 0.28;
-    const length = s * 0.55;
+    const lColor = item.color || [0.50, 0.30, 0.15];
+    const p = item.position || [0, 0, 0];
+    const r = item.R || [1, 0, 0];
+    const f = item.F || [0, 0, 1];
+    const n = item.normal || [0, 1, 0];
+    const s = (typeof item.size === "number") ? item.size : 0.085;
 
     if (item.seed === undefined) item.seed = Math.random();
-    const rotAngle = item.seed * Math.PI * 2;
-    const cosA = Math.cos(rotAngle);
-    const sinA = Math.sin(rotAngle);
+    const rot = window.DropTemplateCache.rotateBasis(r, f, item.seed * Math.PI * 2);
+    const key = `log_${window.DropTemplateCache.quantizeColor(lColor)}`;
 
-    const dirX = r[0] * cosA + f[0] * sinA;
-    const dirY = r[1] * cosA + f[1] * sinA;
-    const dirZ = r[2] * cosA + f[2] * sinA;
-
-    // Elevation equals radius so the log cylinder rests flush on the ground surface
-    const elevation = thickness * 0.5;
-    const center = [
-      p[0] + n[0] * elevation,
-      p[1] + n[1] * elevation,
-      p[2] + n[2] * elevation,
-    ];
-
-    const pStart = [
-      center[0] - dirX * length,
-      center[1] - dirY * length,
-      center[2] - dirZ * length,
-    ];
-    const pEnd = [
-      center[0] + dirX * length,
-      center[1] + dirY * length,
-      center[2] + dirZ * length,
-    ];
-
-    buildTaperedSegment(
-      pStart,
-      pEnd,
-      thickness,
-      thickness * 0.9,
-      6,
-      lColor,
-      vertices,
-      colors,
-      indices,
-      true // add caps to make it solid
+    window.DropTemplateCache.render(
+      key,
+      { position: p, R: rot.R, normal: n, F: rot.F, scale: s, yOff: 0.14 },
+      (tv, tc, ti) => {
+        buildTaperedSegment(
+          [-0.55, 0, 0],
+          [ 0.55, 0, 0],
+          0.28,
+          0.252,
+          6,
+          lColor,
+          tv,
+          tc,
+          ti,
+          true
+        );
+      },
+      vertices, colors, indices
     );
   }
 };
@@ -2560,11 +2599,131 @@ function buildCollectibles(count, seed) {
         return cachedRawBoatHull;
       }
 
+      window._rebuildCollectibleSpatialHelpers = function() {
+        const spatialDoors = new Map();
+        const spatialWindows = new Map();
+        const spatialRoofs = new Map();
+        const spatialFloors = new Map();
+        const activeCampfires = [];
+        const lightCollectibles = [];
+
+        for (let i = 0; i < collectibles.length; i++) {
+          const c = collectibles[i];
+          if (!c || !c.active || !c.position) continue;
+          const px = c.position[0], py = c.position[1], pz = c.position[2];
+          const t = c.type;
+          if (t === "wood_door") {
+            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+            let arr = spatialDoors.get(key);
+            if (!arr) { arr = []; spatialDoors.set(key, arr); }
+            arr.push(c);
+          } else if (t === "wood_window") {
+            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+            let arr = spatialWindows.get(key);
+            if (!arr) { arr = []; spatialWindows.set(key, arr); }
+            arr.push(c);
+          } else if (t === "wood_roof") {
+            const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
+            let arr = spatialRoofs.get(key);
+            if (!arr) { arr = []; spatialRoofs.set(key, arr); }
+            arr.push(c);
+          } else if (t === "thin_wood_floor" || t === "wood_floor") {
+            const key = Math.floor(px) + "_" + Math.floor(py) + "_" + Math.floor(pz);
+            let arr = spatialFloors.get(key);
+            if (!arr) { arr = []; spatialFloors.set(key, arr); }
+            arr.push(c);
+          }
+          if (!c.isPreview) {
+            if (t === "campfire") {
+              activeCampfires.push(c);
+              lightCollectibles.push(c);
+            } else if (t === "lantern" || t === "glow_ore" || t === "glow_battery") {
+              lightCollectibles.push(c);
+            }
+          }
+        }
+        window._spatialDoors = spatialDoors;
+        window._spatialWindows = spatialWindows;
+        window._spatialRoofs = spatialRoofs;
+        window._spatialFloors = spatialFloors;
+        window._activeCampfiresList = activeCampfires;
+        window._lightCollectiblesList = lightCollectibles;
+      };
+
+      window._registerSingleCollectibleInSpatialHelpers = function(c) {
+        if (!c || !c.active || !c.position) return;
+        if (!window._spatialDoors || !window._spatialFloors || !window._lightCollectiblesList) {
+          window._rebuildCollectibleSpatialHelpers();
+          return;
+        }
+        const px = c.position[0], py = c.position[1], pz = c.position[2];
+        const t = c.type;
+        const addToMap = (map, cellSize) => {
+          const key = Math.floor(px / cellSize) + "_" + Math.floor(py / cellSize) + "_" + Math.floor(pz / cellSize);
+          let arr = map.get(key);
+          if (!arr) { arr = []; map.set(key, arr); }
+          if (!arr.includes(c)) arr.push(c);
+        };
+        if (t === "wood_door") addToMap(window._spatialDoors, 0.5);
+        else if (t === "wood_window") addToMap(window._spatialWindows, 0.5);
+        else if (t === "wood_roof") addToMap(window._spatialRoofs, 2.0);
+        else if (t === "thin_wood_floor" || t === "wood_floor") addToMap(window._spatialFloors, 1.0);
+        if (!c.isPreview) {
+          if (t === "campfire") {
+            if (!window._activeCampfiresList.includes(c)) window._activeCampfiresList.push(c);
+            if (!window._lightCollectiblesList.includes(c)) window._lightCollectiblesList.push(c);
+          } else if (t === "lantern" || t === "glow_ore" || t === "glow_battery") {
+            if (!window._lightCollectiblesList.includes(c)) window._lightCollectiblesList.push(c);
+          }
+        }
+      };
+
+      window.dirtyNeighborStructureCaches = function(pos, radius, excludeItem, filterTypes) {
+        if (!pos) return false;
+        const r = radius || 2.2;
+        const rSq = r * r;
+        let candidates;
+        if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
+          candidates = SpatialGrid.queryRadius(pos[0], pos[1], pos[2], r);
+        } else {
+          candidates = collectibles;
+        }
+        let anyAffected = false;
+        for (let i = 0; i < candidates.length; i++) {
+          const o = candidates[i];
+          if (!o || !o.active || o.isPreview || o === excludeItem || !o.position) continue;
+          const ot = o.type;
+          if (filterTypes && !filterTypes.includes(ot)) continue;
+          const dx = o.position[0] - pos[0];
+          const dy = o.position[1] - pos[1];
+          const dz = o.position[2] - pos[2];
+          if (dx * dx + dy * dy + dz * dz > rSq) continue;
+          if (ot === "thin_wood_floor") {
+            o._extDirty = true;
+            anyAffected = true;
+          } else if (ot === "wood_wall") {
+            o._coFixtureDirty = true;
+            o._trimDirty = true;
+            anyAffected = true;
+          } else if (ot === "wood_roof") {
+            o._roofDirty = true;
+            anyAffected = true;
+          }
+        }
+        return anyAffected;
+      };
+
       function refreshCollectiblesVBO(targetBuffer = 'all') {
         if (targetBuffer === 'all' || targetBuffer === 'place' || targetBuffer === 'demolish') {
-          refreshCollectiblesVBO('main');
-          refreshCollectiblesVBO('dynamic');
-          refreshCollectiblesVBO('doors');
+          window._rebuildCollectibleSpatialHelpers();
+          window._skipSpatialRebuildInRefresh = true;
+          try {
+            refreshCollectiblesVBO('main');
+            refreshCollectiblesVBO('dynamic');
+            refreshCollectiblesVBO('doors');
+          } finally {
+            window._skipSpatialRebuildInRefresh = false;
+          }
           return;
         }
 
@@ -2604,40 +2763,9 @@ function buildCollectibles(count, seed) {
           itemsToProcess = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible ? [floorPreviewCollectible] : []);
         }
 
-        // Build spatial acceleration grids for doors, windows, roofs, and campfires when rebuilding 'main' or 'doors'
-        if (targetBuffer === 'main' || targetBuffer === 'doors' || !window._spatialDoors) {
-          const spatialDoors = new Map();
-          const spatialWindows = new Map();
-          const spatialRoofs = new Map();
-          const activeCampfires = [];
-
-          for (let i = 0; i < collectibles.length; i++) {
-            const c = collectibles[i];
-            if (!c.active || !c.position) continue;
-            const px = c.position[0], py = c.position[1], pz = c.position[2];
-            if (c.type === "wood_door") {
-              const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
-              let arr = spatialDoors.get(key);
-              if (!arr) { arr = []; spatialDoors.set(key, arr); }
-              arr.push(c);
-            } else if (c.type === "wood_window") {
-              const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
-              let arr = spatialWindows.get(key);
-              if (!arr) { arr = []; spatialWindows.set(key, arr); }
-              arr.push(c);
-            } else if (c.type === "wood_roof") {
-              const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
-              let arr = spatialRoofs.get(key);
-              if (!arr) { arr = []; spatialRoofs.set(key, arr); }
-              arr.push(c);
-            } else if (c.type === "campfire" && !c.isPreview) {
-              activeCampfires.push(c);
-            }
-          }
-          window._spatialDoors = spatialDoors;
-          window._spatialWindows = spatialWindows;
-          window._spatialRoofs = spatialRoofs;
-          window._activeCampfiresList = activeCampfires;
+        // Build spatial acceleration grids ONCE when rebuilding 'main' or 'doors' (skip redundant rebuild during 'all')
+        if (!window._skipSpatialRebuildInRefresh && (targetBuffer === 'main' || targetBuffer === 'doors' || !window._spatialDoors)) {
+          window._rebuildCollectibleSpatialHelpers();
         }
 
         const DYNAMIC_TYPED_ARRAYS = window._DYNAMIC_TYPED_ARRAYS || (window._DYNAMIC_TYPED_ARRAYS = {});
@@ -2675,7 +2803,7 @@ function buildCollectibles(count, seed) {
           const sz = (prevItem.size || 0).toFixed(3);
           const wVal = (prevItem.width || 0).toFixed(3);
           const dVal = (prevItem.depth || 0).toFixed(3);
-          const colLen = collectibles.length;
+          const topoVer = window._collectiblesTopologyVersion || 0;
 
           // Include relative stairTop/stairBottom for stairs & folding_ladder, and position for roof/wall trimming
           let extraShapeKey = '';
@@ -2688,11 +2816,12 @@ function buildCollectibles(count, seed) {
               (prevItem.stairBottom[1] - p[1]).toFixed(3) + ',' +
               (prevItem.stairBottom[2] - p[2]).toFixed(3);
           } else if (prevItem.type === 'wood_wall' || prevItem.type === 'wood_roof' || prevItem.type === 'thin_wood_floor') {
-            extraShapeKey = p[0].toFixed(3) + ',' + p[1].toFixed(3) + ',' + p[2].toFixed(3) + ',' + colLen;
+            extraShapeKey = p[0].toFixed(3) + ',' + p[1].toFixed(3) + ',' + p[2].toFixed(3) + ',' + topoVer;
           }
 
+          const boatSnapBit = prevItem.isBoatSnapped ? 1 : 0;
           const shapeSig =
-            prevItem.type + '|' + validBit + '|' + ang + '|' + sz + '|' + wVal + '|' + dVal + '|' +
+            prevItem.type + '|' + validBit + '|' + boatSnapBit + '|' + ang + '|' + sz + '|' + wVal + '|' + dVal + '|' +
             r[0].toFixed(4) + ',' + r[1].toFixed(4) + ',' + r[2].toFixed(4) + '|' +
             f[0].toFixed(4) + ',' + f[1].toFixed(4) + ',' + f[2].toFixed(4) + '|' +
             n[0].toFixed(4) + ',' + n[1].toFixed(4) + ',' + n[2].toFixed(4) + '|' +
@@ -2761,10 +2890,12 @@ function buildCollectibles(count, seed) {
 
         if (targetBuffer === 'main') {
           window.staticCollectiblesList = activeProcessedItems;
+          window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
         } else if (targetBuffer === 'dynamic') {
           window.dynamicCollectiblesList = activeProcessedItems;
         } else if (targetBuffer === 'doors') {
           window.doorWindowCollectiblesList = activeProcessedItems;
+          window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
         }
 
         if (indices.length === 0) {
@@ -2772,9 +2903,11 @@ function buildCollectibles(count, seed) {
             collectibleIndicesLength = 0;
             window.staticCollectiblesList = [];
             window.collectibleRawVertices = null;
+            window._staticColIndexCapacity = 0;
           } else if (targetBuffer === 'dynamic') {
             dynamicCollectibleIndicesLength = 0;
             window.dynamicCollectiblesList = [];
+            window.dynamicCollectibleRawVertices = null;
           } else if (targetBuffer === 'doors') {
             doorWindowIndicesLength = 0;
             window.doorWindowCollectiblesList = [];
@@ -2788,59 +2921,79 @@ function buildCollectibles(count, seed) {
         }
 
         const flatGeom = makeFlatShadedGeometry(vertices, colors, indices, true);
-        const isUint32 = flatGeom && flatGeom.indices && flatGeom.indices.length > 65535;
+        const indCount = flatGeom.indices.length;
+        const isUint32 = indCount > 65535;
 
         if (targetBuffer === 'main') {
-            const flatVerts =
-              flatGeom.vertices instanceof Float32Array
-                ? flatGeom.vertices
-                : new Float32Array(flatGeom.vertices);
-            collectibleIndicesLength = flatGeom.indices.length;
-            window.collectibleRawVertices = flatVerts;
+            // Allocate dedicated persistent backing buffer with headroom capacity so:
+            // (1) window.collectibleRawVertices is NEVER corrupted by dynamic/doors/fire reusable arrays,
+            // (2) placing new items appends incrementally via gl.bufferSubData in <0.5ms!
+            const rawCap = Math.max(Math.ceil(indCount * 1.25), indCount + 36000);
+            const capInds = isUint32 ? rawCap : Math.min(65535, rawCap);
+            const capFloats = capInds * 3;
+            const usedFloats = indCount * 3;
+
+            let vCapBuf = window._staticColVertsCapBuf;
+            if (!vCapBuf || vCapBuf.length < capFloats) {
+              vCapBuf = new Float32Array(capFloats);
+              window._staticColVertsCapBuf = vCapBuf;
+            }
+            vCapBuf.set(flatGeom.vertices, 0);
+
+            collectibleIndicesLength = indCount;
+            window._staticColIndexCapacity = capInds;
+            window._staticColIsUint32 = isUint32;
+            window.collectibleRawVertices = vCapBuf.subarray(0, usedFloats);
 
             if (!collectibleVertexBuffer)
               collectibleVertexBuffer = gl.createBuffer();
             window.collectibleVertexBuffer = collectibleVertexBuffer;
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
-            gl.bufferData(
-              gl.ARRAY_BUFFER,
-              flatVerts,
-              gl.STATIC_DRAW,
-            );
+            gl.bufferData(gl.ARRAY_BUFFER, capFloats * 4, gl.STATIC_DRAW);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, window.collectibleRawVertices);
 
             if (!collectibleColorBuffer) collectibleColorBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleColorBuffer);
-            gl.bufferData(
+            gl.bufferData(gl.ARRAY_BUFFER, capFloats * 4, gl.STATIC_DRAW);
+            gl.bufferSubData(
               gl.ARRAY_BUFFER,
-              flatGeom.colors instanceof Float32Array ? flatGeom.colors : new Float32Array(flatGeom.colors),
-              gl.STATIC_DRAW,
+              0,
+              flatGeom.colors instanceof Float32Array ? flatGeom.colors : new Float32Array(flatGeom.colors)
             );
 
             if (!collectibleNormalBuffer)
               collectibleNormalBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleNormalBuffer);
-            gl.bufferData(
+            gl.bufferData(gl.ARRAY_BUFFER, capFloats * 4, gl.STATIC_DRAW);
+            gl.bufferSubData(
               gl.ARRAY_BUFFER,
-              flatGeom.normals instanceof Float32Array ? flatGeom.normals : new Float32Array(flatGeom.normals),
-              gl.STATIC_DRAW,
+              0,
+              flatGeom.normals instanceof Float32Array ? flatGeom.normals : new Float32Array(flatGeom.normals)
             );
 
             if (!collectibleIndexBuffer) collectibleIndexBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
-            gl.bufferData(
+            const idxBytes = isUint32 ? 4 : 2;
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, capInds * idxBytes, gl.STATIC_DRAW);
+            gl.bufferSubData(
               gl.ELEMENT_ARRAY_BUFFER,
-              isUint32 ? (flatGeom.indices instanceof Uint32Array ? flatGeom.indices : new Uint32Array(flatGeom.indices)) : (flatGeom.indices instanceof Uint16Array ? flatGeom.indices : new Uint16Array(flatGeom.indices)),
-              gl.STATIC_DRAW,
+              0,
+              isUint32
+                ? (flatGeom.indices instanceof Uint32Array ? flatGeom.indices : new Uint32Array(flatGeom.indices))
+                : (flatGeom.indices instanceof Uint16Array ? flatGeom.indices : new Uint16Array(flatGeom.indices))
             );
         } else if (targetBuffer === 'dynamic') {
-            dynamicCollectibleIndicesLength = flatGeom.indices.length;
+            dynamicCollectibleIndicesLength = indCount;
+            const dynVertSlice = getReusableTypedArray('dynVerts', Float32Array, flatGeom.vertices);
+            window.dynamicCollectibleRawVertices = dynVertSlice;
 
             if (!dynamicCollectibleVertexBuffer)
               dynamicCollectibleVertexBuffer = gl.createBuffer();
+            window.dynamicCollectibleVertexBuffer = dynamicCollectibleVertexBuffer;
             gl.bindBuffer(gl.ARRAY_BUFFER, dynamicCollectibleVertexBuffer);
             gl.bufferData(
               gl.ARRAY_BUFFER,
-              getReusableTypedArray('dynVerts', Float32Array, flatGeom.vertices),
+              dynVertSlice,
               gl.DYNAMIC_DRAW,
             );
 
@@ -2869,15 +3022,10 @@ function buildCollectibles(count, seed) {
               gl.DYNAMIC_DRAW,
             );
         } else if (targetBuffer === 'doors') {
-            const flatVerts =
-              flatGeom.vertices instanceof Float32Array
-                ? flatGeom.vertices
-                : new Float32Array(flatGeom.vertices);
-            const flatNorms =
-              flatGeom.normals instanceof Float32Array
-                ? flatGeom.normals
-                : new Float32Array(flatGeom.normals);
-            doorWindowIndicesLength = flatGeom.indices.length;
+            // Own persistent copies so dynamic/fire reusable buffers never overwrite doorWindowRawVertices/Normals
+            const flatVerts = new Float32Array(flatGeom.vertices);
+            const flatNorms = new Float32Array(flatGeom.normals);
+            doorWindowIndicesLength = indCount;
             window.doorWindowRawVertices = flatVerts;
             window.doorWindowRawNormals = flatNorms;
 
@@ -2917,7 +3065,7 @@ function buildCollectibles(count, seed) {
               gl.DYNAMIC_DRAW,
             );
         } else {
-            previewIndicesLength = flatGeom.indices.length;
+            previewIndicesLength = indCount;
             const prevVertSlice = getReusableTypedArray('prevVerts', Float32Array, flatGeom.vertices);
             window._lastPreviewFlatVerts = prevVertSlice;
 
@@ -2956,6 +3104,134 @@ function buildCollectibles(count, seed) {
             );
         }
       }
+
+      // Fast incremental GPU append when placing 1 item (avoids ~1s full-planet VBO rebuild!)
+      window.appendPlacedCollectibleToVBO = function(item) {
+        if (!item || !item.active || item.isPreview) return false;
+        window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
+        window._registerSingleCollectibleInSpatialHelpers(item);
+
+        if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.insert === "function") {
+          SpatialGrid.insert(item);
+        }
+        if (typeof window.invalidateStructureCollisionCache === "function") {
+          window.invalidateStructureCollisionCache();
+        }
+
+        const t = item.type;
+        // 1) Dynamic items & planter boxes: rebuild ONLY 'dynamic' buffer
+        if (item.isDynamic || t === "wood_planter_box") {
+          refreshCollectiblesVBO('dynamic');
+          return true;
+        }
+
+        // 2) Doors & windows: rebuild 'doors', and only rebuild 'main' if a co-located wood_wall needs a cutout
+        if (t === "wood_door" || t === "wood_window") {
+          const hitWall = window.dirtyNeighborStructureCaches(item.position, 0.25, item, ["wood_wall"]);
+          window._skipSpatialRebuildInRefresh = true;
+          try {
+            refreshCollectiblesVBO('doors');
+            if (hitWall) refreshCollectiblesVBO('main');
+          } finally {
+            window._skipSpatialRebuildInRefresh = false;
+          }
+          return true;
+        }
+
+        // 3) Static 'main' items: check if any neighbor's trim/extension needs rebuilding
+        let neighborNeedsRebuild = false;
+        if (t === "wood_roof") {
+          neighborNeedsRebuild = window.dirtyNeighborStructureCaches(item.position, 2.2, item, ["wood_wall", "wood_roof"]);
+        } else if (t === "thin_wood_floor" || t === "wood_floor") {
+          neighborNeedsRebuild = window.dirtyNeighborStructureCaches(item.position, 0.55, item, ["thin_wood_floor"]);
+        }
+
+        if (
+          !neighborNeedsRebuild &&
+          typeof gl !== "undefined" && gl &&
+          collectibleVertexBuffer && collectibleColorBuffer && collectibleNormalBuffer && collectibleIndexBuffer &&
+          window._staticColVertsCapBuf &&
+          typeof window._staticColIndexCapacity === "number" &&
+          window._staticColIndexCapacity > 0
+        ) {
+          const handler = window.ItemRegistry && window.ItemRegistry[t];
+          if (handler && typeof handler.render === "function") {
+            const tmpV = [], tmpC = [], tmpI = [];
+            handler.render(item, tmpV, tmpC, tmpI, 'main');
+            const addIndCount = tmpI.length;
+            if (addIndCount === 0) return true;
+
+            const oldLen = collectibleIndicesLength;
+            const newLen = oldLen + addIndCount;
+            const wasUint32 = !!window._staticColIsUint32;
+            const wouldBeUint32 = newLen > 65535;
+
+            if (newLen <= window._staticColIndexCapacity && wasUint32 === wouldBeUint32) {
+              const flat = makeFlatShadedGeometry(tmpV, tmpC, tmpI, false);
+              const flatIndLen = flat.indices.length;
+              const finalNewLen = oldLen + flatIndLen;
+              if (finalNewLen <= window._staticColIndexCapacity && (finalNewLen > 65535) === wasUint32) {
+                const startFloat = oldLen * 3;
+                const endFloat = finalNewLen * 3;
+                window._staticColVertsCapBuf.set(flat.vertices, startFloat);
+                window.collectibleRawVertices = window._staticColVertsCapBuf.subarray(0, endFloat);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
+                gl.bufferSubData(gl.ARRAY_BUFFER, startFloat * 4, flat.vertices);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, collectibleColorBuffer);
+                gl.bufferSubData(gl.ARRAY_BUFFER, startFloat * 4, flat.colors);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, collectibleNormalBuffer);
+                gl.bufferSubData(gl.ARRAY_BUFFER, startFloat * 4, flat.normals);
+
+                const offsetIdx = wasUint32 ? new Uint32Array(flatIndLen) : new Uint16Array(flatIndLen);
+                for (let k = 0; k < flatIndLen; k++) {
+                  offsetIdx[k] = oldLen + flat.indices[k];
+                }
+                const idxBytes = wasUint32 ? 4 : 2;
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
+                gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, oldLen * idxBytes, offsetIdx);
+
+                item.meshStart = oldLen;
+                item.meshEnd = finalNewLen;
+                if (!Array.isArray(window.staticCollectiblesList)) window.staticCollectiblesList = [];
+                window.staticCollectiblesList.push(item);
+                collectibleIndicesLength = finalNewLen;
+                return true;
+              }
+            }
+          }
+        }
+
+        // Fallback when buffer capacity is full, Uint16->Uint32 crossed, or a neighbor wall/roof/thin-floor needs re-trimming:
+        // Still rebuild ONLY 'main' (NOT 'dynamic' or 'doors'), and only dirtied neighbors recompute!
+        window._skipSpatialRebuildInRefresh = true;
+        try {
+          refreshCollectiblesVBO('main');
+        } finally {
+          window._skipSpatialRebuildInRefresh = false;
+        }
+        return true;
+      };
+
+      // Fast surgical GPU update for an existing item modified in place (e.g. attaching wheel/engine/wing to a boat)
+      window.updateCollectibleInVBO = function(item) {
+        if (!item || !item.active || item.isPreview) return false;
+        window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
+        if (item.isDynamic || item.type === "wood_planter_box") {
+          refreshCollectiblesVBO('dynamic');
+          return true;
+        }
+        if (item.type === "wood_door" || item.type === "wood_window") {
+          refreshCollectiblesVBO('doors');
+          return true;
+        }
+        if (typeof window.hideStaticCollectibleInVBO === "function") {
+          window.hideStaticCollectibleInVBO(item);
+        }
+        return window.appendPlacedCollectibleToVBO(item);
+      };
 
       // Surgical GPU sub-buffer update for actively swinging doors & windows:
       // Recomputes only the swinging door/window item(s) and updates their slice in doorWindowVertexBuffer
@@ -3051,6 +3327,36 @@ function buildCollectibles(count, seed) {
                 ? rawV.subarray(startF, endF)
                 : new Float32Array(rawV.slice(startF, endF));
             gl.bindBuffer(gl.ARRAY_BUFFER, collectibleVertexBuffer);
+            gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, sliceView);
+            item.meshStart = 0;
+            item.meshEnd = 0;
+            window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Fast surgical GPU sub-buffer zero-out when picking up a dynamic ground drop:
+      // zeroes out only the item's vertex slice via gl.bufferSubData without rebuilding other drops!
+      window.hideDynamicCollectibleInVBO = function(item) {
+        if (!item || !item.isDynamic) return false;
+        if (
+          item.meshStart !== undefined &&
+          item.meshEnd !== undefined &&
+          item.meshEnd > item.meshStart &&
+          window.dynamicCollectibleRawVertices &&
+          dynamicCollectibleVertexBuffer &&
+          typeof gl !== "undefined" &&
+          gl
+        ) {
+          const startF = item.meshStart * 3;
+          const endF = item.meshEnd * 3;
+          const rawV = window.dynamicCollectibleRawVertices;
+          if (endF <= rawV.length) {
+            for (let j = startF; j < endF; j++) rawV[j] = 0;
+            const sliceView = rawV.subarray(startF, endF);
+            gl.bindBuffer(gl.ARRAY_BUFFER, dynamicCollectibleVertexBuffer);
             gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, sliceView);
             return true;
           }
@@ -4434,8 +4740,12 @@ function buildCollectibles(count, seed) {
           } else if (typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing") {
              let nearestBoat = null;
              let bestDist = Infinity;
-             for (let other of collectibles) {
-               if (other.active && other.type === "wood_boat" && !other.isPreview) {
+             const boatCandidates = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+               ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 1.5)
+               : collectibles;
+             for (let i = 0; i < boatCandidates.length; i++) {
+               const other = boatCandidates[i];
+               if (other && other.active && other.type === "wood_boat" && !other.isPreview && other.position) {
                  const dx = other.position[0] - targetPos[0];
                  const dy = other.position[1] - targetPos[1];
                  const dz = other.position[2] - targetPos[2];
@@ -4673,8 +4983,12 @@ function buildCollectibles(count, seed) {
               // Placing Robot Stand -> Snap directly under an unmounted Robot Cockpit
               let nearestCockpit = null;
               let bestCDist = Infinity;
-              for (let c of collectibles) {
-                if (c.active && !c.isPreview && c.type === "robot_cockpit") {
+              const cockpitCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 1.5)
+                : collectibles;
+              for (let i = 0; i < cockpitCands.length; i++) {
+                const c = cockpitCands[i];
+                if (c && c.active && !c.isPreview && c.type === "robot_cockpit" && c.position) {
                   const dx = c.position[0] - targetPos[0];
                   const dy = c.position[1] - targetPos[1];
                   const dz = c.position[2] - targetPos[2];
@@ -4710,8 +5024,12 @@ function buildCollectibles(count, seed) {
               // Placing Leg, Arm, or other Robot Part -> Snap ONLY to Cockpit that is mounted on a Robot Stand
               let nearestCockpit = null;
               let bestCDist = Infinity;
-              for (let c of collectibles) {
-                if (c.active && !c.isPreview && c.type === "robot_cockpit") {
+              const cockpitCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 1.5)
+                : collectibles;
+              for (let i = 0; i < cockpitCands.length; i++) {
+                const c = cockpitCands[i];
+                if (c && c.active && !c.isPreview && c.type === "robot_cockpit" && c.position) {
                   const dx = c.position[0] - targetPos[0];
                   const dy = c.position[1] - targetPos[1];
                   const dz = c.position[2] - targetPos[2];
@@ -4726,8 +5044,12 @@ function buildCollectibles(count, seed) {
               // Check if nearestCockpit is mounted on a Robot Stand
               let cockpitOnStand = false;
               if (nearestCockpit && bestCDist < 0.6) {
-                for (let s of collectibles) {
-                  if (s.active && !s.isPreview && s.type === "robot_stand") {
+                const standCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                  ? SpatialGrid.queryRadius(nearestCockpit.position[0], nearestCockpit.position[1], nearestCockpit.position[2], 1.5)
+                  : collectibles;
+                for (let i = 0; i < standCands.length; i++) {
+                  const s = standCands[i];
+                  if (s && s.active && !s.isPreview && s.type === "robot_stand" && s.position) {
                     const sdx = s.position[0] - nearestCockpit.position[0];
                     const sdy = s.position[1] - nearestCockpit.position[1];
                     const sdz = s.position[2] - nearestCockpit.position[2];
@@ -4776,8 +5098,12 @@ function buildCollectibles(count, seed) {
               // Placing Cockpit -> Snap ONLY to placed Stand
               let nearestStand = null;
               let bestSDist = Infinity;
-              for (let c of collectibles) {
-                if (c.active && !c.isPreview && c.type === "robot_stand") {
+              const standCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 1.5)
+                : collectibles;
+              for (let i = 0; i < standCands.length; i++) {
+                const c = standCands[i];
+                if (c && c.active && !c.isPreview && c.type === "robot_stand" && c.position) {
                   const dx = c.position[0] - targetPos[0];
                   const dy = c.position[1] - targetPos[1];
                   const dz = c.position[2] - targetPos[2];
@@ -4819,8 +5145,12 @@ function buildCollectibles(count, seed) {
                 // Standalone ground/floor placement
                 let nearestFloor = null;
                 let nearestDist = Infinity;
-                for (let other of collectibles) {
-                  if (other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview) {
+                const floorCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                  ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 1.5)
+                  : collectibles;
+                for (let i = 0; i < floorCands.length; i++) {
+                  const other = floorCands[i];
+                  if (other && other.active && (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") && !other.isPreview && other.position) {
                     const dx = other.position[0] - targetPos[0];
                     const dy = other.position[1] - targetPos[1];
                     const dz = other.position[2] - targetPos[2];
@@ -5368,8 +5698,12 @@ function buildCollectibles(count, seed) {
             if (typeToPlace === "wood_window" || typeToPlace === "wood_door") {
               let nearestWall = null;
               let nearestWallDist = Infinity;
-              for (let other of collectibles) {
-                if (other.active && other.type === "wood_wall" && !other.isPreview) {
+              const wallCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 2.2)
+                : collectibles;
+              for (let i = 0; i < wallCands.length; i++) {
+                const other = wallCands[i];
+                if (other && other.active && other.type === "wood_wall" && !other.isPreview && other.position) {
                   const dx = other.position[0] - targetPos[0];
                   const dy = other.position[1] - targetPos[1];
                   const dz = other.position[2] - targetPos[2];
@@ -5383,8 +5717,12 @@ function buildCollectibles(count, seed) {
 
               if (nearestWall) {
                 let hasFixture = false;
-                for (let other of collectibles) {
-                  if (other.active && (other.type === "wood_window" || other.type === "wood_door") && !other.isPreview) {
+                const fixCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                  ? SpatialGrid.queryRadius(nearestWall.position[0], nearestWall.position[1], nearestWall.position[2], 0.35)
+                  : collectibles;
+                for (let i = 0; i < fixCands.length; i++) {
+                  const other = fixCands[i];
+                  if (other && other.active && (other.type === "wood_window" || other.type === "wood_door") && !other.isPreview && other.position) {
                     const ox = other.position[0] - nearestWall.position[0];
                     const oy = other.position[1] - nearestWall.position[1];
                     const oz = other.position[2] - nearestWall.position[2];
@@ -6367,6 +6705,8 @@ function buildCollectibles(count, seed) {
 
         for (let c of collectibles) {
           if (!c.active || !c.isDynamic) continue;
+          // Settled ground drops sleep at 0 CPU / 0 GPU upload cost!
+          if (c._dropSettled) continue;
 
           // Check if dynamic collectible is outside the object render distance
           let isOutOfRenderDist = false;
@@ -6894,15 +7234,30 @@ function buildCollectibles(count, seed) {
             continue;
           }
           
+          const isItemDrop = (typeof window !== "undefined" && window.GroundDropSystem)
+            ? window.GroundDropSystem.isGroundDrop(c)
+            : (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "dirt" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore" || c.type === "dragon_fruit" || c.type === "cotton_plant" || c.type === "crown_flower" || c.type === "grass" || c.type === "cloth" || c.type === "rubber_block" || c.type === "tough_meat" || c.type === "leather" || c.type === "hide");
+
           if (!c.vel) {
-            // initial velocity outward from the tree (greatly reduced to stay in the same spot)
+            // initial velocity outward from spawn point
             const vOut = 0.002 + Math.random() * 0.003;
             const vUp = 0.003 + Math.random() * 0.005;
+            const cf = c.F || [1, 0, 0];
+            const cn = c.normal || [0, 1, 0];
             c.vel = [
-              c.F[0] * vOut + c.normal[0] * vUp,
-              c.F[1] * vOut + c.normal[1] * vUp,
-              c.F[2] * vOut + c.normal[2] * vUp,
+              cf[0] * vOut + cn[0] * vUp,
+              cf[1] * vOut + cn[1] * vUp,
+              cf[2] * vOut + cn[2] * vUp,
             ];
+          }
+
+          // Throttle floating wooden drops gently bobbing in water (~12Hz instead of 60Hz VBO rebuilds)
+          if (isItemDrop && c._waterDropSettled) {
+            c._waterBobTimer = (c._waterBobTimer || 0) + frameDtSec;
+            if (c._waterBobTimer < 0.083) {
+              continue;
+            }
+            c._waterBobTimer = 0;
           }
 
           const r = Math.sqrt(
@@ -6910,6 +7265,12 @@ function buildCollectibles(count, seed) {
           );
           
           let isAirborneWingedBoat = false;
+          let preTerrainRadius = null;
+          let preCaveData = null;
+          let preWaterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
+            ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
+            : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
+          let preInWater = false;
           
           if (r > 0.001) {
             const nx = c.position[0] / r;
@@ -6918,19 +7279,22 @@ function buildCollectibles(count, seed) {
 
             let force = gravityAccel;
             
-            // Check if collectible is in water
-            let theta = Math.acos(Math.max(-1.0, Math.min(1.0, c.position[1] / (r || 1))));
-            let phi = Math.atan2(c.position[2], c.position[0]);
-            let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
-            let caveDataForCol = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(c.position[0]/(r||1), c.position[1]/(r||1), c.position[2]/(r||1), r) : null;
-            let terrainRadius = caveDataForCol ? caveDataForCol.ground : (RADIUS + height * HEIGHT_SCALE);
-            const waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
-              ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
-              : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
+            // Single terrain + water lookup per frame (reused for ground collision below)
+            preCaveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, r) : null;
+            if (preCaveData) {
+              preTerrainRadius = preCaveData.ground;
+            } else {
+              let theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny)));
+              let phi = Math.atan2(nz, nx);
+              let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
+              preTerrainRadius = RADIUS + height * HEIGHT_SCALE;
+            }
+            const terrainRadius = preTerrainRadius;
+            const waterRadius = preWaterRadius;
             
             let inWater = false;
             if (waterEnabled && terrainRadius < waterRadius) {
-                if (caveDataForCol.insideTunnel) {
+                if (preCaveData && preCaveData.insideTunnel) {
                     let wRadiusLocal = typeof getWaterRadiusAt === "function" ? getWaterRadiusAt(c.position[0], c.position[1], c.position[2]) : waterRadius;
                     if (wRadiusLocal === 0) wRadiusLocal = waterRadius;
                     inWater = (wRadiusLocal > terrainRadius);
@@ -6938,6 +7302,7 @@ function buildCollectibles(count, seed) {
                     inWater = true;
                 }
             }
+            preInWater = inWater;
             
             let isLogFloat = ((c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "wood_boat") && inWater && r <= waterRadius + 0.1);
 
@@ -7061,43 +7426,31 @@ function buildCollectibles(count, seed) {
               }
           }
           
-          // Ground collision
-          let nx_c = c.position[0] / (r || 1);
-          let ny_c = c.position[1] / (r || 1);
-          let nz_c = c.position[2] / (r || 1);
+          // Ground collision (reuses single terrain lookup above — saves 50% terrain height queries!)
+          const rAfter = Math.sqrt(
+            c.position[0] * c.position[0] + c.position[1] * c.position[1] + c.position[2] * c.position[2]
+          ) || 1;
+          const nx_c = c.position[0] / rAfter;
+          const ny_c = c.position[1] / rAfter;
+          const nz_c = c.position[2] / rAfter;
           
-          let caveDataForCol = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx_c, ny_c, nz_c, r) : null;
-          let terrainRadius;
-          if (caveDataForCol) {
-            terrainRadius = caveDataForCol.ground;
-          } else {
-            let theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny_c)));
-            let phi = Math.atan2(nz_c, nx_c);
-            let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
-            terrainRadius = RADIUS + height * HEIGHT_SCALE;
+          let terrainRadius = preTerrainRadius;
+          if (terrainRadius === null) {
+            let caveDataForCol = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx_c, ny_c, nz_c, rAfter) : null;
+            if (caveDataForCol) {
+              terrainRadius = caveDataForCol.ground;
+            } else {
+              let theta = Math.acos(Math.max(-1.0, Math.min(1.0, ny_c)));
+              let phi = Math.atan2(nz_c, nx_c);
+              let height = (typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, globalSeed) : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, globalSeed) : 0));
+              terrainRadius = RADIUS + height * HEIGHT_SCALE;
+            }
           }
           
-          const waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
-            ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
-            : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
+          const waterRadius = preWaterRadius;
+          let groundRadius = preInWater ? waterRadius : terrainRadius;
+          let isInWater = preInWater;
           
-          let groundRadius = terrainRadius;
-          let isInWater = false;
-          if (waterEnabled && terrainRadius < waterRadius) {
-              if (caveDataForCol && caveDataForCol.insideTunnel) {
-                  let wRadiusLocal = typeof getWaterRadiusAt === "function" ? getWaterRadiusAt(c.position[0], c.position[1], c.position[2]) : waterRadius;
-                  if (wRadiusLocal === 0) wRadiusLocal = waterRadius;
-                  if (wRadiusLocal > terrainRadius) {
-                      groundRadius = waterRadius;
-                      isInWater = true;
-                  }
-              } else {
-                  groundRadius = waterRadius;
-                  isInWater = true;
-              }
-          }
-          
-          const isItemDrop = (c.type === "log" || c.type === "branch" || c.type === "rock" || c.type === "big_rock" || c.type === "dirt" || c.type === "iron_ore" || c.type === "gold_ore" || c.type === "glow_ore" || c.type === "dragon_fruit" || c.type === "cotton_plant" || c.type === "crown_flower" || c.type === "grass" || c.type === "cloth" || c.type === "rubber_block");
           let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           if (c.type === "wood_boat" && !isInWater) {
              const cPos = c.position;
@@ -7152,11 +7505,11 @@ function buildCollectibles(count, seed) {
               collisionRadius = (c.type === "wood_boat") ? (waterRadius - 0.04) : (terrainRadius + (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           }
           
-          if (r < collisionRadius) {
+          if (rAfter < collisionRadius) {
             // Hit ground/water
-            const nx = c.position[0] / r;
-            const ny = c.position[1] / r;
-            const nz = c.position[2] / r;
+            const nx = nx_c;
+            const ny = ny_c;
+            const nz = nz_c;
             
             c.position[0] = nx * collisionRadius;
             c.position[1] = ny * collisionRadius;
@@ -7165,10 +7518,10 @@ function buildCollectibles(count, seed) {
             c.isGliding = false;
             c.verticalVel = 0;
             
-            // bounce and friction
+            // bounce and friction (soft realistic bounce for ground drops so they settle quickly!)
             const dot = c.vel[0] * nx + c.vel[1] * ny + c.vel[2] * nz;
             if (dot < 0) {
-                let restitution = (isWheeledBoat || c.type === "wood_boat") ? 0.0 : 1.3;
+                let restitution = (isWheeledBoat || c.type === "wood_boat") ? 0.0 : (isItemDrop ? 0.28 : 0.45);
                 c.vel[0] -= dot * nx * (1.0 + restitution);
                 c.vel[1] -= dot * ny * (1.0 + restitution);
                 c.vel[2] -= dot * nz * (1.0 + restitution);
@@ -7202,6 +7555,7 @@ function buildCollectibles(count, seed) {
                         if (Math.abs(vehSpeed) < 0.0005) {
                             vehSpeed = 0;
                             c._isSleeping = true;
+                            c._sleepWakeTick = window._boatSleepCheckTick || 0;
                         }
                         c.vehicleSpeed = vehSpeed;
 
@@ -7253,34 +7607,49 @@ function buildCollectibles(count, seed) {
                     c._isSleeping = true;
                     c._sleepWakeTick = window._boatSleepCheckTick || 0;
                 }
-            } else if (speedSq < 0.0001 && Math.abs(c.spinSpeed) < 0.02 && c.type !== "wood_boat") {
-                
-                
-                
-                // Align normal to the surface
-                c.normal = [nx, ny, nz];
-                
-                // Preserve original forward direction as much as possible
-                let fDot = c.F[0]*nx + c.F[1]*ny + c.F[2]*nz;
-                let newF = [c.F[0] - fDot*nx, c.F[1] - fDot*ny, c.F[2] - fDot*nz];
-                let lenF = Math.sqrt(newF[0]**2 + newF[1]**2 + newF[2]**2);
-                if (lenF > 0.001) {
-                  c.F = [newF[0]/lenF, newF[1]/lenF, newF[2]/lenF];
-                } else {
-                  if (Math.abs(ny) < 0.9) {
-                    c.F = [-nz, 0, nx];
+            } else if (c.type !== "wood_boat") {
+                c._settleFrames = (c._settleFrames || 0) + 1;
+                if ((speedSq < 0.00018 && Math.abs(c.spinSpeed || 0) < 0.03) || c._settleFrames >= 16) {
+                  // Snap cleanly to ground surface and put drop to sleep (0 CPU / 0 VBO rebuild cost!)
+                  c.vel[0] = 0;
+                  c.vel[1] = 0;
+                  c.vel[2] = 0;
+                  c.spinSpeed = 0;
+
+                  // Align normal to the surface (right-handed basis R = normal x F)
+                  c.normal = [nx, ny, nz];
+                  const oldF = c.F || [1, 0, 0];
+                  let fDot = oldF[0] * nx + oldF[1] * ny + oldF[2] * nz;
+                  let newF = [oldF[0] - fDot * nx, oldF[1] - fDot * ny, oldF[2] - fDot * nz];
+                  let lenF = Math.sqrt(newF[0] * newF[0] + newF[1] * newF[1] + newF[2] * newF[2]);
+                  if (lenF > 0.001) {
+                    c.F = [newF[0] / lenF, newF[1] / lenF, newF[2] / lenF];
                   } else {
-                    c.F = [1, 0, 0];
+                    if (Math.abs(ny) < 0.9) {
+                      c.F = [-nz, 0, nx];
+                    } else {
+                      c.F = [1, 0, 0];
+                    }
+                    let len = Math.sqrt(c.F[0] * c.F[0] + c.F[1] * c.F[1] + c.F[2] * c.F[2]) || 1;
+                    c.F = [c.F[0] / len, c.F[1] / len, c.F[2] / len];
                   }
-                  let len = Math.sqrt(c.F[0]**2 + c.F[1]**2 + c.F[2]**2);
-                  c.F = [c.F[0]/len, c.F[1]/len, c.F[2]/len];
+                  c.R = [
+                    c.normal[1] * c.F[2] - c.normal[2] * c.F[1],
+                    c.normal[2] * c.F[0] - c.normal[0] * c.F[2],
+                    c.normal[0] * c.F[1] - c.normal[1] * c.F[0]
+                  ];
+                  c.U = c.normal;
+
+                  if (isItemDrop) {
+                    const isFloatingWood = (c.type === "log" || c.type === "branch") && isInWater;
+                    if (isFloatingWood) {
+                      c._waterDropSettled = true;
+                    } else {
+                      c._dropSettled = true;
+                    }
+                    needRefresh = true;
+                  }
                 }
-                
-                c.R = [
-                  c.normal[1]*c.F[2] - c.normal[2]*c.F[1],
-                  c.normal[2]*c.F[0] - c.normal[0]*c.F[2],
-                  c.normal[0]*c.F[1] - c.normal[1]*c.F[0]
-                ];
             }
           } else {
              // apply spin
@@ -7589,7 +7958,7 @@ function buildCollectibles(count, seed) {
           category: ITEM_CATEGORIES.PRE_PLACE,
           name_th: "ล้อไม้",
           name_en: "Wooden Wheel",
-          icon: "🛞",
+          icon: "������",
           actionType: "PLACE_COMPONENT",
           placeType: "wood_wheel",
           usage_th: "พรี-วางติดตั้งประกอบเข้ากับเรือไม้ ทำให้เรือวิ่งบนบกได้อย่างคล่องตัว",
@@ -7611,7 +7980,7 @@ function buildCollectibles(count, seed) {
         "BOAT_WING": {
           id: "BOAT_WING",
           category: ITEM_CATEGORIES.PRE_PLACE,
-          name_th: "ปีกเรือ (Boat Wing)",
+          name_th: "ปีกเรือ",
           name_en: "Boat Wing",
           icon: "🪽",
           actionType: "PLACE_COMPONENT",
@@ -7772,7 +8141,7 @@ function buildCollectibles(count, seed) {
         "AEGIS_SHIFT": {
           id: "AEGIS_SHIFT",
           category: ITEM_CATEGORIES.HOLDABLE,
-          name_th: "อีเตอร์ดาบใหญ่ (Aegis-Shift)",
+          name_th: "อีเตอร์ดาบใหญ่",
           name_en: "Aegis-Shift",
           name_ja: "イージスシフト",
           icon: "⛏️⚔️",
@@ -7902,9 +8271,9 @@ function buildCollectibles(count, seed) {
         "TANTO": {
           id: "TANTO",
           category: ITEM_CATEGORIES.HOLDABLE,
-          name_th: "มีดตันโตะ (Tanto)",
-          name_en: "Tanto Knife",
-          name_ja: "タントウ (短刀)",
+          name_th: "ทันโตะ",
+          name_en: "Tanto",
+          name_ja: "短刀",
           icon: "🗡️",
           actionType: "WEAPON_MELEE",
           toolType: "TANTO",
@@ -7913,7 +8282,7 @@ function buildCollectibles(count, seed) {
           damage: 3,
           npcHitConfig: {
             dmg: 3,
-            label: "🗡️💥 ฟันด้วยมีดตันโตะ!",
+            label: "🗡️💥 ฟันด้วยทันโตะ!",
             useUnifiedMeleeReach: true,
             coneCos: 0.45,
             maxVert: 0.65
@@ -7964,7 +8333,7 @@ function buildCollectibles(count, seed) {
         "CROWN_FLOWER": {
           id: "CROWN_FLOWER",
           category: ITEM_CATEGORIES.HOLDABLE,
-          name_th: "ต้นรัก (Crown Flower)",
+          name_th: "ต้นรัก",
           name_en: "Crown Flower",
           name_ja: "クラウンフラワー",
           icon: "💮",
@@ -8162,7 +8531,7 @@ function buildCollectibles(count, seed) {
         "OBSIDIAN_FLUX": {
           id: "OBSIDIAN_FLUX",
           category: ITEM_CATEGORIES.HOLDABLE,
-          name_th: "ออบซิเดียนฟลักซ์ (Obsidian Flux)",
+          name_th: "ออบซิเดียนฟลักซ์",
           name_en: "Obsidian Flux",
           icon: "⚫",
           actionType: "WARP_ITEM",
@@ -8222,7 +8591,7 @@ function buildCollectibles(count, seed) {
           id: "OXFORD_SHOES",
           category: ITEM_CATEGORIES.HOLDABLE,
           equipSlot: "shoes",
-          name_th: "รองเท้าหนัง Oxford",
+          name_th: "รองเท้าหนังอ็อกซ์ฟอร์ด",
           name_en: "Cap-Toe Oxford Shoes",
           icon: "👞",
           actionType: "EQUIP_SHOES",
@@ -8234,7 +8603,7 @@ function buildCollectibles(count, seed) {
           id: "DRESS_BOOTS",
           category: ITEM_CATEGORIES.HOLDABLE,
           equipSlot: "shoes",
-          name_th: "รองเท้าบูทหนัง Dress Boots",
+          name_th: "รองเท้าบูทหนัง",
           name_en: "Cap-Toe Dress Boots",
           icon: "🥾",
           actionType: "EQUIP_SHOES",
@@ -8282,8 +8651,9 @@ function buildCollectibles(count, seed) {
           id: "DOUBLE_BREASTED_SUIT",
           category: ITEM_CATEGORIES.HOLDABLE,
           equipSlot: "accessory",
-          name_th: "สูทกระดุมสองแถว",
-          name_en: "Double-Breasted Suit Jacket",
+          name_th: "สูท",
+          name_en: "Suit",
+          name_ja: "スーツ",
           icon: "🧥",
           actionType: "EQUIP_ACCESSORY",
           usage_th: "เสื้อสูทกระดุมสองแถวสีเทาชาร์โคลลายทางแนวตั้งพร้อมปกแหลมและกระดุมสีอำพัน (เฉพาะตัวเสื้อสูท สวมใส่ในช่องของตกแต่ง และไม่สามารถใส่ทับพร้อมเสื้อฮูดผ้าคลุมได้)",
@@ -8306,7 +8676,7 @@ function buildCollectibles(count, seed) {
           id: "OPERA_CAPE",
           category: ITEM_CATEGORIES.HOLDABLE,
           equipSlot: "accessory",
-          name_th: "ผ้าคลุมไหล่ Opera Cape",
+          name_th: "ผ้าคลุมไหล่โอเปร่า",
           name_en: "Opera Cape",
           icon: "🧛",
           actionType: "EQUIP_ACCESSORY",
@@ -8321,889 +8691,6 @@ function buildCollectibles(count, seed) {
       } else {
         window.ItemRegistry = Object.assign({}, ITEM_DEFINITIONS);
       }
-
-      window.ItemRegistry["iron_bullet"] = {
-        render: function(item, vertices, colors, indices, targetBuffer) {
-          const p = item.position || [0, 0, 0];
-          const s = typeof playerScale !== 'undefined' ? playerScale : 0.1;
-          const radius = (item.radius || 0.18) * s;
-          const segsLat = 12;
-          const segsLong = 16;
-          const ironColor = [0.75, 0.78, 0.82];
-
-          if (typeof buildLowPolySphere === "function") {
-            buildLowPolySphere(p, radius, segsLat, ironColor, 0, 0, vertices, colors, indices);
-          } else {
-            const startIdx = vertices.length / 3;
-            for (let lat = 0; lat <= segsLat; lat++) {
-              const theta = (lat / segsLat) * Math.PI;
-              const sinTheta = Math.sin(theta);
-              const cosTheta = Math.cos(theta);
-
-              for (let lon = 0; lon <= segsLong; lon++) {
-                const phi = (lon / segsLong) * Math.PI * 2;
-                const sinPhi = Math.sin(phi);
-                const cosPhi = Math.cos(phi);
-
-                const dx = sinTheta * cosPhi;
-                const dy = cosTheta;
-                const dz = sinTheta * sinPhi;
-
-                vertices.push(p[0] + radius * dx, p[1] + radius * dy, p[2] + radius * dz);
-
-                const light = Math.max(0.3, dx * 0.35 + dy * 0.75 + dz * 0.55);
-                const spec = Math.pow(Math.max(0, dy * 0.65 + dz * 0.7), 6) * 0.35;
-                colors.push(
-                  Math.min(1.0, ironColor[0] * light + spec),
-                  Math.min(1.0, ironColor[1] * light + spec),
-                  Math.min(1.0, ironColor[2] * light + spec)
-                );
-              }
-            }
-
-            for (let lat = 0; lat < segsLat; lat++) {
-              for (let lon = 0; lon < segsLong; lon++) {
-                const first = startIdx + lat * (segsLong + 1) + lon;
-                const second = first + segsLong + 1;
-                indices.push(first, second, first + 1);
-                indices.push(second, second + 1, first + 1);
-              }
-            }
-          }
-        }
-      };
-      window.ItemRegistry["IRON_BULLET"] = window.ItemRegistry["iron_bullet"];
-
-      window.buildIronBucketModel = function(scale, centerPos, rVec, nVec, fVec, vertices, colors, indices, hasWater = false, handleAngle = 0) {
-        const s = scale || 0.35;
-        const p = centerPos || [0, 0, 0];
-        const r = rVec || [1, 0, 0];
-        const n = nVec || [0, 1, 0];
-        const f = fVec || [0, 0, 1];
-
-        const pt = (rx, ny, fz) => [
-          p[0] + (r[0] * rx + n[0] * ny + f[0] * fz) * s,
-          p[1] + (r[1] * rx + n[1] * ny + f[1] * fz) * s,
-          p[2] + (r[2] * rx + n[2] * ny + f[2] * fz) * s
-        ];
-
-        const ironBodyDark = [0.58, 0.62, 0.68];
-        const ironBodyLight = [0.66, 0.70, 0.76];
-        const ironBand = [0.38, 0.41, 0.46];
-        const ironLug = [0.32, 0.35, 0.40];
-        const ironHandle = [0.50, 0.54, 0.60];
-        const waterColor = [0.18, 0.62, 0.95];
-        const waterHighlight = [0.42, 0.82, 1.0];
-        const innerCavityDark = [0.20, 0.22, 0.26];
-        const innerCavityWall = [0.26, 0.29, 0.34];
-        const gripColor = [0.42, 0.28, 0.16];
-
-        // 1. Bottom base plate & iron foot hoop
-        buildTaperedSegment(pt(0, -0.36, 0), pt(0, -0.30, 0), 0.245 * s, 0.255 * s, 8, ironBand, vertices, colors, indices, true);
-
-        // 2. Lower bucket wall (8-sided flared low-poly)
-        buildTaperedSegment(pt(0, -0.30, 0), pt(0, -0.04, 0), 0.24 * s, 0.295 * s, 8, ironBodyDark, vertices, colors, indices, false);
-
-        // 3. Middle reinforcing iron hoop
-        buildTaperedSegment(pt(0, -0.06, 0), pt(0, 0.01, 0), 0.305 * s, 0.312 * s, 8, ironBand, vertices, colors, indices, false);
-
-        // 4. Upper bucket wall (8-sided flared low-poly)
-        buildTaperedSegment(pt(0, 0.01, 0), pt(0, 0.24, 0), 0.295 * s, 0.35 * s, 8, ironBodyLight, vertices, colors, indices, false);
-
-        // 5. Top thick iron rim / lip (Open ring: addCaps = false so no dark cap covers the opening)
-        buildTaperedSegment(pt(0, 0.22, 0), pt(0, 0.28, 0), 0.355 * s, 0.365 * s, 8, ironBand, vertices, colors, indices, false);
-
-        // 6. Bucket Interior / Water Volume
-        // Always build interior metal lining first for realistic bucket depth
-        buildTaperedSegment(pt(0, -0.30, 0), pt(0, -0.27, 0), 0.235 * s, 0.240 * s, 8, innerCavityDark, vertices, colors, indices, true);
-        buildTaperedSegment(pt(0, -0.27, 0), pt(0, 0.23, 0), 0.240 * s, 0.340 * s, 8, innerCavityWall, vertices, colors, indices, false);
-
-        if (hasWater) {
-          // Water pool surface rests strictly inside upper bucket cavity (never penetrates bucket walls or bottom)
-          buildTaperedSegment(pt(0, 0.13, 0), pt(0, 0.185, 0), 0.262 * s, 0.290 * s, 8, waterColor, vertices, colors, indices, true);
-          // Crisp water surface highlight
-          buildTaperedSegment(pt(0, 0.187, 0), pt(0, 0.191, 0), 0.18 * s, 0.13 * s, 8, waterHighlight, vertices, colors, indices, true);
-        }
-
-        // 7. Side mounting lugs (ears)
-        buildTaperedSegment(pt(-0.365, 0.21, 0), pt(-0.365, 0.32, 0), 0.042 * s, 0.036 * s, 5, ironLug, vertices, colors, indices, true);
-        buildTaperedSegment(pt(0.365, 0.21, 0), pt(0.365, 0.32, 0), 0.042 * s, 0.036 * s, 5, ironLug, vertices, colors, indices, true);
-
-        // 8. Low-poly arched bail handle (hinged around side lugs at ny = 0.28, fz = 0)
-        const cosH = Math.cos(handleAngle || 0);
-        const sinH = Math.sin(handleAngle || 0);
-        const ptHandle = (rx, ny) => {
-          const dy = ny - 0.28;
-          return pt(rx, 0.28 + dy * cosH, -dy * sinH);
-        };
-        const h0 = pt(-0.365, 0.28, 0);
-        const h1 = ptHandle(-0.31, 0.47);
-        const h2 = ptHandle(-0.14, 0.58);
-        const h3 = ptHandle(0.14, 0.58);
-        const h4 = ptHandle(0.31, 0.47);
-        const h5 = pt(0.365, 0.28, 0);
-        const hRad = 0.022 * s;
-        buildTaperedSegment(h0, h1, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
-        buildTaperedSegment(h1, h2, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
-        buildTaperedSegment(h2, h3, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
-        buildTaperedSegment(h3, h4, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
-        buildTaperedSegment(h4, h5, hRad, hRad, 5, ironHandle, vertices, colors, indices, false);
-
-        // 9. Center wooden/forged grip sleeve at top of handle
-        buildTaperedSegment(ptHandle(-0.10, 0.58), ptHandle(0.10, 0.58), 0.036 * s, 0.036 * s, 6, gripColor, vertices, colors, indices, true);
-      };
-
-      window.ItemRegistry["iron_bucket"] = {
-        render: function(item, vertices, colors, indices, targetBuffer) {
-          const s = (item && item.size) ? item.size * 2.2 : 0.55;
-          const p = (item && item.position) ? item.position : [0, 0, 0];
-          const r = (item && item.R) ? item.R : [1, 0, 0];
-          const n = (item && item.normal) ? item.normal : [0, 1, 0];
-          const f = (item && item.F) ? item.F : [0, 0, 1];
-          const hasWater = !!(item && item.hasWater);
-          window.buildIronBucketModel(s, p, r, n, f, vertices, colors, indices, hasWater);
-        }
-      };
-      window.ItemRegistry["IRON_BUCKET"] = window.ItemRegistry["iron_bucket"];
-
-      window.ItemRegistry["water_bucket"] = {
-        render: function(item, vertices, colors, indices, targetBuffer) {
-          const s = (item && item.size) ? item.size * 2.2 : 0.55;
-          const p = (item && item.position) ? item.position : [0, 0, 0];
-          const r = (item && item.R) ? item.R : [1, 0, 0];
-          const n = (item && item.normal) ? item.normal : [0, 1, 0];
-          const f = (item && item.F) ? item.F : [0, 0, 1];
-          window.buildIronBucketModel(s, p, r, n, f, vertices, colors, indices, true);
-        }
-      };
-      window.ItemRegistry["WATER_BUCKET"] = window.ItemRegistry["water_bucket"];
-
-      let _tantoTemplateCache = null;
-      let _shirasayaTemplateCache = null;
-      const _aegisShiftTemplateCache = {};
-
-      function _applyWeaponTemplate(tpl, s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices) {
-        const lv = tpl.vertices;
-        const lc = tpl.colors;
-        const li = isFlipped ? tpl.indicesFlipped : tpl.indices;
-        const baseIdx = vertices.length / 3;
-
-        const px = p[0], py = p[1], pz = p[2];
-        const u0 = uAxis[0] * s, u1 = uAxis[1] * s, u2 = uAxis[2] * s;
-        const v0 = vAxis[0] * s, v1 = vAxis[1] * s, v2 = vAxis[2] * s;
-        const w0 = wAxis[0] * s, w1 = wAxis[1] * s, w2 = wAxis[2] * s;
-
-        for (let i = 0, len = lv.length; i < len; i += 3) {
-          const a = lv[i], u = lv[i + 1], t = lv[i + 2];
-          vertices.push(
-            px + u0 * a + v0 * u + w0 * t,
-            py + u1 * a + v1 * u + w1 * t,
-            pz + u2 * a + v2 * u + w2 * t
-          );
-          colors.push(lc[i], lc[i + 1], lc[i + 2]);
-        }
-
-        for (let i = 0, len = li.length; i < len; i++) {
-          indices.push(baseIdx + li[i]);
-        }
-      }
-
-      function _bakeWeaponTemplate(buildFn) {
-        const tv = [], tc = [], ti = [];
-        buildFn(tv, tc, ti);
-        const tiFlip = new Uint16Array(ti.length);
-        for (let i = 0; i < ti.length; i += 3) {
-          tiFlip[i] = ti[i];
-          tiFlip[i + 1] = ti[i + 2];
-          tiFlip[i + 2] = ti[i + 1];
-        }
-        return {
-          vertices: new Float32Array(tv),
-          colors: new Float32Array(tc),
-          indices: new Uint16Array(ti),
-          indicesFlipped: tiFlip
-        };
-      }
-
-      window.buildTantoModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices) {
-        const s = scale || 0.35;
-        const p = basePos || [0, 0, 0];
-
-        const norm = (v, fb) => {
-          const l = v ? Math.hypot(v[0], v[1], v[2]) : 0;
-          return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
-        };
-        const uAxis = norm(axisAlong, [0, 1, 0]);
-        let vAxis = norm(edgeUp, [1, 0, 0]);
-        const dotUV = uAxis[0] * vAxis[0] + uAxis[1] * vAxis[1] + uAxis[2] * vAxis[2];
-        vAxis = norm([vAxis[0] - uAxis[0] * dotUV, vAxis[1] - uAxis[1] * dotUV, vAxis[2] - uAxis[2] * dotUV], [1, 0, 0]);
-        let wAxis = norm(thickRight, [
-          uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1],
-          uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2],
-          uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]
-        ]);
-        const dotWU = uAxis[0] * wAxis[0] + uAxis[1] * wAxis[1] + uAxis[2] * wAxis[2];
-        const dotWV = vAxis[0] * wAxis[0] + vAxis[1] * wAxis[1] + vAxis[2] * wAxis[2];
-        wAxis = norm([
-          wAxis[0] - uAxis[0] * dotWU - vAxis[0] * dotWV,
-          wAxis[1] - uAxis[1] * dotWU - vAxis[1] * dotWV,
-          wAxis[2] - uAxis[2] * dotWU - vAxis[2] * dotWV
-        ], [0, 0, 1]);
-
-        const det = (uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1]) * wAxis[0] +
-                    (uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2]) * wAxis[1] +
-                    (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
-        const isFlipped = det < 0;
-
-        if (!_tantoTemplateCache) {
-          _tantoTemplateCache = _bakeWeaponTemplate((tv, tc, ti) => {
-            const u0 = [1, 0, 0], v0 = [0, 1, 0], w0 = [0, 0, 1];
-            const pt = (a, u, t) => [a, u, t];
-            const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-              const verts = [
-                [a0, u0Min, -t0], [a1, u1Min, -t1], [a1, u1Min, t1], [a0, u0Min, t0],
-                [a0, u0Max, -t0], [a1, u1Max, -t1], [a1, u1Max, t1], [a0, u0Max, t0]
-              ];
-              const baseIdx = tv.length / 3;
-              for (let i = 0; i < 8; i++) {
-                tv.push(verts[i][0], verts[i][1], verts[i][2]);
-                tc.push(col[0], col[1], col[2]);
-              }
-              const idxPattern = [
-                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
-                0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
-                0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
-              ];
-              for (let i = 0; i < idxPattern.length; i++) {
-                ti.push(baseIdx + idxPattern[i]);
-              }
-            };
-
-            const gripDark = [0.10, 0.11, 0.14];
-            const gripRib = [0.18, 0.20, 0.24];
-            const metalGuard = [0.26, 0.29, 0.34];
-            const habakiSteel = [0.34, 0.38, 0.44];
-            const obsidianBody = [0.11, 0.12, 0.16];
-            const spineSteel = [0.22, 0.25, 0.31];
-            const glowCyan = [0.22, 0.95, 0.88];
-            const glowCore = [0.58, 1.00, 0.96];
-
-            addBox(pt(-0.24, 0.008, 0), 0.045, 0.068, 0.044, metalGuard, u0, v0, w0, tv, tc, ti);
-            addBox(pt(-0.265, 0.008, 0), 0.014, 0.052, 0.032, spineSteel, u0, v0, w0, tv, tc, ti);
-            addBox(pt(-0.06, 0.008, 0), 0.32, 0.064, 0.040, gripDark, u0, v0, w0, tv, tc, ti);
-            for (let i = 0; i < 6; i++) {
-              const rx = -0.185 + i * 0.046;
-              addBox(pt(rx, 0.008, 0), 0.022, 0.070, 0.044, gripRib, u0, v0, w0, tv, tc, ti);
-            }
-            addBox(pt(0.065, 0.010, 0), 0.028, 0.022, 0.046, glowCyan, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.125, 0.012, 0), 0.040, 0.112, 0.076, metalGuard, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.125, 0.068, 0), 0.026, 0.012, 0.040, glowCyan, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.180, 0.012, 0), 0.070, 0.072, 0.044, habakiSteel, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.180, 0.012, 0), 0.030, 0.078, 0.048, spineSteel, u0, v0, w0, tv, tc, ti);
-
-            addTaperedPrism(0.215, -0.024, -0.004, 0.018, 0.595, -0.020, -0.004, 0.014, spineSteel);
-            addTaperedPrism(0.215, -0.004,  0.036, 0.016, 0.595, -0.004,  0.034, 0.012, obsidianBody);
-            addTaperedPrism(0.215,  0.036,  0.049, 0.008, 0.595,  0.034,  0.046, 0.006, glowCyan);
-            addTaperedPrism(0.320,  0.046,  0.053, 0.004, 0.595,  0.044,  0.050, 0.003, glowCore);
-
-            addBox(pt(0.295, 0.004, 0), 0.120, 0.007, 0.036, glowCyan, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.385, 0.020, 0), 0.070, 0.006, 0.034, glowCyan, u0, v0, w0, tv, tc, ti);
-
-            addTaperedPrism(0.595, -0.020, -0.004, 0.014, 0.775, -0.020, -0.011, 0.003, spineSteel);
-            addTaperedPrism(0.595, -0.004,  0.034, 0.012, 0.775, -0.018, -0.009, 0.002, obsidianBody);
-            addTaperedPrism(0.595,  0.034,  0.046, 0.006, 0.775, -0.015, -0.007, 0.002, glowCyan);
-            addTaperedPrism(0.595,  0.044,  0.051, 0.003, 0.775, -0.012, -0.005, 0.0015, glowCore);
-          });
-        }
-
-        _applyWeaponTemplate(_tantoTemplateCache, s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices);
-      };
-
-      window.buildShirasayaModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices) {
-        const s = scale || 0.32;
-        const p = basePos || [0, 0, 0];
-
-        const norm = (v, fb) => {
-          const l = v ? Math.hypot(v[0], v[1], v[2]) : 0;
-          return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
-        };
-        const uAxis = norm(axisAlong, [0, 1, 0]);
-        let vAxis = norm(edgeUp, [1, 0, 0]);
-        const dotUV = uAxis[0] * vAxis[0] + uAxis[1] * vAxis[1] + uAxis[2] * vAxis[2];
-        vAxis = norm([vAxis[0] - uAxis[0] * dotUV, vAxis[1] - uAxis[1] * dotUV, vAxis[2] - uAxis[2] * dotUV], [1, 0, 0]);
-        let wAxis = norm(thickRight, [
-          uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1],
-          uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2],
-          uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]
-        ]);
-        const dotWU = uAxis[0] * wAxis[0] + uAxis[1] * wAxis[1] + uAxis[2] * wAxis[2];
-        const dotWV = vAxis[0] * wAxis[0] + vAxis[1] * wAxis[1] + vAxis[2] * wAxis[2];
-        wAxis = norm([
-          wAxis[0] - uAxis[0] * dotWU - vAxis[0] * dotWV,
-          wAxis[1] - uAxis[1] * dotWU - vAxis[1] * dotWV,
-          wAxis[2] - uAxis[2] * dotWU - vAxis[2] * dotWV
-        ], [0, 0, 1]);
-
-        const det = (uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1]) * wAxis[0] +
-                    (uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2]) * wAxis[1] +
-                    (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
-        const isFlipped = det < 0;
-
-        if (!_shirasayaTemplateCache) {
-          _shirasayaTemplateCache = _bakeWeaponTemplate((tv, tc, ti) => {
-            const u0 = [1, 0, 0], v0 = [0, 1, 0], w0 = [0, 0, 1];
-            const pt = (a, u, t) => [a, u, t];
-            const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-              const verts = [
-                [a0, u0Min, -t0], [a1, u1Min, -t1], [a1, u1Min, t1], [a0, u0Min, t0],
-                [a0, u0Max, -t0], [a1, u1Max, -t1], [a1, u1Max, t1], [a0, u0Max, t0]
-              ];
-              const baseIdx = tv.length / 3;
-              for (let i = 0; i < 8; i++) {
-                tv.push(verts[i][0], verts[i][1], verts[i][2]);
-                tc.push(col[0], col[1], col[2]);
-              }
-              const idxPattern = [
-                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
-                0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
-                0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
-              ];
-              for (let i = 0; i < idxPattern.length; i++) {
-                ti.push(baseIdx + idxPattern[i]);
-              }
-            };
-
-            const gripDark = [0.09, 0.10, 0.13];
-            const gripWrap = [0.16, 0.18, 0.22];
-            const kashiraMetal = [0.28, 0.31, 0.36];
-            const collarSteel = [0.36, 0.40, 0.46];
-            const obsidianBody = [0.10, 0.11, 0.15];
-            const spineSteel = [0.24, 0.28, 0.34];
-            const glowCyan = [0.22, 0.95, 0.88];
-            const glowCore = [0.64, 1.00, 0.97];
-
-            addBox(pt(-0.415, 0.006, 0), 0.032, 0.062, 0.042, kashiraMetal, u0, v0, w0, tv, tc, ti);
-            addBox(pt(-0.12, 0.006, 0), 0.56, 0.058, 0.038, gripDark, u0, v0, w0, tv, tc, ti);
-            for (let i = 0; i < 10; i++) {
-              const rx = -0.365 + i * 0.052;
-              addBox(pt(rx, 0.006, 0), 0.024, 0.064, 0.042, gripWrap, u0, v0, w0, tv, tc, ti);
-            }
-
-            addBox(pt(0.185, 0.008, 0), 0.050, 0.072, 0.044, collarSteel, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.220, 0.008, 0), 0.022, 0.068, 0.042, glowCyan, u0, v0, w0, tv, tc, ti);
-
-            const segs = [
-              { a0: 0.23, u0:  0.000, t0: 0.016, a1: 0.58, u1: -0.012, t1: 0.014 },
-              { a0: 0.58, u0: -0.012, t0: 0.014, a1: 0.94, u1: -0.034, t1: 0.012 },
-              { a0: 0.94, u0: -0.034, t0: 0.012, a1: 1.28, u1: -0.064, t1: 0.009 }
-            ];
-            for (let i = 0; i < segs.length; i++) {
-              const sg = segs[i];
-              addTaperedPrism(sg.a0, -0.024 + sg.u0, -0.005 + sg.u0, sg.t0, sg.a1, -0.022 + sg.u1, -0.005 + sg.u1, sg.t1, spineSteel);
-              addTaperedPrism(sg.a0, -0.005 + sg.u0,  0.032 + sg.u0, sg.t0 * 0.9, sg.a1, -0.005 + sg.u1,  0.028 + sg.u1, sg.t1 * 0.9, obsidianBody);
-              addTaperedPrism(sg.a0,  0.032 + sg.u0,  0.044 + sg.u0, sg.t0 * 0.5, sg.a1,  0.028 + sg.u1,  0.040 + sg.u1, sg.t1 * 0.5, glowCyan);
-              addTaperedPrism(sg.a0,  0.042 + sg.u0,  0.048 + sg.u0, sg.t0 * 0.25, sg.a1,  0.038 + sg.u1,  0.044 + sg.u1, sg.t1 * 0.25, glowCore);
-            }
-
-            addBox(pt(0.39, 0.002, 0), 0.220, 0.006, 0.032, glowCyan, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.72, -0.018, 0), 0.160, 0.005, 0.026, glowCyan, u0, v0, w0, tv, tc, ti);
-
-            addTaperedPrism(1.28, -0.022 - 0.064, -0.005 - 0.064, 0.009, 1.48, -0.022 - 0.088, -0.014 - 0.088, 0.0025, spineSteel);
-            addTaperedPrism(1.28, -0.005 - 0.064,  0.028 - 0.064, 0.008, 1.48, -0.020 - 0.088, -0.011 - 0.088, 0.002, obsidianBody);
-            addTaperedPrism(1.28,  0.028 - 0.064,  0.040 - 0.064, 0.0045, 1.48, -0.017 - 0.088, -0.008 - 0.088, 0.0015, glowCyan);
-            addTaperedPrism(1.28,  0.038 - 0.064,  0.044 - 0.064, 0.0025, 1.48, -0.014 - 0.088, -0.006 - 0.088, 0.001, glowCore);
-          });
-        }
-
-        _applyWeaponTemplate(_shirasayaTemplateCache, s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices);
-      };
-
-      window.ItemRegistry["tanto"] = {
-        render: function(item, vertices, colors, indices, targetBuffer) {
-          const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
-          const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.4 : 0.45);
-          const p = (item && item.position) ? item.position : [0, 0, 0];
-          const r = (item && item.R) ? item.R : [1, 0, 0];
-          const n = (item && item.normal) ? item.normal : [0, 1, 0];
-          const f = (item && item.F) ? item.F : [0, 0, 1];
-          if (isIcon) {
-            // Slight 22-deg diagonal tilt so blade, circuit trace, and guard pop in 3D inventory cards
-            const ax = [r[0] * 0.37 + n[0] * 0.93, r[1] * 0.37 + n[1] * 0.93, r[2] * 0.37 + n[2] * 0.93];
-            const ed = [r[0] * 0.93 - n[0] * 0.37, r[1] * 0.93 - n[1] * 0.37, r[2] * 0.93 - n[2] * 0.37];
-            window.buildTantoModel(s, p, ax, ed, f, vertices, colors, indices);
-          } else {
-            // World drop: lay blade flat along R with cutting edge along F and thickness vertical along normal
-            window.buildTantoModel(s, p, r, f, n, vertices, colors, indices);
-          }
-        }
-      };
-      window.ItemRegistry["TANTO"] = window.ItemRegistry["tanto"];
-
-      window.buildAegisShiftModel = function(scale, basePos, axisAlong, edgeUp, thickRight, vertices, colors, indices, mode = "pickaxe") {
-        const s = scale || 0.34;
-        const p = basePos || [0, 0, 0];
-
-        const norm = (v, fb) => {
-          const l = v ? Math.hypot(v[0], v[1], v[2]) : 0;
-          return l > 1e-5 ? [v[0] / l, v[1] / l, v[2] / l] : fb;
-        };
-        const uAxis = norm(axisAlong, [0, 1, 0]);
-        let vAxis = norm(edgeUp, [1, 0, 0]);
-        const dotUV = uAxis[0] * vAxis[0] + uAxis[1] * vAxis[1] + uAxis[2] * vAxis[2];
-        vAxis = norm([vAxis[0] - uAxis[0] * dotUV, vAxis[1] - uAxis[1] * dotUV, vAxis[2] - uAxis[2] * dotUV], [1, 0, 0]);
-        let wAxis = norm(thickRight, [
-          uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1],
-          uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2],
-          uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]
-        ]);
-        const dotWU = uAxis[0] * wAxis[0] + uAxis[1] * wAxis[1] + uAxis[2] * wAxis[2];
-        const dotWV = vAxis[0] * wAxis[0] + vAxis[1] * wAxis[1] + vAxis[2] * wAxis[2];
-        wAxis = norm([
-          wAxis[0] - uAxis[0] * dotWU - vAxis[0] * dotWV,
-          wAxis[1] - uAxis[1] * dotWU - vAxis[1] * dotWV,
-          wAxis[2] - uAxis[2] * dotWU - vAxis[2] * dotWV
-        ], [0, 0, 1]);
-
-        const det = (uAxis[1] * vAxis[2] - uAxis[2] * vAxis[1]) * wAxis[0] +
-                    (uAxis[2] * vAxis[0] - uAxis[0] * vAxis[2]) * wAxis[1] +
-                    (uAxis[0] * vAxis[1] - uAxis[1] * vAxis[0]) * wAxis[2];
-        const isFlipped = det < 0;
-
-        const cacheKey = mode || "pickaxe";
-        if (!_aegisShiftTemplateCache[cacheKey]) {
-          _aegisShiftTemplateCache[cacheKey] = _bakeWeaponTemplate((tv, tc, ti) => {
-            const u0 = [1, 0, 0], v0 = [0, 1, 0], w0 = [0, 0, 1];
-            const pt = (a, u, t) => [a, u, t];
-            const addTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-              const verts = [
-                [a0, u0Min, -t0], [a1, u1Min, -t1], [a1, u1Min, t1], [a0, u0Min, t0],
-                [a0, u0Max, -t0], [a1, u1Max, -t1], [a1, u1Max, t1], [a0, u0Max, t0]
-              ];
-              const baseIdx = tv.length / 3;
-              for (let i = 0; i < 8; i++) {
-                tv.push(verts[i][0], verts[i][1], verts[i][2]);
-                tc.push(col[0], col[1], col[2]);
-              }
-              const idxPattern = [
-                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
-                0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
-                0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
-              ];
-              for (let i = 0; i < idxPattern.length; i++) {
-                ti.push(baseIdx + idxPattern[i]);
-              }
-            };
-
-            const gripDark = [0.10, 0.11, 0.14];
-            const gripRib = [0.17, 0.19, 0.23];
-            const gunmetal = [0.22, 0.25, 0.30];
-            const steelSilver = [0.56, 0.60, 0.66];
-            const darkBlade = [0.14, 0.16, 0.21];
-            const glowCyan = [0.20, 0.94, 0.92];
-            const glowCore = [0.68, 1.00, 0.98];
-
-            addBox(pt(-0.245, 0, 0), 0.042, 0.068, 0.056, gunmetal, u0, v0, w0, tv, tc, ti);
-            addBox(pt(-0.270, 0, 0), 0.020, 0.054, 0.044, steelSilver, u0, v0, w0, tv, tc, ti);
-            addBox(pt(-0.252, 0, 0), 0.036, 0.014, 0.060, glowCyan, u0, v0, w0, tv, tc, ti);
-
-            addBox(pt(-0.025, 0, 0), 0.39, 0.054, 0.044, gripDark, u0, v0, w0, tv, tc, ti);
-            for (let i = 0; i < 7; i++) {
-              const rx = -0.18 + i * 0.052;
-              addBox(pt(rx, 0, 0), 0.024, 0.060, 0.048, gripRib, u0, v0, w0, tv, tc, ti);
-            }
-
-            addBox(pt(0.180, 0, 0), 0.044, 0.094, 0.064, steelSilver, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.265, 0, 0), 0.145, 0.082, 0.054, gunmetal, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.250, 0, 0), 0.165, 0.018, 0.062, glowCyan, u0, v0, w0, tv, tc, ti);
-
-            addBox(pt(0.370, 0, 0), 0.132, 0.132, 0.066, gunmetal, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.370, 0, 0), 0.104, 0.104, 0.072, steelSilver, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.370, 0, 0), 0.076, 0.076, 0.078, glowCyan, u0, v0, w0, tv, tc, ti);
-            addBox(pt(0.370, 0, 0), 0.044, 0.044, 0.084, glowCore, u0, v0, w0, tv, tc, ti);
-
-            const drawCurvedPickArm = (signU) => {
-              const u1a = signU * 0.055, u1b = signU * 0.215;
-              addTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
-                              0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
-              addTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
-                              0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
-              const u2a = signU * 0.205, u2b = signU * 0.385;
-              addTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
-                              0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
-              addBox(pt(0.365, signU * 0.255, 0), 0.014, 0.088, 0.042, glowCyan, u0, v0, w0, tv, tc, ti);
-              addTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
-                              0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
-              addTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
-                              0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
-            };
-
-            if (cacheKey === "greatsword") {
-              for (let si = -1; si <= 1; si += 2) {
-                addTaperedPrism(0.325, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.022,
-                                0.380, Math.min(si * 0.06, si * 0.23), Math.max(si * 0.06, si * 0.23), 0.014, gunmetal);
-                addTaperedPrism(0.345, Math.min(si * 0.21, si * 0.38), Math.max(si * 0.21, si * 0.38), 0.016,
-                                0.425, Math.min(si * 0.23, si * 0.42), Math.max(si * 0.23, si * 0.42), 0.009, darkBlade);
-                addTaperedPrism(0.390, Math.min(si * 0.36, si * 0.46), Math.max(si * 0.36, si * 0.46), 0.010,
-                                0.475, Math.min(si * 0.46, si * 0.48), Math.max(si * 0.46, si * 0.48), 0.002, steelSilver);
-                addBox(pt(0.375, si * 0.245, 0), 0.015, 0.075, 0.036, glowCyan, u0, v0, w0, tv, tc, ti);
-
-                addBox(pt(0.475, si * 0.095, 0), 0.115, 0.056, 0.068, steelSilver, u0, v0, w0, tv, tc, ti);
-                addBox(pt(0.475, si * 0.078, 0), 0.090, 0.018, 0.074, glowCyan, u0, v0, w0, tv, tc, ti);
-              }
-
-              addTaperedPrism(0.410, -0.066, 0.066, 0.022, 1.440, -0.056, 0.056, 0.017, gunmetal);
-              addTaperedPrism(0.410,  0.066, 0.145, 0.014, 1.440,  0.056, 0.128, 0.007, steelSilver);
-              addTaperedPrism(0.410, -0.145,-0.066, 0.014, 1.440, -0.128,-0.056, 0.007, steelSilver);
-              addTaperedPrism(0.430,  0.138, 0.152, 0.004, 1.440,  0.122, 0.135, 0.003, glowCore);
-              addTaperedPrism(0.430, -0.152,-0.138, 0.004, 1.440, -0.135,-0.122, 0.003, glowCore);
-              addTaperedPrism(0.425, -0.018, 0.018, 0.025, 1.430, -0.013, 0.013, 0.020, glowCyan);
-              addTaperedPrism(0.435, -0.008, 0.008, 0.027, 1.410, -0.006, 0.006, 0.022, glowCore);
-
-              addTaperedPrism(1.440, -0.056, 0.056, 0.017, 1.725, -0.006, 0.006, 0.003, gunmetal);
-              addTaperedPrism(1.440,  0.056, 0.128, 0.007, 1.730,  0.000, 0.008, 0.002, steelSilver);
-              addTaperedPrism(1.440, -0.128,-0.056, 0.007, 1.730, -0.008, 0.000, 0.002, steelSilver);
-              addTaperedPrism(1.430, -0.013, 0.013, 0.020, 1.560, -0.004, 0.004, 0.008, glowCyan);
-            } else if (cacheKey === "axe") {
-              const drawFoldedPickArm = (signU) => {
-                const pivotA = 0.355, pivotU = signU * 0.055;
-                const foldAngle = 1.18 * signU;
-                const cosF = Math.cos(foldAngle), sinF = Math.sin(foldAngle);
-                const rotPt = (a, u, t) => {
-                  const da = a - pivotA;
-                  const du = u - pivotU;
-                  return [pivotA + da * cosF - du * sinF, pivotU + du * cosF + da * sinF, t];
-                };
-                const rotUAxis = [cosF, sinF, 0];
-                const rotVAxis = [-sinF, cosF, 0];
-                const addRotTaperedPrism = (a0, u0Min, u0Max, t0, a1, u1Min, u1Max, t1, col) => {
-                  const verts = [
-                    rotPt(a0, u0Min, -t0), rotPt(a1, u1Min, -t1), rotPt(a1, u1Min, t1), rotPt(a0, u0Min, t0),
-                    rotPt(a0, u0Max, -t0), rotPt(a1, u1Max, -t1), rotPt(a1, u1Max, t1), rotPt(a0, u0Max, t0)
-                  ];
-                  const baseIdx = tv.length / 3;
-                  for (let i = 0; i < 8; i++) {
-                    tv.push(verts[i][0], verts[i][1], verts[i][2]);
-                    tc.push(col[0], col[1], col[2]);
-                  }
-                  const idxPattern = [
-                    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7,
-                    0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
-                    0, 7, 3, 0, 4, 7, 1, 2, 6, 1, 6, 5
-                  ];
-                  for (let i = 0; i < idxPattern.length; i++) {
-                    ti.push(baseIdx + idxPattern[i]);
-                  }
-                };
-
-                const u1a = signU * 0.055, u1b = signU * 0.215;
-                addRotTaperedPrism(0.335, Math.min(u1a, u1a + signU * 0.06), Math.max(u1a, u1a + signU * 0.06), 0.022,
-                                   0.345, Math.min(u1b, u1b + signU * 0.05), Math.max(u1b, u1b + signU * 0.05), 0.018, gunmetal);
-                addRotTaperedPrism(0.345, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.020,
-                                   0.420, Math.min(0.06 * signU, 0.215 * signU), Math.max(0.06 * signU, 0.215 * signU), 0.014, steelSilver);
-                const u2a = signU * 0.205, u2b = signU * 0.385;
-                addRotTaperedPrism(0.320, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.016,
-                                   0.398, Math.min(u2a, u2b), Math.max(u2a, u2b), 0.010, darkBlade);
-                addBox(rotPt(0.365, signU * 0.255, 0), 0.014, 0.088, 0.042, glowCyan, rotUAxis, rotVAxis, w0, tv, tc, ti);
-                addRotTaperedPrism(0.285, Math.min(signU * 0.375, signU * 0.505), Math.max(signU * 0.375, signU * 0.505), 0.012,
-                                   0.215, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, darkBlade);
-                addRotTaperedPrism(0.335, Math.min(signU * 0.375, signU * 0.500), Math.max(signU * 0.375, signU * 0.500), 0.008,
-                                   0.218, Math.min(signU * 0.495, signU * 0.515), Math.max(signU * 0.495, signU * 0.515), 0.002, steelSilver);
-              };
-              drawFoldedPickArm(1);
-              drawFoldedPickArm(-1);
-              addBox(pt(0.435, 0, 0), 0.032, 0.125, 0.048, steelSilver, u0, v0, w0, tv, tc, ti);
-            } else {
-              drawCurvedPickArm(1);
-              drawCurvedPickArm(-1);
-              addBox(pt(0.435, 0, 0), 0.032, 0.125, 0.048, steelSilver, u0, v0, w0, tv, tc, ti);
-            }
-          });
-        }
-
-        _applyWeaponTemplate(_aegisShiftTemplateCache[cacheKey], s, p, uAxis, vAxis, wAxis, isFlipped, vertices, colors, indices);
-      };
-
-      window.ItemRegistry["aegis_shift"] = {
-        render: function(item, vertices, colors, indices, targetBuffer) {
-          const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
-          const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.4 : 0.46);
-          const p = (item && item.position) ? item.position : [0, 0, 0];
-          const r = (item && item.R) ? item.R : [1, 0, 0];
-          const n = (item && item.normal) ? item.normal : [0, 1, 0];
-          const f = (item && item.F) ? item.F : [0, 0, 1];
-          const mode = (item && item.aegisMode) ? item.aegisMode : "pickaxe";
-          if (isIcon) {
-            const ax = [r[0] * 0.34 + n[0] * 0.94, r[1] * 0.34 + n[1] * 0.94, r[2] * 0.34 + n[2] * 0.94];
-            const ed = [r[0] * 0.94 - n[0] * 0.34, r[1] * 0.94 - n[1] * 0.34, r[2] * 0.94 - n[2] * 0.34];
-            window.buildAegisShiftModel(s, p, ax, ed, f, vertices, colors, indices, mode);
-          } else {
-            window.buildAegisShiftModel(s, p, r, f, n, vertices, colors, indices, mode);
-          }
-        }
-      };
-      window.ItemRegistry["AEGIS_SHIFT"] = window.ItemRegistry["aegis_shift"];
-
-      window.buildWoodPlanterBoxModel = function(item, vertices, colors, indices) {
-        const p = (item && item.position) ? item.position : [0, 0, 0];
-        const r = (item && item.R) ? item.R : [1, 0, 0];
-        const f = (item && item.F) ? item.F : [0, 0, 1];
-        const n = (item && item.normal) ? item.normal : [0, 1, 0];
-        const isPreview = !!(item && item.isPreview);
-        const isValid = !(item && item.isValidPlacement === false);
-        const previewColor = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
-
-        const s = (item && item.customScale) ? item.customScale : 0.46;
-
-        const woodPostColor = isPreview ? previewColor : [0.38, 0.24, 0.12];
-        const woodPlankDark = isPreview ? previewColor : [0.52, 0.35, 0.19];
-        const woodPlankLight = isPreview ? previewColor : [0.60, 0.41, 0.23];
-        const woodRimColor = isPreview ? previewColor : [0.46, 0.30, 0.16];
-        const dirtBaseColor = isPreview ? previewColor : [0.33, 0.20, 0.10];
-        const dirtMoundColor = isPreview ? previewColor : [0.39, 0.24, 0.13];
-        const dirtClodColor = isPreview ? previewColor : [0.28, 0.17, 0.08];
-
-        const pt = (rx, ny, fz) => [
-          p[0] + (r[0] * rx + n[0] * ny + f[0] * fz) * s,
-          p[1] + (r[1] * rx + n[1] * ny + f[1] * fz) * s,
-          p[2] + (r[2] * rx + n[2] * ny + f[2] * fz) * s
-        ];
-
-        // 1) Bottom wooden floor plate
-        addBox(pt(0, 0.014, 0), 0.236 * s, 0.016 * s, 0.176 * s, woodPostColor, r, n, f, vertices, colors, indices);
-
-        // 2) 4 Corner Wooden Posts
-        const postX = 0.112;
-        const postZ = 0.082;
-        const postCoords = [
-          [-postX, 0.056, -postZ],
-          [ postX, 0.056, -postZ],
-          [-postX, 0.056,  postZ],
-          [ postX, 0.056,  postZ]
-        ];
-        for (let i = 0; i < 4; i++) {
-          const c = postCoords[i];
-          addBox(pt(c[0], c[1], c[2]), 0.028 * s, 0.112 * s, 0.028 * s, woodPostColor, r, n, f, vertices, colors, indices);
-        }
-
-        // 3) Front & Back Low-Poly Wooden Plank Walls (2 horizontal planks each)
-        addBox(pt(0, 0.032, -postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankDark, r, n, f, vertices, colors, indices);
-        addBox(pt(0, 0.072, -postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankLight, r, n, f, vertices, colors, indices);
-        addBox(pt(0, 0.032,  postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankDark, r, n, f, vertices, colors, indices);
-        addBox(pt(0, 0.072,  postZ), 0.210 * s, 0.036 * s, 0.018 * s, woodPlankLight, r, n, f, vertices, colors, indices);
-
-        // 4) Left & Right Low-Poly Wooden Plank Walls (2 horizontal planks each)
-        addBox(pt(-postX, 0.032, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankLight, r, n, f, vertices, colors, indices);
-        addBox(pt(-postX, 0.072, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankDark, r, n, f, vertices, colors, indices);
-        addBox(pt( postX, 0.032, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankLight, r, n, f, vertices, colors, indices);
-        addBox(pt( postX, 0.072, 0), 0.018 * s, 0.036 * s, 0.150 * s, woodPlankDark, r, n, f, vertices, colors, indices);
-
-        // 5) Top Wooden Rim Trim around all 4 edges
-        addBox(pt(0, 0.100, -postZ), 0.252 * s, 0.016 * s, 0.030 * s, woodRimColor, r, n, f, vertices, colors, indices);
-        addBox(pt(0, 0.100,  postZ), 0.252 * s, 0.016 * s, 0.030 * s, woodRimColor, r, n, f, vertices, colors, indices);
-        addBox(pt(-postX, 0.100, 0), 0.030 * s, 0.016 * s, 0.152 * s, woodRimColor, r, n, f, vertices, colors, indices);
-        addBox(pt( postX, 0.100, 0), 0.030 * s, 0.016 * s, 0.152 * s, woodRimColor, r, n, f, vertices, colors, indices);
-
-        // 6) Planetary Terrain Surface Mound inside the planter box (adapted from terrain.js buildPlanetAsync)
-        let det = (r[1] * n[2] - r[2] * n[1]) * f[0] +
-                  (r[2] * n[0] - r[0] * n[2]) * f[1] +
-                  (r[0] * n[1] - r[1] * n[0]) * f[2];
-        const isFlipped = det < 0;
-
-        const latSeg = 10;
-        const longSeg = 12;
-        const gridBaseIdx = vertices.length / 3;
-        const planetSeed = (typeof window !== "undefined" && typeof window.globalSeed === "number") ? window.globalSeed : 12345;
-        const itemSeed = (item && typeof item.seed === "number") ? item.seed : 123.45;
-        const fbm = (typeof window !== "undefined" && typeof window.fbmNoise === "function")
-          ? window.fbmNoise
-          : ((typeof fbmNoise === "function") ? fbmNoise : null);
-
-        // สีดินสีเดียวล้วน (เข้มชุ่มน้ำเมื่อรดน้ำแล้ว)
-        const isDirtMoist = !!(item && item.plantData && item.plantData.watered);
-        const singleDirtColor = isPreview ? previewColor : (isDirtMoist ? [0.28, 0.18, 0.09] : [0.46, 0.30, 0.16]);
-
-        let moundHeights = (item && item._cachedMoundHeights && item._cachedMoundSeed === itemSeed)
-          ? item._cachedMoundHeights
-          : null;
-        if (!moundHeights) {
-          moundHeights = new Float32Array((latSeg + 1) * (longSeg + 1));
-          let mIdx = 0;
-          for (let lat = 0; lat <= latSeg; lat++) {
-            const v = (lat / latSeg) * 2.0 - 1.0;
-            for (let long = 0; long <= longSeg; long++) {
-              const u = (long / longSeg) * 2.0 - 1.0;
-              const edgeFalloff = Math.max(0.0, (1.0 - u * u * 0.88) * (1.0 - v * v * 0.88));
-              const localNoise = fbm
-                ? fbm(u * 2.4 + itemSeed, v * 2.4 + itemSeed, 0.5, planetSeed + 300, 3)
-                : (Math.sin(u * 4.0 + itemSeed) * Math.cos(v * 4.0) * 0.35);
-              moundHeights[mIdx++] = 0.082 + edgeFalloff * (0.022 + localNoise * 0.010);
-            }
-          }
-          if (item && typeof item === "object") {
-            item._cachedMoundHeights = moundHeights;
-            item._cachedMoundSeed = itemSeed;
-          }
-        }
-
-        let mhIdx = 0;
-        for (let lat = 0; lat <= latSeg; lat++) {
-          const v = (lat / latSeg) * 2.0 - 1.0; // -1 to +1
-          const fz = v * 0.073;
-
-          for (let long = 0; long <= longSeg; long++) {
-            const u = (long / longSeg) * 2.0 - 1.0; // -1 to +1
-            const rx = u * 0.103;
-            const moundHeight = moundHeights[mhIdx++];
-            const vPos = pt(rx, moundHeight, fz);
-
-            vertices.push(vPos[0], vPos[1], vPos[2]);
-            colors.push(singleDirtColor[0], singleDirtColor[1], singleDirtColor[2]);
-          }
-        }
-
-        for (let lat = 0; lat < latSeg; lat++) {
-          for (let long = 0; long < longSeg; long++) {
-            const a = gridBaseIdx + lat * (longSeg + 1) + long;
-            const b = a + longSeg + 1;
-            const c = a + 1;
-            const d = b + 1;
-            if (isFlipped) {
-              indices.push(a, d, c);
-              indices.push(a, b, d);
-            } else {
-              indices.push(a, c, d);
-              indices.push(a, d, b);
-            }
-          }
-        }
-
-        // 7) Plant Growing inside the Planter Box or Snap Placement Preview
-        if (item && (item.plantData || item.isPreviewPlant)) {
-          const isPreviewSnap = !item.plantData && item.isPreviewPlant;
-          const plant = item.plantData || {
-            seedType: item.previewSeedType || "DRAGON_FRUIT",
-            plantTime: 0,
-            watered: false,
-            growthDuration: 300,
-            seed: 1234
-          };
-
-          const isWatered = !isPreviewSnap && (plant.watered === true) && (plant.plantTime > 0);
-          const elapsedSec = isWatered ? Math.max(0, (Date.now() - plant.plantTime) / 1000) : 0;
-          const totalDur = plant.growthDuration || 300;
-          const progress = isWatered ? Math.min(1.0, elapsedSec / totalDur) : 0.0;
-          const curStage = isWatered ? Math.min(5, Math.floor(elapsedSec / 60)) : 0;
-          const isMature = isWatered && (progress >= 1.0);
-          if (!isPreviewSnap) {
-            plant.progress = progress;
-            plant.mature = isMature;
-            plant.stage = curStage;
-          }
-
-          const soilCenter = pt(0, 0.095, 0);
-          const plantSeed = (plant.seed || 1234) + 42;
-          const seedType = (plant.seedType || "DRAGON_FRUIT").toUpperCase();
-
-          // REQUIREMENT: Preview before placing and Stage 0 (first minute) use the EXACT SAME Sprout (ต้นอ่อน) model!
-          if (isPreviewSnap || curStage === 0) {
-            if (typeof window.buildPlantSprout === "function") {
-              const sproutScale = 0.024 * (s / 0.35);
-              window.buildPlantSprout(
-                soilCenter,
-                n,
-                r,
-                f,
-                sproutScale,
-                seedType,
-                vertices,
-                colors,
-                indices,
-                isPreviewSnap,
-                { isValid: (item.previewIsValid !== undefined ? item.previewIsValid : true) }
-              );
-            }
-          } else {
-            // Stage 1 to 5: Plant grows gradually towards full maturity (5 minutes)
-            const growthFactor = 0.28 + 0.72 * progress;
-            const plantTreeScale = 0.042 * (s / 0.35) * growthFactor;
-
-            if (seedType.includes("DRAGON")) {
-              const leafColor = [0.94, 0.12, 0.15];
-              leafColor.isWhiteRedAlternating = true;
-              if (plant.useGold) leafColor.useGoldForWhite = true;
-              if (typeof window.buildSingleTree === "function") {
-                window.buildSingleTree(
-                  soilCenter,
-                  n,
-                  r,
-                  f,
-                  plantTreeScale,
-                  leafColor,
-                  plantSeed,
-                  vertices,
-                  colors,
-                  indices,
-                  { hasFruits: isMature }
-                );
-              }
-            } else if (seedType.includes("BRANCH")) {
-              const leafColor = [0.18, 0.52, 0.20];
-              if (typeof window.buildSingleTree === "function") {
-                window.buildSingleTree(
-                  soilCenter,
-                  n,
-                  r,
-                  f,
-                  plantTreeScale,
-                  leafColor,
-                  plantSeed,
-                  vertices,
-                  colors,
-                  indices,
-                  { hasFruits: false }
-                );
-              }
-            } else if (seedType.includes("COTTON")) {
-              if (typeof window.buildCottonPlant === "function") {
-                window.buildCottonPlant(
-                  soilCenter[0], soilCenter[1], soilCenter[2],
-                  n[0], n[1], n[2],
-                  r, f, n,
-                  plantSeed,
-                  vertices,
-                  colors,
-                  indices,
-                  false,
-                  0.38 + 0.62 * progress,
-                  { hasBolls: isMature }
-                );
-              }
-            } else if (seedType.includes("CROWN")) {
-              if (typeof window.buildCrownFlowerPlant === "function") {
-                window.buildCrownFlowerPlant(
-                  soilCenter[0], soilCenter[1], soilCenter[2],
-                  n[0], n[1], n[2],
-                  r, f, n,
-                  plantSeed,
-                  vertices,
-                  colors,
-                  indices,
-                  false,
-                  0.38 + 0.62 * progress,
-                  { hasFlowers: isMature }
-                );
-              }
-            }
-          }
-        }
-      };
-
-      window.ItemRegistry["wood_planter_box"] = {
-        render: function(item, vertices, colors, indices, targetBuffer) {
-          window.buildWoodPlanterBoxModel(item, vertices, colors, indices);
-        }
-      };
-      window.ItemRegistry["WOOD_PLANTER_BOX"] = window.ItemRegistry["wood_planter_box"];
 
       // Helper functions for Backend Item System
       function getItemDefinition(itemOrName) {
@@ -9280,25 +8767,37 @@ function buildCollectibles(count, seed) {
       function getItemDisplayName(itemOrName, lang) {
         const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || getStoredLanguageFallback()));
         const def = getItemDefinition(itemOrName);
+        const rawKey = (def && def.id)
+          ? def.id
+          : (typeof itemOrName === "string" ? itemOrName : (itemOrName?.name || itemOrName?.type || ""));
+        const cleanKey = "item_" + String(rawKey).toUpperCase();
+        const i18nDict = (typeof window !== "undefined" && window.I18N_DICTIONARY) ? window.I18N_DICTIONARY : null;
+
+        if (curLang === "seedian") {
+          const raw = (i18nDict && i18nDict.th && i18nDict.th[cleanKey])
+            || (def && (def.name_th || def.name_en))
+            || (typeof itemOrName === "string" ? itemOrName : (itemOrName?.label || itemOrName?.name || "ITEM"));
+          return (window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(raw) : raw;
+        }
+
+        if (i18nDict && i18nDict[curLang] && i18nDict[curLang][cleanKey]) {
+          return i18nDict[curLang][cleanKey];
+        }
+
         if (def) {
           if (curLang === "th") return def.name_th || def.name_en;
-          if (curLang === "seedian") {
-            const raw = def.name_th || def.name_en;
-            return (window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(raw) : raw;
-          }
+          if (curLang === "ja") return def.name_ja || def.name_en || def.name_th;
           return def.name_en || def.name_th;
         }
+
         if (typeof window.t === "function") {
-          const rawName = typeof itemOrName === "string" ? itemOrName : (itemOrName?.name || itemOrName?.type || "");
-          const cleanKey = "item_" + String(rawName).toUpperCase();
           const translated = window.t(cleanKey);
           if (translated && translated !== cleanKey) return translated;
         }
         if (typeof itemOrName === "string") {
-          return (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(itemOrName) : itemOrName;
+          return itemOrName;
         }
-        const fallback = itemOrName?.label || itemOrName?.name || "ITEM";
-        return (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(fallback) : fallback;
+        return itemOrName?.label || itemOrName?.name || "ITEM";
       }
       window.getItemDisplayName = getItemDisplayName;
 

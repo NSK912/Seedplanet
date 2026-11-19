@@ -137,7 +137,9 @@
 
       // Crafting & Cooking
       craft_button: "คราฟต์",
+      craft_btn: "คราฟต์",
       cook_button: "ปรุงอาหาร",
+      cook_btn: "ปรุงอาหาร",
       required_ingredients: "วัตถุดิบที่ต้องการ:",
       insufficient_materials: "วัตถุดิบไม่พอ",
 
@@ -159,10 +161,10 @@
       item_GLOW_BATTERY: "หินเรืองแสงอัดแท่ง(แบต)",
       item_GLOW_BATTERY_EMPTY: "แบตเตอรี่เรืองแสง(หมดพลังงาน)",
       item_BRANCH: "กิ่งไม้",
-      item_TANTO: "มีดตันโตะ (Tanto)",
+      item_TANTO: "ทันโตะ",
       item_AXE: "ขวาน",
       item_PICKAXE: "อีเตอร์",
-      item_AEGIS_SHIFT: "อีเตอร์ดาบใหญ่ (Aegis-Shift)",
+      item_AEGIS_SHIFT: "อีเตอร์ดาบใหญ่",
       item_LOG: "ท่อนไม้",
       item_BOW: "ธนู",
       item_ARROW: "ลูกธนู",
@@ -177,7 +179,7 @@
       item_CAMPFIRE: "กองไฟ",
       item_WOOD_BOAT: "เรือไม้",
       item_WOOD_WHEEL: "ล้อไม้",
-      item_BOAT_WING: "ปีกเรือ (Boat Wing)",
+      item_BOAT_WING: "ปีกเรือ",
       item_ELECTRIC_ENGINE: "เครื่องยนต์ไฟฟ้า",
       item_WOOD_WALL: "กำแพงไม้",
       item_WOOD_WINDOW: "หน้าต่างไม้",
@@ -194,7 +196,7 @@
       item_FRIED_BUG: "แมลงทอด",
       item_DRAGON_FRUIT: "แก้วมังกร",
       item_COTTON_PLANT: "ต้นฝ้าย (นุ่น)",
-      item_CROWN_FLOWER: "ต้นรัก (Crown Flower)",
+      item_CROWN_FLOWER: "ต้นรัก",
       item_GRASS: "หญ้า",
       item_CLOTH: "ผ้า",
       item_RUBBER_BLOCK: "ก้อนยาง",
@@ -213,19 +215,19 @@
       item_PLANET_CORE: "แกนกลางดวงดาว",
       item_OBSIDIAN_CUBE: "ศิลาออบซิเดียน",
       item_OBSIDIAN_PAD_WARP: "แท่นวาร์ปออบซิเดียน",
-      item_OBSIDIAN_FLUX: "ออบซิเดียนฟลักซ์ (Obsidian Flux)",
+      item_OBSIDIAN_FLUX: "ออบซิเดียนฟลักซ์",
       item_WHITE_BODYSUIT_TOP: "เสื้อบอดี้สูทแขนสั้นสีขาว",
       item_WHITE_BODYSUIT_SHORTS: "กางเกงขาสั้นบอดี้สูทสีขาว",
       item_TRAVELER_HOODIE: "เสื้อฮูดผ้าคลุมนักเดินทาง",
       item_TRAVELER_BOOTS: "รองเท้าบูทนักเดินทาง",
-      item_OXFORD_SHOES: "รองเท้าหนัง Oxford",
-      item_DRESS_BOOTS: "รองเท้าบูทหนัง Dress Boots",
+      item_OXFORD_SHOES: "รองเท้าหนังอ็อกซ์ฟอร์ด",
+      item_DRESS_BOOTS: "รองเท้าบูทหนัง",
       item_WHITE_SHIRT_SHORT: "เสื้อเชิ้ตสีขาวแขนสั้น",
       item_BLACK_PLEATED_SKIRT: "กระโปรงพลีทสีดำ",
       item_BLACK_LEGGINGS: "กางเกงเลกกิ้งสีดำ",
-      item_DOUBLE_BREASTED_SUIT: "สูทกระดุมสองแถว",
+      item_DOUBLE_BREASTED_SUIT: "สูท",
       item_BLACK_SLACKS: "กางเกงสแล็ค",
-      item_OPERA_CAPE: "ผ้าคลุมไหล่ Opera Cape",
+      item_OPERA_CAPE: "ผ้าคลุมไหล่โอเปร่า",
       warp_ui_title: "Obsidian Flux",
       warp_pad_prefix: "แท่นวาร์ป #",
       no_warp_pads_notice: "🚫 ยังไม่มีแท่นวาร์ป (Obsidian Pad) ที่วางไว้บนดาวดวงนี้!",
@@ -453,7 +455,9 @@
 
       // Crafting & Cooking
       craft_button: "Craft",
+      craft_btn: "Craft",
       cook_button: "Cook",
+      cook_btn: "Cook",
       required_ingredients: "Required Ingredients:",
       insufficient_materials: "Insufficient Materials",
 
@@ -475,10 +479,10 @@
       item_GLOW_BATTERY: "Glowing Battery Rod",
       item_GLOW_BATTERY_EMPTY: "Empty Glowing Battery",
       item_BRANCH: "Branch",
-      item_TANTO: "Tanto Knife",
+      item_TANTO: "Tanto",
       item_AXE: "Axe",
       item_PICKAXE: "Pickaxe",
-      item_AEGIS_SHIFT: "Aegis-Shift (Pickaxe/Greatsword)",
+      item_AEGIS_SHIFT: "Aegis-Shift",
       item_LOG: "Wood Log",
       item_BOW: "Bow",
       item_ARROW: "Arrow",
@@ -539,7 +543,7 @@
       item_WHITE_SHIRT_SHORT: "White Short-Sleeve Shirt",
       item_BLACK_PLEATED_SKIRT: "Black Pleated Skirt",
       item_BLACK_LEGGINGS: "Black Leggings",
-      item_DOUBLE_BREASTED_SUIT: "Double-Breasted Suit Jacket",
+      item_DOUBLE_BREASTED_SUIT: "Suit",
       item_BLACK_SLACKS: "Black Dress Slacks",
       item_OPERA_CAPE: "Opera Cape",
       warp_ui_title: "Obsidian Flux",
@@ -770,7 +774,9 @@
 
       // Crafting & Cooking
       craft_button: "クラフト",
+      craft_btn: "クラフト",
       cook_button: "調理",
+      cook_btn: "調理",
       required_ingredients: "必要素材:",
       insufficient_materials: "素材不足",
 
@@ -792,10 +798,10 @@
       item_GLOW_BATTERY: "発光バッテリーロッド",
       item_GLOW_BATTERY_EMPTY: "空の発光バッテリー",
       item_BRANCH: "木の枝",
-      item_TANTO: "タントウ (短刀)",
+      item_TANTO: "短刀",
       item_AXE: "斧",
       item_PICKAXE: "ツルハシ",
-      item_AEGIS_SHIFT: "イージスシフト (ピッケル大剣)",
+      item_AEGIS_SHIFT: "イージスシフト",
       item_LOG: "丸太",
       item_BOW: "弓",
       item_ARROW: "矢",
@@ -856,7 +862,7 @@
       item_WHITE_SHIRT_SHORT: "白の半袖シャツ",
       item_BLACK_PLEATED_SKIRT: "黒のプリーツスカート",
       item_BLACK_LEGGINGS: "黒のレギンス",
-      item_DOUBLE_BREASTED_SUIT: "ダブルブレストスーツ",
+      item_DOUBLE_BREASTED_SUIT: "スーツ",
       item_BLACK_SLACKS: "ブラックスラックス",
       item_OPERA_CAPE: "オペラケープ",
       warp_ui_title: "黒曜石フラックス",
@@ -1042,31 +1048,32 @@
   function getItemDisplayName(itemName, lang) {
     if (!itemName) return "";
     const curLang = lang || (typeof getGameLanguage === "function" ? getGameLanguage() : currentLang) || "en";
-    if (typeof window.getItemDefinition === "function") {
-      const def = window.getItemDefinition(itemName);
-      if (def) {
-        if (curLang === "th") return def.name_th || def.name_en;
-        if (curLang === "ja") return def.name_ja || def.name_en || def.name_th;
-        if (curLang === "seedian") {
-          const baseName = def.name_th || def.name_en;
-          return (window.Seedian && typeof window.Seedian.toSeedian === "function")
-            ? window.Seedian.toSeedian(baseName)
-            : baseName;
-        }
-        return def.name_en || def.name_th;
-      }
-    }
-    const rawName = typeof itemName === "string" ? itemName : (itemName.name || itemName.type || "");
+    const def = (typeof window.getItemDefinition === "function") ? window.getItemDefinition(itemName) : null;
+    const rawName = (def && def.id) ? def.id : (typeof itemName === "string" ? itemName : (itemName.name || itemName.type || ""));
     const cleanKey = "item_" + String(rawName).toUpperCase();
+
+    if (curLang === "seedian") {
+      const baseName = (DICTIONARY.th && DICTIONARY.th[cleanKey]) || (def && (def.name_th || def.name_en)) || (DICTIONARY.en && DICTIONARY.en[cleanKey]) || rawName;
+      return (window.Seedian && typeof window.Seedian.toSeedian === "function")
+        ? window.Seedian.toSeedian(baseName)
+        : baseName;
+    }
+
+    if (DICTIONARY[curLang] && DICTIONARY[curLang][cleanKey]) {
+      return DICTIONARY[curLang][cleanKey];
+    }
+
+    if (def) {
+      if (curLang === "th") return def.name_th || def.name_en;
+      if (curLang === "ja") return def.name_ja || def.name_en || def.name_th;
+      return def.name_en || def.name_th;
+    }
+
     const translated = t(cleanKey);
     if (translated && translated !== cleanKey) {
       return translated;
     }
-    const fallbackName = typeof itemName === "string" ? itemName : (itemName.label || itemName.name || "");
-    if (curLang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
-      return window.Seedian.toSeedian(fallbackName);
-    }
-    return fallbackName;
+    return typeof itemName === "string" ? itemName : (itemName.label || itemName.name || "");
   }
 
   function updateUILanguage() {
@@ -1224,7 +1231,7 @@
     if (save) {
       if (typeof window.saveSettingsToLocalStorage === "function") {
         window.saveSettingsToLocalStorage();
-      } else {
+      } else if (!((typeof isDevMode !== "undefined" && isDevMode) || (typeof window !== "undefined" && window.isDevMode))) {
         try {
           const opts = JSON.parse(localStorage.getItem("seedplanet_options_config") || "{}");
           opts.language = currentLang;

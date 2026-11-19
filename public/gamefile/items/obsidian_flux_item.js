@@ -3,10 +3,7 @@
 // Crafted from 1x Obsidian Cube + 1x Glow Ore -> 5x Obsidian Ball
 
 (function() {
-  let _obsidianFluxTemplateCache = null;
-
-  function getObsidianFluxTemplate() {
-    if (_obsidianFluxTemplateCache) return _obsidianFluxTemplateCache;
+  function _buildObsidianFluxLocal(isIconMode, localVerts, localCols, localIndices) {
 
     const unitRadius = 0.26;
     const cosRy = Math.cos(2.0);
@@ -41,11 +38,6 @@
     const segsLat = 40;
     const segsLon = 48;
     const lx = -0.35, ly = 0.62, lz = -0.70;
-
-    const localVerts = [];
-    const stdColors = [];
-    const iconColors = [];
-    const localIndices = [];
 
     function makeLocalVertex(theta, phi, rScale) {
       const cosT = Math.cos(theta);
@@ -185,21 +177,13 @@
           p11[0], p11[1], p11[2],
           p10[0], p10[1], p10[2]
         );
+        const colOut = isIconMode ? iconCol : stdCol;
         for (let k = 0; k < 4; k++) {
-          stdColors.push(stdCol[0], stdCol[1], stdCol[2]);
-          iconColors.push(iconCol[0], iconCol[1], iconCol[2]);
+          localCols.push(colOut[0], colOut[1], colOut[2]);
         }
         localIndices.push(baseIdx, baseIdx + 1, baseIdx + 2, baseIdx, baseIdx + 2, baseIdx + 3);
       }
     }
-
-    _obsidianFluxTemplateCache = {
-      localVerts: new Float32Array(localVerts),
-      stdColors: new Float32Array(stdColors),
-      iconColors: new Float32Array(iconColors),
-      localIndices: new Uint16Array(localIndices)
-    };
-    return _obsidianFluxTemplateCache;
   }
 
   window.buildObsidianFluxModel = function(
@@ -229,47 +213,49 @@
     const isIconPreview = Boolean(c && c.isIconPreview);
     const s = scaleMultiplier || 1.0;
 
-    const tpl = getObsidianFluxTemplate();
-    const lv = tpl.localVerts;
-    const lc = isIconPreview ? tpl.iconColors : tpl.stdColors;
-    const li = tpl.localIndices;
-    const baseIdx = vertices.length / 3;
-
-    const bx = basePos[0], by = basePos[1], bz = basePos[2];
-    const r0 = itemR[0] * s, r1 = itemR[1] * s, r2 = itemR[2] * s;
-    const n0 = itemN[0] * s, n1 = itemN[1] * s, n2 = itemN[2] * s;
-    const f0 = itemF[0] * s, f1 = itemF[1] * s, f2 = itemF[2] * s;
+    const tpl = window.DropTemplateCache.getOrBake(
+      isIconPreview ? "obsidian_flux_icon" : "obsidian_flux_std",
+      (tv, tc, ti) => _buildObsidianFluxLocal(isIconPreview, tv, tc, ti)
+    );
+    if (!tpl) return;
 
     if (transformPoint) {
+      const lv = tpl.verts;
+      const lc = tpl.cols;
+      const li = tpl.inds;
+      const baseIdx = vertices.length / 3;
       for (let i = 0, len = lv.length; i < len; i += 3) {
         const pt = transformPoint(lv[i] * s, lv[i + 1] * s, lv[i + 2] * s);
         vertices.push(pt[0], pt[1], pt[2]);
       }
-    } else {
-      for (let i = 0, len = lv.length; i < len; i += 3) {
-        const lx = lv[i], ly = lv[i + 1], lz = lv[i + 2];
-        vertices.push(
-          bx + lx * r0 + ly * n0 + lz * f0,
-          by + lx * r1 + ly * n1 + lz * f1,
-          bz + lx * r2 + ly * n2 + lz * f2
-        );
+      if (overrideColors) {
+        const oc0 = overrideColors[0], oc1 = overrideColors[1], oc2 = overrideColors[2];
+        const vCount = lv.length / 3;
+        for (let i = 0; i < vCount; i++) {
+          colors.push(oc0, oc1, oc2);
+        }
+      } else {
+        for (let i = 0, len = lc.length; i < len; i += 3) {
+          colors.push(lc[i], lc[i + 1], lc[i + 2]);
+        }
       }
-    }
-
-    if (overrideColors) {
-      const oc0 = overrideColors[0], oc1 = overrideColors[1], oc2 = overrideColors[2];
-      const vCount = lv.length / 3;
-      for (let i = 0; i < vCount; i++) {
-        colors.push(oc0, oc1, oc2);
+      for (let i = 0, len = li.length; i < len; i++) {
+        indices.push(baseIdx + li[i]);
       }
     } else {
-      for (let i = 0, len = lc.length; i < len; i += 3) {
-        colors.push(lc[i], lc[i + 1], lc[i + 2]);
-      }
-    }
-
-    for (let i = 0, len = li.length; i < len; i++) {
-      indices.push(baseIdx + li[i]);
+      window.DropTemplateCache.emit(
+        tpl,
+        basePos,
+        itemR,
+        itemN,
+        itemF,
+        s,
+        0,
+        vertices,
+        colors,
+        indices,
+        overrideColors
+      );
     }
   };
 

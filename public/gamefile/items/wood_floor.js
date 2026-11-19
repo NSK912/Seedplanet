@@ -103,16 +103,33 @@ window.ItemRegistry["wood_floor"] = {
 
       if (isThin) {
         let hasLeftN = false, hasRightN = false, hasBackN = false, hasFrontN = false;
-        const allCollectibles = (typeof window !== "undefined" && window.collectibles) ? window.collectibles : [];
-        const colLen = allCollectibles.length;
-        if (item._extCache && item._extColLen === colLen) {
+        if (!item.isPreview && item._extCache && !item._extDirty) {
           hasLeftN = item._extCache[0];
           hasRightN = item._extCache[1];
           hasBackN = item._extCache[2];
           hasFrontN = item._extCache[3];
         } else {
-          for (let k = 0; k < colLen; k++) {
-            const other = allCollectibles[k];
+          let floorsToCheck = null;
+          if (window._spatialFloors) {
+            floorsToCheck = [];
+            const cx = Math.floor(p[0]);
+            const cy = Math.floor(p[1]);
+            const cz = Math.floor(p[2]);
+            for (let dx = -1; dx <= 1; dx++) {
+              for (let dy = -1; dy <= 1; dy++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                  const bucket = window._spatialFloors.get((cx + dx) + "_" + (cy + dy) + "_" + (cz + dz));
+                  if (bucket) {
+                    for (let b = 0; b < bucket.length; b++) floorsToCheck.push(bucket[b]);
+                  }
+                }
+              }
+            }
+          } else {
+            floorsToCheck = (typeof window !== "undefined" && window.collectibles) ? window.collectibles : [];
+          }
+          for (let k = 0, kLen = floorsToCheck.length; k < kLen; k++) {
+            const other = floorsToCheck[k];
             if (!other || !other.active || other === item || other.isPreview) continue;
             if (other.type !== "thin_wood_floor" && other.type !== "wood_floor") continue;
             const oP = other.position;
@@ -132,8 +149,10 @@ window.ItemRegistry["wood_floor"] = {
               else if (dF > 0.24 && dF < 0.36) hasFrontN = true;
             }
           }
-          item._extCache = [hasLeftN, hasRightN, hasBackN, hasFrontN];
-          item._extColLen = colLen;
+          if (!item.isPreview) {
+            item._extCache = [hasLeftN, hasRightN, hasBackN, hasFrontN];
+            item._extDirty = false;
+          }
         }
         const extL = hasLeftN ? 0.0 : 0.016;
         const extR = hasRightN ? 0.0 : 0.016;

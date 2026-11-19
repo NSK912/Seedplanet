@@ -59,8 +59,7 @@ window.ItemRegistry["wood_roof"] = {
     let hasRightNeighbor = false;
 
     const allCollectibles = (typeof window !== "undefined" && window.collectibles) ? window.collectibles : [];
-    const colLen = allCollectibles.length;
-    if (item._vMaxEff !== undefined && item._colLen === colLen && item._hasLeftN !== undefined && item._hasRightN !== undefined) {
+    if (!item.isPreview && !item._roofDirty && item._vMaxEff !== undefined && item._hasLeftN !== undefined && item._hasRightN !== undefined) {
       vMaxEff = item._vMaxEff;
       hasLeftNeighbor = item._hasLeftN;
       hasRightNeighbor = item._hasRightN;
@@ -131,7 +130,7 @@ window.ItemRegistry["wood_roof"] = {
         item._vMaxEff = vMaxEff;
         item._hasLeftN = hasLeftNeighbor;
         item._hasRightN = hasRightNeighbor;
-        item._colLen = colLen;
+        item._roofDirty = false;
       }
     }
 

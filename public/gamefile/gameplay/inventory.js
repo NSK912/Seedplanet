@@ -33,231 +33,6 @@
       window.actionSlotsItems = actionSlotsItems;
       window.equipSlotsItems = equipSlotsItems;
 
-      // ============================================
-      // ระบบพลังงานแบตเตอรี่หินเรืองแสง (Glow Battery Energy Points System)
-      // ============================================
-      // ใช้ระบบแต้มพลังงาน (Energy Points) เช่นเดียวกับระบบแต้ม HP ของผู้เล่น
-      // ความจุเต็ม = 72,000 แต้ม (ใช้งานขับขี่ได้เต็ม 20 นาที ที่ 60 ticks/วินาที)
-      // แต้มรีเจนเต็ม = 18,000 แต้ม (ใช้เวลารีเจน 5 นาที ที่ 60 ticks/วินาที)
-      // แบตเตอรี่ที่หมดพลังงาน = รอรีเจนสะสมแต้มจนเต็ม 18,000 แต้ม แล้วจะกลับมา 72,000 แต้มพร้อมใช้งาน
-      window.BatterySystem = {
-        MAX_CHARGE: 72000,     // 72,000 แต้มพลังงาน (เทียบเท่าขับต่อเนื่อง 20 นาที)
-        REGEN_TIME: 18000,     // 18,000 แต้มรีเจน (เทียบเท่ารีเจน 5 นาที)
-        activeCharge: 72000,
-        _lastNoticeTime: 0,
-
-        getTotalBatteryCount() {
-          let count = 0;
-          if (typeof inventory !== "undefined" && Array.isArray(inventory)) {
-            for (let item of inventory) {
-              if (item && (item.name === "GLOW_BATTERY" || item.label === "GLOW_BATTERY")) count += (item.count || 1);
-            }
-          }
-          if (typeof actionSlotsItems !== "undefined" && Array.isArray(actionSlotsItems)) {
-            for (let item of actionSlotsItems) {
-              if (item && (item.name === "GLOW_BATTERY" || item.label === "GLOW_BATTERY")) count += (item.count || 1);
-            }
-          }
-          return count;
-        },
-
-        getTotalEmptyBatteryCount() {
-          let count = 0;
-          if (typeof inventory !== "undefined" && Array.isArray(inventory)) {
-            for (let item of inventory) {
-              if (item && item.name === "GLOW_BATTERY_EMPTY") count += (item.count || 1);
-            }
-          }
-          if (typeof actionSlotsItems !== "undefined" && Array.isArray(actionSlotsItems)) {
-            for (let item of actionSlotsItems) {
-              if (item && item.name === "GLOW_BATTERY_EMPTY") count += (item.count || 1);
-            }
-          }
-          return count;
-        },
-
-        getActiveBattery() {
-          if (this.getTotalBatteryCount() > 0) {
-            return { charge: this.activeCharge, isRecharging: false, rechargeTime: 0 };
-          }
-          return null;
-        },
-
-        hasActiveBattery() {
-          return this.getTotalBatteryCount() > 0;
-        },
-
-        getStats() {
-          let readyCount = this.getTotalBatteryCount();
-          let rechargingCount = this.getTotalEmptyBatteryCount();
-          let activeBattery = readyCount > 0 ? { charge: this.activeCharge } : null;
-          let minRechargePointsRemaining = Infinity;
-
-          // Find the empty battery with the most recharge time
-          const scanForRecharge = (arr) => {
-            if (!arr || !Array.isArray(arr)) return;
-            for (let item of arr) {
-              if (item && item.name === "GLOW_BATTERY_EMPTY" && item.rechargeTime !== undefined) {
-                const rem = Math.max(0, this.REGEN_TIME - item.rechargeTime);
-                if (rem < minRechargePointsRemaining) minRechargePointsRemaining = rem;
-              }
-            }
-          };
-          scanForRecharge(typeof inventory !== "undefined" ? inventory : []);
-          scanForRecharge(typeof actionSlotsItems !== "undefined" ? actionSlotsItems : []);
-
-          if (rechargingCount > 0 && minRechargePointsRemaining === Infinity) {
-             minRechargePointsRemaining = this.REGEN_TIME; // Default if not started yet
-          }
-
-          const minSecRemaining = minRechargePointsRemaining === Infinity ? 0 : (minRechargePointsRemaining / 60);
-
-          return {
-            total: readyCount + rechargingCount,
-            readyCount,
-            rechargingCount,
-            activeBattery,
-            minRechargeTimeRemaining: minSecRemaining
-          };
-        },
-
-        consumePower(amount = 1) {
-          if (this.getTotalBatteryCount() <= 0) return false;
-
-          let deduct = 1;
-          if (typeof amount === "number" && !isNaN(amount) && amount > 0) {
-            deduct = amount < 0.2 ? (amount * 60) : amount;
-          }
-
-          this.activeCharge -= deduct;
-          if (this.activeCharge <= 0) {
-             // 1. Remove 1 GLOW_BATTERY
-             let removed = false;
-             if (typeof consumeItem === "function") {
-               consumeItem("GLOW_BATTERY", 1);
-               removed = true;
-             }
-
-             if (removed) {
-               // 2. Add 1 GLOW_BATTERY_EMPTY
-               if (typeof addItemToInventory === "function") {
-                 addItemToInventory({ name: "GLOW_BATTERY_EMPTY", count: 1 }, false, false);
-               }
-               
-               // Initialize rechargeTime for the newly added empty battery
-               const initRecharge = (arr) => {
-                  if (!arr || !Array.isArray(arr)) return;
-                  for (let item of arr) {
-                    if (item && item.name === "GLOW_BATTERY_EMPTY" && item.rechargeTime === undefined) {
-                       item.rechargeTime = 0;
-                    }
-                  }
-               };
-               initRecharge(typeof inventory !== "undefined" ? inventory : []);
-               initRecharge(typeof actionSlotsItems !== "undefined" ? actionSlotsItems : []);
-
-               this.activeCharge = this.MAX_CHARGE;
-               
-               if (this.getTotalBatteryCount() > 0) {
-                 if (typeof showNotice === "function") {
-                   showNotice("🔋 แบตเตอรี่หมด 1 ก้อน (เริ่มรีเจน 5 นาที) ➔ สลับไปใช้ก้อนถัดไปอัตโนมัติ!");
-                 }
-               } else {
-                 if (typeof showNotice === "function") {
-                   showNotice("⚠️ แบตเตอรี่ในกระเป๋าหมดพลังงานทั้งหมดแล้ว! (กำลังรอรีเจน 5 นาที)");
-                 }
-               }
-               if (typeof renderInventory === "function" && document.getElementById("inventoryOverlay")?.classList.contains("open")) {
-                 renderInventory();
-               }
-             }
-          }
-          return true;
-        },
-
-        update(dt = 1) {
-          let addPoints = 1;
-          if (typeof dt === "number" && !isNaN(dt) && dt > 0) {
-            addPoints = dt < 0.2 ? (dt * 60) : dt;
-          }
-
-          let hasRechargedAny = false;
-          
-          const processRecharge = (arr) => {
-            if (!arr || !Array.isArray(arr)) return;
-            for (let item of arr) {
-              if (item && item.name === "GLOW_BATTERY_EMPTY") {
-                if (item.rechargeTime === undefined) item.rechargeTime = 0;
-                item.rechargeTime += addPoints;
-                if (item.rechargeTime >= this.REGEN_TIME) {
-                   // Convert to GLOW_BATTERY
-                   item.name = "GLOW_BATTERY";
-                   item.label = window.Language ? (window.Language.current === "en" ? "Glowing Battery Rod" : "หินเรืองแสงอัดแท่ง(แบต)") : "GLOW_BATTERY";
-                   item.icon = "🔋";
-                   delete item.rechargeTime;
-                   hasRechargedAny = true;
-                }
-              }
-            }
-          };
-          
-          processRecharge(typeof inventory !== "undefined" ? inventory : []);
-          processRecharge(typeof actionSlotsItems !== "undefined" ? actionSlotsItems : []);
-
-          if (hasRechargedAny) {
-            if (typeof window.mergeInventory === "function") window.mergeInventory(); // group stacked items back together
-            
-            if (typeof showNotice === "function") {
-              showNotice("⚡ แบตเตอรี่หินเรืองแสงรีเจนพลังงานเต็ม 100% แล้ว! (Battery Fully Recharged)");
-            }
-            if (typeof renderInventory === "function" && document.getElementById("inventoryOverlay")?.classList.contains("open")) {
-              renderInventory();
-            }
-          }
-        },
-
-        showEmptyNotice() {
-          const now = Date.now();
-          if (now - this._lastNoticeTime > 3500) {
-            this._lastNoticeTime = now;
-            const total = this.getTotalBatteryCount();
-            if (total === 0) {
-              if (typeof showNotice === "function") {
-                showNotice("⚠️ เครื่องยนต์ไฟฟ้าต้องการไอเทม [หินเรืองแสงอัดแท่ง(แบต)] ในกระเป๋าเพื่อทำงาน!");
-              }
-            } else {
-              const stats = this.getStats();
-              if (stats.minRechargeTimeRemaining > 0) {
-                const remSec = Math.ceil(stats.minRechargeTimeRemaining);
-                const mins = Math.floor(remSec / 60);
-                const secs = remSec % 60;
-                const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-                if (typeof showNotice === "function") {
-                  showNotice(`🔋 แบตเตอรี่กำลังรีเจนพลังงาน... เหลืออีก ${timeStr} นาที (รอรีเจนครบ 5 นาที)`);
-                }
-              }
-            }
-          }
-        },
-
-        exportState() {
-          return {
-            activeCharge: this.activeCharge
-          };
-        },
-
-        importState(data) {
-          if (data && typeof data === "object") {
-            if (typeof data.activeCharge === "number") {
-              this.activeCharge = data.activeCharge;
-            } else if (Array.isArray(data)) { // Support old save format
-              const active = data.find(b => !b.isRecharging && b.charge > 0);
-              this.activeCharge = active ? active.charge : this.MAX_CHARGE;
-            }
-          }
-        }
-      };
-
       const ALL_ITEMS = [
         { name: "ROCK", icon: "🪨" },
         { name: "BIG_ROCK", icon: "🪨" },
@@ -645,40 +420,8 @@
             buildRockFormation(p, 0.55, [0.22, 0.95, 0.88], 333.33, rawVertices, rawColors, rawIndices);
           } else if (name === "GLOW_BATTERY" || name === "GLOW_BATTERY_EMPTY") {
             scaleFactor = 1.35;
-            
-            let fillPercent = 0;
-            if (name === "GLOW_BATTERY") {
-              if (window.BatterySystem) {
-                 const stats = window.BatterySystem.getStats();
-                 fillPercent = (stats.activeBattery && stats.activeBattery.charge) ? (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100 : 100;
-              } else {
-                 fillPercent = 100;
-              }
-            } else {
-               // Empty battery is recharging
-               if (item && typeof item.rechargeTime === "number" && window.BatterySystem) {
-                  fillPercent = (item.rechargeTime / window.BatterySystem.REGEN_TIME) * 100;
-               } else {
-                  fillPercent = 0;
-               }
-            }
-
-            const isLow = fillPercent <= 20;
-            const fullColor = isLow ? [0.88, 0.1, 0.1] : [0.22, 0.95, 0.88];
-            const emptyColor = [0.3, 0.3, 0.3];
-            
-            const totalHeight = 0.64;
-            const fillHeight = totalHeight * (fillPercent / 100);
-            
-            // Empty part (top)
-            if (fillPercent < 100) {
-              const emptyBot = -0.32 + fillHeight;
-              buildTaperedSegment([0, emptyBot, 0], [0, 0.32, 0], 0.13, 0.13, 4, emptyColor, rawVertices, rawColors, rawIndices, true);
-            }
-            // Filled part (bottom)
-            if (fillPercent > 0) {
-              const fillTop = -0.32 + fillHeight;
-              buildTaperedSegment([0, -0.32, 0], [0, fillTop, 0], 0.13, 0.13, 4, fullColor, rawVertices, rawColors, rawIndices, true);
+            if (typeof window.buildGlowBatteryIconModel === "function") {
+              window.buildGlowBatteryIconModel(name, item, rawVertices, rawColors, rawIndices);
             }
           } else if (name === "BRANCH") {
             scaleFactor = 1.4;
@@ -1317,19 +1060,34 @@
       function updateActionSlotsPosition() {
         const actionSlotsWrapper = document.getElementById("actionSlots");
         if (!actionSlotsWrapper) return;
-        
-        if (actionSlotsWrapper.classList.contains("move-mode") && window.innerWidth > 768) {
+
+        if (actionSlotsWrapper.classList.contains("move-mode")) {
           const panel = document.querySelector("#inventoryOverlay .inventory-panel");
+          const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+          const slotsWidth = actionSlotsWrapper.offsetWidth || 7.5 * rootPx;
+          const gap = rootPx; // 1rem
+
           if (panel) {
             const rect = panel.getBoundingClientRect();
-            // Position action slots exactly adjacent to the right edge of the inventory panel with a 16px gap
-            actionSlotsWrapper.style.left = `${rect.right + 16}px`;
-            actionSlotsWrapper.style.top = `${rect.top + rect.height / 2}px`;
-            actionSlotsWrapper.style.transform = "translateY(-50%) scale(var(--ui-hud-scale, 1))";
-            actionSlotsWrapper.style.transformOrigin = "left center";
-            actionSlotsWrapper.style.bottom = "auto";
-            actionSlotsWrapper.style.right = "auto";
+            if (rect.width > 0 && rect.right + gap + slotsWidth <= window.innerWidth - rootPx * 0.5) {
+              // Position action slots adjacent to the right edge of the inventory panel
+              actionSlotsWrapper.style.left = `${rect.right + gap}px`;
+              actionSlotsWrapper.style.top = `${rect.top + rect.height / 2}px`;
+              actionSlotsWrapper.style.transform = "translateY(-50%)";
+              actionSlotsWrapper.style.transformOrigin = "left center";
+              actionSlotsWrapper.style.bottom = "auto";
+              actionSlotsWrapper.style.right = "auto";
+              return;
+            }
           }
+
+          // Fallback for narrow landscape viewports: pin to right edge instead of bottom-center HP bar
+          actionSlotsWrapper.style.left = "auto";
+          actionSlotsWrapper.style.right = "0.625rem";
+          actionSlotsWrapper.style.top = "50%";
+          actionSlotsWrapper.style.bottom = "auto";
+          actionSlotsWrapper.style.transform = "translateY(-50%)";
+          actionSlotsWrapper.style.transformOrigin = "right center";
         } else {
           // Reset custom inline styles so the CSS handles normal layout
           actionSlotsWrapper.style.left = "";
@@ -1344,35 +1102,62 @@
 
       
       function closeInventoryActually() {
-        const qBtn = document.getElementById("quitGameBtn");
-        if (qBtn) qBtn.style.display = "none";
         const overlay = document.getElementById("inventoryOverlay");
-        overlay.classList.remove("open");
-        
-        // Hide cooking tab when closed
-        if (document.getElementById("tabCooking").classList.contains("active")) {
+        const wasChestMode = !!(overlay && overlay.classList.contains("mode-chest")) || !!currentOpenChest;
+        const wasCookingActive = !!(document.getElementById("tabCooking")?.classList.contains("active"));
+
+        if (overlay) {
+          overlay.classList.remove("open");
+          overlay.classList.remove("mode-chest");
+        }
+
+        // Hide chest elements and clear chest state when closed
+        if (wasChestMode) {
+          currentOpenChest = null;
+          const chestGridWrapper = document.getElementById("chestGridWrapper");
+          if (chestGridWrapper) chestGridWrapper.style.display = "none";
+          const invChestLabel = document.getElementById("inventoryGridChestLabel");
+          if (invChestLabel) invChestLabel.style.display = "none";
+          const tabChest = document.getElementById("tabChest");
+          if (tabChest) { tabChest.classList.remove("active"); tabChest.style.display = "none"; }
+          const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+          if (chestTakeAllBtn) chestTakeAllBtn.style.display = "none";
+        }
+
+        // Restore default inventory tab layout when closing Cooking or Chest mode
+        if (wasCookingActive || wasChestMode) {
           activeTab = "inventory";
-          document.getElementById("tabCooking").classList.remove("active");
-          document.getElementById("tabCooking").style.display = "none";
-          document.getElementById("tabInventory").classList.add("active");
-          document.getElementById("cookingList").style.display = "none";
-          document.getElementById("inventoryGrid").style.display = "grid";
-          
+          if (typeof window.setActiveTab === "function") window.setActiveTab("inventory");
+          const tabCooking = document.getElementById("tabCooking");
+          if (tabCooking) {
+            tabCooking.classList.remove("active");
+            tabCooking.style.display = "none";
+          }
+          const tabInventory = document.getElementById("tabInventory");
+          if (tabInventory) tabInventory.classList.add("active");
+          const cookingList = document.getElementById("cookingList");
+          if (cookingList) cookingList.style.display = "none";
+          const inventoryGrid = document.getElementById("inventoryGrid");
+          if (inventoryGrid) inventoryGrid.style.display = "grid";
+
           const mainLayout = document.getElementById("inventoryMainLayout");
           if (mainLayout) {
             mainLayout.style.display = "flex";
             mainLayout.style.maxWidth = "none";
           }
-          const divider = document.getElementById("inventoryVerticalDivider");
-          if (divider) divider.style.display = "block";
-          const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
-          if (leftDivider) leftDivider.style.display = "block";
           const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
           const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "flex";
+          const bottomBtns = document.getElementById("inventoryBottomButtons");
+          if (bottomBtns) bottomBtns.style.display = "flex";
         }
-        document.getElementById("tabCooking").style.display = "none";
+        const tabCookingEl = document.getElementById("tabCooking");
+        if (tabCookingEl) tabCookingEl.style.display = "none";
+        const tabChestEl = document.getElementById("tabChest");
+        if (tabChestEl) { tabChestEl.classList.remove("active"); tabChestEl.style.display = "none"; }
+        const chestTakeAllEl = document.getElementById("chestTakeAllBtn");
+        if (chestTakeAllEl) chestTakeAllEl.style.display = "none";
 
 
         if (gameStarted) {
@@ -1395,36 +1180,70 @@
       window.closeInventoryActually = closeInventoryActually;
 
       function openChest(chestItem) {
-        // Close inventory first if open
-        const invOverlay = document.getElementById("inventoryOverlay");
-        if (invOverlay && invOverlay.classList.contains("open")) {
-          invOverlay.classList.remove("open");
-        }
-        
         currentOpenChest = chestItem;
         if (!currentOpenChest.storage) {
           currentOpenChest.storage = Array(20).fill(null);
         }
-        
-        const overlay = document.getElementById("chestOverlay");
-        if (overlay) {
-          overlay.classList.add("open");
-        }
-        
+
+        const overlay = document.getElementById("inventoryOverlay");
+        const tabChest = document.getElementById("tabChest");
+        const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+        const chestGridWrapper = document.getElementById("chestGridWrapper");
+        const invChestLabel = document.getElementById("inventoryGridChestLabel");
+        const tabCooking = document.getElementById("tabCooking");
+        const tabInventory = document.getElementById("tabInventory");
+        const tabItemsList = document.getElementById("tabItemsList");
+        const tabSettings = document.getElementById("tabSettings");
+        const tabCrafting = document.getElementById("tabCrafting");
+        const qBtn = document.getElementById("quitGameBtn");
+        const mainLayout = document.getElementById("inventoryMainLayout");
+        const inventoryGrid = document.getElementById("inventoryGrid");
+        const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
+        const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
+        const bottomBtns = document.getElementById("inventoryBottomButtons");
+        const inventorySettings = document.getElementById("inventorySettings");
+        const craftingList = document.getElementById("craftingList");
+        const cookingList = document.getElementById("cookingList");
+
+        // Reuse the exact INVENTORY header, #inventoryMainLayout, and #inventoryGrid — prepare BEFORE opening
+        if (tabInventory) { tabInventory.style.display = "none"; tabInventory.classList.remove("active"); }
+        if (tabItemsList) { tabItemsList.style.display = "none"; tabItemsList.classList.remove("active"); }
+        if (tabSettings) { tabSettings.style.display = "none"; tabSettings.classList.remove("active"); }
+        if (tabCrafting) { tabCrafting.style.display = "none"; tabCrafting.classList.remove("active"); }
+        if (tabCooking) { tabCooking.style.display = "none"; tabCooking.classList.remove("active"); }
+        if (qBtn) qBtn.classList.add("quit-btn-hidden");
+
+        if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
+        if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+        if (bottomBtns) bottomBtns.style.display = "none";
+        if (inventorySettings) inventorySettings.style.display = "none";
+        if (craftingList) craftingList.style.display = "none";
+        if (cookingList) cookingList.style.display = "none";
+
+        activeTab = "chest";
+        if (typeof window.setActiveTab === "function") window.setActiveTab("chest");
+        if (tabChest) { tabChest.style.display = "inline-flex"; tabChest.classList.add("active"); }
+        if (chestTakeAllBtn) chestTakeAllBtn.style.display = "inline-flex";
+        if (overlay) overlay.classList.add("mode-chest");
+        if (mainLayout) { mainLayout.style.display = "flex"; mainLayout.style.maxWidth = "none"; }
+        if (chestGridWrapper) chestGridWrapper.style.display = "flex";
+        if (invChestLabel) invChestLabel.style.display = "flex";
+        if (inventoryGrid) inventoryGrid.style.display = "grid";
+
+        // Render chest slots (left) + player inventory slots via renderInventory() (right) BEFORE displaying overlay
         renderChest();
 
+        if (typeof window.updateResponsiveUIScale === "function") window.updateResponsiveUIScale();
+        if (overlay) overlay.classList.add("open");
+
+        if (window.GamepadController && window.GamepadController.uiNav) {
+          window.GamepadController.uiNav.area = "chest";
+          window.GamepadController.uiNav.index = 0;
+        }
       }
 
       function closeChest() {
-        currentOpenChest = null;
-        const overlay = document.getElementById("chestOverlay");
-        if (overlay) {
-          overlay.classList.remove("open");
-        }
-        if (gameStarted) {
-          requestPointerLockSafe();
-        }
-        closeTrashConfirm();
+        closeInventoryActually();
       }
 
       let activeWarpFluxSource = null;
@@ -1498,10 +1317,15 @@
         const invOverlay = document.getElementById("inventoryOverlay");
         if (invOverlay && invOverlay.classList.contains("open")) {
           invOverlay.classList.remove("open");
-        }
-        const chestOverlay = document.getElementById("chestOverlay");
-        if (chestOverlay && chestOverlay.classList.contains("open")) {
-          chestOverlay.classList.remove("open");
+          invOverlay.classList.remove("mode-chest");
+          const chestGridWrapper = document.getElementById("chestGridWrapper");
+          if (chestGridWrapper) chestGridWrapper.style.display = "none";
+          const invChestLabel = document.getElementById("inventoryGridChestLabel");
+          if (invChestLabel) invChestLabel.style.display = "none";
+          const tabChest = document.getElementById("tabChest");
+          if (tabChest) { tabChest.classList.remove("active"); tabChest.style.display = "none"; }
+          const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+          if (chestTakeAllBtn) chestTakeAllBtn.style.display = "none";
           currentOpenChest = null;
         }
 
@@ -1828,6 +1652,78 @@
         }
       }
 
+      // Unified bottom item-name bar (with top divider line & smooth auto-marquee when text overflows)
+      function measureItemNameBarMarquee(bar) {
+        if (!bar || !bar.isConnected) return;
+        const inner = bar.querySelector(".item-name-bar-inner");
+        const track = bar.querySelector(".item-name-bar-track");
+        if (!inner || !track) return;
+        const availW = inner.clientWidth;
+        if (availW <= 0) return;
+        const textW = track.scrollWidth;
+        const overflow = Math.ceil(textW - availW);
+        if (overflow > 1) {
+          const shiftPx = overflow + 4;
+          const durationSec = Math.max(3.6, Math.min(12, 2.4 + shiftPx / 16));
+          track.style.setProperty("--marquee-shift", `-${shiftPx}px`);
+          track.style.setProperty("--marquee-duration", `${durationSec.toFixed(2)}s`);
+          bar.classList.add("is-scrolling");
+        } else {
+          bar.classList.remove("is-scrolling");
+          track.style.removeProperty("--marquee-shift");
+          track.style.removeProperty("--marquee-duration");
+        }
+      }
+
+      const _itemNameBarObserver = (typeof IntersectionObserver === "function")
+        ? new IntersectionObserver((entries) => {
+            for (let i = 0; i < entries.length; i++) {
+              const entry = entries[i];
+              if (entry.isIntersecting) {
+                measureItemNameBarMarquee(entry.target);
+              }
+            }
+          }, { threshold: 0.01 })
+        : null;
+
+      function syncItemNameBarMarquees(rootEl) {
+        const root = rootEl || document;
+        const bars = root.querySelectorAll(".item-name-bar");
+        for (let i = 0; i < bars.length; i++) {
+          measureItemNameBarMarquee(bars[i]);
+        }
+      }
+      window.syncItemNameBarMarquees = syncItemNameBarMarquees;
+
+      function createUnifiedItemNameBar(displayName, extraClass) {
+        const bar = document.createElement("span");
+        bar.className = "item-name-bar" + (extraClass ? " " + extraClass : "");
+
+        const inner = document.createElement("span");
+        inner.className = "item-name-bar-inner";
+
+        const track = document.createElement("span");
+        track.className = "item-name-bar-track";
+
+        if (typeof window.setElementTextOrHTML === "function") {
+          window.setElementTextOrHTML(track, displayName);
+        } else if (typeof displayName === "string" && (displayName.includes("<svg") || displayName.includes("<span"))) {
+          track.innerHTML = displayName;
+        } else {
+          track.textContent = displayName;
+        }
+
+        inner.appendChild(track);
+        bar.appendChild(inner);
+
+        if (_itemNameBarObserver) {
+          _itemNameBarObserver.observe(bar);
+        }
+        requestAnimationFrame(() => measureItemNameBarMarquee(bar));
+        return bar;
+      }
+      window.createUnifiedItemNameBar = createUnifiedItemNameBar;
+
       function populateSlotElement(slotEl, {
         source,
         index,
@@ -1875,9 +1771,9 @@
         if (keyLabel) {
           const keyBadge = document.createElement("span");
           keyBadge.style.position = "absolute";
-          keyBadge.style.top = "2px";
-          keyBadge.style.right = "4px";
-          keyBadge.style.fontSize = "10px";
+          keyBadge.style.top = "0.125rem";
+          keyBadge.style.right = "0.25rem";
+          keyBadge.style.fontSize = "0.625rem";
           keyBadge.style.color = "rgba(255,255,255,0.5)";
           keyBadge.style.fontFamily = "'Google Sans', sans-serif";
           keyBadge.textContent = keyLabel;
@@ -1909,68 +1805,28 @@
           }
           slotEl.appendChild(content);
 
-          const label = document.createElement("span");
-          label.className = "slot-label";
-          if (labelStyle) {
-            Object.assign(label.style, labelStyle);
-          } else if (labelColor) {
-            label.style.color = labelColor;
-          }
           const rawName = item.name || item.label || "ITEM";
           const displayName = typeof getItemDisplayName === "function" ? getItemDisplayName(rawName) : rawName;
-          if (typeof window.setElementTextOrHTML === "function") {
-            window.setElementTextOrHTML(label, displayName);
-          } else if (typeof displayName === "string" && (displayName.includes("<svg") || displayName.includes("<span"))) {
-            label.innerHTML = displayName;
-          } else {
-            label.textContent = displayName;
+          const nameBar = createUnifiedItemNameBar(displayName);
+          if (labelStyle) {
+            Object.assign(nameBar.style, labelStyle);
+          } else if (labelColor) {
+            nameBar.style.color = labelColor;
           }
-          slotEl.appendChild(label);
+          slotEl.appendChild(nameBar);
 
           if (item.count > 1) {
             const countBadge = document.createElement("span");
+            countBadge.className = "slot-count-badge";
             countBadge.style.position = "absolute";
-            countBadge.style.top = "2px";
-            countBadge.style.left = "4px";
-            countBadge.style.fontSize = "11px";
+            countBadge.style.top = "0.125rem";
+            countBadge.style.left = "0.25rem";
+            countBadge.style.fontSize = "0.6875rem";
             countBadge.style.fontWeight = "bold";
             countBadge.style.color = "#fff";
-            countBadge.style.textShadow = "1px 1px 2px #000";
+            countBadge.style.textShadow = "0.0625rem 0.0625rem 0.125rem #000";
             countBadge.textContent = "x" + item.count;
             slotEl.appendChild(countBadge);
-          }
-
-          if (item.name === "GLOW_BATTERY" || item.label === "GLOW_BATTERY") {
-            const stats = window.BatterySystem ? window.BatterySystem.getStats() : null;
-            if (stats && stats.readyCount > 0 && stats.activeBattery) {
-              const pct = Math.round((stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100);
-              const totalSecs = Math.floor(stats.activeBattery.charge / 60);
-              const m = Math.floor(totalSecs / 60);
-              const s = Math.floor(totalSecs % 60);
-              slotEl.title = `🔋 หินเรืองแสงอัดแท่ง(แบต)\n• พร้อมใช้งาน: ${stats.readyCount} ก้อน\n• พลังงานก้อนหลัก: ${pct}% (${m}:${s < 10 ? '0' : ''}${s} นาที)\n• 1 ก้อนใช้ได้ 20 นาที / รีเจนอัตโนมัติ 5 นาทีเมื่อหมด`;
-            } else {
-              slotEl.title = `🔋 หินเรืองแสงอัดแท่ง(แบต)\n• พร้อมใช้งาน (20 นาที)\n• รีเจนอัตโนมัติ 5 นาทีเมื่อหมด`;
-            }
-          } else if (item.name === "GLOW_BATTERY_EMPTY") {
-            const pct = Math.round((item.rechargeTime / 18000) * 100);
-            const rem = Math.max(0, (18000 - item.rechargeTime) / 60);
-            const m = Math.floor(rem / 60);
-            const s = Math.ceil(rem % 60);
-            slotEl.title = `⏳ แบตเตอรี่เรืองแสง(หมดพลังงาน)\n• กำลังรีเจน: ${pct}%\n• เหลือเวลารีเจน: ${m}:${s < 10 ? '0' : ''}${s} นาที`;
-          } else {
-            const def = (typeof getItemDefinition === "function") ? getItemDefinition(item) : (window.getItemDefinition ? window.getItemDefinition(item) : null);
-            if (def) {
-              const isPrePlace = window.hasItemCategory ? window.hasItemCategory(item, "PRE_PLACE") : (def.category === "PRE_PLACE");
-              const isHoldable = window.hasItemCategory ? window.hasItemCategory(item, "HOLDABLE") : (def.category === "HOLDABLE");
-              const isVehicle = window.hasItemCategory ? window.hasItemCategory(item, "VEHICLE") : (Array.isArray(def.category) ? def.category.includes("VEHICLE") : def.category === "VEHICLE");
-              
-              let catLabel = "📦 ไอเทมวัตถุดิบ/ทั่วไป (NONE)";
-              if (isVehicle) catLabel = "🚙 ยานพาหนะ (VEHICLE)";
-              else if (isPrePlace) catLabel = "🏗️ ไอเทม พรี-วาง (PRE_PLACE)";
-              else if (isHoldable) catLabel = "⚔️ ไอเทมถือ (HOLDABLE)";
-
-              slotEl.title = `${def.icon || ""} ${def.name_th} (${def.name_en})\n• หมวดหมู่: ${catLabel}\n• การใช้งาน: ${def.usage_th}`;
-            }
           }
 
           if (item && (item.name === "WOODEN_ARM_CANNON" || item.name === "ARM_CANNON")) {
@@ -1991,11 +1847,11 @@
               }
 
               const labelEl = document.createElement("span");
-              labelEl.style.fontSize = "10px";
+              labelEl.style.fontSize = "0.625rem";
               labelEl.style.fontWeight = "bold";
               labelEl.style.color = "#00f0ff";
-              labelEl.style.textShadow = "0 0 4px #000, 1px 1px 2px #000";
-              labelEl.style.marginTop = "0px";
+              labelEl.style.textShadow = "0 0 0.25rem #000, 0.0625rem 0.0625rem 0.125rem #000";
+              labelEl.style.marginTop = "0";
               labelEl.style.whiteSpace = "nowrap";
               labelEl.textContent = `x${ammoCount}`;
 
@@ -2108,21 +1964,23 @@
             if (onClick) onClick(e);
           };
 
-          // Track hovered slot for bottom inventory action buttons
-          slotEl.addEventListener("mouseenter", () => {
+          // Track hovered slot for bottom inventory action buttons (use property assignment to prevent listener leaks on reused slot elements)
+          slotEl.onmouseenter = () => {
             window.lastHoveredSlot = { slotEl, source, index, item };
-          });
-          slotEl.addEventListener("mouseleave", () => {
+          };
+          slotEl.onmouseleave = () => {
             if (window.lastHoveredSlot && window.lastHoveredSlot.slotEl === slotEl) {
               window.lastHoveredSlot = null;
             }
-          });
+          };
         } else {
           slotEl.classList.add("empty");
           slotEl.classList.remove("item-selected");
           slotEl.draggable = false;
           slotEl.ondragstart = null;
           slotEl.ondragend = null;
+          slotEl.onmouseenter = null;
+          slotEl.onmouseleave = null;
           if (cursor) slotEl.style.cursor = cursor;
           slotEl.onclick = (e) => {
             if (window.selectedInventorySlot) {
@@ -2165,7 +2023,7 @@
           };
 
           const emptyText = document.createElement("span");
-          emptyText.style.fontSize = "10px";
+          emptyText.style.fontSize = "0.625rem";
           emptyText.style.color = "rgba(255,255,255,0.05)";
           emptyText.textContent = "□";
           slotEl.appendChild(emptyText);
@@ -2186,7 +2044,7 @@
         if (!chestGrid) return;
         chestGrid.innerHTML = "";
 
-        // 1. Render Chest Storage slots (20 slots)
+        // 1. Render Chest Storage slots (20 slots) on the left of #inventoryMainLayout
         for (let i = 0; i < 20; i++) {
           const item = currentOpenChest.storage[i];
           const slot = createSlotElement({
@@ -2194,7 +2052,7 @@
             index: i,
             item: item,
             onClick: item ? () => {
-              // Click to put/take 1 item into player inventory
+              // Click to take 1 item into player inventory
               if (addItemToInventory({ ...item, count: 1 }, true)) {
                 if (item.count > 1) {
                   item.count -= 1;
@@ -2202,7 +2060,6 @@
                   currentOpenChest.storage[i] = null;
                 }
                 renderChest();
-                renderInventory();
                 renderActionSlots();
                 updateBadge();
                 saveSettingsToLocalStorage();
@@ -2214,39 +2071,8 @@
           chestGrid.appendChild(slot);
         }
 
-        // 2. Render Player Inventory slots inside Chest UI (20 slots)
-        const playerGrid = document.getElementById("chestPlayerInventoryGrid");
-        if (!playerGrid) return;
-        playerGrid.innerHTML = "";
-
-        for (let i = 0; i < TOTAL_SLOTS; i++) {
-          const item = inventory[i];
-          const isLocked = i >= UNLOCKED_SLOTS;
-          const slot = createSlotElement({
-            source: "chestPlayerInventory",
-            index: i,
-            item: item,
-            isLocked: isLocked,
-            onClick: (item && !isLocked) ? () => {
-              // Click to put item into chest storage
-              if (addItemToChest(item)) {
-                if (item.count > 1) {
-                  item.count -= 1;
-                } else {
-                  inventory[i] = null;
-                }
-                renderChest();
-                renderInventory();
-                renderActionSlots();
-                updateBadge();
-                saveSettingsToLocalStorage();
-              } else {
-                showNotice("กล่องเต็มแล้ว! (Chest Full)");
-              }
-            } : null
-          });
-          playerGrid.appendChild(slot);
-        }
+        // 2. Render Player Inventory slots on the right using the exact same #inventoryGrid & renderInventory()
+        renderInventory();
       }
 
       // Initialize chest event listeners once elements are ready
@@ -2264,28 +2090,6 @@
               handleTrashDrop(e);
             }
           });
-        }
-        
-        const chestOverlay = document.getElementById("chestOverlay");
-        if (chestOverlay) {
-          chestOverlay?.addEventListener("dragover", (e) => {
-            if (e.target === chestOverlay) {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-            }
-          });
-          chestOverlay?.addEventListener("drop", (e) => {
-            if (e.target === chestOverlay) {
-              handleTrashDrop(e);
-            }
-          });
-        }
-
-        const chestClose = document.getElementById("chestClose");
-        if (chestClose) {
-          chestClose.onclick = () => {
-            closeChest();
-          };
         }
 
         const warpClose = document.getElementById("warpClose");
@@ -2358,9 +2162,23 @@
           saveSettingsToLocalStorage();
           closeInventoryActually();
         } else {
-          overlay.classList.add("open");
+          // Ensure chest mode is completely reset before opening regular inventory
+          currentOpenChest = null;
+          overlay.classList.remove("mode-chest");
+          const chestGridWrapper = document.getElementById("chestGridWrapper");
+          if (chestGridWrapper) chestGridWrapper.style.display = "none";
+          const invChestLabel = document.getElementById("inventoryGridChestLabel");
+          if (invChestLabel) invChestLabel.style.display = "none";
+          const tabChest = document.getElementById("tabChest");
+          if (tabChest) { tabChest.classList.remove("active"); tabChest.style.display = "none"; }
+          const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+          if (chestTakeAllBtn) chestTakeAllBtn.style.display = "none";
+
           const qBtn = document.getElementById("quitGameBtn");
-          if (qBtn) qBtn.style.display = "none";
+          if (qBtn) {
+            qBtn.style.removeProperty("display");
+            qBtn.classList.remove("quit-btn-hidden");
+          }
           // คืนค่าการแสดงผลแท็บและปุ่มออกไปหน้าหลัก
           document.getElementById("tabInventory").style.display = "inline-flex";
           document.getElementById("tabCrafting").style.display = "inline-flex";
@@ -2370,17 +2188,18 @@
 
           // รีเซ็ตแท็บแอคทีฟเป็น กระเป๋า (Inventory) เสมอตอนเปิดครั้งแรก
           activeTab = "inventory";
+          if (typeof window.setActiveTab === "function") window.setActiveTab("inventory");
           document.getElementById("tabInventory").classList.add("active");
           document.getElementById("tabCrafting").classList.remove("active");
           document.getElementById("tabItemsList").classList.remove("active");
           document.getElementById("tabSettings").classList.remove("active");
           
           
-        document.getElementById("tabCooking").classList.remove("active");
+          document.getElementById("tabCooking").classList.remove("active");
           document.getElementById("tabCooking").style.display = "none";
-        document.getElementById("cookingList").style.display = "none";
+          document.getElementById("cookingList").style.display = "none";
 
-        document.getElementById("inventoryGrid").style.display = "grid";
+          document.getElementById("inventoryGrid").style.display = "grid";
           document.getElementById("inventorySettings").style.display = "none";
           document.getElementById("craftingList").style.display = "none";
           
@@ -2389,14 +2208,12 @@
             mainLayout.style.display = "flex";
             mainLayout.style.maxWidth = "none";
           }
-          const divider = document.getElementById("inventoryVerticalDivider");
-          if (divider) divider.style.display = "block";
-          const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
-          if (leftDivider) leftDivider.style.display = "block";
           const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
           if (actionSlotsWrapper) actionSlotsWrapper.style.display = "flex";
           const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
           if (equipSlotsWrapper) equipSlotsWrapper.style.display = "flex";
+          const bottomBtns = document.getElementById("inventoryBottomButtons");
+          if (bottomBtns) bottomBtns.style.display = "flex";
 
           // Auto-enable move mode when inventory opens
           isMoveModeEnabled = true;
@@ -2405,6 +2222,8 @@
           renderActionSlots();
           if (typeof renderEquipSlots === "function") renderEquipSlots();
 
+          if (typeof window.updateResponsiveUIScale === "function") window.updateResponsiveUIScale();
+          overlay.classList.add("open");
         }
       }
 
@@ -2471,47 +2290,13 @@
           }
           if (stored) {
             addedAny = true;
-          } else if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+          } else if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.spawnBatch === "function") {
             droppedOverflow = true;
-            const pLen = Math.hypot(dropOrigin[0], dropOrigin[1], dropOrigin[2]) || 1;
-            const uN = [dropOrigin[0] / pLen, dropOrigin[1] / pLen, dropOrigin[2] / pLen];
-            let tA = [1, 0, 0];
-            if (Math.abs(uN[0]) > 0.8) tA = [0, 1, 0];
-            const tB = [
-              uN[1] * tA[2] - uN[2] * tA[1],
-              uN[2] * tA[0] - uN[0] * tA[2],
-              uN[0] * tA[1] - uN[1] * tA[0]
-            ];
-            const bL = Math.hypot(tB[0], tB[1], tB[2]) || 1;
-            const uF = [tB[0] / bL, tB[1] / bL, tB[2] / bL];
-            const uR = [
-              uN[1] * uF[2] - uN[2] * uF[1],
-              uN[2] * uF[0] - uN[0] * uF[2],
-              uN[0] * uF[1] - uN[1] * uF[0]
-            ];
-            const dropType = String(entry.name || "").toLowerCase();
-            for (let k = 0; k < count; k++) {
-              const ang = ((i * 13 + k) / Math.max(1, count)) * Math.PI * 2;
-              const rad = 0.08 + (k % 3) * 0.04;
-              const offR = Math.cos(ang) * rad;
-              const offF = Math.sin(ang) * rad;
-              collectibles.push({
-                position: [
-                  dropOrigin[0] + uR[0] * offR + uF[0] * offF,
-                  dropOrigin[1] + uR[1] * offR + uF[1] * offF,
-                  dropOrigin[2] + uR[2] * offR + uF[2] * offF
-                ],
-                normal: uN,
-                R: uR,
-                F: uF,
-                type: dropType,
-                size: 0.16,
-                active: true,
-                isDynamic: true,
-                seed: Math.random()
-              });
-            }
-            window.pendingDynamicCollectibleRefresh = true;
+            window.GroundDropSystem.spawnBatch(
+              dropOrigin,
+              [{ type: entry.name, count: count, size: 0.16 }],
+              { ringScatter: true, baseRadius: 0.08, ringStep: 0.04, lift: 0.015, popOut: 0.0022, popUp: 0.0032 }
+            );
           }
         }
 
@@ -2558,7 +2343,7 @@
         const isShirasayaHit = !!(customWeaponLabel && (customWeaponLabel.indexOf("ชิราซายะ") !== -1 || customWeaponLabel.indexOf("Aegis-Shift") !== -1));
         const inferredWeaponId = (options && options.weaponId)
           ? String(options.weaponId).toUpperCase()
-          : ((customWeaponLabel && (customWeaponLabel.indexOf("มีดตันโตะ") !== -1 || customWeaponLabel.indexOf("ชิราซายะ") !== -1))
+          : ((customWeaponLabel && (customWeaponLabel.indexOf("ทันโตะ") !== -1 || customWeaponLabel.indexOf("มีดตันโตะ") !== -1 || customWeaponLabel.indexOf("ชิราซายะ") !== -1))
             ? "TANTO"
             : ((actor && typeof actor.getActiveItem === "function" && actor.getActiveItem() && actor.getActiveItem().name)
               ? String(actor.getActiveItem().name).toUpperCase()
@@ -3149,7 +2934,6 @@
           bestPlanterTree.plantData = null;
           bestPlanterTree.isDynamic = false;
           if (typeof window !== "undefined") {
-             window.pendingCollectibleRefresh = true;
              window.pendingDynamicCollectibleRefresh = true;
           }
           if (typeof saveSettingsToLocalStorage === "function") {
@@ -3284,40 +3068,27 @@
   }
   window.checkMeleeHit = checkMeleeHit;
 
-function spawnDrop(pos, type, normal, tangent, bitangent, color, size, isHand=false) {
-   const offsetRadius = 0.002 + Math.random() * 0.005;
-   const offsetAngle = Math.random() * Math.PI * 2;
-   const hOffset = 0.005 + Math.random() * 0.01;
-   
-   const dx = tangent[0]*offsetRadius*Math.cos(offsetAngle) + bitangent[0]*offsetRadius*Math.sin(offsetAngle) + normal[0]*hOffset;
-   const dy = tangent[1]*offsetRadius*Math.cos(offsetAngle) + bitangent[1]*offsetRadius*Math.sin(offsetAngle) + normal[1]*hOffset;
-   const dz = tangent[2]*offsetRadius*Math.cos(offsetAngle) + bitangent[2]*offsetRadius*Math.sin(offsetAngle) + normal[2]*hOffset;
-
-   const collectible = {
-       type: type,
-       position: [pos[0] + dx, pos[1] + dy, pos[2] + dz],
-       normal: normal,
-       R: tangent,
-       F: bitangent,
-       U: normal,
-       color: color,
-       size: size,
-       active: true,
-       isDynamic: true,
-       seed: Math.random()
-   };
-   
-   if (isHand) {
-       collectible.vel = [dx*0.01 + (Math.random()-0.5)*0.001, dy*0.01 + (Math.random()-0.5)*0.001, dz*0.01 + (Math.random()-0.5)*0.001];
-       collectible.spin = [(Math.random()-0.5)*0.05, (Math.random()-0.5)*0.05, (Math.random()-0.5)*0.05];
-       collectible.spinSpeed = 0.01 + Math.random()*0.02;
-   }
-   
-   collectibles.push(collectible);
-   if (typeof window !== "undefined") {
-      window.pendingDynamicCollectibleRefresh = true;
+function spawnDrop(pos, type, normal, tangent, bitangent, color, size, isHand = false) {
+   if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.spawn === "function") {
+      const drop = window.GroundDropSystem.spawn({
+        type: type,
+        position: pos,
+        normal: normal,
+        tangent: tangent,
+        bitangent: bitangent,
+        color: color,
+        size: size,
+        isHand: isHand,
+        scatterRadius: 0.002 + Math.random() * 0.005,
+        scatterLift: 0.005 + Math.random() * 0.01
+      });
       window.spawnDrop = spawnDrop;
+      return drop;
    }
+   return null;
+}
+if (typeof window !== "undefined") {
+   window.spawnDrop = spawnDrop;
 }
 
 function cancelFloorPlacement() {
@@ -3330,7 +3101,6 @@ function cancelFloorPlacement() {
               collectibles.splice(idx, 1);
             }
             floorPreviewCollectible = null;
-            pendingCollectibleRefresh = true;
             if (typeof refreshCollectiblesVBO === 'function') refreshCollectiblesVBO('preview');
           }
         }
@@ -3352,12 +3122,7 @@ function cancelFloorPlacement() {
       }
 
       function suppressGrassUnder(pos, radius) {
-          console.log('suppressGrassUnder', pos, radius);
-
           if (typeof grassChunks === 'undefined' || !natureRawVertices) return;
-          let modified = false;
-          let minStartF = Infinity;
-          let maxEndF = 0;
           const rSq = radius * radius;
           
           for (let i = 0; i < grassChunks.length; i++) {
@@ -3398,10 +3163,11 @@ function cancelFloorPlacement() {
               }
               
               if (chunkModified) {
-                  console.log('Modified grass chunk, zeroed triangles!');
-                  modified = true;
                   gl.bindBuffer(gl.ARRAY_BUFFER, natureVertexBuffer);
-                  gl.bufferSubData(gl.ARRAY_BUFFER, chunkMin * 4, new Float32Array(natureRawVertices.slice(chunkMin, chunkMax)));
+                  const sliceView = (typeof natureRawVertices.subarray === "function")
+                    ? natureRawVertices.subarray(chunkMin, chunkMax)
+                    : new Float32Array(natureRawVertices.slice(chunkMin, chunkMax));
+                  gl.bufferSubData(gl.ARRAY_BUFFER, chunkMin * 4, sliceView);
               }
           }
       }
@@ -3667,29 +3433,32 @@ function cancelFloorPlacement() {
                       const upSpeed = 0.0038 + Math.random() * 0.0025;
                       const slashPush = 0.0014;
 
-                      collectibles.push({
-                          type: "grass",
-                          position: spawnPos,
-                          normal: [bNormX, bNormY, bNormZ],
-                          R: [wDir[0], wDir[1], wDir[2]],
-                          F: [tipDir[0], tipDir[1], tipDir[2]],
-                          U: [bNormX, bNormY, bNormZ],
-                          color: topColor,
-                          botColor: botColor,
-                          bladeHeight: bladeHeight,
-                          bladeWidth: bladeWidth,
-                          bladeCurve: (Math.random() - 0.5) * 0.55,
-                          size: bladeHeight,
-                          active: true,
-                          isDynamic: true,
-                          seed: Math.random(),
-                          vel: [
-                              outDirX * outSpeed + gNx * upSpeed + F[0] * slashPush,
-                              outDirY * outSpeed + gNy * upSpeed + F[1] * slashPush,
-                              outDirZ * outSpeed + gNz * upSpeed + F[2] * slashPush
-                          ],
-                          spinSpeed: (Math.random() < 0.5 ? 1 : -1) * (0.045 + Math.random() * 0.05)
-                      });
+                      if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.spawn === "function") {
+                          window.GroundDropSystem.spawn({
+                              type: "grass",
+                              position: spawnPos,
+                              normal: [bNormX, bNormY, bNormZ],
+                              R: [wDir[0], wDir[1], wDir[2]],
+                              F: [tipDir[0], tipDir[1], tipDir[2]],
+                              rawBasis: true,
+                              applyScatter: false,
+                              color: topColor,
+                              size: bladeHeight,
+                              vel: [
+                                  outDirX * outSpeed + gNx * upSpeed + F[0] * slashPush,
+                                  outDirY * outSpeed + gNy * upSpeed + F[1] * slashPush,
+                                  outDirZ * outSpeed + gNz * upSpeed + F[2] * slashPush
+                              ],
+                              spinSpeed: (Math.random() < 0.5 ? 1 : -1) * (0.045 + Math.random() * 0.05),
+                              extra: {
+                                  botColor: botColor,
+                                  bladeHeight: bladeHeight,
+                                  bladeWidth: bladeWidth,
+                                  bladeCurve: (Math.random() - 0.5) * 0.55
+                              },
+                              skipRefresh: true
+                          });
+                      }
                   }
               }
 
@@ -3879,24 +3648,44 @@ function cancelFloorPlacement() {
           floorPreviewCollectible.angle = placementRotationAngle;
           floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
 
-          let nearestBoat = null;
+          let nearestBoat = (floorPreviewCollectible.targetBoat && floorPreviewCollectible.targetBoat.active && !floorPreviewCollectible.targetBoat.isPreview && floorPreviewCollectible.targetBoat.type === "wood_boat")
+            ? floorPreviewCollectible.targetBoat
+            : null;
           let bestDist = Infinity;
-          for (let c of collectibles) {
-            if (c.active && !c.isPreview && c.type === "wood_boat") {
-              const dx = c.position[0] - floorPreviewCollectible.position[0];
-              const dy = c.position[1] - floorPreviewCollectible.position[1];
-              const dz = c.position[2] - floorPreviewCollectible.position[2];
-              const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-              if (dist < bestDist) {
-                bestDist = dist;
-                nearestBoat = c;
+          if (nearestBoat && nearestBoat.position) {
+            const dx = nearestBoat.position[0] - floorPreviewCollectible.position[0];
+            const dy = nearestBoat.position[1] - floorPreviewCollectible.position[1];
+            const dz = nearestBoat.position[2] - floorPreviewCollectible.position[2];
+            bestDist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (bestDist >= 3.5) {
+              nearestBoat = null;
+              bestDist = Infinity;
+            }
+          }
+          if (!nearestBoat) {
+            const boatCands = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+              ? SpatialGrid.queryRadius(floorPreviewCollectible.position[0], floorPreviewCollectible.position[1], floorPreviewCollectible.position[2], 3.8)
+              : collectibles;
+            for (let bi = 0; bi < boatCands.length; bi++) {
+              const c = boatCands[bi];
+              if (c && c.active && !c.isPreview && c.type === "wood_boat" && c.position) {
+                const dx = c.position[0] - floorPreviewCollectible.position[0];
+                const dy = c.position[1] - floorPreviewCollectible.position[1];
+                const dz = c.position[2] - floorPreviewCollectible.position[2];
+                const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                if (dist < bestDist) {
+                  bestDist = dist;
+                  nearestBoat = c;
+                }
               }
             }
           }
           if (nearestBoat && bestDist < 3.5) {
+            floorPreviewCollectible._attachedBoatTarget = nearestBoat;
             if (placingItemName === "WOOD_WHEEL") {
               nearestBoat.hasWheel = true;
               nearestBoat.hasWheels = true;
+              nearestBoat._isSleeping = false;
               floorPreviewCollectible.active = false;
               if (typeof showNotice === "function") {
                 showNotice("⚙️ ติดล้อไม้กับเรือเรียบร้อย! เรือสามารถขับบนบกได้แล้ว (Wooden Wheel attached! Boat can now drive on land)");
@@ -4015,12 +3804,17 @@ function cancelFloorPlacement() {
         if (floorPreviewCollectible.F) floorPreviewCollectible.F = [...floorPreviewCollectible.F];
 
         // Avoid duplicate push when floorPreviewCollectible was already pushed in collectibles.js,
-        // and ensure the newly placed structure is always appended at the end in chronological order
+        // and do NOT push dead preview objects absorbed into a boat upgrade
+        const attachedBoatTarget = floorPreviewCollectible._attachedBoatTarget || null;
+        delete floorPreviewCollectible._attachedBoatTarget;
         const existingPreviewIdx = collectibles.indexOf(floorPreviewCollectible);
         if (existingPreviewIdx !== -1) {
           collectibles.splice(existingPreviewIdx, 1);
         }
-        collectibles.push(floorPreviewCollectible);
+        const placedItem = floorPreviewCollectible;
+        if (!attachedBoatTarget) {
+          collectibles.push(placedItem);
+        }
 
         if (placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") {
           getPlacedObsidianPadsInOrder();
@@ -4028,10 +3822,12 @@ function cancelFloorPlacement() {
         
         // Remove 1 item from player's inventory or action slot
         const info = floorPlacementInfo;
+        let slotEmptied = false;
         if (info && info.item) {
           if (info.item.count > 1) {
             info.item.count--;
           } else {
+            slotEmptied = true;
             if (info.source === "inventory") inventory[info.index] = null;
             else actionSlotsItems[info.index] = null;
             
@@ -4042,14 +3838,43 @@ function cancelFloorPlacement() {
           }
         }
 
-        // Refresh UI
-        if (typeof renderInventory === "function") renderInventory();
-        if (typeof renderActionSlots === "function") renderActionSlots();
-        if (typeof updateBadge === "function") updateBadge();
+        // Refresh UI: surgical count update if item stack still remains, full DOM rebuild only if slot emptied
+        if (!slotEmptied && info && info.item) {
+          const updateCountInSlot = (slotEl, count) => {
+            if (!slotEl) return;
+            let badge = slotEl.querySelector(".slot-count-badge");
+            if (count > 1) {
+              if (badge) {
+                badge.textContent = "x" + count;
+              }
+            } else if (badge) {
+              badge.remove();
+            }
+          };
+          if (info.source === "action") {
+            const hudSlots = document.querySelectorAll(".action-slots .action-slot");
+            const invActionSlots = document.querySelectorAll(".inventory-action-slots .action-slot");
+            updateCountInSlot(hudSlots[info.index], info.item.count);
+            updateCountInSlot(invActionSlots[info.index], info.item.count);
+          } else if (info.source === "inventory") {
+            const invGrid = document.getElementById("inventoryGrid");
+            if (invGrid && invGrid.children && invGrid.children[info.index]) {
+              updateCountInSlot(invGrid.children[info.index], info.item.count);
+            }
+          }
+          if (typeof updateBadge === "function") updateBadge();
+        } else {
+          const invOverlay = document.getElementById("inventoryOverlay");
+          if (invOverlay && invOverlay.classList.contains("open") && typeof renderInventory === "function") {
+            renderInventory();
+          }
+          if (typeof renderActionSlots === "function") renderActionSlots();
+          if (typeof updateBadge === "function") updateBadge();
+        }
 
         // Check if player still has items in the active slot/inventory
         let stillHasItems = false;
-        if (info && info.item && info.item.count > 0 && info.item.name === placingItemName) {
+        if (info && info.item && info.item.count > 0 && info.item.name === placingItemName && !slotEmptied) {
           stillHasItems = true;
         }
         if ((placingItemName === "OBSIDIAN_PAD_WARP" || placingItemName === "OBSIDIAN_COMPASS_PAD") && getPlacedObsidianPadsInOrder().length >= MAX_OBSIDIAN_PADS) {
@@ -4113,8 +3938,26 @@ function cancelFloorPlacement() {
           floorPreviewCollectible = null;
         }
 
-        // Force WebGL buffer refresh
-        pendingCollectibleRefresh = true;
+        // Fast incremental WebGL buffer update (<0.5ms) instead of rebuilding the entire planet VBO
+        if (attachedBoatTarget) {
+          if (typeof window.updateCollectibleInVBO === "function") {
+            window.updateCollectibleInVBO(attachedBoatTarget);
+          } else if (attachedBoatTarget.isDynamic && typeof refreshCollectiblesVBO === "function") {
+            refreshCollectiblesVBO('dynamic');
+          } else {
+            pendingCollectibleRefresh = true;
+          }
+          if (typeof refreshCollectiblesVBO === "function") {
+            refreshCollectiblesVBO('preview');
+          }
+        } else if (typeof window.appendPlacedCollectibleToVBO === "function") {
+          const appended = window.appendPlacedCollectibleToVBO(placedItem);
+          if (!appended) {
+            pendingCollectibleRefresh = true;
+          }
+        } else {
+          pendingCollectibleRefresh = true;
+        }
         if (typeof saveSettingsToLocalStorage === "function") {
           saveSettingsToLocalStorage();
         }
@@ -5047,22 +4890,17 @@ function cancelFloorPlacement() {
 
       function performSmashActionLogic() {
         checkMeleeHit("HAND");
-        setTimeout(() => {
-          isUsingItem = false;
-          isSmashing = false; 
-          activeItem = originalItem;
-        }, 500);
       }
 
       function performSmashAction() {
-        console.log("Performing smash action...");
+        if (!isSmashing && (!activeItem || activeItem.name !== "HAND")) {
+          originalItem = activeItem;
+        }
         useAnimTimer = 1.0;
         isUsingItem = true;
-        isSmashing = true; 
-        
-        originalItem = activeItem; 
-        activeItem = { name: "HAND" }; 
-        
+        isSmashing = true;
+        activeItem = { name: "HAND" };
+
         performSmashActionLogic();
       }
       
@@ -5224,19 +5062,19 @@ function cancelFloorPlacement() {
         if (!_activeNoticeToast) {
           _activeNoticeToast = document.createElement("div");
           _activeNoticeToast.style.position = "fixed";
-          _activeNoticeToast.style.bottom = "100px";
+          _activeNoticeToast.style.bottom = "6.25rem";
           _activeNoticeToast.style.left = "50%";
           _activeNoticeToast.style.transform = "translateX(-50%)";
           _activeNoticeToast.style.background = "rgba(10, 10, 15, 0.9)";
           _activeNoticeToast.style.color = "#34d399";
           _activeNoticeToast.style.border = "1px solid rgba(52, 211, 153, 0.4)";
-          _activeNoticeToast.style.padding = "10px 20px";
-          _activeNoticeToast.style.borderRadius = "8px";
+          _activeNoticeToast.style.padding = "0.625rem 1.25rem";
+          _activeNoticeToast.style.borderRadius = "0.5rem";
           _activeNoticeToast.style.fontFamily = "'Google Sans', sans-serif";
-          _activeNoticeToast.style.fontSize = "13px";
+          _activeNoticeToast.style.fontSize = "0.8125rem";
           _activeNoticeToast.style.zIndex = "999999";
           _activeNoticeToast.style.pointerEvents = "none";
-          _activeNoticeToast.style.boxShadow = "0 8px 32px rgba(0,0,0,0.6)";
+          _activeNoticeToast.style.boxShadow = "0 0.5rem 2rem rgba(0,0,0,0.6)";
           _activeNoticeToast.style.transition = "opacity 0.25s, transform 0.25s";
           document.body.appendChild(_activeNoticeToast);
         }
@@ -5267,7 +5105,7 @@ function cancelFloorPlacement() {
         _activeNoticeTimer = setTimeout(() => {
           if (_activeNoticeToast) {
             _activeNoticeToast.style.opacity = "0";
-            _activeNoticeToast.style.transform = "translateX(-50%) translateY(10px)";
+            _activeNoticeToast.style.transform = "translateX(-50%) translateY(0.625rem)";
             _activeNoticeFadeTimer = setTimeout(() => {
               if (_activeNoticeToast) {
                 _activeNoticeToast.remove();
@@ -5357,215 +5195,289 @@ function cancelFloorPlacement() {
         }
       ];
 
-            function openCookingUI() {
-        document.getElementById("inventoryOverlay").classList.add("open");
-        document.getElementById("tabCooking").style.display = "inline-flex";
-        
-        // Hide other tabs
-        document.getElementById("tabInventory").style.display = "none";
-        document.getElementById("tabItemsList").style.display = "none";
-        document.getElementById("tabSettings").style.display = "none";
-        document.getElementById("tabCrafting").style.display = "none";
-        document.getElementById("quitGameBtn").style.display = "none";
-        
+      function openCookingUI() {
+        const overlay = document.getElementById("inventoryOverlay");
+        const chestGridWrapper = document.getElementById("chestGridWrapper");
+        const invChestLabel = document.getElementById("inventoryGridChestLabel");
+        const tabChest = document.getElementById("tabChest");
+        const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+        const tabCooking = document.getElementById("tabCooking");
+        const tabInventory = document.getElementById("tabInventory");
+        const tabItemsList = document.getElementById("tabItemsList");
+        const tabSettings = document.getElementById("tabSettings");
+        const tabCrafting = document.getElementById("tabCrafting");
+        const qBtn = document.getElementById("quitGameBtn");
+        const mainLayout = document.getElementById("inventoryMainLayout");
+        const inventoryGrid = document.getElementById("inventoryGrid");
+        const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
+        const actionSlotsWrapper = document.getElementById("inventoryActionSlotsWrapper");
+        const bottomBtns = document.getElementById("inventoryBottomButtons");
+        const inventorySettings = document.getElementById("inventorySettings");
+        const craftingList = document.getElementById("craftingList");
+        const cookingList = document.getElementById("cookingList");
+
+        // Ensure chest mode is cleared before preparing cooking layout
+        currentOpenChest = null;
+        if (overlay) overlay.classList.remove("mode-chest");
+        if (chestGridWrapper) chestGridWrapper.style.display = "none";
+        if (invChestLabel) invChestLabel.style.display = "none";
+        if (tabChest) { tabChest.classList.remove("active"); tabChest.style.display = "none"; }
+        if (chestTakeAllBtn) chestTakeAllBtn.style.display = "none";
+
+        // Prepare cooking layout completely BEFORE opening the overlay so inventory never flashes
+        if (tabInventory) { tabInventory.style.display = "none"; tabInventory.classList.remove("active"); }
+        if (tabItemsList) { tabItemsList.style.display = "none"; tabItemsList.classList.remove("active"); }
+        if (tabSettings) { tabSettings.style.display = "none"; tabSettings.classList.remove("active"); }
+        if (tabCrafting) { tabCrafting.style.display = "none"; tabCrafting.classList.remove("active"); }
+        if (qBtn) qBtn.classList.add("quit-btn-hidden");
+
+        if (mainLayout) mainLayout.style.display = "none";
+        if (inventoryGrid) inventoryGrid.style.display = "none";
+        if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
+        if (actionSlotsWrapper) actionSlotsWrapper.style.display = "none";
+        if (bottomBtns) bottomBtns.style.display = "none";
+        if (inventorySettings) inventorySettings.style.display = "none";
+        if (craftingList) craftingList.style.display = "none";
+
         activeTab = "cooking";
-        document.getElementById("tabInventory").classList.remove("active");
-        document.getElementById("tabItemsList").classList.remove("active");
-        document.getElementById("tabSettings").classList.remove("active");
-        document.getElementById("tabCrafting").classList.remove("active");
-        document.getElementById("tabCooking").classList.add("active");
-        
-        document.getElementById("inventoryGrid").style.display = "none";
-        document.getElementById("inventorySettings").style.display = "none";
-        document.getElementById("craftingList").style.display = "none";
-        document.getElementById("cookingList").style.display = "flex";
-        
+        if (typeof window.setActiveTab === "function") window.setActiveTab("cooking");
+        if (tabCooking) { tabCooking.style.display = "inline-flex"; tabCooking.classList.add("active"); }
+        if (cookingList) cookingList.style.display = "flex";
+
         renderCooking();
+
+        if (typeof window.updateResponsiveUIScale === "function") window.updateResponsiveUIScale();
+        if (overlay) overlay.classList.add("open");
+      }
+
+      // Unified Recipe Card List renderer shared by both Crafting and Cooking UIs
+      function renderRecipeCardsList(container, recipes, opts) {
+        if (!container) return;
+        container.innerHTML = "";
+
+        const actionLabel = (opts && opts.actionLabel) ? opts.actionLabel : "Craft";
+        const iconType = (opts && opts.iconType) ? opts.iconType : "wrench";
+        const onAction = (opts && typeof opts.onAction === "function") ? opts.onAction : null;
+
+        recipes.forEach((recipe, recipeIdx) => {
+          const card = document.createElement("div");
+          card.className = "crafting-recipe-card";
+          card.dataset.recipeId = recipe.id;
+          card.dataset.recipeIndex = String(recipeIdx);
+
+          // Pre-compute ingredient availability so the leftmost action button knows canCraft
+          let canCraft = true;
+          const ingredientStates = recipe.ingredients.map(ing => {
+            const currentCount = getItemCount(ing.name);
+            const isEnough = currentCount >= ing.count;
+            if (!isEnough) {
+              canCraft = false;
+            }
+            return { ing, currentCount, isEnough };
+          });
+
+          // Click (Mouse) & Tap (Touchscreen) support: selects card and activates 3D main icon rotation preview
+          const selectCardForPreview = () => {
+            window._selectedCraftingCard = card;
+            window._selectedCraftingRecipeId = recipe.id;
+            window._activeTouchCraftingCard = card;
+            window._activeTouchRecipeId = recipe.id;
+
+            const allCards = container.querySelectorAll(".crafting-recipe-card");
+            allCards.forEach(c => {
+              if (c === card) {
+                c.classList.add("crafting-card-selected");
+                c.classList.add("touch-preview-active");
+              } else {
+                c.classList.remove("crafting-card-selected");
+                c.classList.remove("touch-preview-active");
+                c.classList.remove("gamepad-focused");
+              }
+            });
+
+            // Sync with GamepadController index so gamepad focus doesn't stay stuck on a different card
+            if (window.GamepadController && window.GamepadController.uiNav) {
+              window.GamepadController.uiNav.area = "cards";
+              window.GamepadController.uiNav.index = recipeIdx;
+              if (window.isUsingGamepad) {
+                card.classList.add("gamepad-focused");
+              }
+            }
+
+            if (typeof window.startCraftingPreviewLoop === "function") {
+              window.startCraftingPreviewLoop();
+            }
+          };
+
+          card.addEventListener("mousedown", selectCardForPreview);
+          card.addEventListener("click", () => {
+            selectCardForPreview();
+            if (window.isGamepadTriggeringClick && canCraft && onAction) {
+              onAction(recipe);
+            }
+          });
+          card.addEventListener("touchstart", selectCardForPreview, { passive: true });
+          card.addEventListener("pointerdown", selectCardForPreview, { passive: true });
+
+          if (window._selectedCraftingRecipeId === recipe.id || window._activeTouchRecipeId === recipe.id) {
+            window._selectedCraftingCard = card;
+            window._activeTouchCraftingCard = card;
+            card.classList.add("crafting-card-selected");
+            card.classList.add("touch-preview-active");
+          }
+
+          const topRow = document.createElement("div");
+          topRow.className = "craft-recipe-row";
+
+          // 1) Leftmost: Single Merged Gold Button (Action + Output Item Icon)
+          const craftOutputBtn = document.createElement("button");
+          craftOutputBtn.type = "button";
+          craftOutputBtn.className = "craft-tile craft-tile-output craft-tile-gold" + (canCraft ? "" : " craft-tile-disabled");
+          if (!canCraft) {
+            craftOutputBtn.setAttribute("aria-disabled", "true");
+          }
+
+          const itemIcon = document.createElement("span");
+          itemIcon.className = "craft-icon";
+          // Only the main output icon uses interactivePreview: true so it can rotate continuously!
+          const canvas3D = create3DIconCanvas(recipe.output, 40, 40, { interactivePreview: true });
+          if (canvas3D) {
+            itemIcon.appendChild(canvas3D);
+            card._mainIconCanvas = canvas3D;
+          } else {
+            itemIcon.textContent = recipe.output.icon;
+          }
+          craftOutputBtn.appendChild(itemIcon);
+
+          if (recipe.output.count > 1) {
+            const outCountBadge = document.createElement("span");
+            outCountBadge.className = "slot-count-badge is-output";
+            outCountBadge.textContent = "x" + recipe.output.count;
+            craftOutputBtn.appendChild(outCountBadge);
+          }
+
+          const craftBar = document.createElement("span");
+          craftBar.className = "craft-tile-craft-bar";
+
+          const actionSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          actionSvg.setAttribute("width", "10");
+          actionSvg.setAttribute("height", "10");
+          actionSvg.setAttribute("viewBox", "0 0 24 24");
+          actionSvg.setAttribute("fill", "none");
+          actionSvg.setAttribute("stroke", "currentColor");
+          actionSvg.setAttribute("stroke-width", "2.4");
+          actionSvg.setAttribute("stroke-linecap", "round");
+          actionSvg.setAttribute("stroke-linejoin", "round");
+          if (iconType === "flame") {
+            actionSvg.innerHTML = `
+              <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+            `;
+          } else {
+            actionSvg.innerHTML = `
+              <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
+              <path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64" />
+              <path d="m20 8-5 5" />
+            `;
+          }
+
+          const craftBarText = document.createElement("span");
+          if (typeof window.setElementTextOrHTML === "function") {
+            window.setElementTextOrHTML(craftBarText, actionLabel);
+          } else {
+            craftBarText.textContent = actionLabel;
+          }
+
+          craftBar.appendChild(actionSvg);
+          craftBar.appendChild(craftBarText);
+          craftOutputBtn.appendChild(craftBar);
+
+          craftOutputBtn.onclick = (e) => {
+            e.stopPropagation();
+            selectCardForPreview();
+            if (canCraft && onAction) {
+              onAction(recipe);
+            }
+          };
+
+          topRow.appendChild(craftOutputBtn);
+
+          // 2) Continuing to the right: White Required Material Icons
+          const materialsRow = document.createElement("div");
+          materialsRow.className = "craft-materials-row";
+
+          ingredientStates.forEach(({ ing, currentCount, isEnough }) => {
+            const matTile = document.createElement("div");
+            matTile.className = "craft-tile craft-tile-material craft-tile-white";
+
+            const ingIconSpan = document.createElement("span");
+            ingIconSpan.className = "craft-icon";
+            const ingCanvas3D = create3DIconCanvas(ing, 40, 40);
+            if (ingCanvas3D) {
+              ingIconSpan.appendChild(ingCanvas3D);
+            } else {
+              ingIconSpan.textContent = ing.icon;
+            }
+            matTile.appendChild(ingIconSpan);
+
+            const ingDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
+            matTile.appendChild(createUnifiedItemNameBar(ingDispName));
+
+            const countBadge = document.createElement("span");
+            countBadge.className = "slot-count-badge " + (isEnough ? "is-enough" : "is-short");
+            countBadge.textContent = `${currentCount}/${ing.count}`;
+            matTile.appendChild(countBadge);
+
+            materialsRow.appendChild(matTile);
+          });
+
+          topRow.appendChild(materialsRow);
+          card.appendChild(topRow);
+
+          // 3) Bottom-center of the card: Output Item Name (without count suffix)
+          const outNameEl = document.createElement("div");
+          outNameEl.className = "craft-recipe-output-name";
+          const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
+          if (typeof window.setElementTextOrHTML === "function") {
+            window.setElementTextOrHTML(outNameEl, outName);
+          } else {
+            outNameEl.textContent = outName;
+          }
+          card.appendChild(outNameEl);
+
+          container.appendChild(card);
+        });
+
+        if (typeof window.startCraftingPreviewLoop === "function") {
+          window.startCraftingPreviewLoop();
+        }
+        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
 
       function renderCooking() {
         window.renderCooking = renderCooking;
         const list = document.getElementById("cookingList");
         if (!list) return;
-        list.innerHTML = "";
-        
-        COOKING_RECIPES.forEach(recipe => {
-          const card = document.createElement("div");
-          card.style.background = "rgba(255, 255, 255, 0.03)";
-          card.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-          card.style.borderRadius = "0px";
-          card.style.padding = "12px";
-          card.style.display = "flex";
-          card.style.flexDirection = "column";
-          card.style.gap = "8px";
-
-          const cardHeader = document.createElement("div");
-          cardHeader.style.display = "flex";
-          cardHeader.style.alignItems = "center";
-          cardHeader.style.justifyContent = "space-between";
-
-          const itemInfo = document.createElement("div");
-          itemInfo.style.display = "flex";
-          itemInfo.style.alignItems = "center";
-          itemInfo.style.gap = "8px";
-
-          const itemIcon = document.createElement("span");
-          itemIcon.style.fontSize = "24px";
-          itemIcon.style.display = "inline-flex";
-          itemIcon.style.alignItems = "center";
-          itemIcon.style.justifyContent = "center";
-
-          const canvas3D = create3DIconCanvas(recipe.output, 40, 40);
-          if (canvas3D) {
-            itemIcon.appendChild(canvas3D);
-          } else {
-            itemIcon.textContent = recipe.output.icon;
+        const cookLabel = typeof t === "function" ? t("cook_button") : "ปรุงอาหาร";
+        renderRecipeCardsList(list, COOKING_RECIPES, {
+          actionLabel: cookLabel,
+          iconType: "flame",
+          onAction: (recipe) => {
+            recipe.ingredients.forEach(ing => {
+              consumeItem(ing.name, ing.count);
+            });
+            addItemToInventory({
+              name: recipe.output.name,
+              label: recipe.output.name,
+              icon: recipe.output.icon,
+              count: recipe.output.count || 1
+            });
+            renderCooking();
+            renderInventory();
+            if (typeof playCollectSound === "function") {
+              playCollectSound();
+            }
           }
-
-          const itemName = document.createElement("span");
-          itemName.style.fontFamily = "'Google Sans', sans-serif";
-          itemName.style.fontWeight = "bold";
-          itemName.style.fontSize = "14px";
-          itemName.style.color = "#df6c6c";
-          const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
-          const outNameStr = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
-          if (typeof window.setElementTextOrHTML === "function") {
-            window.setElementTextOrHTML(itemName, outNameStr);
-          } else {
-            itemName.textContent = outNameStr;
-          }
-
-          itemInfo.appendChild(itemIcon);
-          itemInfo.appendChild(itemName);
-          cardHeader.appendChild(itemInfo);
-
-          const ingContainer = document.createElement("div");
-          ingContainer.style.display = "flex";
-          ingContainer.style.flexDirection = "column";
-          ingContainer.style.gap = "4px";
-          ingContainer.style.background = "rgba(0, 0, 0, 0.2)";
-          ingContainer.style.padding = "6px 10px";
-          ingContainer.style.borderRadius = "0px";
-
-          let canCraft = true;
-          recipe.ingredients.forEach(ing => {
-            const currentCount = getItemCount(ing.name);
-            const isEnough = currentCount >= ing.count;
-            if (!isEnough) {
-              canCraft = false;
-            }
-            const ingLine = document.createElement("div");
-            ingLine.style.display = "flex";
-            ingLine.style.justifyContent = "space-between";
-            ingLine.style.alignItems = "center";
-            ingLine.style.fontSize = "12px";
-            ingLine.style.fontFamily = "'Google Sans', sans-serif";
-
-            const ingLeft = document.createElement("span");
-            ingLeft.style.display = "flex";
-            ingLeft.style.alignItems = "center";
-            ingLeft.style.gap = "6px";
-            
-            const ingIconSpan = document.createElement("span");
-            ingIconSpan.style.display = "inline-flex";
-            ingIconSpan.style.alignItems = "center";
-            ingIconSpan.style.justifyContent = "center";
-
-            const canvas3D = create3DIconCanvas(ing, 22, 22);
-            if (canvas3D) {
-              ingIconSpan.appendChild(canvas3D);
-            } else {
-              ingIconSpan.textContent = ing.icon;
-            }
-            
-            const ingLabelSpan = document.createElement("span");
-            const ingDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
-            if (typeof window.setElementTextOrHTML === "function") {
-              window.setElementTextOrHTML(ingLabelSpan, ingDispName);
-            } else {
-              ingLabelSpan.textContent = ingDispName;
-            }
-            
-            ingLeft.appendChild(ingIconSpan);
-            ingLeft.appendChild(ingLabelSpan);
-
-            const ingRight = document.createElement("span");
-            ingRight.style.color = isEnough ? "#34d399" : "#f87171";
-            ingRight.textContent = `${currentCount} / ${ing.count}`;
-
-            ingLine.appendChild(ingLeft);
-            ingLine.appendChild(ingRight);
-            ingContainer.appendChild(ingLine);
-          });
-
-          card.appendChild(cardHeader);
-          card.appendChild(ingContainer);
-
-          const btn = document.createElement("button");
-          btn.style.width = "100%";
-          btn.style.padding = "8px 0";
-          btn.style.fontFamily = "'Google Sans', sans-serif";
-          btn.style.fontWeight = "bold";
-          btn.style.fontSize = "12px";
-          btn.style.cursor = canCraft ? "pointer" : "not-allowed";
-          btn.style.transition = "all 0.2s";
-          btn.style.clipPath = "polygon(0% 0%, 96% 0%, 100% 8px, 100% 100%, 4% 100%, 0% calc(100% - 8px))";
-          if (canCraft) {
-            btn.style.background = "rgba(223, 108, 108, 0.15)";
-            btn.style.border = "1px solid #df6c6c";
-            btn.style.color = "#df6c6c";
-            btn.style.textShadow = "0 0 6px rgba(223, 108, 108, 0.4)";
-            const cookLabel = typeof t === "function" ? t("cook_btn") : "ทำอาหาร (Cook)";
-            btn.innerHTML = `
-              <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
-                  <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-                </svg>
-                <span>${cookLabel}</span>
-              </div>
-            `;
-            
-            btn.onmouseenter = () => {
-              btn.style.background = "rgba(223, 108, 108, 0.3)";
-              btn.style.boxShadow = "0 0 12px rgba(223, 108, 108, 0.15)";
-            };
-            btn.onmouseleave = () => {
-              btn.style.background = "rgba(223, 108, 108, 0.15)";
-              btn.style.boxShadow = "none";
-            };
-            btn.onclick = () => {
-              recipe.ingredients.forEach(ing => {
-                consumeItem(ing.name, ing.count);
-              });
-              addItemToInventory({
-                name: recipe.output.name,
-                label: recipe.output.name,
-                icon: recipe.output.icon,
-                count: recipe.output.count || 1
-              });
-              renderCooking();
-              renderInventory();
-              if (typeof playCollectSound === "function") {
-                playCollectSound();
-              }
-            };
-          } else {
-            btn.style.background = "rgba(255, 255, 255, 0.05)";
-            btn.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-            btn.style.color = "rgba(255, 255, 255, 0.3)";
-            const insufficientLabel = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
-            if (typeof window.setElementTextOrHTML === "function") {
-              window.setElementTextOrHTML(btn, insufficientLabel);
-            } else {
-              btn.textContent = insufficientLabel;
-            }
-            btn.disabled = true;
-          }
-
-          card.appendChild(btn);
-          list.appendChild(card);
         });
-        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
       window.renderCooking = renderCooking;
 
@@ -5624,60 +5536,60 @@ function cancelFloorPlacement() {
           },
           {
             id: "oxford_shoes",
-            output: { name: "OXFORD_SHOES", icon: "👞", count: 1, label: "รองเท้าหนัง Oxford (Cap-Toe Oxford Shoes) x1" },
+            output: { name: "OXFORD_SHOES", icon: "👞", count: 1, label: "รองเท้าหนังอ็อกซ์ฟอร์ด x1" },
             ingredients: [
-              { name: "LEATHER", icon: "🟫", count: 1, label: "หนัง (LEATHER) x1" },
-              { name: "RUBBER_BLOCK", icon: "⬛", count: 1, label: "ก้อนยาง (RUBBER BLOCK) x1" }
+              { name: "LEATHER", icon: "🟫", count: 1, label: "หนัง x1" },
+              { name: "RUBBER_BLOCK", icon: "⬛", count: 1, label: "ก้อนยาง x1" }
             ]
           },
           {
             id: "dress_boots",
-            output: { name: "DRESS_BOOTS", icon: "🥾", count: 1, label: "รองเท้าบูทหนัง Dress Boots (Cap-Toe Dress Boots) x1" },
+            output: { name: "DRESS_BOOTS", icon: "🥾", count: 1, label: "รองเท้าบูทหนัง x1" },
             ingredients: [
-              { name: "LEATHER", icon: "🟫", count: 1, label: "หนัง (LEATHER) x1" },
-              { name: "RUBBER_BLOCK", icon: "⬛", count: 1, label: "ก้อนยาง (RUBBER BLOCK) x1" }
+              { name: "LEATHER", icon: "🟫", count: 1, label: "หนัง x1" },
+              { name: "RUBBER_BLOCK", icon: "⬛", count: 1, label: "ก้อนยาง x1" }
             ]
           },
           {
             id: "white_shirt_short",
-            output: { name: "WHITE_SHIRT_SHORT", icon: "👔", count: 1, label: "เสื้อเชิ้ตสีขาวแขนสั้น (White Short-Sleeve Shirt) x1" },
+            output: { name: "WHITE_SHIRT_SHORT", icon: "👔", count: 1, label: "เสื้อเชิ้ตสีขาวแขนสั้น x1" },
             ingredients: [
-              { name: "CLOTH", icon: "⬜", count: 3, label: "ผ้า (CLOTH) x3" }
+              { name: "CLOTH", icon: "⬜", count: 3, label: "ผ้า x3" }
             ]
           },
           {
             id: "black_pleated_skirt",
-            output: { name: "BLACK_PLEATED_SKIRT", icon: "👗", count: 1, label: "กระโปรงพลีทสีดำ (Black Pleated Skirt) x1" },
+            output: { name: "BLACK_PLEATED_SKIRT", icon: "👗", count: 1, label: "กระโปรงพลีทสีดำ x1" },
             ingredients: [
-              { name: "CLOTH", icon: "⬜", count: 2, label: "ผ้า (CLOTH) x2" }
+              { name: "CLOTH", icon: "⬜", count: 2, label: "ผ้า x2" }
             ]
           },
           {
             id: "black_leggings",
-            output: { name: "BLACK_LEGGINGS", icon: "👖", count: 1, label: "กางเกงเลกกิ้งสีดำ (Black Leggings) x1" },
+            output: { name: "BLACK_LEGGINGS", icon: "👖", count: 1, label: "กางเกงเลกกิ้งสีดำ x1" },
             ingredients: [
-              { name: "CLOTH", icon: "⬜", count: 3, label: "ผ้า (CLOTH) x3" }
+              { name: "CLOTH", icon: "⬜", count: 3, label: "ผ้า x3" }
             ]
           },
           {
             id: "double_breasted_suit",
-            output: { name: "DOUBLE_BREASTED_SUIT", icon: "🧥", count: 1, label: "สูทกระดุมสองแถว (Double-Breasted Suit Jacket) x1" },
+            output: { name: "DOUBLE_BREASTED_SUIT", icon: "🧥", count: 1, label: "สูท x1" },
             ingredients: [
-              { name: "CLOTH", icon: "⬜", count: 5, label: "ผ้า (CLOTH) x5" }
+              { name: "CLOTH", icon: "⬜", count: 5, label: "ผ้า x5" }
             ]
           },
           {
             id: "black_slacks",
-            output: { name: "BLACK_SLACKS", icon: "👖", count: 1, label: "กางเกงสแล็ค (Black Dress Slacks) x1" },
+            output: { name: "BLACK_SLACKS", icon: "👖", count: 1, label: "กางเกงสแล็ค x1" },
             ingredients: [
-              { name: "CLOTH", icon: "⬜", count: 3, label: "ผ้า (CLOTH) x3" }
+              { name: "CLOTH", icon: "⬜", count: 3, label: "ผ้า x3" }
             ]
           },
           {
             id: "opera_cape",
-            output: { name: "OPERA_CAPE", icon: "🧛", count: 1, label: "ผ้าคลุมไหล่ Opera Cape (Opera Cape) x1" },
+            output: { name: "OPERA_CAPE", icon: "🧛", count: 1, label: "ผ้าคลุมไหล่โอเปร่า x1" },
             ingredients: [
-              { name: "CLOTH", icon: "⬜", count: 2, label: "ผ้า (CLOTH) x2" }
+              { name: "CLOTH", icon: "⬜", count: 2, label: "ผ้า x2" }
             ]
           },
           {
@@ -5912,300 +5824,66 @@ function cancelFloorPlacement() {
           },
           {
             id: "obsidian_flux",
-            output: { name: "OBSIDIAN_FLUX", icon: "⚫", count: 5, label: "ออบซิเดียนฟลักซ์ (Obsidian Flux) x5" },
+            output: { name: "OBSIDIAN_FLUX", icon: "⚫", count: 5, label: "ออบซิเดียนฟลักซ์ x5" },
             ingredients: [
-              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 1, label: "ศิลาออบซิเดียน (OBSIDIAN CUBE)" },
-              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง (GLOWING ORE)" }
+              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 1, label: "ศิลาออบซิเดียน" },
+              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง" }
             ]
           },
           {
             id: "tanto",
-            output: { name: "TANTO", icon: "🗡️", count: 1, label: "มีดตันโตะ (TANTO) x1" },
+            output: { name: "TANTO", icon: "🗡️", count: 1, label: "ทันโตะ x1" },
             ingredients: [
-              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 1, label: "ศิลาออบซิเดียน (OBSIDIAN CUBE)" },
-              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง (GLOWING ORE)" },
-              { name: "IRON_ORE", icon: "🟥", count: 1, label: "แร่เหล็ก (IRON ORE)" }
+              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 1, label: "ศิลาออบซิเดียน" },
+              { name: "GLOW_ORE", icon: "✨", count: 1, label: "แร่หินเรืองแสง" },
+              { name: "IRON_ORE", icon: "🟥", count: 1, label: "แร่เหล็ก" }
             ]
           },
           {
             id: "aegis_shift",
-            output: { name: "AEGIS_SHIFT", icon: "⛏️⚔️", count: 1, label: "อีเตอร์ดาบใหญ่ (Aegis-Shift) x1" },
+            output: { name: "AEGIS_SHIFT", icon: "⛏️⚔️", count: 1, label: "อีเตอร์ดาบใหญ่ x1" },
             ingredients: [
-              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 3, label: "ศิลาออบซิเดียน (OBSIDIAN CUBE)" },
-              { name: "IRON_ORE", icon: "🟥", count: 3, label: "แร่เหล็ก (IRON ORE)" },
-              { name: "GLOW_ORE", icon: "✨", count: 3, label: "แร่หินเรืองแสง (GLOWING ORE)" }
+              { name: "OBSIDIAN_CUBE", icon: "🔶", count: 3, label: "ศิลาออบซิเดียน" },
+              { name: "IRON_ORE", icon: "🟥", count: 3, label: "แร่เหล็ก" },
+              { name: "GLOW_ORE", icon: "✨", count: 3, label: "แร่หินเรืองแสง" }
             ]
           }
         ];
 
-        if (!document.getElementById("craftingCardPreviewStyles")) {
-          const st = document.createElement("style");
-          st.id = "craftingCardPreviewStyles";
-          st.textContent = `
-            .crafting-recipe-card {
-              cursor: pointer;
-              transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-            }
-            .crafting-recipe-card.crafting-card-selected,
-            .crafting-recipe-card.touch-preview-active,
-            .crafting-recipe-card.gamepad-focused {
-              border-color: #dfb76c !important;
-              background: rgba(223, 183, 108, 0.08) !important;
-              box-shadow: 0 0 14px rgba(223, 183, 108, 0.35) !important;
-            }
-          `;
-          document.head.appendChild(st);
-        }
-
-        CRAFTING_RECIPES.forEach((recipe, recipeIdx) => {
-          const card = document.createElement("div");
-          card.className = "crafting-recipe-card";
-          card.dataset.recipeId = recipe.id;
-          card.dataset.recipeIndex = String(recipeIdx);
-          card.style.background = "rgba(255, 255, 255, 0.03)";
-          card.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-          card.style.borderRadius = "0px";
-          card.style.padding = "12px";
-          card.style.display = "flex";
-          card.style.flexDirection = "column";
-          card.style.gap = "8px";
-
-          // Header: Item to craft
-          const cardHeader = document.createElement("div");
-          cardHeader.style.display = "flex";
-          cardHeader.style.alignItems = "center";
-          cardHeader.style.justifyContent = "space-between";
-
-          const itemInfo = document.createElement("div");
-          itemInfo.style.display = "flex";
-          itemInfo.style.alignItems = "center";
-          itemInfo.style.gap = "8px";
-
-          const itemIcon = document.createElement("span");
-          itemIcon.style.fontSize = "24px";
-          itemIcon.style.display = "inline-flex";
-          itemIcon.style.alignItems = "center";
-          itemIcon.style.justifyContent = "center";
-          // Only the main output icon uses interactivePreview: true so it can rotate continuously!
-          const canvas3D = create3DIconCanvas(recipe.output, 40, 40, { interactivePreview: true });
-          if (canvas3D) {
-            itemIcon.appendChild(canvas3D);
-            card._mainIconCanvas = canvas3D;
-          } else {
-            itemIcon.textContent = recipe.output.icon;
-          }
-
-          // Click (Mouse) & Tap (Touchscreen) support: clicking or tapping a crafting card selects it and activates its 3D main icon rotation preview
-          const selectCardForPreview = () => {
-            window._selectedCraftingCard = card;
-            window._selectedCraftingRecipeId = recipe.id;
-            window._activeTouchCraftingCard = card;
-            window._activeTouchRecipeId = recipe.id;
-
-            const allCards = craftingList.querySelectorAll(".crafting-recipe-card");
-            allCards.forEach(c => {
-              if (c === card) {
-                c.classList.add("crafting-card-selected");
-                c.classList.add("touch-preview-active");
-              } else {
-                c.classList.remove("crafting-card-selected");
-                c.classList.remove("touch-preview-active");
-                c.classList.remove("gamepad-focused");
-              }
-            });
-
-            // Sync with GamepadController index so gamepad focus doesn't stay stuck on a different card
-            if (window.GamepadController && window.GamepadController.uiNav) {
-              window.GamepadController.uiNav.area = "cards";
-              window.GamepadController.uiNav.index = recipeIdx;
-              if (window.isUsingGamepad) {
-                card.classList.add("gamepad-focused");
-              }
-            }
-
-            if (typeof window.startCraftingPreviewLoop === "function") {
-              window.startCraftingPreviewLoop();
-            }
-          };
-
-          card.addEventListener("mousedown", selectCardForPreview);
-          card.addEventListener("click", selectCardForPreview);
-          card.addEventListener("touchstart", selectCardForPreview, { passive: true });
-          card.addEventListener("pointerdown", selectCardForPreview, { passive: true });
-
-          if (window._selectedCraftingRecipeId === recipe.id || window._activeTouchRecipeId === recipe.id) {
-            window._selectedCraftingCard = card;
-            window._activeTouchCraftingCard = card;
-            card.classList.add("crafting-card-selected");
-            card.classList.add("touch-preview-active");
-          }
-
-          const itemName = document.createElement("span");
-          itemName.style.fontFamily = "'Google Sans', sans-serif";
-          itemName.style.fontWeight = "bold";
-          itemName.style.fontSize = "14px";
-          itemName.style.color = "#dfb76c";
-          const outName = typeof getItemDisplayName === "function" ? getItemDisplayName(recipe.output.name) : recipe.output.name;
-          const outNameStr = outName + (recipe.output.count > 1 ? ` x${recipe.output.count}` : "");
-          if (typeof window.setElementTextOrHTML === "function") {
-            window.setElementTextOrHTML(itemName, outNameStr);
-          } else {
-            itemName.textContent = outNameStr;
-          }
-
-          itemInfo.appendChild(itemIcon);
-          itemInfo.appendChild(itemName);
-
-          cardHeader.appendChild(itemInfo);
-
-          // Ingredients list
-          const ingContainer = document.createElement("div");
-          ingContainer.style.display = "flex";
-          ingContainer.style.flexDirection = "column";
-          ingContainer.style.gap = "4px";
-          ingContainer.style.background = "rgba(0, 0, 0, 0.2)";
-          ingContainer.style.padding = "6px 10px";
-          ingContainer.style.borderRadius = "0px";
-
-          let canCraft = true;
-
-          recipe.ingredients.forEach(ing => {
-            const currentCount = getItemCount(ing.name);
-            const isEnough = currentCount >= ing.count;
-            if (!isEnough) {
-              canCraft = false;
-            }
-
-            const ingLine = document.createElement("div");
-            ingLine.style.display = "flex";
-            ingLine.style.justifyContent = "space-between";
-            ingLine.style.alignItems = "center";
-            ingLine.style.fontSize = "12px";
-            ingLine.style.fontFamily = "'Google Sans', sans-serif";
-
-            const ingLeft = document.createElement("span");
-            ingLeft.style.display = "flex";
-            ingLeft.style.alignItems = "center";
-            ingLeft.style.gap = "6px";
-            const ingIconSpan = document.createElement("span");
-            ingIconSpan.style.display = "inline-flex";
-            ingIconSpan.style.alignItems = "center";
-            ingIconSpan.style.justifyContent = "center";
-            const canvas3D = create3DIconCanvas(ing, 22, 22);
-            if (canvas3D) {
-              ingIconSpan.appendChild(canvas3D);
-            } else {
-              ingIconSpan.textContent = ing.icon;
-            }
-            
-            const ingLabelSpan = document.createElement("span");
-            const ingDispName = typeof getItemDisplayName === "function" ? getItemDisplayName(ing.name) : (ing.label || ing.name);
-            if (typeof window.setElementTextOrHTML === "function") {
-              window.setElementTextOrHTML(ingLabelSpan, ingDispName);
-            } else {
-              ingLabelSpan.textContent = ingDispName;
-            }
-            
-            ingLeft.innerHTML = "";
-            ingLeft.appendChild(ingIconSpan);
-            ingLeft.appendChild(ingLabelSpan);
-
-            const ingRight = document.createElement("span");
-            ingRight.style.color = isEnough ? "#34d399" : "#f87171";
-            ingRight.textContent = `${currentCount} / ${ing.count}`;
-
-            ingLine.appendChild(ingLeft);
-            ingLine.appendChild(ingRight);
-            ingContainer.appendChild(ingLine);
-          });
-
-          card.appendChild(cardHeader);
-          card.appendChild(ingContainer);
-
-          // Craft button
-          const btn = document.createElement("button");
-          btn.style.width = "100%";
-          btn.style.padding = "8px 0";
-          btn.style.fontFamily = "'Google Sans', sans-serif";
-          btn.style.fontWeight = "bold";
-          btn.style.fontSize = "12px";
-          btn.style.cursor = canCraft ? "pointer" : "not-allowed";
-          btn.style.transition = "all 0.2s";
-          btn.style.clipPath = "polygon(0% 0%, 96% 0%, 100% 8px, 100% 100%, 4% 100%, 0% calc(100% - 8px))";
-          
-
-          if (canCraft) {
-            btn.style.background = "rgba(223, 183, 108, 0.15)";
-            btn.style.border = "1px solid #dfb76c";
-            btn.style.color = "#dfb76c";
-            btn.style.textShadow = "0 0 6px rgba(223, 183, 108, 0.4)";
-            const craftLabel = typeof t === "function" ? t("craft_btn") : "คราฟไอเทม (Craft)";
-            btn.innerHTML = `
-              <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
-                  <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
-                  <path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64" />
-                  <path d="m20 8-5 5" />
-                </svg>
-                <span>${craftLabel}</span>
-              </div>
-            `;
-            
-            btn.onmouseenter = () => {
-              btn.style.background = "rgba(223, 183, 108, 0.3)";
-              btn.style.boxShadow = "0 0 12px rgba(223, 183, 108, 0.15)";
-            };
-            btn.onmouseleave = () => {
-              btn.style.background = "rgba(223, 183, 108, 0.15)";
-              btn.style.boxShadow = "none";
-            };
-            
-            btn.onclick = () => {
-              selectCardForPreview();
-              craftItem(recipe.id);
-            };
-          } else {
-            btn.style.background = "rgba(255, 255, 255, 0.05)";
-            btn.style.border = "1px solid rgba(255, 255, 255, 0.15)";
-            btn.style.color = "rgba(255, 255, 255, 0.3)";
-            btn.style.textShadow = "none";
-            const insufficientLabel = typeof t === "function" ? t("insufficient_materials") : "วัตถุดิบไม่เพียงพอ (Insufficient Materials)";
-            if (typeof window.setElementTextOrHTML === "function") {
-              window.setElementTextOrHTML(btn, insufficientLabel);
-            } else {
-              btn.textContent = insufficientLabel;
-            }
-            btn.disabled = true;
-          }
-
-          card.appendChild(btn);
-          craftingList.appendChild(card);
+        const craftLabel = typeof t === "function" ? t("craft_button") : "คราฟต์";
+        renderRecipeCardsList(craftingList, CRAFTING_RECIPES, {
+          actionLabel: craftLabel,
+          iconType: "wrench",
+          onAction: (recipe) => craftItem(recipe.id)
         });
-        if (typeof window.startCraftingPreviewLoop === "function") {
-          window.startCraftingPreviewLoop();
-        }
-        if (typeof updateCustomScrollbar === "function") setTimeout(updateCustomScrollbar, 30);
       }
       window.renderCrafting = renderCrafting;
 
-      // Continuous 3D main icon preview rotation loop for Crafting Tab (Mouse click, Touchscreen tap, and Gamepad focus)
+      // Continuous 3D main icon preview rotation loop for Crafting & Cooking Tabs (Mouse click, Touchscreen tap, and Gamepad focus)
       (function setupCraftingMainIconPreviewLoop() {
         let isLoopRunning = false;
         let lastFrameTime = 0;
         // Moderately slow right-to-left rotation speed (~1.35 rad/sec, ~4.6s per full 360° turn)
         const ROTATE_SPEED_RAD_PER_SEC = 1.35;
 
-        function isCraftingVisible() {
-          const craftingList = document.getElementById("craftingList");
-          if (!craftingList || craftingList.style.display === "none") return false;
+        function getActiveRecipeList() {
           const invOverlay = document.getElementById("inventoryOverlay");
           const craftOverlay = document.getElementById("craftingOverlay");
           const isOpen = (invOverlay && invOverlay.classList.contains("open")) || (craftOverlay && craftOverlay.classList.contains("open"));
-          return !!isOpen;
+          if (!isOpen) return null;
+
+          const craftingList = document.getElementById("craftingList");
+          if (craftingList && craftingList.style.display !== "none") return craftingList;
+
+          const cookingList = document.getElementById("cookingList");
+          if (cookingList && cookingList.style.display !== "none") return cookingList;
+
+          return null;
         }
 
         function tick(now) {
-          if (!isCraftingVisible()) {
+          const activeList = getActiveRecipeList();
+          if (!activeList) {
             isLoopRunning = false;
             return;
           }
@@ -6213,12 +5891,11 @@ function cancelFloorPlacement() {
           const dt = lastFrameTime ? Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000)) : 0.016;
           lastFrameTime = now;
 
-          const craftingList = document.getElementById("craftingList");
-          if (craftingList) {
-            const cards = craftingList.querySelectorAll(".crafting-recipe-card");
+          if (activeList) {
+            const cards = activeList.querySelectorAll(".crafting-recipe-card");
             const isGamepadMode = !!(window.isUsingGamepad || window.isGamepadUINavActive);
-            const hasAnyGamepadFocusedCard = !!craftingList.querySelector(".crafting-recipe-card.gamepad-focused");
-            const hasAnySelectedCard = !!craftingList.querySelector(".crafting-recipe-card.crafting-card-selected, .crafting-recipe-card.touch-preview-active");
+            const hasAnyGamepadFocusedCard = !!activeList.querySelector(".crafting-recipe-card.gamepad-focused");
+            const hasAnySelectedCard = !!activeList.querySelector(".crafting-recipe-card.crafting-card-selected, .crafting-recipe-card.touch-preview-active");
 
             for (let i = 0; i < cards.length; i++) {
               const card = cards[i];
@@ -6768,16 +6445,9 @@ function cancelFloorPlacement() {
         
         const overlay = document.getElementById("trashConfirmOverlay");
         
-        // Append strictly inside the active panel to keep it contained within the inventory / chest UI window
-        const chestOverlay = document.getElementById("chestOverlay");
-        let targetPanel = null;
-        if (source === "chest" || source === "chestPlayerInventory" || (chestOverlay && chestOverlay.classList.contains("open"))) {
-           targetPanel = document.querySelector("#chestOverlay .inventory-panel");
-           if (targetPanel) targetPanel.style.overflow = "hidden";
-        } else {
-           targetPanel = document.querySelector("#inventoryOverlay .inventory-panel");
-           if (targetPanel) targetPanel.style.overflow = "hidden";
-        }
+        // Append strictly inside the active #inventoryOverlay panel (shared by Inventory, Crafting, Cooking & Chest)
+        const targetPanel = document.querySelector("#inventoryOverlay .inventory-panel");
+        if (targetPanel) targetPanel.style.overflow = "hidden";
 
         if (targetPanel && overlay && overlay.parentElement !== targetPanel) {
            targetPanel.appendChild(overlay);
@@ -6810,8 +6480,6 @@ function cancelFloorPlacement() {
         const iconEl = document.getElementById("trashConfirmIcon");
         if (iconEl) iconEl.innerHTML = "";
         document.getElementById("trashConfirmOverlay").style.setProperty("display", "none", "important");
-        const chestPanel = document.querySelector("#chestOverlay .inventory-panel");
-        if (chestPanel) chestPanel.style.overflow = "";
         const invPanel = document.querySelector("#inventoryOverlay .inventory-panel");
         if (invPanel) invPanel.style.overflow = "";
         clearInterval(trashHoldInterval);
@@ -6887,7 +6555,7 @@ function cancelFloorPlacement() {
           st.textContent = `
             .inventory-slot.item-selected, .action-slot.item-selected {
               border-color: #dfb76c !important;
-              box-shadow: inset 0 0 0 2px #dfb76c, inset 0 0 12px rgba(223, 183, 108, 0.4) !important;
+              box-shadow: inset 0 0 0 2px #dfb76c, inset 0 0 0.75rem rgba(223, 183, 108, 0.4) !important;
               background: rgba(223, 183, 108, 0.16) !important;
             }
           `;
@@ -6922,18 +6590,18 @@ function cancelFloorPlacement() {
             if (btnActionUI) {
               btnActionUI.style.opacity = "1";
               btnActionUI.style.cursor = "pointer";
-              btnActionUI.style.boxShadow = "0 0 10px rgba(223, 183, 108, 0.35)";
+              btnActionUI.style.boxShadow = "0 0 0.625rem rgba(223, 183, 108, 0.35)";
             }
             if (btnSplit) {
               const canSplit = (curItem.count > 1);
               btnSplit.style.opacity = canSplit ? "1" : "0.45";
               btnSplit.style.cursor = canSplit ? "pointer" : "not-allowed";
-              btnSplit.style.boxShadow = canSplit ? "0 0 10px rgba(56, 189, 248, 0.35)" : "none";
+              btnSplit.style.boxShadow = canSplit ? "0 0 0.625rem rgba(56, 189, 248, 0.35)" : "none";
             }
             if (btnDestroy) {
               btnDestroy.style.opacity = "1";
               btnDestroy.style.cursor = "pointer";
-              btnDestroy.style.boxShadow = "0 0 10px rgba(239, 68, 68, 0.35)";
+              btnDestroy.style.boxShadow = "0 0 0.625rem rgba(239, 68, 68, 0.35)";
             }
           } else {
             if (btnActionUI) {
@@ -7078,8 +6746,10 @@ function cancelFloorPlacement() {
       function getActiveScrollableContainer() {
         const overlay = document.getElementById("inventoryOverlay");
         if (!overlay || !overlay.classList.contains("open")) return null;
+        if (overlay.classList.contains("mode-chest")) return null;
 
         const activeTabName = typeof window.getActiveTab === "function" ? window.getActiveTab() : (typeof activeTab !== "undefined" ? activeTab : "inventory");
+        if (activeTabName === "chest") return null;
 
         if (activeTabName === "settings") {
           const el = document.getElementById("inventorySettings");
@@ -7369,7 +7039,8 @@ function cancelFloorPlacement() {
         if (!grid) return;
         grid.innerHTML = "";
 
-        if (activeTab === "inventory") {
+        if (activeTab === "inventory" || activeTab === "chest") {
+          const isChestTransfer = (activeTab === "chest" && !!currentOpenChest);
           for (let i = 0; i < TOTAL_SLOTS; i++) {
             const item = inventory[i];
             const isLocked = i >= UNLOCKED_SLOTS;
@@ -7378,8 +7049,26 @@ function cancelFloorPlacement() {
               index: i,
               item: item,
               isLocked: isLocked,
-              cursor: isMoveModeEnabled ? "grab" : "pointer",
-              onClick: (item && !isLocked) ? (isMoveModeEnabled ? null : () => useItem(item, i, "inventory")) : null
+              cursor: isChestTransfer ? "pointer" : (isMoveModeEnabled ? "grab" : "pointer"),
+              onClick: (item && !isLocked)
+                ? (isChestTransfer
+                    ? () => {
+                        if (addItemToChest(item)) {
+                          if (item.count > 1) {
+                            item.count -= 1;
+                          } else {
+                            inventory[i] = null;
+                          }
+                          renderChest();
+                          renderActionSlots();
+                          updateBadge();
+                          saveSettingsToLocalStorage();
+                        } else {
+                          showNotice("กล่องเต็มแล้ว! (Chest Full)");
+                        }
+                      }
+                    : (isMoveModeEnabled ? null : () => useItem(item, i, "inventory")))
+                : null
             });
             grid.appendChild(slot);
           }
@@ -7485,13 +7174,6 @@ function cancelFloorPlacement() {
             item: item,
             keyLabel: null,
             cursor: isMoveModeEnabled ? "grab" : "pointer",
-            labelStyle: {
-              fontSize: "8px",
-              position: "absolute",
-              bottom: "2px",
-              color: "rgba(223, 183, 108, 0.7)",
-              fontFamily: "'Google Sans', sans-serif"
-            },
             onRightClick: () => {
               handleSplitItem("equip", i);
             }
@@ -7499,7 +7181,6 @@ function cancelFloorPlacement() {
 
           if (!item && meta) {
             slotEl.style.position = "relative";
-            slotEl.title = slotTitle;
 
             const iconWrap = document.createElement("span");
             iconWrap.className = "slot-content equip-placeholder-icon";
@@ -7507,30 +7188,10 @@ function cancelFloorPlacement() {
             iconWrap.style.alignItems = "center";
             iconWrap.style.justifyContent = "center";
             iconWrap.style.pointerEvents = "none";
-            iconWrap.style.marginBottom = "8px";
             iconWrap.innerHTML = meta.svg;
             slotEl.appendChild(iconWrap);
 
-            const emptyLabel = document.createElement("span");
-            emptyLabel.className = "slot-label";
-            emptyLabel.style.fontSize = "8px";
-            emptyLabel.style.position = "absolute";
-            emptyLabel.style.bottom = "3px";
-            emptyLabel.style.left = "2px";
-            emptyLabel.style.right = "2px";
-            emptyLabel.style.textAlign = "center";
-            emptyLabel.style.color = "rgba(223, 183, 108, 0.45)";
-            emptyLabel.style.fontFamily = "'Google Sans', sans-serif";
-            emptyLabel.style.pointerEvents = "none";
-            emptyLabel.style.whiteSpace = "nowrap";
-            emptyLabel.style.overflow = "hidden";
-            emptyLabel.style.textOverflow = "ellipsis";
-            if (typeof window.setElementTextOrHTML === "function") {
-              window.setElementTextOrHTML(emptyLabel, slotTitle);
-            } else {
-              emptyLabel.textContent = slotTitle;
-            }
-            slotEl.appendChild(emptyLabel);
+            slotEl.appendChild(createUnifiedItemNameBar(slotTitle));
           }
         }
       }
@@ -7538,7 +7199,10 @@ function cancelFloorPlacement() {
 
       function renderActionSlots() {
         window.renderActionSlots = renderActionSlots;
-        if (typeof renderEquipSlots === "function") renderEquipSlots();
+        const _invOv = document.getElementById("inventoryOverlay");
+        if (_invOv && _invOv.classList.contains("open") && typeof renderEquipSlots === "function") {
+          renderEquipSlots();
+        }
         const containers = [
           document.querySelectorAll(".action-slots .action-slot"),
           document.querySelectorAll(".inventory-action-slots .action-slot")
@@ -7570,13 +7234,6 @@ function cancelFloorPlacement() {
               item: item,
               keyLabel: keyLabel,
               cursor: isMoveModeEnabled ? "grab" : "pointer",
-              labelStyle: {
-                fontSize: "8px",
-                position: "absolute",
-                bottom: "2px",
-                color: "rgba(223, 183, 108, 0.7)",
-                fontFamily: "'Google Sans', sans-serif"
-              },
               onClick: isMoveModeEnabled ? null : () => {
                 if (selectedActionSlotIndex === i) {
                   selectedActionSlotIndex = -1;
@@ -7604,12 +7261,8 @@ function cancelFloorPlacement() {
         });
       }
 
-      function addItemToInventory(item, playAudio = true, shouldRender = true) {
-        const itemName = item.name || item.label;
-        const addCount = Math.max(1, item.count || 1);
+      function getAvailableInventorySpace(itemName) {
         const maxStack = MAX_STACK_PER_SLOT;
-
-        // Verify total capacity across all unlocked slots first (existing stack room + empty slots)
         let availableSpace = 0;
         for (let i = 0; i < UNLOCKED_SLOTS; i++) {
           const slotItem = inventory[i];
@@ -7622,6 +7275,19 @@ function cancelFloorPlacement() {
             }
           }
         }
+        return availableSpace;
+      }
+      if (typeof window !== "undefined") {
+        window.getAvailableInventorySpace = getAvailableInventorySpace;
+      }
+
+      function addItemToInventory(item, playAudio = true, shouldRender = true) {
+        const itemName = item.name || item.label;
+        const addCount = Math.max(1, item.count || 1);
+        const maxStack = MAX_STACK_PER_SLOT;
+
+        // Verify total capacity across all unlocked slots first (existing stack room + empty slots)
+        const availableSpace = getAvailableInventorySpace(itemName);
         if (availableSpace < addCount) {
           return false;
         }
@@ -7891,16 +7557,42 @@ function cancelFloorPlacement() {
               }
             }
 
+            if (typeof window.invalidateStructureCollisionCache === "function") {
+              window.invalidateStructureCollisionCache();
+            }
+            window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
+            const demType = closestDemolishItem.type;
+            let demNeighborAffected = false;
+            if (typeof window.dirtyNeighborStructureCaches === "function" && closestDemolishItem.position) {
+              if (demType === "wood_roof") {
+                demNeighborAffected = window.dirtyNeighborStructureCaches(closestDemolishItem.position, 2.2, closestDemolishItem, ["wood_wall", "wood_roof"]);
+              } else if (demType === "wood_door" || demType === "wood_window") {
+                demNeighborAffected = window.dirtyNeighborStructureCaches(closestDemolishItem.position, 0.3, closestDemolishItem, ["wood_wall"]);
+              } else if (demType === "thin_wood_floor" || demType === "wood_floor") {
+                demNeighborAffected = window.dirtyNeighborStructureCaches(closestDemolishItem.position, 0.55, closestDemolishItem, ["thin_wood_floor"]);
+              }
+            }
+            if (typeof window._rebuildCollectibleSpatialHelpers === "function") {
+              window._rebuildCollectibleSpatialHelpers();
+            }
             if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.rebuild === "function" && typeof collectibles !== "undefined") {
               SpatialGrid.rebuild(collectibles);
             }
-            if (typeof window !== "undefined") {
-              window.pendingCollectibleRefresh = true;
-              window.pendingDynamicCollectibleRefresh = true;
-            }
-
-            if (typeof refreshCollectiblesVBO === "function") {
-              refreshCollectiblesVBO();
+            if (demType === "wood_door" || demType === "wood_window") {
+              if (typeof refreshCollectiblesVBO === "function") {
+                refreshCollectiblesVBO('doors');
+                if (demNeighborAffected) refreshCollectiblesVBO('main');
+              }
+            } else if (closestDemolishItem.isDynamic || demType === "wood_planter_box") {
+              if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO('dynamic');
+            } else if (!demNeighborAffected && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(closestDemolishItem)) {
+              // Surgically zeroed in VBO via gl.bufferSubData without rebuilding entire planet
+              if (Array.isArray(window.staticCollectiblesList)) {
+                const sIdx = window.staticCollectiblesList.indexOf(closestDemolishItem);
+                if (sIdx !== -1) window.staticCollectiblesList.splice(sIdx, 1);
+              }
+            } else if (typeof refreshCollectiblesVBO === "function") {
+              refreshCollectiblesVBO('main');
             }
             renderInventory();
             renderActionSlots();
@@ -8064,8 +7756,16 @@ function cancelFloorPlacement() {
                 activeRidingMech.attachedParts = activeRidingMech.attachedParts.filter(e => e.item !== targetCol);
               }
 
-              pendingCollectibleRefresh = true;
-              if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("demolish");
+              if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.remove === "function") {
+                SpatialGrid.remove(targetCol);
+              }
+              if (targetCol.isDynamic) {
+                if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("dynamic");
+              } else if (typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(targetCol)) {
+                // Fast surgical GPU sub-buffer zero-out (<0.1ms)
+              } else if (typeof refreshCollectiblesVBO === "function") {
+                refreshCollectiblesVBO("main");
+              }
               if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
               showNotice((typeof t === "function") ? t("mech_dismantle_success", { part: eqData.label }) : `Dismantled ${eqData.label} successfully!`);
               if (typeof playCollectSound === "function") playCollectSound();
@@ -8172,8 +7872,13 @@ function cancelFloorPlacement() {
               });
             }
 
-            pendingCollectibleRefresh = true;
-            if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("place");
+            if (typeof window.appendPlacedCollectibleToVBO === "function") {
+              if (!window.appendPlacedCollectibleToVBO(newCol) && typeof refreshCollectiblesVBO === "function") {
+                refreshCollectiblesVBO("main");
+              }
+            } else if (typeof refreshCollectiblesVBO === "function") {
+              refreshCollectiblesVBO("main");
+            }
             if (typeof saveSettingsToLocalStorage === "function") saveSettingsToLocalStorage();
             showNotice((typeof t === "function") ? t("mech_equip_success", { part: getRobotPartLabel(itemType) }) : `Equipped ${getRobotPartLabel(itemType)} successfully!`);
             if (typeof playCollectSound === "function") playCollectSound();
@@ -8204,13 +7909,16 @@ function cancelFloorPlacement() {
           slotEl.innerHTML = `
             <span class="mech-slot-number">#0${slotId}</span>
             <div class="mech-slot-icon"></div>
-            <span class="mech-slot-label">${matchingItem ? equippedData.label : ''}</span>
-            <span class="mech-slot-status ${matchingItem ? '' : 'empty'}">${matchingItem ? equippedText : emptyText}</span>
+            ${matchingItem ? '' : `<span class="mech-slot-status empty">${emptyText}</span>`}
           `;
+
+          if (matchingItem && equippedData) {
+            slotEl.appendChild(createUnifiedItemNameBar(equippedData.label));
+          }
 
           const iconContainer = slotEl.querySelector(".mech-slot-icon");
           if (matchingItem && iconContainer && typeof create3DIconCanvas === "function") {
-            const icon3D = create3DIconCanvas(matchingItem.type || equippedData.itemName, 38, 38);
+            const icon3D = create3DIconCanvas(matchingItem.type || equippedData.itemName, 40, 40);
             if (icon3D) {
               iconContainer.appendChild(icon3D);
             }

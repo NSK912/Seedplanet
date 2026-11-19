@@ -96,20 +96,24 @@ function startGameWithSlot(loadedData, devMode = false) {
   window.gameStarted = true;
   isDevMode = devMode;
   window.isDevMode = devMode;
+  if (devMode) {
+    activeSaveSlotId = null;
+    if (typeof window !== "undefined" && window._pendingSaveSettingsTimer) {
+      clearTimeout(window._pendingSaveSettingsTimer);
+      window._pendingSaveSettingsTimer = null;
+    }
+  }
 
   const toggleBtn = document.getElementById("toggleControlsBtn");
   const mainCtrls = document.getElementById("mainControls");
-  const fullBtn = document.getElementById("fullscreenBtn");
   const devLink = document.getElementById("devByNskLink");
   if (!isDevMode) {
     if (toggleBtn) toggleBtn.style.setProperty("display", "none", "important");
     if (mainCtrls) mainCtrls.style.setProperty("display", "none", "important");
-    if (fullBtn) fullBtn.style.setProperty("display", "none", "important");
     if (devLink) devLink.style.setProperty("display", "none", "important");
   } else {
     if (toggleBtn) toggleBtn.style.setProperty("display", "block", "important");
     if (mainCtrls) mainCtrls.style.setProperty("display", "flex", "important");
-    if (fullBtn) fullBtn.style.setProperty("display", "inline-block", "important");
     if (devLink) devLink.style.setProperty("display", "inline", "important");
   }
   
@@ -206,6 +210,10 @@ function startGameWithSlot(loadedData, devMode = false) {
     savedCollectiblesState = null;
     window.savedCollectiblesState = null;
     window.savedRemovedWorldKeys = [];
+    window.demolishedHouseChests = [];
+    window.savedHouseChestsStorage = [];
+    window.cutGrassPositions = [];
+    if (typeof savedAmphibiansState !== "undefined") savedAmphibiansState = null;
     playerHP = 5;
     playerMaxHP = 5;
     playerHunger = 5;
@@ -393,20 +401,21 @@ function startGameWithSlot(loadedData, devMode = false) {
           if (actionSlotsEl) {
             actionSlotsEl.style.display = "grid";
           }
+          const playerHpHudEl = document.getElementById("playerHpVerticalContainer");
+          if (playerHpHudEl) {
+            playerHpHudEl.style.display = "flex";
+          }
 
           const toggleBtn = document.getElementById("toggleControlsBtn");
           const mainCtrls = document.getElementById("mainControls");
-          const fullBtn = document.getElementById("fullscreenBtn");
           const devLink = document.getElementById("devByNskLink");
           if (!isDevMode) {
             if (toggleBtn) toggleBtn.style.setProperty("display", "none", "important");
             if (mainCtrls) mainCtrls.style.setProperty("display", "none", "important");
-            if (fullBtn) fullBtn.style.setProperty("display", "none", "important");
             if (devLink) devLink.style.setProperty("display", "none", "important");
           } else {
             if (toggleBtn) toggleBtn.style.setProperty("display", "block");
             if (mainCtrls) mainCtrls.style.setProperty("display", "flex");
-            if (fullBtn) fullBtn.style.setProperty("display", "inline-block");
             if (devLink) devLink.style.setProperty("display", "inline");
           }
 
@@ -434,7 +443,15 @@ const settingsMenuBtn = document.getElementById("gameSettingsBtn");
 if (settingsMenuBtn) {
   settingsMenuBtn?.addEventListener("click", () => {
     const overlay = document.getElementById("inventoryOverlay");
-    overlay.classList.add("open");
+    overlay.classList.remove("mode-chest");
+    const chestGridWrapper = document.getElementById("chestGridWrapper");
+    if (chestGridWrapper) chestGridWrapper.style.display = "none";
+    const invChestLabel = document.getElementById("inventoryGridChestLabel");
+    if (invChestLabel) invChestLabel.style.display = "none";
+    const tabChest = document.getElementById("tabChest");
+    if (tabChest) { tabChest.classList.remove("active"); tabChest.style.display = "none"; }
+    const chestTakeAllBtn = document.getElementById("chestTakeAllBtn");
+    if (chestTakeAllBtn) chestTakeAllBtn.style.display = "none";
 
     activeTab = "settings";
     if (typeof window.setActiveTab === "function") window.setActiveTab("settings");
@@ -448,10 +465,6 @@ if (settingsMenuBtn) {
     
     const mainLayout = document.getElementById("inventoryMainLayout");
     if (mainLayout) mainLayout.style.display = "none";
-    const divider = document.getElementById("inventoryVerticalDivider");
-    if (divider) divider.style.display = "none";
-    const leftDivider = document.getElementById("inventoryLeftVerticalDivider");
-    if (leftDivider) leftDivider.style.display = "none";
     const equipSlotsWrapper = document.getElementById("inventoryEquipSlotsWrapper");
     if (equipSlotsWrapper) equipSlotsWrapper.style.display = "none";
     
@@ -460,6 +473,7 @@ if (settingsMenuBtn) {
     document.getElementById("cookingList").style.display = "none";
 
     document.getElementById("inventorySettings").style.display = "flex";
+    overlay.classList.add("open");
 
     const bottomBtns = document.getElementById("inventoryBottomButtons");
     if (bottomBtns) bottomBtns.style.display = "none";
@@ -469,6 +483,11 @@ if (settingsMenuBtn) {
     document.getElementById("tabCrafting").style.display = "none";
     document.getElementById("tabItemsList").style.display = "none";
     document.getElementById("btnExitToMenu").style.display = "none";
+    const qBtn = document.getElementById("quitGameBtn");
+    if (qBtn) {
+      qBtn.style.removeProperty("display");
+      qBtn.classList.remove("quit-btn-hidden");
+    }
 
     syncInventorySettingsUI();
   });

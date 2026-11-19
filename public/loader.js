@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789500000182';
+  const version = '1789500000227';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -28,18 +28,13 @@
 
     // --- Audio System ---
     'gamefile/audio/audio.js',
-    'gamefile/audio/wooden_wheels_sound.js',
 
     // --- Core Engine & Utilities ---
     'gamefile/Engine/utils.js',
-    'gamefile/Engine/SpacesMap.js',
-    'gamefile/Engine/terrain.js',
-    'gamefile/Engine/SpatialGrid.js',
+    'gamefile/Environment/SpacesMap.js',
+    'gamefile/Environment/terrain.js',
     'gamefile/Engine/physics.js',
     'gamefile/Engine/camera.js',
-    'gamefile/Engine/gamepad.js',
-    'gamefile/Engine/3d_ui.js',
-    'gamefile/Engine/ssrCore.js',
 
     // --- Environment ---
     'gamefile/Environment/surface.js',
@@ -50,6 +45,8 @@
     'gamefile/Environment/ore.js',
     'gamefile/Environment/Clouds3D.js',
     'gamefile/Environment/UnderwaterPlants.js',
+    'gamefile/Environment/cotton_plant.js',
+    'gamefile/Environment/crown_flower.js',
 
     // --- Gameplay Modules ---
     'gamefile/gameplay/compass.js',
@@ -57,6 +54,9 @@
     // --- Items ---
     'gamefile/items/collectibles.js',
     'gamefile/items/rock.js',
+    'gamefile/items/iron_ore.js',
+    'gamefile/items/gold_ore.js',
+    'gamefile/items/glow_ore.js',
     'gamefile/items/branch.js',
     'gamefile/items/arrow.js',
     'gamefile/items/wooden_arm_cannon.js',
@@ -90,7 +90,17 @@
     'gamefile/items/robot_stand.js',
     'gamefile/items/fried_bug.js',
     'gamefile/items/dragon_fruit.js',
+    'gamefile/items/tough_meat.js',
+    'gamefile/items/leather.js',
     'gamefile/items/planter_system.js',
+    'gamefile/items/cloth.js',
+    'gamefile/items/rubber_block.js',
+    'gamefile/items/iron_bullet.js',
+    'gamefile/items/glow_battery.js',
+    'gamefile/items/iron_bucket.js',
+    'gamefile/items/wood_planter_box.js',
+    'gamefile/items/tanto.js',
+    'gamefile/items/aegis_shift.js',
 
     // --- NPCs ---
     'gamefile/npcs/meganeura.js',
@@ -104,6 +114,16 @@
     // --- Gameplay Core & System ---
     'gamefile/gameplay/GLBLoader.js',
     'gamefile/gameplay/capsuleModel.js',
+    // --- Craftable Clothing & Footwear ---
+    'gamefile/items/traveler_boots.js',
+    'gamefile/items/oxford_shoes.js',
+    'gamefile/items/dress_boots.js',
+    'gamefile/items/white_shirt_short.js',
+    'gamefile/items/black_pleated_skirt.js',
+    'gamefile/items/black_leggings.js',
+    'gamefile/items/double_breasted_suit.js',
+    'gamefile/items/black_slacks.js',
+    'gamefile/items/opera_cape.js',
     'gamefile/gameplay/inventory.js',
     'gamefile/gameplay/player.js',
     'gamefile/gameplay/ActorCore.js',

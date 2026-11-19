@@ -156,8 +156,9 @@ window.characterVertexShaderSource = `#version 300 es
                 }
                 vec3 pointLightAccum = vec3(0.0);
                 vec3 pointTintAccum = vec3(0.0);
-                for (int i = 0; i < 16; i++) {
-                    if (i < uPointLightCount) {
+                if (uPointLightCount > 0) {
+                    for (int i = 0; i < 16; i++) {
+                        if (i >= uPointLightCount) break;
                         vec4 pl = uPointLights[i];
                         vec4 plc = uPointLightColors[i];
                         vec3 toLight = pl.xyz - vWorldPos;
@@ -490,13 +491,30 @@ window.characterVertexShaderSource = `#version 300 es
       function updatePlayerHPUI() {
         const hpContainer = document.getElementById("playerHpVerticalContainer");
         if (!hpContainer) return;
-        
-        hpContainer.innerHTML = "";
-        
-        // 5 ช่อง HP (สีแดง - อยู่ด้านล่างเนื่องจาก container ใช้ column-reverse)
+
+        let hpGroup = document.getElementById("playerHpSlotsGroup");
+        let hungerGroup = document.getElementById("playerHungerSlotsGroup");
+
+        if (!hpGroup) {
+          hpGroup = document.createElement("div");
+          hpGroup.className = "player-hp-slots-group";
+          hpGroup.id = "playerHpSlotsGroup";
+          hpContainer.prepend(hpGroup);
+        }
+        if (!hungerGroup) {
+          hungerGroup = document.createElement("div");
+          hungerGroup.className = "player-hunger-slots-group";
+          hungerGroup.id = "playerHungerSlotsGroup";
+          hpContainer.appendChild(hungerGroup);
+        }
+
+        hpGroup.innerHTML = "";
+        hungerGroup.innerHTML = "";
+
+        // 5 ช่อง HP (สีแดง - ฝั่งซ้าย)
         const totalHpSlots = (typeof playerMaxHP === "number") ? playerMaxHP : 5;
         const filledHpSlots = (typeof playerHP === "number") ? Math.max(0, playerHP) : 5;
-        
+
         for (let s = 0; s < totalHpSlots; s++) {
           const slotDiv = document.createElement("div");
           slotDiv.className = "player-hp-slot-minimal";
@@ -504,24 +522,21 @@ window.characterVertexShaderSource = `#version 300 es
             slotDiv.className += " filled";
           }
           slotDiv.title = `HP: ${filledHpSlots}/${totalHpSlots}`;
-          hpContainer.appendChild(slotDiv);
+          hpGroup.appendChild(slotDiv);
         }
 
-        // 5 ช่องความหิว (สีขาว - อยู่ด้านบนเหนือ HP)
+        // 5 ช่องความหิว (สีขาว - ฝั่งขวา)
         const totalHungerSlots = (typeof playerMaxHunger === "number") ? playerMaxHunger : 5;
         const filledHungerSlots = (typeof playerHunger === "number") ? Math.max(0, playerHunger) : 5;
 
         for (let s = 0; s < totalHungerSlots; s++) {
           const slotDiv = document.createElement("div");
           slotDiv.className = "player-hunger-slot-minimal";
-          if (s === 0) {
-            slotDiv.className += " slot-divider"; // ช่องว่างแยกส่วนระหว่าง HP และค่าความหิว
-          }
           if (s < filledHungerSlots) {
             slotDiv.className += " filled";
           }
           slotDiv.title = `ความหิว (Hunger): ${filledHungerSlots}/${totalHungerSlots}`;
-          hpContainer.appendChild(slotDiv);
+          hungerGroup.appendChild(slotDiv);
         }
 
         hpContainer.title = `HP: ${filledHpSlots}/${totalHpSlots} | ความหิว (Hunger): ${filledHungerSlots}/${totalHungerSlots}`;
@@ -4752,7 +4767,14 @@ window.characterVertexShaderSource = `#version 300 es
         let waterPourBob = 0.0;
         let waterAimYaw = 0.0;
 
-        if (heldItem || activeBucketWater > 0) {
+        const isBareHandSwing = !!(
+          !heldItem &&
+          effectiveIsUsingItem &&
+          effectiveUseAnimTimer > 0 &&
+          (isClone || (typeof isSmashing !== "undefined" && isSmashing) || (typeof activeItem !== "undefined" && activeItem && activeItem.name === "HAND"))
+        );
+
+        if (heldItem || activeBucketWater > 0 || isBareHandSwing) {
              if (heldItem && heldItem.name === "BOW") {
                  if (effectiveIsUsingItem && effectiveUseAnimTimer > 0) {
                      armAngle = -1.57;
@@ -4834,8 +4856,8 @@ window.characterVertexShaderSource = `#version 300 es
                  }
              } else {
                  if (effectiveIsUsingItem && effectiveUseAnimTimer > 0) {
-                     // Swing animation for axe / pickaxe / shovel / items (shared by player and clones)
-                     let swingPhase = effectiveUseAnimTimer;
+                     // Swing animation for bare-hand / axe / pickaxe / shovel / items (quantized to 24 steps for smooth cloth-cache reuse)
+                     let swingPhase = Math.round(effectiveUseAnimTimer * 24) / 24;
                      let targetArmAngle = 0;
                      let targetElbowFlex = 0;
                      if (swingPhase > 0.8) {
@@ -6237,19 +6259,21 @@ window.characterVertexShaderSource = `#version 300 es
           } else if (shirasayaMode === "post_skill") {
                  skillWristLeft = { gripMode: "reverse" };
                  if (heldItem) computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot);
-          } else if (heldItem) {
-                 // Tool swing wrist extension & flexion rig (AXE, PICKAXE, SHOVEL, BRANCH)
+          } else if (heldItem || isBareHandSwing) {
+                 // Tool swing wrist extension & flexion rig (AXE, PICKAXE, SHOVEL, BRANCH, and bare-hand HAND)
                  // Note: Normal TANTO holding (shirasayaMode === "idle") is untouched!
                  const isSwingingTool = !!(
                    effectiveIsUsingItem &&
                    effectiveUseAnimTimer > 0 &&
-                   heldItem.name !== "TANTO" &&
-                   heldItem.name !== "tanto" &&
-                   heldItem.name !== "AEGIS_SHIFT" &&
-                   heldItem.name !== "aegis_shift"
+                   (!heldItem || (
+                     heldItem.name !== "TANTO" &&
+                     heldItem.name !== "tanto" &&
+                     heldItem.name !== "AEGIS_SHIFT" &&
+                     heldItem.name !== "aegis_shift"
+                   ))
                  );
                  if (isSwingingTool) {
-                     const swP = effectiveUseAnimTimer;
+                     const swP = Math.round(effectiveUseAnimTimer * 24) / 24;
                      let wSnap = 0.0;
                      if (swP > 0.8) {
                          const tW = (1.0 - swP) / 0.2;
@@ -6282,7 +6306,9 @@ window.characterVertexShaderSource = `#version 300 es
                          handBlend: 0.55
                      };
                  }
-                 computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot, skillWristRight);
+                 if (heldItem) {
+                     computeRightHeldItemPoints(heldItem.name, rightElbowRot, rightHandRot, skillWristRight);
+                 }
           }
 
           if (shiraMem && (activeSkillMode !== "idle" || shiraMem.idleFade > 0.001)) {
@@ -6610,7 +6636,7 @@ window.characterVertexShaderSource = `#version 300 es
         // Determine hand grip amount (0 = relaxed open hand, 0.55 = cupped orb/fruit grip, 1.0 = closed fist wrapping held handle)
         let leftHandGrip = 0.0;
         let rightHandGrip = 0.0;
-        if (heldItem || activeBucketWater > 0) {
+        if (heldItem || activeBucketWater > 0 || isBareHandSwing) {
           if (shirasayaMode === "charging") {
             leftHandGrip = 1.0;
             rightHandGrip = 0.0;
@@ -7697,52 +7723,8 @@ window.characterVertexShaderSource = `#version 300 es
                 } else if (heldItem && (heldItem.name === "GLOW_BATTERY" || heldItem.name === "GLOW_BATTERY_EMPTY")) {
                     const wHandleP1 = transformPt(axeHandleP1Rot);
                     const wHandleP2 = transformPt(axeHandleP2Rot);
-                    
-                    let fillPercent = 0;
-                    if (heldItem.name === "GLOW_BATTERY") {
-                       if (window.BatterySystem) {
-                          const stats = window.BatterySystem.getStats();
-                          fillPercent = (stats.activeBattery && stats.activeBattery.charge) ? (stats.activeBattery.charge / window.BatterySystem.MAX_CHARGE) * 100 : 100;
-                       } else {
-                          fillPercent = 100;
-                       }
-                    } else {
-                       if (heldItem.rechargeTime !== undefined && window.BatterySystem) {
-                          fillPercent = (heldItem.rechargeTime / window.BatterySystem.REGEN_TIME) * 100;
-                       } else {
-                          fillPercent = 0;
-                       }
-                    }
-
-                    const isLow = fillPercent <= 20;
-                    const batteryColor = isLow ? [0.88, 0.1, 0.1] : [0.22, 0.95, 0.88];
-                    const emptyColor = [0.3, 0.3, 0.3];
-                    
-                    const startT = 0.05;
-                    const endT = 0.95;
-                    const fillT = startT + (endT - startT) * (fillPercent / 100);
-
-                    const rodP1 = [
-                        wHandleP1[0] + (wHandleP2[0] - wHandleP1[0]) * startT,
-                        wHandleP1[1] + (wHandleP2[1] - wHandleP1[1]) * startT,
-                        wHandleP1[2] + (wHandleP2[2] - wHandleP1[2]) * startT
-                    ];
-                    const rodFillEnd = [
-                        wHandleP1[0] + (wHandleP2[0] - wHandleP1[0]) * fillT,
-                        wHandleP1[1] + (wHandleP2[1] - wHandleP1[1]) * fillT,
-                        wHandleP1[2] + (wHandleP2[2] - wHandleP1[2]) * fillT
-                    ];
-                    const rodP2 = [
-                        wHandleP1[0] + (wHandleP2[0] - wHandleP1[0]) * endT,
-                        wHandleP1[1] + (wHandleP2[1] - wHandleP1[1]) * endT,
-                        wHandleP1[2] + (wHandleP2[2] - wHandleP1[2]) * endT
-                    ];
-                    
-                    if (fillPercent > 0) {
-                       buildTaperedSegment(rodP1, rodFillEnd, 0.022 * itemScale, 0.022 * itemScale, 4, batteryColor, rawV, rawC, rawI, true);
-                    }
-                    if (fillPercent < 100) {
-                       buildTaperedSegment(rodFillEnd, rodP2, 0.022 * itemScale, 0.022 * itemScale, 4, emptyColor, rawV, rawC, rawI, true);
+                    if (typeof window.buildGlowBatteryHandModel === "function") {
+                        window.buildGlowBatteryHandModel(heldItem, wHandleP1, wHandleP2, itemScale, rawV, rawC, rawI);
                     }
                 } else if (heldItem && (heldItem.name === "BRANCH" || heldItem.name === "branch")) {
                     flatEquip = _getTransformedHeldFlatEquip(
@@ -8452,6 +8434,9 @@ window.characterVertexShaderSource = `#version 300 es
         }
       }
 
+      let _charMatCacheKey = "";
+      let _charMatCacheVal = null;
+
       function getCharacterMatrix() {
         if (ragdollEnabled && ragdollInitialized) {
           const m = (typeof ragdollQuat !== "undefined" && ragdollQuat && ragdollQuat.length === 4)
@@ -8513,6 +8498,25 @@ window.characterVertexShaderSource = `#version 300 es
             rp[0], rp[1], rp[2], 1
           ];
         }
+
+        // Fast per-frame memoization so repeated calls (hair, hoodie, equip, shadow pass, main pass) don't recompute terrain/cave SDFs 8x/frame
+        const _shiraMatStPre = (!ragdollEnabled && !activeRidingBoat && !(typeof activeRidingMech !== "undefined" && activeRidingMech)
+          && !(typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi")
+          && typeof window !== "undefined" && ((window.tantoShirasayaState && window.tantoShirasayaState.mode === "dashing") || (window.aegisShiftState && window.aegisShiftState.mode === "dashing")))
+          ? ((window.aegisShiftState && window.aegisShiftState.mode === "dashing") ? window.aegisShiftState : window.tantoShirasayaState)
+          : null;
+        const _shiraLiftPre = _shiraMatStPre ? (_shiraMatStPre.visualAirLift || 0.0) : 0.0;
+        const _shiraSpinPre = _shiraMatStPre ? (_shiraMatStPre.visualSpinYaw || 0.0) : 0.0;
+        const _curSwimF = (typeof currentSwimFactor === "number") ? currentSwimFactor : 0.0;
+        const _curSwimM = (typeof swimMovementFactor === "number") ? swimMovementFactor : 0.0;
+        const _boatPosKey = (activeRidingBoat && activeRidingBoat.position)
+          ? `${activeRidingBoat.position[0]}_${activeRidingBoat.position[1]}_${activeRidingBoat.position[2]}_${activeRidingBoat.bankAngle || 0}`
+          : "0";
+        const _matKey = `${charTheta}_${charPhi}_${charHeading}_${playerCenterRadius}_${playerScale}_${ragdollEnabled ? 1 : 0}_${_boatPosKey}_${(typeof activeRidingMech !== "undefined" && activeRidingMech) ? 1 : 0}_${_curSwimF}_${_curSwimM}_${typeof playerDiveDepth === "number" ? playerDiveDepth : 0}_${_shiraLiftPre}_${_shiraSpinPre}_${waterEnabled ? 1 : 0}_${waterLevel}_${RADIUS}_${HEIGHT_SCALE}_${typeof window !== "undefined" ? window.characterModel : ""}`;
+        if (!ragdollEnabled && !activeRidingBoat && _curSwimF <= 0.0001 && _charMatCacheVal && _charMatCacheKey === _matKey) {
+          return _charMatCacheVal;
+        }
+
         const sinTheta = Math.sin(charTheta);
         const cosTheta = Math.cos(charTheta);
         const sinPhi = Math.sin(charPhi);
@@ -8522,54 +8526,67 @@ window.characterVertexShaderSource = `#version 300 es
         const ny = cosTheta;
         const nz = sinTheta * sinPhi;
 
-        const height = getVisualHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
         const charScale = playerScale;
-
-        let feetRadiusBefore = (typeof playerCenterRadius !== 'undefined' && playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + height * HEIGHT_SCALE);
-        const caveData = typeof getTerrainSurfaceAndCeiling === "function"
-          ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore)
-          : { ground: RADIUS + height * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
-        let terrainRadius = caveData.ground;
-        const waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
-          ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
-          : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
-        let wRadiusLocal = typeof getWaterRadiusAt === "function"
-          ? getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore)
-          : waterRadius;
-        
-        if (caveData.insideTunnel && wRadiusLocal === 0) {
-            wRadiusLocal = waterRadius;
-        }
-
-        if (typeof getWaterRadiusAt !== "function") {
-          const latCharForSwim = Math.round((charTheta / Math.PI) * Math.min(currentGridSize, 200));
-          let phiCharForSwim = charPhi;
-          if (phiCharForSwim < 0) phiCharForSwim += Math.PI * 2;
-          const longCharForSwim = Math.round((phiCharForSwim / (Math.PI * 2)) * Math.min(currentGridSize, 200));
-          const gridIdxCharSwim = latCharForSwim * (Math.min(currentGridSize, 200) + 1) + longCharForSwim;
-          if (typeof waterMask !== 'undefined' && waterMask && waterMask[gridIdxCharSwim] === 0) {
-             if (!caveData.insideTunnel) {
-                 wRadiusLocal = 0;
-             }
-          }
-        }
-
+        let terrainRadius = 0;
+        let waterRadius = 0;
         let swimFactor = 0.0;
-        
-        let currentFeetRadius = terrainRadius;
+        let caveData = null;
 
-        if (false) { // Disabled: allow water in caves
-            swimFactor = 0.0;
-        } else if (activeRidingBoat) {
-            swimFactor = 0.0;
-        } else if (waterEnabled && currentFeetRadius < wRadiusLocal) {
-          const depth = wRadiusLocal - currentFeetRadius;
-          const swimThreshold = 0.48 * charScale;
-          if (depth > swimThreshold) {
-            swimFactor = Math.min(
-              1.0,
-              (depth - swimThreshold) / (0.15 * charScale),
-            );
+        // Fast-path on dry land when playerCenterRadius is already computed: skip expensive terrain noise + cave SDF + water queries!
+        const canSkipTerrainLookup = (
+          playerCenterRadius !== null &&
+          !activeRidingBoat &&
+          !(typeof activeRidingMech !== "undefined" && activeRidingMech) &&
+          (!waterEnabled || _curSwimF <= 0.0001)
+        );
+
+        if (!canSkipTerrainLookup) {
+          const height = getVisualHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0));
+
+          let feetRadiusBefore = (typeof playerCenterRadius !== 'undefined' && playerCenterRadius !== null) ? (playerCenterRadius - 0.46 * charScale) : (RADIUS + height * HEIGHT_SCALE);
+          caveData = typeof getTerrainSurfaceAndCeiling === "function"
+            ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore)
+            : { ground: RADIUS + height * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
+          terrainRadius = caveData.ground;
+          waterRadius = (typeof Physics !== "undefined" && typeof Physics.getCanonicalWaterRadius === "function")
+            ? Physics.getCanonicalWaterRadius(RADIUS, waterLevel, HEIGHT_SCALE)
+            : (RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
+          let wRadiusLocal = typeof getWaterRadiusAt === "function"
+            ? getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore)
+            : waterRadius;
+          
+          if (caveData.insideTunnel && wRadiusLocal === 0) {
+              wRadiusLocal = waterRadius;
+          }
+
+          if (typeof getWaterRadiusAt !== "function") {
+            const latCharForSwim = Math.round((charTheta / Math.PI) * Math.min(currentGridSize, 200));
+            let phiCharForSwim = charPhi;
+            if (phiCharForSwim < 0) phiCharForSwim += Math.PI * 2;
+            const longCharForSwim = Math.round((phiCharForSwim / (Math.PI * 2)) * Math.min(currentGridSize, 200));
+            const gridIdxCharSwim = latCharForSwim * (Math.min(currentGridSize, 200) + 1) + longCharForSwim;
+            if (typeof waterMask !== 'undefined' && waterMask && waterMask[gridIdxCharSwim] === 0) {
+               if (!caveData.insideTunnel) {
+                   wRadiusLocal = 0;
+               }
+            }
+          }
+
+          let currentFeetRadius = terrainRadius;
+
+          if (false) { // Disabled: allow water in caves
+              swimFactor = 0.0;
+          } else if (activeRidingBoat) {
+              swimFactor = 0.0;
+          } else if (waterEnabled && currentFeetRadius < wRadiusLocal) {
+            const depth = wRadiusLocal - currentFeetRadius;
+            const swimThreshold = 0.48 * charScale;
+            if (depth > swimThreshold) {
+              swimFactor = Math.min(
+                1.0,
+                (depth - swimThreshold) / (0.15 * charScale),
+              );
+            }
           }
         }
 
@@ -8748,7 +8765,7 @@ window.characterVertexShaderSource = `#version 300 es
           finalF[2] * charScale,
         ];
 
-        return [
+        const _matOut = [
           rx[0],
           rx[1],
           rx[2],
@@ -8766,6 +8783,11 @@ window.characterVertexShaderSource = `#version 300 es
           pz,
           1,
         ];
+        if (!ragdollEnabled && !activeRidingBoat && _curSwimF <= 0.0001) {
+          _charMatCacheKey = _matKey;
+          _charMatCacheVal = _matOut;
+        }
+        return _matOut;
       }
       // Central shared swimming transform computation (Used by Player and PlayerClones)
       window.computeSwimmingTransform = function(opts) {
@@ -8912,7 +8934,6 @@ window.characterVertexShaderSource = `#version 300 es
               playPlaceSound();
             }
             showNotice("หมุนหลังคา/โมเดลแล้ว (Rotated) [Q]");
-            pendingCollectibleRefresh = true;
             if (typeof refreshCollectiblesVBO === "function") {
               refreshCollectiblesVBO('preview');
             }
@@ -8961,14 +8982,17 @@ window.characterVertexShaderSource = `#version 300 es
                   activeInteractNPC.position = [sinT * cosP * activeInteractNPC.r, cosT * activeInteractNPC.r, sinT * sinP * activeInteractNPC.r];
 
                   // Remove arrows attached to this NPC
+                  let removedNpcArrows = false;
                   for (let coll of collectibles) {
                     if (coll.attachedToNPC === activeInteractNPC) {
                       coll.attachedToNPC = null;
                       coll.active = false;
+                      removedNpcArrows = true;
                     }
                   }
-                  window.pendingCollectibleRefresh = true;
-                  window.pendingDynamicCollectibleRefresh = true;
+                  if (removedNpcArrows) {
+                    window.pendingDynamicCollectibleRefresh = true;
+                  }
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
@@ -9007,14 +9031,17 @@ window.characterVertexShaderSource = `#version 300 es
                   activeInteractNPC.position = [sinT * cosP * activeInteractNPC.r, cosT * activeInteractNPC.r, sinT * sinP * activeInteractNPC.r];
 
                   // Remove arrows attached to this NPC
+                  let removedNpcArrows = false;
                   for (let coll of collectibles) {
                     if (coll.attachedToNPC === activeInteractNPC) {
                       coll.attachedToNPC = null;
                       coll.active = false;
+                      removedNpcArrows = true;
                     }
                   }
-                  window.pendingCollectibleRefresh = true;
-                  window.pendingDynamicCollectibleRefresh = true;
+                  if (removedNpcArrows) {
+                    window.pendingDynamicCollectibleRefresh = true;
+                  }
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
@@ -9053,14 +9080,17 @@ window.characterVertexShaderSource = `#version 300 es
                   activeInteractNPC.position = [sinT * cosP * activeInteractNPC.r, cosT * activeInteractNPC.r, sinT * sinP * activeInteractNPC.r];
 
                   // Remove arrows attached to this NPC
+                  let removedNpcArrows = false;
                   for (let coll of collectibles) {
                     if (coll.attachedToNPC === activeInteractNPC) {
                       coll.attachedToNPC = null;
                       coll.active = false;
+                      removedNpcArrows = true;
                     }
                   }
-                  window.pendingCollectibleRefresh = true;
-                  window.pendingDynamicCollectibleRefresh = true;
+                  if (removedNpcArrows) {
+                    window.pendingDynamicCollectibleRefresh = true;
+                  }
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
@@ -9126,17 +9156,11 @@ window.characterVertexShaderSource = `#version 300 es
               let item = bestItem;
               let icon = "🌿";
               let label = "BRANCH";
-              if (item.type === "rock") { icon = "🪨"; label = "ROCK"; }
-              else if (item.type === "big_rock") { icon = "🪨"; label = "BIG_ROCK"; }
-              else if (item.type === "dirt" || item.type === "DIRT") { icon = "🟫"; label = "DIRT"; }
-              else if (item.type === "iron_ore") { icon = "🟥"; label = "IRON_ORE"; }
-              else if (item.type === "gold_ore") { icon = "🪙"; label = "GOLD_ORE"; }
-              else if (item.type === "glow_ore") { icon = "✨"; label = "GLOW_ORE"; }
-              else if (item.type === "glow_battery") { icon = "🔋"; label = "GLOW_BATTERY"; }
-              else if (item.type === "log") { icon = "🪵"; label = "LOG"; }
-              else if (item.type === "axe") { icon = "🪓"; label = "AXE"; }
-              else if (item.type === "pickaxe") { icon = "⛏️"; label = "PICKAXE"; }
-              else if (item.type === "plank" || item.type === "wood_floor" || item.type === "thin_wood_floor") { icon = "🪵"; label = item.type === "thin_wood_floor" ? "THIN_WOOD_FLOOR" : "WOOD_FLOOR"; }
+              if (typeof window !== "undefined" && window.GroundDropSystem && window.GroundDropSystem.isGroundDropType(item.type)) {
+                const meta = window.GroundDropSystem.getMeta(item.type);
+                icon = meta.icon;
+                label = meta.label;
+              } else if (item.type === "plank" || item.type === "wood_floor" || item.type === "thin_wood_floor") { icon = "🪵"; label = item.type === "thin_wood_floor" ? "THIN_WOOD_FLOOR" : "WOOD_FLOOR"; }
               else if (item.type === "stone_floor") { icon = "🪨"; label = "STONE_FLOOR"; }
               else if (item.type === "campfire") { icon = "🔥"; label = "CAMPFIRE"; }
               else if (item.type === "wood_boat") { icon = "🛶"; label = "WOOD_BOAT"; }
@@ -9149,48 +9173,42 @@ window.characterVertexShaderSource = `#version 300 es
               else if (item.type === "wood_wheel") { icon = "🛞"; label = "WOOD_WHEEL"; }
               else if (item.type === "electric_engine") { icon = "🔋"; label = "ELECTRIC_ENGINE"; }
               else if (item.type === "boat_wing") { icon = "🪽"; label = "BOAT_WING"; }
-              else if (item.type === "meganeura_item") { icon = "🦟"; label = "MEGANEURA"; }
-              else if (item.type === "isopod_item") { icon = "🦐"; label = "ISOPOD"; }
               else if (item.type === "wooden_arm_cannon") { icon = "🪵🦾"; label = "WOODEN_ARM_CANNON"; }
-              else if (item.type === "dragon_fruit") { icon = "🐉"; label = "DRAGON_FRUIT"; }
-              else if (item.type === "cotton_plant") { icon = "☁️"; label = "COTTON_PLANT"; }
-              else if (item.type === "crown_flower") { icon = "💮"; label = "CROWN_FLOWER"; }
-              else if (item.type === "grass") { icon = "🌱"; label = "GRASS"; }
-              else if (item.type === "cloth") { icon = "⬜"; label = "CLOTH"; }
-              else if (item.type === "rubber_block") { icon = "⬛"; label = "RUBBER_BLOCK"; }
-              else if (item.type === "tough_meat") { icon = "🥩"; label = "TOUGH_MEAT"; }
-              else if (item.type === "leather" || item.type === "hide") { icon = "🟫"; label = "LEATHER"; }
-              else if (item.type === "tanto") { icon = "🗡️"; label = "TANTO"; }
-              else if (item.type === "aegis_shift") { icon = "⛏️⚔️"; label = "AEGIS_SHIFT"; }
               
-              const itemData = {
-                icon: icon,
-                label: label,
-                name: label
-              };
+              const dropTotal = Math.max(1, Math.floor(item.count || 1));
+              const availSpace = (dropTotal > 1 && typeof window.getAvailableInventorySpace === "function")
+                ? window.getAvailableInventorySpace(label)
+                : dropTotal;
+              const takeCount = dropTotal > 1 ? Math.min(dropTotal, availSpace) : 1;
 
-              if (addItemToInventory(itemData)) {
-                item.active = false;
-                collectedCount[item.type] = (collectedCount[item.type] || 0) + 1;
-                if (item.cottonId) {
-                  const obsId = parseInt(item.cottonId.replace("cotton_", ""));
-                  const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
-                  const obs = natureList.find(o => o && o.id === obsId);
-                  if (obs) obs.active = false;
-                } else if (item.crownFlowerId) {
-                  const obsId = parseInt(item.crownFlowerId.replace("crown_flower_", ""));
-                  const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
-                  const obs = natureList.find(o => o && o.id === obsId);
-                  if (obs) obs.active = false;
+              if (takeCount > 0) {
+                const itemData = {
+                  icon: icon,
+                  label: label,
+                  name: label,
+                  count: takeCount
+                };
+
+                if (addItemToInventory(itemData)) {
+                  collectedCount[item.type] = (collectedCount[item.type] || 0) + takeCount;
+                  if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.takeFromDrop === "function") {
+                    window.GroundDropSystem.takeFromDrop(item, takeCount);
+                  } else if (takeCount < dropTotal) {
+                    item.count = dropTotal - takeCount;
+                  } else if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.markCollected === "function") {
+                    window.GroundDropSystem.markCollected(item);
+                  } else {
+                    item.active = false;
+                    if (item.isDynamic) {
+                      window.pendingDynamicCollectibleRefresh = true;
+                    } else if (typeof window !== "undefined" && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(item)) {
+                      // Surgical sub-buffer update
+                    } else {
+                      pendingCollectibleRefresh = true;
+                    }
+                  }
+                  found = true;
                 }
-                if (item.isDynamic) {
-                  window.pendingDynamicCollectibleRefresh = true;
-                } else if (typeof window !== "undefined" && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(item)) {
-                  // Surgical sub-buffer update completed without full VBO rebuild
-                } else {
-                  pendingCollectibleRefresh = true;
-                }
-                found = true;
               }
             }
           }
@@ -9359,14 +9377,17 @@ window.characterVertexShaderSource = `#version 300 es
                   activeInteractNPC.position = [sinT * cosP * activeInteractNPC.r, cosT * activeInteractNPC.r, sinT * sinP * activeInteractNPC.r];
 
                   // Remove arrows attached to this NPC
+                  let removedNpcArrows = false;
                   for (let coll of collectibles) {
                     if (coll.attachedToNPC === activeInteractNPC) {
                       coll.attachedToNPC = null;
                       coll.active = false;
+                      removedNpcArrows = true;
                     }
                   }
-                  window.pendingCollectibleRefresh = true;
-                  window.pendingDynamicCollectibleRefresh = true;
+                  if (removedNpcArrows) {
+                    window.pendingDynamicCollectibleRefresh = true;
+                  }
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
@@ -9405,14 +9426,17 @@ window.characterVertexShaderSource = `#version 300 es
                   activeInteractNPC.position = [sinT * cosP * activeInteractNPC.r, cosT * activeInteractNPC.r, sinT * sinP * activeInteractNPC.r];
 
                   // Remove arrows attached to this NPC
+                  let removedNpcArrows = false;
                   for (let coll of collectibles) {
                     if (coll.attachedToNPC === activeInteractNPC) {
                       coll.attachedToNPC = null;
                       coll.active = false;
+                      removedNpcArrows = true;
                     }
                   }
-                  window.pendingCollectibleRefresh = true;
-                  window.pendingDynamicCollectibleRefresh = true;
+                  if (removedNpcArrows) {
+                    window.pendingDynamicCollectibleRefresh = true;
+                  }
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }
@@ -9451,14 +9475,17 @@ window.characterVertexShaderSource = `#version 300 es
                   activeInteractNPC.position = [sinT * cosP * activeInteractNPC.r, cosT * activeInteractNPC.r, sinT * sinP * activeInteractNPC.r];
 
                   // Remove arrows attached to this NPC
+                  let removedNpcArrows = false;
                   for (let coll of collectibles) {
                     if (coll.attachedToNPC === activeInteractNPC) {
                       coll.attachedToNPC = null;
                       coll.active = false;
+                      removedNpcArrows = true;
                     }
                   }
-                  window.pendingCollectibleRefresh = true;
-                  window.pendingDynamicCollectibleRefresh = true;
+                  if (removedNpcArrows) {
+                    window.pendingDynamicCollectibleRefresh = true;
+                  }
                 } else {
                   showNotice("กระเป๋าเต็ม! (Inventory full)");
                 }

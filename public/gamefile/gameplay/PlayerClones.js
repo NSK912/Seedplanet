@@ -1108,7 +1108,9 @@
     for (let i = 0; i < colList.length; i++) {
       const it = colList[i];
       if (!it || !it.active || it.isPreview || it.isAttachedToTree || !it.position) continue;
-      const isResourceDrop = (it.type === "log" || it.type === "branch" || it.type === "rock" || it.type === "big_rock" || it.type === "iron_ore" || it.type === "gold_ore" || it.type === "glow_ore" || it.type === "isopod_item" || it.type === "meganeura_item" || it.type === "dragon_fruit");
+      const isResourceDrop = (typeof window !== "undefined" && window.GroundDropSystem)
+        ? (window.GroundDropSystem.isGroundDrop(it) && it.type !== "axe" && it.type !== "pickaxe" && it.type !== "shovel" && it.type !== "tanto" && it.type !== "aegis_shift")
+        : (it.type === "log" || it.type === "branch" || it.type === "rock" || it.type === "big_rock" || it.type === "iron_ore" || it.type === "gold_ore" || it.type === "glow_ore" || it.type === "isopod_item" || it.type === "meganeura_item" || it.type === "dragon_fruit" || it.type === "tough_meat" || it.type === "leather" || it.type === "hide" || it.type === "grass" || it.type === "cloth" || it.type === "rubber_block");
       if (!isResourceDrop) continue;
 
       const dx = it.position[0] - cPos[0];
@@ -2631,28 +2633,26 @@
           const dropReach = checkClonePlayerReach3D(cState, drop.position, isShrubPlant ? 0.25 : 0.15, charScale, planetRadius, 0.06);
 
           if (dropReach.valid) {
-            drop.active = false;
-            if (drop.cottonId) {
-              const obsId = parseInt(String(drop.cottonId).replace("cotton_", ""), 10);
-              const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
-              const obs = natureList.find(o => o && o.id === obsId);
-              if (obs) obs.active = false;
-            } else if (drop.crownFlowerId) {
-              const obsId = parseInt(String(drop.crownFlowerId).replace("crown_flower_", ""), 10);
-              const natureList = (window.allDeterministicNatureObstacles || []).concat(window.natureObstacles || []);
-              const obs = natureList.find(o => o && o.id === obsId);
-              if (obs) obs.active = false;
-            }
-            const dropType = (drop.type || "").toUpperCase();
-            addCloneItem(cState, dropType, getResourceIcon(dropType), 1);
-            if (drop.isDynamic) {
-              if (typeof pendingDynamicCollectibleRefresh !== "undefined") pendingDynamicCollectibleRefresh = true;
-              if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
-            } else if (typeof window !== "undefined" && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(drop)) {
-              // Fast surgical GPU sub-buffer zero-out: no full-planet VBO or SpatialGrid rebuild needed
+            const dropMeta = (typeof window !== "undefined" && window.GroundDropSystem)
+              ? window.GroundDropSystem.getMeta(drop.type)
+              : null;
+            const dropType = dropMeta ? dropMeta.label : (drop.type || "").toUpperCase();
+            const dropIcon = dropMeta ? dropMeta.icon : getResourceIcon(dropType);
+            const dropQty = Math.max(1, Math.floor(drop.count || 1));
+            addCloneItem(cState, dropType, dropIcon, dropQty);
+            if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.markCollected === "function") {
+              window.GroundDropSystem.markCollected(drop);
             } else {
-              if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
-              if (typeof window !== "undefined") window.pendingCollectibleRefresh = true;
+              drop.active = false;
+              if (drop.isDynamic) {
+                if (typeof pendingDynamicCollectibleRefresh !== "undefined") pendingDynamicCollectibleRefresh = true;
+                if (typeof window !== "undefined") window.pendingDynamicCollectibleRefresh = true;
+              } else if (typeof window !== "undefined" && typeof window.hideStaticCollectibleInVBO === "function" && window.hideStaticCollectibleInVBO(drop)) {
+                // Fast surgical GPU sub-buffer zero-out
+              } else {
+                if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
+                if (typeof window !== "undefined") window.pendingCollectibleRefresh = true;
+              }
             }
             cState.targetDrop = null;
             executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);

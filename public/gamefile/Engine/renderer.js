@@ -1,6 +1,2017 @@
+// === SEEDPLANET MODULE: ENGINE/SSRCORE.JS ===
+
+(function(global) {
+  'use strict';
+
+  let _gl = null;
+  let _sceneTexture = null;
+  let _width = 0;
+  let _height = 0;
+  let _quality = 2; // 0 = Off, 1 = Low, 2 = Medium, 3 = High
+
+  /**
+   * SSRCore: Centralized Screen-Space Reflection Engine
+   * Provides clean scene capturing, texture management, and standard GLSL ray-marching helpers
+   */
+  const SSRCore = {
+    /**
+     * Initialize WebGL context reference
+     */
+    init: function(gl) {
+      _gl = gl;
+    },
+
+    /**
+     * Set quality level (0 = Off, 1 = Low, 2 = Medium, 3 = High)
+     */
+    setQuality: function(q) {
+      _quality = typeof q === 'number' ? q : 0;
+      if (typeof window !== 'undefined') {
+        window.ssrQuality = _quality;
+      }
+    },
+
+    /**
+     * Get current quality level
+     */
+    getQuality: function() {
+      if (typeof window !== 'undefined' && typeof window.ssrQuality === 'number') {
+        return window.ssrQuality;
+      }
+      return _quality;
+    },
+
+    /**
+     * Check if SSR is active
+     */
+    isEnabled: function() {
+      return this.getQuality() > 0;
+    },
+
+    /**
+     * Captures the rendered color buffer into the central SSR texture
+     */
+    captureScene: function(gl) {
+      const activeGl = gl || _gl;
+      if (!activeGl) return null;
+
+      if (!this.isEnabled()) {
+        if (typeof window !== 'undefined') {
+          window._SSRSceneTexture = null;
+        }
+        return null;
+      }
+
+      const w = activeGl.drawingBufferWidth || (activeGl.canvas ? activeGl.canvas.width : 0);
+      const h = activeGl.drawingBufferHeight || (activeGl.canvas ? activeGl.canvas.height : 0);
+      if (w <= 0 || h <= 0) return null;
+
+      if (!_sceneTexture) {
+        _sceneTexture = activeGl.createTexture();
+        activeGl.bindTexture(activeGl.TEXTURE_2D, _sceneTexture);
+        activeGl.texParameteri(activeGl.TEXTURE_2D, activeGl.TEXTURE_WRAP_S, activeGl.CLAMP_TO_EDGE);
+        activeGl.texParameteri(activeGl.TEXTURE_2D, activeGl.TEXTURE_WRAP_T, activeGl.CLAMP_TO_EDGE);
+        activeGl.texParameteri(activeGl.TEXTURE_2D, activeGl.TEXTURE_MIN_FILTER, activeGl.LINEAR);
+        activeGl.texParameteri(activeGl.TEXTURE_2D, activeGl.TEXTURE_MAG_FILTER, activeGl.LINEAR);
+        activeGl.texImage2D(activeGl.TEXTURE_2D, 0, activeGl.RGBA, w, h, 0, activeGl.RGBA, activeGl.UNSIGNED_BYTE, null);
+        _width = w;
+        _height = h;
+      } else {
+        activeGl.bindTexture(activeGl.TEXTURE_2D, _sceneTexture);
+        if (_width !== w || _height !== h) {
+          activeGl.texImage2D(activeGl.TEXTURE_2D, 0, activeGl.RGBA, w, h, 0, activeGl.RGBA, activeGl.UNSIGNED_BYTE, null);
+          _width = w;
+          _height = h;
+        }
+      }
+
+      activeGl.copyTexSubImage2D(activeGl.TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+      if (typeof window !== 'undefined') {
+        window._SSRSceneTexture = _sceneTexture;
+      }
+      return _sceneTexture;
+    },
+
+    /**
+     * Returns captured scene texture handle
+     */
+    getSceneTexture: function() {
+      return _sceneTexture;
+    },
+
+    /**
+     * Standard GLSL Code Snippet for Basic Screen-Space Reflections
+     */
+    getGLSL: function() {
+      return `
+        // Central Basic Screen-Space Reflection (SSR) Engine
+        bool traceCoreSSR(
+            vec3 worldPos,
+            vec3 reflectDir,
+            vec2 screenUV,
+            sampler2D sceneTex,
+            mat4 viewProj,
+            int steps,
+            float maxDist,
+            out vec3 outColor,
+            out float outHit
+        ) {
+            outColor = vec3(0.0);
+            outHit = 0.0;
+
+            vec3 stepVector = reflectDir * (maxDist / float(steps));
+            vec3 rayPos = worldPos;
+
+            for (int i = 1; i <= 32; i++) {
+                if (i > steps) break;
+                rayPos += stepVector;
+                vec4 clipPos = viewProj * vec4(rayPos, 1.0);
+                if (clipPos.w <= 0.001) continue;
+
+                vec3 ndc = clipPos.xyz / clipPos.w;
+                vec2 uv = ndc.xy * 0.5 + 0.5;
+
+                if (uv.x >= 0.005 && uv.x <= 0.995 && uv.y >= 0.005 && uv.y <= 0.995) {
+                    float sDist = length(uv - screenUV);
+                    if (sDist > 0.003) {
+                        vec2 edgeDist = min(uv, vec2(1.0) - uv);
+                        float edgeFade = smoothstep(0.005, 0.12, min(edgeDist.x, edgeDist.y));
+                        float progress = float(i) / float(steps);
+                        float distFade = 1.0 - smoothstep(0.70, 1.0, progress);
+                        outColor = texture(sceneTex, uv).rgb;
+                        outHit = edgeFade * distFade;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+      `;
+    }
+  };
+
+  global.SSRCore = SSRCore;
+  global.CoreSSR = SSRCore;
+})(typeof window !== 'undefined' ? window : this);
+
+// === SEEDPLANET MODULE: JS/3D_UI.JS ===
+// Genuine 3D UI rendered in WebGL or WebGPU as textured billboards
+
+const World3DUI = {
+  // Centralized theme colors for 3D UI buttons (เรือ, หุ่น, ทุกปุ่ม E)
+  BORDER_COLOR: 'rgba(255, 255, 255, 0.65)',    // ขอบขาว
+  BG_COLOR: 'rgba(60, 60, 60, 0.88)',            // พื้นหลังเทา
+  PROGRESS_COLOR: 'rgba(255, 255, 255, 0.45)',   // Progress bar ขาว
+  BUTTON_COLOR: '#dfb76c',                       // ปุ่ม E ทอง
+  BUTTON_PROGRESS_COLOR: 'rgba(255, 255, 255, 0.45)',
+
+  backend: null,
+  signs: new Map(),
+  hoveredSlotIndex: -1,
+  _interactionsInitialized: false,
+  
+  // API matching the old World3DUI structure for compatibility
+  init(context, type) {
+    if (this.backend) return;
+    
+    this.type = type;
+    if (type === 'webgl') {
+      this.backend = this.createWebGLBackend(context);
+    } else if (type === 'webgpu') {
+      this.backend = this.createWebGPUBackend(context);
+    }
+
+    this.setupInteractions();
+  },
+
+  setupInteractions() {
+    if (this._interactionsInitialized) return;
+    this._interactionsInitialized = true;
+
+    const getCursorPos = (e) => {
+      let cx = e.clientX;
+      let cy = e.clientY;
+      if (typeof virtualCursorX === "number" && typeof virtualCursorY === "number" && (document.pointerLockElement || (typeof simulatedPointerLock !== "undefined" && simulatedPointerLock))) {
+        cx = virtualCursorX;
+        cy = virtualCursorY;
+      }
+      return { x: cx, y: cy };
+    };
+
+    window.addEventListener("pointermove", (e) => {
+      const pos = getCursorPos(e);
+      World3DUI.handlePointerMove(pos.x, pos.y);
+    }, { passive: true });
+
+    window.addEventListener("pointerdown", (e) => {
+      const pos = getCursorPos(e);
+      if (World3DUI.handleClick(pos.x, pos.y)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === "function") {
+          e.stopImmediatePropagation();
+        }
+      }
+    }, { capture: true });
+  },
+
+  transformVec4(mat, v) {
+    return [
+      mat[0] * v[0] + mat[4] * v[1] + mat[8] * v[2] + mat[12] * v[3],
+      mat[1] * v[0] + mat[5] * v[1] + mat[9] * v[2] + mat[13] * v[3],
+      mat[2] * v[0] + mat[6] * v[1] + mat[10] * v[2] + mat[14] * v[3],
+      mat[3] * v[0] + mat[7] * v[1] + mat[11] * v[2] + mat[15] * v[3]
+    ];
+  },
+
+  getScreenRay(screenX, screenY) {
+    const W = window.innerWidth || (window.canvas ? window.canvas.width : 1);
+    const H = window.innerHeight || (window.canvas ? window.canvas.height : 1);
+    const invMat = window.invViewProj;
+    if (!invMat) return null;
+
+    const ndcX = (screenX / W) * 2.0 - 1.0;
+    const ndcY = 1.0 - (screenY / H) * 2.0;
+
+    const pNearHom = this.transformVec4(invMat, [ndcX, ndcY, -1.0, 1.0]);
+    const pFarHom = this.transformVec4(invMat, [ndcX, ndcY, 1.0, 1.0]);
+    if (Math.abs(pNearHom[3]) < 1e-7 || Math.abs(pFarHom[3]) < 1e-7) return null;
+
+    const pNear = [pNearHom[0] / pNearHom[3], pNearHom[1] / pNearHom[3], pNearHom[2] / pNearHom[3]];
+    const pFar = [pFarHom[0] / pFarHom[3], pFarHom[1] / pFarHom[3], pFarHom[2] / pFarHom[3]];
+
+    const dir = [pFar[0] - pNear[0], pFar[1] - pNear[1], pFar[2] - pNear[2]];
+    const dLen = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+    dir[0] /= dLen;
+    dir[1] /= dLen;
+    dir[2] /= dLen;
+
+    return { origin: pNear, dir: dir };
+  },
+
+  raycastSign(signId, screenX, screenY) {
+    const sign = this.signs.get(signId);
+    if (!sign || !sign.visible) return null;
+
+    const ray = this.getScreenRay(screenX, screenY);
+    if (!ray) return null;
+
+    const fwd = [-sign.normal[0], -sign.normal[1], -sign.normal[2]];
+    const up = sign.up;
+    const right = [
+      up[1] * fwd[2] - up[2] * fwd[1],
+      up[2] * fwd[0] - up[0] * fwd[2],
+      up[0] * fwd[1] - up[1] * fwd[0]
+    ];
+    const rLen = Math.hypot(right[0], right[1], right[2]) || 1;
+    right[0] /= rLen; right[1] /= rLen; right[2] /= rLen;
+
+    const trueUp = [
+      fwd[1] * right[2] - fwd[2] * right[1],
+      fwd[2] * right[0] - fwd[0] * right[2],
+      fwd[0] * right[1] - fwd[1] * right[0]
+    ];
+    const uLen = Math.hypot(trueUp[0], trueUp[1], trueUp[2]) || 1;
+    trueUp[0] /= uLen; trueUp[1] /= uLen; trueUp[2] /= uLen;
+
+    const sx = sign.scale[0] || 1;
+    const sy = sign.scale[1] || 1;
+
+    // Plane intersection
+    const planeNormal = fwd;
+    const denom = ray.dir[0] * planeNormal[0] + ray.dir[1] * planeNormal[1] + ray.dir[2] * planeNormal[2];
+    if (Math.abs(denom) < 1e-6) return null;
+
+    const p0 = sign.position;
+    const t = ((p0[0] - ray.origin[0]) * planeNormal[0] +
+               (p0[1] - ray.origin[1]) * planeNormal[1] +
+               (p0[2] - ray.origin[2]) * planeNormal[2]) / denom;
+
+    if (t < 0) return null;
+
+    const hitP = [
+      ray.origin[0] + t * ray.dir[0],
+      ray.origin[1] + t * ray.dir[1],
+      ray.origin[2] + t * ray.dir[2]
+    ];
+
+    const rel = [hitP[0] - p0[0], hitP[1] - p0[1], hitP[2] - p0[2]];
+    const localX = (rel[0] * right[0] + rel[1] * right[1] + rel[2] * right[2]) / sx;
+    const localY = (rel[0] * trueUp[0] + rel[1] * trueUp[1] + rel[2] * trueUp[2]) / sy;
+
+    if (Math.abs(localX) > 0.5 || Math.abs(localY) > 0.5) return null;
+
+    const u = localX + 0.5;
+    const v = 0.5 - localY;
+
+    return {
+      hit: true,
+      u: u,
+      v: v,
+      worldPos: hitP,
+      distance: t,
+      canvasW: sign.canvas.width,
+      canvasH: sign.canvas.height
+    };
+  },
+
+  raycastMechStandSlot(screenX, screenY) {
+    const hitInfo = this.raycastSign("mech_stand_world_sign", screenX, screenY);
+    if (!hitInfo) return null;
+
+    const w = hitInfo.canvasW;
+    const h = hitInfo.canvasH;
+    const scale = w / 1024;
+
+    // Canvas coordinate (taking into account horizontal flip ctx.scale(-1, 1))
+    const canvasX = (1.0 - hitInfo.u) * w;
+    const canvasY = hitInfo.v * h;
+
+    const startX = 30 * scale;
+    const startY = 88 * scale;
+    const slotW = 226 * scale;
+    const slotH = 236 * scale;
+    const gapX = 18 * scale;
+    const gapY = 16 * scale;
+
+    let hitSlotIndex = -1;
+    for (let i = 0; i < 8; i++) {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const sx = startX + col * (slotW + gapX);
+      const sy = startY + row * (slotH + gapY);
+      if (canvasX >= sx && canvasX <= sx + slotW && canvasY >= sy && canvasY <= sy + slotH) {
+        hitSlotIndex = i;
+        break;
+      }
+    }
+
+    return {
+      ...hitInfo,
+      canvasX,
+      canvasY,
+      slotIndex: hitSlotIndex
+    };
+  },
+
+  handleClick(screenX, screenY) {
+    const hit = this.raycastMechStandSlot(screenX, screenY);
+    if (hit && hit.slotIndex >= 0) {
+      if (typeof window.triggerMechStandSlotAction === "function") {
+        const success = window.triggerMechStandSlotAction(hit.slotIndex);
+        const sign = this.signs.get("mech_stand_world_sign");
+        if (sign) sign.needsTextureUpdate = true;
+        return true;
+      }
+    }
+    return false;
+  },
+
+  handlePointerMove(screenX, screenY) {
+    const hit = this.raycastMechStandSlot(screenX, screenY);
+    const newHover = (hit && hit.slotIndex >= 0) ? hit.slotIndex : -1;
+    if (newHover !== this.hoveredSlotIndex) {
+      this.hoveredSlotIndex = newHover;
+      const sign = this.signs.get("mech_stand_world_sign");
+      if (sign) sign.needsTextureUpdate = true;
+    }
+    return hit && hit.slotIndex >= 0;
+  },
+
+  createSign(options) {
+    if (!this.backend) return null;
+    return this.backend.createSign(options);
+  },
+
+  hasSign(id) {
+    return this.signs.has(id);
+  },
+
+  removeSign(id) {
+    if (!this.backend) return;
+    this.backend.removeSign(id);
+  },
+
+  updateSign(id, options) {
+    if (!this.backend) return;
+    this.backend.updateSign(id, options);
+  },
+
+  updateAll(cameraPos = null) {
+    if (!this.backend) return;
+    this.backend.updateAll(cameraPos);
+  },
+
+  render(ctx, viewProjMatrix, cameraPos) {
+    if (!this.backend) return;
+    this.backend.render(ctx, viewProjMatrix, cameraPos);
+  },
+
+  // --- WebGL Backend ---
+  createWebGLBackend(gl) {
+    const backend = {
+      gl: gl,
+      program: null,
+      positionBuffer: null,
+      uvBuffer: null,
+      locations: {},
+      parent: this,
+      
+      init() {
+        const vsSource = `#version 300 es
+          in vec3 aPosition;
+          in vec2 aUV;
+          uniform mat4 uViewProj;
+          uniform mat4 uModel;
+          out vec2 vUV;
+          void main() {
+            vUV = aUV;
+            gl_Position = uViewProj * uModel * vec4(aPosition, 1.0);
+          }
+        `;
+        const fsSource = `#version 300 es
+          precision mediump float;
+          in vec2 vUV;
+          uniform sampler2D uSampler;
+          uniform vec4 uColor;
+          out vec4 fragColor;
+          void main() {
+            vec4 texColor = texture(uSampler, vUV);
+            if (texColor.a < 0.05) {
+              discard;
+            }
+            fragColor = texColor * uColor;
+          }
+        `;
+        const vertexShader = this.loadShader(gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = this.loadShader(gl.FRAGMENT_SHADER, fsSource);
+
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vertexShader);
+        gl.attachShader(this.program, fragmentShader);
+        gl.linkProgram(this.program);
+
+        const positions = new Float32Array([
+          -0.5,  0.5, 0.0,
+          -0.5, -0.5, 0.0,
+           0.5, -0.5, 0.0,
+          -0.5,  0.5, 0.0,
+           0.5, -0.5, 0.0,
+           0.5,  0.5, 0.0,
+        ]);
+        const uvs = new Float32Array([
+          0.0, 0.0,
+          0.0, 1.0,
+          1.0, 1.0,
+          0.0, 0.0,
+          1.0, 1.0,
+          1.0, 0.0,
+        ]);
+        this.positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+        this.uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+
+        this.locations = {
+          aPosition: gl.getAttribLocation(this.program, 'aPosition'),
+          aUV: gl.getAttribLocation(this.program, 'aUV'),
+          uViewProj: gl.getUniformLocation(this.program, 'uViewProj'),
+          uModel: gl.getUniformLocation(this.program, 'uModel'),
+          uSampler: gl.getUniformLocation(this.program, 'uSampler'),
+          uColor: gl.getUniformLocation(this.program, 'uColor'),
+        };
+      },
+      loadShader(type, source) {
+        const shader = this.gl.createShader(type);
+        this.gl.shaderSource(shader, source);
+        this.gl.compileShader(shader);
+        return shader;
+      },
+      createSign(options) {
+        const id = options.id;
+        const width = options.resolution?.[0] || 256;
+        const height = options.resolution?.[1] || 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        const texture = this.gl.createTexture();
+        this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, canvas);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+
+        const ext = this.gl.getExtension('EXT_texture_filter_anisotropic') ||
+                    this.gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic') ||
+                    this.gl.getExtension('MOZ_EXT_texture_filter_anisotropic');
+        if (ext) {
+          const maxAniso = this.gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 4;
+          this.gl.texParameterf(this.gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(16, maxAniso));
+        }
+
+        try {
+          this.gl.generateMipmap(this.gl.TEXTURE_2D);
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
+        } catch(e) {
+          this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+        }
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+
+        const sign = {
+          id, canvas, ctx, texture,
+          position: options.position || [0, 0, 0],
+          scale: options.size || options.scale || [1, 1, 1],
+          normal: options.normal || [0, 0, 1],
+          up: options.up || [0, 1, 0],
+          color: options.color || [1, 1, 1, 1],
+          needsTextureUpdate: true,
+          lastContentKey: options.contentKey !== undefined ? options.contentKey : null,
+          drawFn: options.drawFn || null,
+          visible: true
+        };
+        this.parent.signs.set(id, sign);
+        return sign;
+      },
+      removeSign(id) {
+        const sign = this.parent.signs.get(id);
+        if (sign && this.gl) this.gl.deleteTexture(sign.texture);
+        this.parent.signs.delete(id);
+      },
+      updateSign(id, options) {
+        const sign = this.parent.signs.get(id);
+        if (!sign) return;
+        if (options.position !== undefined) sign.position = options.position;
+        if (options.size !== undefined) sign.scale = options.size;
+        if (options.scale !== undefined) sign.scale = options.scale;
+        if (options.normal !== undefined) sign.normal = options.normal;
+        if (options.up !== undefined) sign.up = options.up;
+        if (options.visible !== undefined) sign.visible = options.visible;
+        if (options.contentKey !== undefined) {
+          if (sign.lastContentKey !== options.contentKey) {
+            sign.lastContentKey = options.contentKey;
+            if (options.drawFn !== undefined) sign.drawFn = options.drawFn;
+            sign.needsTextureUpdate = true;
+          }
+        } else if (options.drawFn !== undefined) {
+          sign.drawFn = options.drawFn;
+          sign.needsTextureUpdate = true;
+        }
+      },
+      updateAll() {
+        for (const [id, sign] of this.parent.signs) {
+          if (!sign.visible) continue;
+          if (sign.needsTextureUpdate && sign.drawFn) {
+            sign.ctx.clearRect(0, 0, sign.canvas.width, sign.canvas.height);
+            sign.drawFn(sign.ctx, sign.canvas.width, sign.canvas.height);
+            this.gl.bindTexture(this.gl.TEXTURE_2D, sign.texture);
+            this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, sign.canvas);
+
+            try {
+              this.gl.generateMipmap(this.gl.TEXTURE_2D);
+            } catch(e) {}
+            sign.needsTextureUpdate = false;
+          }
+        }
+      },
+      render(glContext, viewProjMatrix) {
+        if (this.parent.signs.size === 0) return;
+        this.updateAll();
+        const gl = this.gl;
+        gl.useProgram(this.program);
+        gl.disable(gl.CULL_FACE);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+        gl.enableVertexAttribArray(this.locations.aPosition);
+        gl.vertexAttribPointer(this.locations.aPosition, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+        gl.enableVertexAttribArray(this.locations.aUV);
+        gl.vertexAttribPointer(this.locations.aUV, 2, gl.FLOAT, false, 0, 0);
+
+        gl.uniformMatrix4fv(this.locations.uViewProj, false, viewProjMatrix);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(this.locations.uSampler, 0);
+
+        for (const [id, sign] of this.parent.signs) {
+          if (!sign.visible) continue;
+          if (sign.noDepthTest || id === "bow_aim_reticle") {
+            gl.disable(gl.DEPTH_TEST);
+            gl.depthMask(false);
+          } else {
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthMask(true);
+          }
+          const fwd = [-sign.normal[0], -sign.normal[1], -sign.normal[2]];
+          const up = sign.up;
+          const right = [
+            up[1]*fwd[2] - up[2]*fwd[1],
+            up[2]*fwd[0] - up[0]*fwd[2],
+            up[0]*fwd[1] - up[1]*fwd[0]
+          ];
+          const rLen = Math.sqrt(right[0]*right[0] + right[1]*right[1] + right[2]*right[2]) || 1;
+          right[0]/=rLen; right[1]/=rLen; right[2]/=rLen;
+          const trueUp = [
+            fwd[1]*right[2] - fwd[2]*right[1],
+            fwd[2]*right[0] - fwd[0]*right[2],
+            fwd[0]*right[1] - fwd[1]*right[0]
+          ];
+          const sx = sign.scale[0] || 1;
+          const sy = sign.scale[1] || 1;
+          const sz = 1.0;
+          const modelMatrix = new Float32Array([
+            right[0]*sx, right[1]*sx, right[2]*sx, 0,
+            trueUp[0]*sy, trueUp[1]*sy, trueUp[2]*sy, 0,
+            fwd[0]*sz, fwd[1]*sz, fwd[2]*sz, 0,
+            sign.position[0], sign.position[1], sign.position[2], 1
+          ]);
+          gl.uniformMatrix4fv(this.locations.uModel, false, modelMatrix);
+          gl.uniform4fv(this.locations.uColor, sign.color);
+          gl.bindTexture(gl.TEXTURE_2D, sign.texture);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+      }
+    };
+    backend.init();
+    return backend;
+  },
+
+  // --- High-level 3D UI Management Helpers ---
+  updateBoatUI(options) {
+    if (!this.backend) return;
+    const {
+      boat,
+      isRiding = false,
+      playerScale = 0.1,
+      isEngineBoat = false,
+      batteryPercent = 100,
+      holdPercent = 0
+    } = options;
+
+    if (!boat || !boat.position || !boat.F || !boat.normal) {
+      this.hideBoatUI();
+      return;
+    }
+
+    // Fixed base scale (0.1) so 3D UI offsets remain constant regardless of player character scale
+    const UI_BASE_SCALE = 0.1;
+    const backOffset = (typeof window.boatUiBackOffset !== 'undefined' ? window.boatUiBackOffset : 2.47) * UI_BASE_SCALE;
+    const upOffset = (typeof window.boatUiUpOffset !== 'undefined' ? window.boatUiUpOffset : 0.43) * UI_BASE_SCALE;
+    const rightOffset = (typeof window.boatUiRightOffset !== 'undefined' ? window.boatUiRightOffset : 0.0) * UI_BASE_SCALE;
+    const yawOffsetDeg = (typeof window.boatUiYawOffset !== 'undefined' ? window.boatUiYawOffset : 0.0);
+    const pitchOffsetDeg = (typeof window.boatUiPitchOffset !== 'undefined' ? window.boatUiPitchOffset : -22.0);
+
+    let bf = boat.F || [0, 0, 1];
+    let bn = boat.normal || [0, 1, 0];
+    let br = boat.R || [1, 0, 0];
+
+    if (boat.angle !== undefined && boat.angle !== 0 && boat.R) {
+      const cosH = Math.cos(boat.angle);
+      const sinH = Math.sin(boat.angle);
+      bf = [
+        boat.F[0] * cosH + boat.R[0] * sinH,
+        boat.F[1] * cosH + boat.R[1] * sinH,
+        boat.F[2] * cosH + boat.R[2] * sinH
+      ];
+      br = [
+        boat.R[0] * cosH - boat.F[0] * sinH,
+        boat.R[1] * cosH - boat.F[1] * sinH,
+        boat.R[2] * cosH - boat.F[2] * sinH
+      ];
+    }
+
+    if (boat.bankAngle && Math.abs(boat.bankAngle) > 0.0001) {
+      const cosB = Math.cos(boat.bankAngle);
+      const sinB = Math.sin(boat.bankAngle);
+      const bR = [
+        br[0] * cosB - bn[0] * sinB,
+        br[1] * cosB - bn[1] * sinB,
+        br[2] * cosB - bn[2] * sinB
+      ];
+      const bN = [
+        bn[0] * cosB + br[0] * sinB,
+        bn[1] * cosB + br[1] * sinB,
+        bn[2] * cosB + br[2] * sinB
+      ];
+      br = bR;
+      bn = bN;
+    }
+
+    let targetWorldPos = [
+      boat.position[0] - bf[0] * backOffset + bn[0] * upOffset + br[0] * rightOffset,
+      boat.position[1] - bf[1] * backOffset + bn[1] * upOffset + br[1] * rightOffset,
+      boat.position[2] - bf[2] * backOffset + bn[2] * upOffset + br[2] * rightOffset
+    ];
+
+    if (yawOffsetDeg !== 0) {
+      const yawRad = yawOffsetDeg * (Math.PI / 180);
+      const cosY = Math.cos(yawRad);
+      const sinY = Math.sin(yawRad);
+      const bf_old = [...bf];
+      bf = [
+        bf_old[0] * cosY + br[0] * sinY,
+        bf_old[1] * cosY + br[1] * sinY,
+        bf_old[2] * cosY + br[2] * sinY
+      ];
+      br = [
+        br[0] * cosY - bf_old[0] * sinY,
+        br[1] * cosY - bf_old[1] * sinY,
+        br[2] * cosY - bf_old[2] * sinY
+      ];
+    }
+
+    if (pitchOffsetDeg !== 0) {
+      const pitchRad = pitchOffsetDeg * (Math.PI / 180);
+      const cosP = Math.cos(pitchRad);
+      const sinP = Math.sin(pitchRad);
+      const bf_old = [...bf];
+      bf = [
+        bf_old[0] * cosP + bn[0] * sinP,
+        bf_old[1] * cosP + bn[1] * sinP,
+        bf_old[2] * cosP + bn[2] * sinP
+      ];
+      bn = [
+        bn[0] * cosP - bf_old[0] * sinP,
+        bn[1] * cosP - bf_old[1] * sinP,
+        bn[2] * cosP - bf_old[2] * sinP
+      ];
+    }
+
+    const signNormal = [-bf[0], -bf[1], -bf[2]];
+    const signUp = [bn[0], bn[1], bn[2]];
+    const boatScale = (typeof window.boatUiScale === 'number' ? window.boatUiScale : 0.47);
+    const signW = 0.18 * boatScale;
+    const signH = 0.18 * boatScale;
+    const boatSignId = "boat_world_sign";
+    const isGp = (typeof isCurrentlyGamepadMode === 'function' ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+    let btnText = 'E';
+    if (isGp && window.GamepadController && typeof window.GamepadController.getButtonLabel === 'function') {
+      btnText = window.GamepadController.getButtonLabel('interact');
+    }
+    const contentKey = isEngineBoat ? (`E|${holdPercent}`) : (`B|${holdPercent}|${btnText}`);
+
+    const drawBoatUI = (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.save();
+      // สลับด้าน (Flip horizontally) to fix mirrored 3D UI
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+
+      const p = 4; // padding
+      const innerW = w - p * 2;
+      const innerH = h - p * 2;
+
+      // Draw outer border (ขอบขาว)
+      ctx.fillStyle = World3DUI.BORDER_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(w - 20, 0);
+      ctx.lineTo(w, 20);
+      ctx.lineTo(w, h);
+      ctx.lineTo(20, h);
+      ctx.lineTo(0, h - 20);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw inner background (พื้นหลังเทา)
+      ctx.fillStyle = World3DUI.BG_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(p, p);
+      ctx.lineTo(w - 20, p);
+      ctx.lineTo(w - p, 20);
+      ctx.lineTo(w - p, h - p);
+      ctx.lineTo(20, h - p);
+      ctx.lineTo(p, h - 20);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw progress bars (Progress bar ขาว)
+      if (holdPercent > 0) {
+        ctx.fillStyle = World3DUI.PROGRESS_COLOR;
+        ctx.fillRect(p, p, innerW * (holdPercent / 100), innerH);
+      }
+
+      // Draw text or icon
+      if (isEngineBoat) {
+        if (typeof create3DIconCanvas === 'function') {
+           if (!window._mech3dIconCache) window._mech3dIconCache = {};
+           let c = window._mech3dIconCache["GLOW_BATTERY_128"];
+           if (!c) {
+             c = create3DIconCanvas("GLOW_BATTERY", 128, 128);
+             if (c) window._mech3dIconCache["GLOW_BATTERY_128"] = c;
+           }
+           if (c) {
+              const imgSize = w * 0.75;
+              ctx.drawImage(c, (w - imgSize) / 2, (h - imgSize) / 2, imgSize, imgSize);
+           } else {
+             ctx.fillStyle = '#fff';
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.font = 'bold 120px "Google Sans", sans-serif';
+             ctx.fillText('🔋', w / 2, h / 2);
+           }
+        } else {
+           ctx.fillStyle = '#fff';
+           ctx.textAlign = 'center';
+           ctx.textBaseline = 'middle';
+           ctx.font = 'bold 120px "Google Sans", sans-serif';
+           ctx.fillText('🔋', w / 2, h / 2);
+        }
+      } else {
+        ctx.fillStyle = World3DUI.BUTTON_COLOR || '#dfb76c';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = btnText.length > 1 ? 'bold 96px "Google Sans", sans-serif' : 'bold 120px "Google Sans", sans-serif';
+        ctx.fillText(btnText, w / 2, h / 2);
+      }
+
+      ctx.restore();
+    };
+
+    if (!this.hasSign(boatSignId)) {
+      this.createSign({
+        id: boatSignId,
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        resolution: [256, 256],
+        contentKey: contentKey,
+        drawFn: drawBoatUI,
+        visible: true
+      });
+    } else {
+      this.updateSign(boatSignId, {
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        contentKey: contentKey,
+        drawFn: drawBoatUI,
+        visible: true
+      });
+    }
+  },
+
+  hideBoatUI() {
+    if (this.hasSign("boat_world_sign")) {
+      this.removeSign("boat_world_sign");
+    }
+  },
+
+  
+  updateMechRideUI(options) {
+    if (!this.backend) return;
+    const {
+      mech,
+      playerScale = 0.1,
+      holdPercent = 0,
+      isDismount = false,
+      extraStatus = "",
+      batteryPercent = 100,
+      hasBattery = false,
+      targetPos
+    } = options;
+
+    if (!mech || !mech.position) {
+      this.hideMechRideUI();
+      return;
+    }
 
 
-      // --- Shaders ---
+    const isFps = (window.cameraMode === 'fps' || window.cameraMode === 'firstperson');
+    const isRiding = isDismount; // isDismount is true when player is ON the mech (showing E to dismount)
+
+    // 1. FPS Offsets (Riding)
+    const fpsForward = (typeof window.devgame?.mechRideUiFpsForwardOffset !== 'undefined') ? window.devgame.mechRideUiFpsForwardOffset : 1.41;
+    const fpsUp = (typeof window.devgame?.mechRideUiFpsUpOffset !== 'undefined') ? window.devgame.mechRideUiFpsUpOffset : 1.10;
+    const fpsRight = (typeof window.devgame?.mechRideUiFpsRightOffset !== 'undefined') ? window.devgame.mechRideUiFpsRightOffset : 0.0;
+    const fpsScale = (typeof window.devgame?.mechRideUiFpsScale !== 'undefined') ? window.devgame.mechRideUiFpsScale : 0.47;
+    const fpsYaw = (typeof window.devgame?.mechRideUiFpsYawOffset !== 'undefined') ? window.devgame.mechRideUiFpsYawOffset : 0.0;
+    const fpsPitch = (typeof window.devgame?.mechRideUiFpsPitchOffset !== 'undefined') ? window.devgame.mechRideUiFpsPitchOffset : 0;
+    
+    // 2. TPS Offsets (Riding)
+    const tpsForward = (typeof window.devgame?.mechRideUiTpsForwardOffset !== 'undefined') ? window.devgame.mechRideUiTpsForwardOffset : -2.01;
+    const tpsUp = (typeof window.devgame?.mechRideUiTpsUpOffset !== 'undefined') ? window.devgame.mechRideUiTpsUpOffset : 1.68;
+    const tpsRight = (typeof window.devgame?.mechRideUiTpsRightOffset !== 'undefined') ? window.devgame.mechRideUiTpsRightOffset : 0.0;
+    const tpsScale = (typeof window.devgame?.mechRideUiTpsScale !== 'undefined') ? window.devgame.mechRideUiTpsScale : 0.47;
+    const tpsYaw = (typeof window.devgame?.mechRideUiTpsYawOffset !== 'undefined') ? window.devgame.mechRideUiTpsYawOffset : 0.0;
+    const tpsPitch = (typeof window.devgame?.mechRideUiTpsPitchOffset !== 'undefined') ? window.devgame.mechRideUiTpsPitchOffset : 0;
+
+    // 3. OUT Offsets (Not Riding / Mounting - Anchored on the Mech Leg)
+    const outForward = (typeof window.devgame?.mechRideUiOutForwardOffset !== 'undefined') ? window.devgame.mechRideUiOutForwardOffset : 0.35;
+    const outUp = (typeof window.devgame?.mechRideUiOutUpOffset !== 'undefined') ? window.devgame.mechRideUiOutUpOffset : 0.0;
+    const outRight = (typeof window.devgame?.mechRideUiOutRightOffset !== 'undefined') ? window.devgame.mechRideUiOutRightOffset : 0.0;
+    const outScale = (typeof window.devgame?.mechRideUiOutScale !== 'undefined') ? window.devgame.mechRideUiOutScale : 0.47;
+    const outYaw = (typeof window.devgame?.mechRideUiOutYawOffset !== 'undefined') ? window.devgame.mechRideUiOutYawOffset : 0.0;
+    const outPitch = (typeof window.devgame?.mechRideUiOutPitchOffset !== 'undefined') ? window.devgame.mechRideUiOutPitchOffset : 0;
+
+    // Fixed base scale (0.1) so 3D UI offsets remain constant regardless of player character scale
+    const UI_BASE_SCALE = 0.1;
+    const forwardOffset = (!isRiding ? outForward : (isFps ? fpsForward : tpsForward)) * UI_BASE_SCALE;
+    const upOffset = (!isRiding ? outUp : (isFps ? fpsUp : tpsUp)) * UI_BASE_SCALE;
+    const rightOffset = (!isRiding ? outRight : (isFps ? fpsRight : tpsRight)) * UI_BASE_SCALE;
+    const yawOffsetDeg = (!isRiding ? outYaw : (isFps ? fpsYaw : tpsYaw));
+    const pitchOffsetDeg = (!isRiding ? outPitch : (isFps ? fpsPitch : tpsPitch));
+    const scale = (!isRiding ? outScale : (isFps ? fpsScale : tpsScale));
+
+    let mf = mech.F || [0, 0, 1];
+    let mn = mech.normal || [0, 1, 0];
+    let mr = mech.R || [1, 0, 0];
+
+    // If mech has rotation/angle, apply it to vectors
+    if (mech.angle !== undefined && mech.angle !== 0) {
+      const baseF = mech.F || [0, 0, 1];
+      const baseR = mech.R || [1, 0, 0];
+      const cosH = Math.cos(mech.angle);
+      const sinH = Math.sin(mech.angle);
+      mf = [
+        baseF[0] * cosH + baseR[0] * sinH,
+        baseF[1] * cosH + baseR[1] * sinH,
+        baseF[2] * cosH + baseR[2] * sinH
+      ];
+      mr = [
+        baseR[0] * cosH - baseF[0] * sinH,
+        baseR[1] * cosH - baseF[1] * sinH,
+        baseR[2] * cosH - baseF[2] * sinH
+      ];
+    }
+
+    const basePos = targetPos || mech.position;
+    let targetWorldPos = [
+      basePos[0] + mf[0] * forwardOffset + mn[0] * upOffset + mr[0] * rightOffset,
+      basePos[1] + mf[1] * forwardOffset + mn[1] * upOffset + mr[1] * rightOffset,
+      basePos[2] + mf[2] * forwardOffset + mn[2] * upOffset + mr[2] * rightOffset
+    ];
+
+    if (yawOffsetDeg !== 0) {
+      const yawRad = yawOffsetDeg * (Math.PI / 180);
+      const cosY = Math.cos(yawRad);
+      const sinY = Math.sin(yawRad);
+      const mf_old = [...mf];
+      mf = [
+        mf_old[0] * cosY + mr[0] * sinY,
+        mf_old[1] * cosY + mr[1] * sinY,
+        mf_old[2] * cosY + mr[2] * sinY
+      ];
+      mr = [
+        mr[0] * cosY - mf_old[0] * sinY,
+        mr[1] * cosY - mf_old[1] * sinY,
+        mr[2] * cosY - mf_old[2] * sinY
+      ];
+    }
+
+    if (pitchOffsetDeg !== 0) {
+      const pitchRad = pitchOffsetDeg * (Math.PI / 180);
+      const cosP = Math.cos(pitchRad);
+      const sinP = Math.sin(pitchRad);
+      const mf_old = [...mf];
+      mf = [
+        mf_old[0] * cosP + mn[0] * sinP,
+        mf_old[1] * cosP + mn[1] * sinP,
+        mf_old[2] * cosP + mn[2] * sinP
+      ];
+      mn = [
+        mn[0] * cosP - mf_old[0] * sinP,
+        mn[1] * cosP - mf_old[1] * sinP,
+        mn[2] * cosP - mf_old[2] * sinP
+      ];
+    }
+
+
+    const signNormal = [-mf[0], -mf[1], -mf[2]];
+    const signUp = [mn[0], mn[1], mn[2]];
+    
+    // Use the viewport scale we calculated above (independent of playerScale)
+    const signW = 0.18 * scale;
+    const signH = 0.18 * scale;
+    const signId = "mech_ride_world_sign";
+    const isGp = (typeof isCurrentlyGamepadMode === 'function' ? isCurrentlyGamepadMode() : !!(window.isUsingGamepad && window.GamepadController && window.GamepadController.connected));
+    let btnText = 'E';
+    if (isGp && window.GamepadController && typeof window.GamepadController.getButtonLabel === 'function') {
+      btnText = window.GamepadController.getButtonLabel('interact');
+    }
+    const contentKey = (isDismount && hasBattery) ? (`MB|${holdPercent}`) : (`ME|${holdPercent}|${btnText}`);
+
+    const drawMechRideUI = (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.save();
+      // สลับด้าน (Flip horizontally) to fix mirrored 3D UI
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+
+      const p = 4; // padding
+      const innerW = w - p * 2;
+      const innerH = h - p * 2;
+
+      // Draw outer border (ขอบขาว)
+      ctx.fillStyle = World3DUI.BORDER_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(w - 20, 0);
+      ctx.lineTo(w, 20);
+      ctx.lineTo(w, h);
+      ctx.lineTo(20, h);
+      ctx.lineTo(0, h - 20);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw inner background (พื้นหลังเทา)
+      ctx.fillStyle = World3DUI.BG_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(p, p);
+      ctx.lineTo(w - 20, p);
+      ctx.lineTo(w - p, 20);
+      ctx.lineTo(w - p, h - p);
+      ctx.lineTo(20, h - p);
+      ctx.lineTo(p, h - 20);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw progress bars (Progress bar ขาว)
+      if (holdPercent > 0) {
+        ctx.fillStyle = World3DUI.PROGRESS_COLOR;
+        ctx.fillRect(p, p, innerW * (holdPercent / 100), innerH);
+      }
+
+      // If riding the mech and has battery, show battery icon; when mounting (before getting on) or without battery, show 'E'
+      if (isDismount && hasBattery) {
+        if (typeof create3DIconCanvas === 'function') {
+           if (!window._mech3dIconCache) window._mech3dIconCache = {};
+           let c = window._mech3dIconCache["GLOW_BATTERY_128"];
+           if (!c) {
+             c = create3DIconCanvas("GLOW_BATTERY", 128, 128);
+             if (c) window._mech3dIconCache["GLOW_BATTERY_128"] = c;
+           }
+           if (c) {
+              const imgSize = w * 0.75;
+              ctx.drawImage(c, (w - imgSize) / 2, (h - imgSize) / 2, imgSize, imgSize);
+           } else {
+             ctx.fillStyle = '#fff';
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.font = 'bold 120px "Google Sans", sans-serif';
+             ctx.fillText('🔋', w / 2, h / 2);
+           }
+        } else {
+           ctx.fillStyle = '#fff';
+           ctx.textAlign = 'center';
+           ctx.textBaseline = 'middle';
+           ctx.font = 'bold 120px "Google Sans", sans-serif';
+           ctx.fillText('🔋', w / 2, h / 2);
+        }
+      } else {
+        ctx.fillStyle = World3DUI.BUTTON_COLOR || '#dfb76c';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = btnText.length > 1 ? 'bold 96px "Google Sans", sans-serif' : 'bold 120px "Google Sans", sans-serif';
+        ctx.fillText(btnText, w / 2, h / 2);
+      }
+
+      ctx.restore();
+    };
+
+    if (!this.hasSign(signId)) {
+      this.createSign({
+        id: signId,
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        resolution: [256, 256],
+        contentKey: contentKey,
+        drawFn: drawMechRideUI,
+        visible: true
+      });
+    } else {
+      this.updateSign(signId, {
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        contentKey: contentKey,
+        drawFn: drawMechRideUI,
+        visible: true
+      });
+    }
+  },
+
+  hideMechRideUI() {
+    if (this.hasSign("mech_ride_world_sign")) {
+      this.removeSign("mech_ride_world_sign");
+    }
+  },
+
+  updateMechStandUI(options) {
+    if (!this.backend) return;
+    const { stand, parts = [], playerScale = 0.1, holdPercent = 0 } = options;
+
+    if (!stand || !stand.position) {
+      this.hideMechStandUI();
+      return;
+    }
+
+    let sn = stand.normal ? [...stand.normal] : [0, 1, 0];
+    let sf = stand.F ? [...stand.F] : [0, 0, 1];
+    let sr = stand.R ? [...stand.R] : [1, 0, 0];
+
+    // Fixed UI offsets independent of player character scale
+    const upOffset = (typeof window.mechStandUiUpOffset === "number" ? window.mechStandUiUpOffset : 0.16);
+    const rightOffset = (typeof window.mechStandUiRightOffset === "number" ? window.mechStandUiRightOffset : 0.0);
+    const forwardOffset = (typeof window.mechStandUiForwardOffset === "number" ? window.mechStandUiForwardOffset : 0.22);
+    const yawOffsetDeg = (typeof window.mechStandUiYawOffset === "number" ? window.mechStandUiYawOffset : 180.0);
+    const pitchOffsetDeg = (typeof window.mechStandUiPitchOffset === "number" ? window.mechStandUiPitchOffset : 0.0);
+    const scaleVal = (typeof window.mechStandUiScale === "number" ? window.mechStandUiScale : 0.34);
+
+    let targetWorldPos = [
+      stand.position[0] + sn[0] * upOffset + sr[0] * rightOffset + sf[0] * forwardOffset,
+      stand.position[1] + sn[1] * upOffset + sr[1] * rightOffset + sf[1] * forwardOffset,
+      stand.position[2] + sn[2] * upOffset + sr[2] * rightOffset + sf[2] * forwardOffset
+    ];
+
+    if (yawOffsetDeg !== 0) {
+      const yawRad = yawOffsetDeg * (Math.PI / 180);
+      const cosY = Math.cos(yawRad);
+      const sinY = Math.sin(yawRad);
+      const sf_old = [...sf];
+      sf = [
+        sf_old[0] * cosY + sr[0] * sinY,
+        sf_old[1] * cosY + sr[1] * sinY,
+        sf_old[2] * cosY + sr[2] * sinY
+      ];
+      sr = [
+        sr[0] * cosY - sf_old[0] * sinY,
+        sr[1] * cosY - sf_old[1] * sinY,
+        sr[2] * cosY - sf_old[2] * sinY
+      ];
+    }
+
+    if (pitchOffsetDeg !== 0) {
+      const pitchRad = pitchOffsetDeg * (Math.PI / 180);
+      const cosP = Math.cos(pitchRad);
+      const sinP = Math.sin(pitchRad);
+      const sf_old = [...sf];
+      sf = [
+        sf_old[0] * cosP + sn[0] * sinP,
+        sf_old[1] * cosP + sn[1] * sinP,
+        sf_old[2] * cosP + sn[2] * sinP
+      ];
+      sn = [
+        sn[0] * cosP - sf_old[0] * sinP,
+        sn[1] * cosP - sf_old[1] * sinP,
+        sn[2] * cosP - sf_old[2] * sinP
+      ];
+    }
+
+    // World3DUI sign faces -normal, so to face towards +sf:
+    const signNormal = [-sf[0], -sf[1], -sf[2]];
+    const signUp = [sn[0], sn[1], sn[2]];
+    const signW = 0.68 * scaleVal;
+    const signH = 0.40 * scaleVal;
+    const standSignId = "mech_stand_world_sign";
+
+    // Gather equipped parts
+    const equippedItems = [];
+    equippedItems.push({
+      item: stand,
+      type: "robot_stand",
+      label: (typeof t === "function") ? t("mech_part_stand") : "Stand"
+    });
+
+    const partsList = Array.isArray(parts) ? parts : [];
+    function getPartLabel(typeOrName) {
+      const tKey = (typeOrName || "").toLowerCase();
+      if (tKey.includes("cockpit")) return (typeof t === "function") ? t("mech_part_cockpit") : "Cockpit";
+      if (tKey.includes("left_arm")) return (typeof t === "function") ? t("mech_part_left_arm") : "Left Arm";
+      if (tKey.includes("right_arm")) return (typeof t === "function") ? t("mech_part_right_arm") : "Right Arm";
+      if (tKey.includes("left_leg")) return (typeof t === "function") ? t("mech_part_left_leg") : "Left Leg";
+      if (tKey.includes("right_leg")) return (typeof t === "function") ? t("mech_part_right_leg") : "Right Leg";
+      if (tKey.includes("stand")) return (typeof t === "function") ? t("mech_part_stand") : "Stand";
+      if (tKey.includes("core")) return (typeof t === "function") ? t("mech_part_core") : "Power Core";
+      if (tKey.includes("module")) return (typeof t === "function") ? t("mech_part_module") : "Module";
+      if (typeof getItemDisplayName === "function") return getItemDisplayName(typeOrName);
+      return typeOrName || "Robot Part";
+    }
+
+    partsList.forEach(p => {
+      if (p && p.active && !p.isPreview && p.type && p.type !== "robot_stand") {
+        equippedItems.push({
+          item: p,
+          type: p.type,
+          label: getPartLabel(p.type)
+        });
+      }
+    });
+
+    if (!window._mech3dIconCache) window._mech3dIconCache = {};
+    const getCachedIcon = (type, size = 192) => {
+      if (!type) return null;
+      const cacheKey = `${type}_${size}`;
+      if (window._mech3dIconCache[cacheKey]) return window._mech3dIconCache[cacheKey];
+      if (typeof create3DIconCanvas === "function") {
+        const c = create3DIconCanvas(type, size, size);
+        if (c) {
+          window._mech3dIconCache[cacheKey] = c;
+          return c;
+        }
+      }
+      return null;
+    };
+
+    const drawMechStandUI = (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      const scale = w / 1024;
+
+      ctx.save();
+      // Flip horizontally for 3D Quad rendering
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+
+      const cut = 24 * scale;
+      // Outer golden cyber border (2 cuts: Top-Right & Bottom-Left)
+      ctx.fillStyle = 'rgba(223, 183, 108, 0.55)';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(w - cut, 0);
+      ctx.lineTo(w, cut);
+      ctx.lineTo(w, h);
+      ctx.lineTo(cut, h);
+      ctx.lineTo(0, h - cut);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner glassy dark background (2 cuts: Top-Right & Bottom-Left)
+      const pad = 5 * scale;
+      ctx.fillStyle = 'rgba(10, 12, 18, 0.94)';
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(w - cut, pad);
+      ctx.lineTo(w - pad, cut);
+      ctx.lineTo(w - pad, h - pad);
+      ctx.lineTo(cut, h - pad);
+      ctx.lineTo(pad, h - cut);
+      ctx.closePath();
+      ctx.fill();
+
+      // Title & Header
+      ctx.fillStyle = '#dfb76c';
+      ctx.font = `bold ${Math.round(24 * scale)}px "Google Sans", sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const titleText = (typeof t === "function") ? t("robot_stand_title") : "ROBOT STAND SYSTEM";
+      ctx.fillText('⚙ ' + titleText, 36 * scale, 42 * scale);
+
+
+      
+      // Header Separator Line
+      ctx.strokeStyle = 'rgba(223, 183, 108, 0.3)';
+      ctx.lineWidth = Math.max(1, 2 * scale);
+      ctx.beginPath();
+      ctx.moveTo(24 * scale, 70 * scale);
+      ctx.lineTo(w - 24 * scale, 70 * scale);
+      ctx.stroke();
+
+      // 8 Slots (4 columns x 2 rows)
+      const startX = 30 * scale;
+      const startY = 88 * scale;
+      const slotW = 226 * scale;
+      const slotH = 236 * scale;
+      const gapX = 18 * scale;
+      const gapY = 16 * scale;
+      const slotCut = 12 * scale;
+
+      for (let i = 0; i < 8; i++) {
+        const col = i % 4;
+        const row = Math.floor(i / 4);
+        const sx = startX + col * (slotW + gapX);
+        const sy = startY + row * (slotH + gapY);
+        const equippedData = equippedItems[i] || null;
+        const isEquipped = !!equippedData;
+        const isHovered = (World3DUI.hoveredSlotIndex === i);
+
+        // Slot Border (2 cuts: Top-Right & Bottom-Left)
+        if (isHovered) {
+          ctx.fillStyle = isEquipped ? '#ffe58f' : '#38bdf8';
+        } else {
+          ctx.fillStyle = isEquipped ? 'rgba(223, 183, 108, 0.75)' : 'rgba(255, 255, 255, 0.14)';
+        }
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + slotW - slotCut, sy);
+        ctx.lineTo(sx + slotW, sy + slotCut);
+        ctx.lineTo(sx + slotW, sy + slotH);
+        ctx.lineTo(sx + slotCut, sy + slotH);
+        ctx.lineTo(sx, sy + slotH - slotCut);
+        ctx.closePath();
+        ctx.fill();
+
+        // Slot Background (2 cuts: Top-Right & Bottom-Left)
+        const sPad = 2 * scale;
+        if (isHovered) {
+          ctx.fillStyle = isEquipped ? 'rgba(42, 52, 76, 0.98)' : 'rgba(24, 38, 58, 0.95)';
+        } else {
+          ctx.fillStyle = isEquipped ? 'rgba(24, 28, 40, 0.95)' : 'rgba(12, 14, 20, 0.85)';
+        }
+        ctx.beginPath();
+        ctx.moveTo(sx + sPad, sy + sPad);
+        ctx.lineTo(sx + slotW - slotCut, sy + sPad);
+        ctx.lineTo(sx + slotW - sPad, sy + slotCut);
+        ctx.lineTo(sx + slotW - sPad, sy + slotH - sPad);
+        ctx.lineTo(sx + slotCut, sy + slotH - sPad);
+        ctx.lineTo(sx + sPad, sy + slotH - slotCut);
+        ctx.closePath();
+        ctx.fill();
+
+        // Top-left slot number
+        ctx.fillStyle = isHovered ? (isEquipped ? '#ffe58f' : '#38bdf8') : (isEquipped ? '#dfb76c' : 'rgba(255, 255, 255, 0.35)');
+        ctx.font = `bold ${Math.round(15 * scale)}px "Google Sans", sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`#0${i + 1}`, sx + 12 * scale, sy + 10 * scale);
+
+        // Center Icon
+        if (isEquipped) {
+          const iconCanvas = getCachedIcon(equippedData.type, Math.round(96 * scale));
+          if (iconCanvas) {
+            const iconSize = 100 * scale;
+            ctx.drawImage(iconCanvas, sx + (slotW - iconSize) / 2, sy + 38 * scale, iconSize, iconSize);
+          } else {
+            ctx.fillStyle = '#dfb76c';
+            ctx.font = `${Math.round(36 * scale)}px "Google Sans", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🤖', sx + slotW / 2, sy + 88 * scale);
+          }
+
+          // Part Label
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.round(16 * scale)}px "Google Sans", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(equippedData.label, sx + slotW / 2, sy + 164 * scale);
+
+          // Status Badge
+          if (isHovered) {
+            ctx.fillStyle = (equippedData.type === "robot_stand") ? '#94a3b8' : '#f59e0b';
+            ctx.font = `bold ${Math.round(14 * scale)}px "Google Sans", sans-serif`;
+            ctx.fillText((equippedData.type === "robot_stand") ? '🔒 LOCKED' : '⚡ DISMANTLE', sx + slotW / 2, sy + 200 * scale);
+          } else {
+            ctx.fillStyle = '#4ade80';
+            ctx.font = `bold ${Math.round(14 * scale)}px "Google Sans", sans-serif`;
+            ctx.fillText('✔ EQUIPPED', sx + slotW / 2, sy + 200 * scale);
+          }
+        } else {
+          // Empty slot representation
+          ctx.strokeStyle = isHovered ? '#38bdf8' : 'rgba(255, 255, 255, 0.15)';
+          ctx.lineWidth = isHovered ? (2.5 * scale) : (1.5 * scale);
+          ctx.beginPath();
+          ctx.arc(sx + slotW / 2, sy + 88 * scale, 28 * scale, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = isHovered ? '#38bdf8' : 'rgba(255, 255, 255, 0.2)';
+          ctx.font = isHovered ? `bold ${Math.round(30 * scale)}px "Google Sans", sans-serif` : `${Math.round(28 * scale)}px "Google Sans", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('+', sx + slotW / 2, sy + 88 * scale);
+
+          // Status
+          if (isHovered) {
+            ctx.fillStyle = '#38bdf8';
+            ctx.font = `bold ${Math.round(14 * scale)}px "Google Sans", sans-serif`;
+            ctx.fillText('✚ EQUIP PART', sx + slotW / 2, sy + 200 * scale);
+          } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.font = `${Math.round(14 * scale)}px "Google Sans", sans-serif`;
+            ctx.fillText('✚ EMPTY', sx + slotW / 2, sy + 200 * scale);
+          }
+        }
+      }
+
+      ctx.restore();
+    };
+
+    const standLang = (typeof getGameLanguage === "function") ? getGameLanguage() : (window.gameLanguage || "th");
+    let standContentKey = `${standLang}|${World3DUI.hoveredSlotIndex}|`;
+    for (let i = 0; i < 8; i++) {
+      const eq = equippedItems[i];
+      standContentKey += eq ? `${eq.type}:${eq.label},` : ",";
+    }
+
+    if (!this.hasSign(standSignId)) {
+      this.createSign({
+        id: standSignId,
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        resolution: [2048, 1200],
+        contentKey: standContentKey,
+        drawFn: drawMechStandUI,
+        visible: true
+      });
+    } else {
+      this.updateSign(standSignId, {
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        contentKey: standContentKey,
+        drawFn: drawMechStandUI,
+        visible: true
+      });
+    }
+  },
+
+  hideMechStandUI() {
+    if (this.hasSign("mech_stand_world_sign")) {
+      this.removeSign("mech_stand_world_sign");
+    }
+  },
+
+  _drawSeedianOrText(ctx, text, x, y, fontSize, align, color, isSeedian) {
+    const str = String(text || "");
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    if (!isSeedian) {
+      ctx.font = `bold ${Math.round(fontSize)}px "Google Sans", sans-serif`;
+      ctx.textAlign = align || "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(str, x, y);
+      return;
+    }
+
+    // Seedian geometric rune vector paths for 2D Canvas rendering
+    const RUNE_PATHS = {
+      A: "M16 2.5 L28 29.5 H4 Z M2 17.5 H30",
+      B: "M8 2.5 V29.5 M8 6.5 L24 16 L8 25.5",
+      C: "M26 2.5 L6 16 L26 29.5 M6 16 H28",
+      D: "M4 2.5 H28 L16 29.5 Z M16 2.5 V29.5",
+      E: "M6 2.5 V29.5 H26 V2.5 M16 12 V29.5",
+      F: "M10 2.5 V29.5 M10 8.5 L24 16 M10 18.5 L24 25.5",
+      G: "M16 2.5 L28 16 L16 29.5 L4 16 Z M16 16 H30",
+      H: "M6 2.5 H26 M6 29.5 H26 M6 4.5 L26 27.5 M26 4.5 L6 27.5",
+      I: "M16 2.5 V29.5 M16 10 L28 2.5",
+      J: "M6 2.5 H22 V23.5 L14 29.5",
+      K: "M4 16 L16 2.5 L28 16 M16 2.5 V29.5",
+      L: "M8 2.5 V29.5 H28 M2 29.5 L14 18",
+      M: "M6 2.5 V29.5 L16 16 L26 29.5 V2.5",
+      N: "M8 2.5 V29.5 M8 16 L24 6.5 M8 16 L24 25.5",
+      O: "M16 2.5 L27 8.5 L27 23.5 L16 29.5 L5 23.5 L5 8.5 Z",
+      P: "M22 2.5 V29.5 M22 4.5 L6 14.5 H22",
+      Q: "M16 2.5 L26 14 L16 23.5 L6 14 Z M16 23.5 V29.5",
+      R: "M8 2.5 V29.5 M8 4.5 L24 14 L8 23.5 M2 14 H28",
+      S: "M26 2.5 L8 11.5 L24 20.5 L6 29.5",
+      T: "M4 2.5 H28 M10 2.5 V29.5 M22 2.5 V29.5",
+      U: "M6 2.5 H26 M6 2.5 V21.5 L16 29.5 L26 21.5 V2.5",
+      V: "M2 2.5 H30 M6 2.5 L16 29.5 L26 2.5",
+      W: "M4 12 H28 L16 29.5 Z M16 2.5 V12",
+      X: "M16 2.5 V29.5 M2 16 H30 M10 10 H22 V22 H10 Z",
+      Y: "M16 15.5 V29.5 M16 2.5 L26 9.5 L16 16.5 L6 9.5 Z",
+      Z: "M4 2.5 H28 V29.5 H4 Z M4 29.5 L28 2.5"
+    };
+
+    const glyphSize = fontSize * 0.86;
+    const glyphAdv = glyphSize * 0.92;
+    const chars = Array.from(str.toUpperCase());
+    let totalW = 0;
+    ctx.font = `bold ${Math.round(fontSize * 0.85)}px "Google Sans", sans-serif`;
+    for (const ch of chars) {
+      if (RUNE_PATHS[ch]) totalW += glyphAdv;
+      else if (ch === " ") totalW += glyphSize * 0.42;
+      else totalW += ctx.measureText(ch).width + 2;
+    }
+
+    let curX = x;
+    if (align === "center") curX = x - totalW * 0.5;
+    else if (align === "right") curX = x - totalW;
+
+    for (const ch of chars) {
+      if (RUNE_PATHS[ch] && typeof Path2D !== "undefined") {
+        ctx.save();
+        ctx.translate(curX, y - glyphSize * 0.5);
+        const s = glyphSize / 32;
+        ctx.scale(s, s);
+        ctx.lineWidth = 3.2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke(new Path2D(RUNE_PATHS[ch]));
+        ctx.restore();
+        curX += glyphAdv;
+      } else if (ch === " ") {
+        curX += glyphSize * 0.42;
+      } else {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(ch, curX, y);
+        curX += ctx.measureText(ch).width + 2;
+      }
+    }
+  },
+
+  updatePlanterBoxUI(options) {
+    if (!this.backend) return;
+    const {
+      planter,
+      signId = "planter_box_world_sign",
+      seedType = "DRAGON_FRUIT",
+      seedIcon = "🌱",
+      plantName = "แก้วมังกร",
+      timerText = "5:00",
+      statusText = "กำลังเติบโต (0/5)",
+      filledSlots = 0,
+      isWatered = false,
+      isMature = false,
+      isEmpty = false,
+      lang = "th"
+    } = options || {};
+
+    if (!planter || !planter.position) {
+      this.hidePlanterBoxUI(signId);
+      return;
+    }
+
+    let sn = planter.normal ? [...planter.normal] : [0, 1, 0];
+    let sf = planter.F ? [...planter.F] : [0, 0, 1];
+    let sr = planter.R ? [...planter.R] : [1, 0, 0];
+
+    // Flip between the 2 LONG sides (+F and -F) so the 3D UI always faces the player,
+    // and never mounts on the short sides (+R / -R).
+    let activePlayerPos = (options && options.playerPos) ? options.playerPos : null;
+    if (!activePlayerPos && typeof charTheta !== "undefined" && typeof charPhi !== "undefined" && typeof RADIUS !== "undefined") {
+      const r = (typeof playerCenterRadius === "number" && playerCenterRadius > 0) ? playerCenterRadius : RADIUS;
+      activePlayerPos = [
+        r * Math.sin(charTheta) * Math.cos(charPhi),
+        r * Math.cos(charTheta),
+        r * Math.sin(charTheta) * Math.sin(charPhi)
+      ];
+    }
+    if (activePlayerPos) {
+      const dx = activePlayerPos[0] - planter.position[0];
+      const dy = activePlayerPos[1] - planter.position[1];
+      const dz = activePlayerPos[2] - planter.position[2];
+      const dotF = dx * sf[0] + dy * sf[1] + dz * sf[2];
+      if (dotF < 0) {
+        sf = [-sf[0], -sf[1], -sf[2]];
+        sr = [-sr[0], -sr[1], -sr[2]];
+      }
+    }
+
+    const dev = window.devgame || {};
+    const upOffset = (typeof dev.planterUiUpOffset === "number")
+      ? dev.planterUiUpOffset
+      : (typeof window.planterUiUpOffset === "number" ? window.planterUiUpOffset : 0.03);
+    const rightOffset = (typeof dev.planterUiRightOffset === "number")
+      ? dev.planterUiRightOffset
+      : (typeof window.planterUiRightOffset === "number" ? window.planterUiRightOffset : 0.00);
+    const forwardOffset = (typeof dev.planterUiForwardOffset === "number")
+      ? dev.planterUiForwardOffset
+      : (typeof window.planterUiForwardOffset === "number" ? window.planterUiForwardOffset : 0.05);
+    const yawOffsetDeg = (typeof dev.planterUiYawOffset === "number")
+      ? dev.planterUiYawOffset
+      : (typeof window.planterUiYawOffset === "number" ? window.planterUiYawOffset : 180.0);
+    const pitchOffsetDeg = (typeof dev.planterUiPitchOffset === "number")
+      ? dev.planterUiPitchOffset
+      : (typeof window.planterUiPitchOffset === "number" ? window.planterUiPitchOffset : 0.0);
+    const scaleVal = (typeof dev.planterUiScale === "number")
+      ? dev.planterUiScale
+      : (typeof window.planterUiScale === "number" ? window.planterUiScale : 0.25);
+
+    const targetWorldPos = [
+      planter.position[0] + sn[0] * upOffset + sr[0] * rightOffset + sf[0] * forwardOffset,
+      planter.position[1] + sn[1] * upOffset + sr[1] * rightOffset + sf[1] * forwardOffset,
+      planter.position[2] + sn[2] * upOffset + sr[2] * rightOffset + sf[2] * forwardOffset
+    ];
+
+    if (yawOffsetDeg !== 0) {
+      const yawRad = yawOffsetDeg * (Math.PI / 180);
+      const cosY = Math.cos(yawRad);
+      const sinY = Math.sin(yawRad);
+      const sf_old = [...sf];
+      sf = [
+        sf_old[0] * cosY + sr[0] * sinY,
+        sf_old[1] * cosY + sr[1] * sinY,
+        sf_old[2] * cosY + sr[2] * sinY
+      ];
+      sr = [
+        sr[0] * cosY - sf_old[0] * sinY,
+        sr[1] * cosY - sf_old[1] * sinY,
+        sr[2] * cosY - sf_old[2] * sinY
+      ];
+    }
+
+    if (pitchOffsetDeg !== 0) {
+      const pitchRad = pitchOffsetDeg * (Math.PI / 180);
+      const cosP = Math.cos(pitchRad);
+      const sinP = Math.sin(pitchRad);
+      const sf_old = [...sf];
+      sf = [
+        sf_old[0] * cosP + sn[0] * sinP,
+        sf_old[1] * cosP + sn[1] * sinP,
+        sf_old[2] * cosP + sn[2] * sinP
+      ];
+      sn = [
+        sn[0] * cosP - sf_old[0] * sinP,
+        sn[1] * cosP - sf_old[1] * sinP,
+        sn[2] * cosP - sf_old[2] * sinP
+      ];
+    }
+
+    const signNormal = [-sf[0], -sf[1], -sf[2]];
+    const signUp = [sn[0], sn[1], sn[2]];
+    const signW = 0.48 * scaleVal;
+    const signH = 0.19 * scaleVal;
+    const planterSignId = signId;
+    const isSeedian = (lang === "seedian");
+
+    if (!window._mech3dIconCache) window._mech3dIconCache = {};
+    const getCachedIcon = (type, size = 128) => {
+      if (!type) return null;
+      const cacheKey = `${type}_${size}`;
+      if (window._mech3dIconCache[cacheKey]) return window._mech3dIconCache[cacheKey];
+      if (typeof create3DIconCanvas === "function") {
+        const c = create3DIconCanvas(type, size, size);
+        if (c) {
+          window._mech3dIconCache[cacheKey] = c;
+          return c;
+        }
+      }
+      return null;
+    };
+
+    const stateKey = `${lang}_${seedType}_${plantName}_${timerText}_${statusText}_${filledSlots}_${isWatered}_${isMature}_${isEmpty}`;
+
+    const drawPlanterBoxUI = (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      const scale = w / 1024;
+
+      ctx.save();
+      // Flip horizontally for 3D Quad rendering (same as Mech Stand 3D UI)
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+
+      const cut = 26 * scale;
+      // Outer cyber border (2 cuts: Top-Right & Bottom-Left)
+      ctx.fillStyle = isMature
+        ? "rgba(74, 222, 128, 0.80)"
+        : (isEmpty ? "rgba(223, 183, 108, 0.55)" : (!isWatered ? "rgba(56, 189, 248, 0.72)" : "rgba(223, 183, 108, 0.65)"));
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(w - cut, 0);
+      ctx.lineTo(w, cut);
+      ctx.lineTo(w, h);
+      ctx.lineTo(cut, h);
+      ctx.lineTo(0, h - cut);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner glassy dark background (2 cuts: Top-Right & Bottom-Left)
+      const pad = 6 * scale;
+      ctx.fillStyle = "rgba(12, 16, 22, 0.94)";
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(w - cut, pad);
+      ctx.lineTo(w - pad, cut);
+      ctx.lineTo(w - pad, h - pad);
+      ctx.lineTo(cut, h - pad);
+      ctx.lineTo(pad, h - cut);
+      ctx.closePath();
+      ctx.fill();
+
+      // Header Row: 3D Seed Icon + Plant Name + Timer
+      const iconCanvas = getCachedIcon(seedType, Math.round(112 * scale));
+      if (iconCanvas) {
+        const iconSize = 92 * scale;
+        ctx.drawImage(iconCanvas, 44 * scale, 26 * scale, iconSize, iconSize);
+      } else {
+        ctx.fillStyle = "#4ade80";
+        ctx.font = `${Math.round(54 * scale)}px "Google Sans", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(seedIcon || "🌱", 90 * scale, 74 * scale);
+      }
+
+      // Plant Name
+      this._drawSeedianOrText(ctx, plantName, 152 * scale, 74 * scale, 50 * scale, "left", "#ffffff", isSeedian);
+
+      // Timer Text on Right
+      const timerColor = isMature ? "#4ade80" : (isEmpty ? "#94a3b8" : (!isWatered ? "#38bdf8" : "#fbbf24"));
+      this._drawSeedianOrText(ctx, timerText, w - 48 * scale, 74 * scale, 48 * scale, "right", timerColor, isSeedian);
+
+      // Header Separator Line
+      ctx.strokeStyle = isMature
+        ? "rgba(74, 222, 128, 0.35)"
+        : "rgba(223, 183, 108, 0.30)";
+      ctx.lineWidth = Math.max(1, 2.5 * scale);
+      ctx.beginPath();
+      ctx.moveTo(38 * scale, 134 * scale);
+      ctx.lineTo(w - 38 * scale, 134 * scale);
+      ctx.stroke();
+
+      // 5 Discrete HP-Style Growth Slots (Chamfered 3D UI Slots)
+      const startX = 48 * scale;
+      const startY = 164 * scale;
+      const gapX = 22 * scale;
+      const slotW = (w - startX * 2 - gapX * 4) / 5;
+      const slotH = 74 * scale;
+      const slotCut = 12 * scale;
+
+      for (let i = 0; i < 5; i++) {
+        const sx = startX + i * (slotW + gapX);
+        const sy = startY;
+        const isFilled = isMature || (i < filledSlots);
+
+        // Slot Outer Border
+        ctx.fillStyle = isFilled ? "#34d399" : "rgba(52, 211, 153, 0.38)";
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + slotW - slotCut, sy);
+        ctx.lineTo(sx + slotW, sy + slotCut);
+        ctx.lineTo(sx + slotW, sy + slotH);
+        ctx.lineTo(sx + slotCut, sy + slotH);
+        ctx.lineTo(sx, sy + slotH - slotCut);
+        ctx.closePath();
+        ctx.fill();
+
+        // Slot Inner Fill
+        const sPad = 3.5 * scale;
+        ctx.fillStyle = isFilled ? "#10b981" : "rgba(14, 30, 24, 0.88)";
+        ctx.beginPath();
+        ctx.moveTo(sx + sPad, sy + sPad);
+        ctx.lineTo(sx + slotW - slotCut, sy + sPad);
+        ctx.lineTo(sx + slotW - sPad, sy + slotCut);
+        ctx.lineTo(sx + slotW - sPad, sy + slotH - sPad);
+        ctx.lineTo(sx + slotCut, sy + slotH - sPad);
+        ctx.lineTo(sx + sPad, sy + slotH - slotCut);
+        ctx.closePath();
+        ctx.fill();
+
+        if (isFilled) {
+          ctx.fillStyle = "rgba(167, 243, 208, 0.38)";
+          ctx.fillRect(sx + sPad * 2, sy + sPad * 2, slotW - slotCut - sPad * 2, 12 * scale);
+        }
+      }
+
+      // Status Text at Bottom
+      const statusColor = isMature ? "#4ade80" : (isEmpty ? "#cbd5e1" : (!isWatered ? "#7dd3fc" : "rgba(241, 245, 249, 0.92)"));
+      this._drawSeedianOrText(ctx, statusText, w / 2, 322 * scale, 40 * scale, "center", statusColor, isSeedian);
+
+      ctx.restore();
+    };
+
+    if (!this.hasSign(planterSignId)) {
+      const sign = this.createSign({
+        id: planterSignId,
+        position: targetWorldPos,
+        normal: signNormal,
+        up: signUp,
+        size: [signW, signH],
+        resolution: [1024, 400],
+        drawFn: drawPlanterBoxUI,
+        visible: true
+      });
+      if (sign) sign._lastStateKey = stateKey;
+    } else {
+      const sign = this.signs.get(planterSignId);
+      if (sign) {
+        sign.position = targetWorldPos;
+        sign.normal = signNormal;
+        sign.up = signUp;
+        sign.scale = [signW, signH, 1];
+        sign.visible = true;
+        if (sign._lastStateKey !== stateKey) {
+          sign._lastStateKey = stateKey;
+          sign.drawFn = drawPlanterBoxUI;
+          sign.needsTextureUpdate = true;
+        }
+      }
+    }
+  },
+
+  hidePlanterBoxUI(signId) {
+    if (signId) {
+      if (this.hasSign(signId)) this.removeSign(signId);
+      return;
+    }
+    const toRemove = [];
+    for (const [id] of this.signs) {
+      if (typeof id === "string" && id.startsWith("planter_box_world_sign")) {
+        toRemove.push(id);
+      }
+    }
+    for (const id of toRemove) {
+      this.removeSign(id);
+    }
+  },
+
+  cleanupUnusedPlanterSigns(activeSignIds) {
+    const toRemove = [];
+    for (const [id] of this.signs) {
+      if (typeof id === "string" && id.startsWith("planter_box_world_sign")) {
+        if (!activeSignIds || !activeSignIds.has(id)) {
+          toRemove.push(id);
+        }
+      }
+    }
+    for (const id of toRemove) {
+      this.removeSign(id);
+    }
+  },
+
+  // --- 3D Aim Reticle System (Bow, Arm Cannon & Demolish Mode) ---
+  _drawAimReticleCanvas(ctx, w, h, isLocked, isDemolish = false, demolishProgress = 0, demolishLabel = "") {
+    ctx.clearRect(0, 0, w, h);
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = w * 0.36;
+
+    // Subtle drop shadow for clarity on all terrain
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+    ctx.shadowBlur = 6;
+
+    const mainColor = isDemolish
+      ? (isLocked ? "#ff3b30" : "#ffffff")
+      : (isLocked ? "#ff3b30" : "#ffffff");
+
+    // Circular ring (the same 3D crosshair circle as gun)
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = isLocked ? 6.5 : 5.5;
+    ctx.strokeStyle = mainColor;
+    ctx.stroke();
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = mainColor;
+    ctx.fill();
+
+    // Corner brackets when locked (precision target reticle)
+    if (isLocked) {
+      const bDist = r + 7;
+      const bLen = 9;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = mainColor;
+
+      // Top-Left corner
+      ctx.beginPath();
+      ctx.moveTo(cx - bDist, cy - bDist + bLen);
+      ctx.lineTo(cx - bDist, cy - bDist);
+      ctx.lineTo(cx - bDist + bLen, cy - bDist);
+      ctx.stroke();
+
+      // Top-Right corner
+      ctx.beginPath();
+      ctx.moveTo(cx + bDist - bLen, cy - bDist);
+      ctx.lineTo(cx + bDist, cy - bDist);
+      ctx.lineTo(cx + bDist, cy - bDist + bLen);
+      ctx.stroke();
+
+      // Bottom-Left corner
+      ctx.beginPath();
+      ctx.moveTo(cx - bDist, cy + bDist - bLen);
+      ctx.lineTo(cx - bDist, cy + bDist);
+      ctx.lineTo(cx - bDist + bLen, cy + bDist);
+      ctx.stroke();
+
+      // Bottom-Right corner
+      ctx.beginPath();
+      ctx.moveTo(cx + bDist - bLen, cy + bDist);
+      ctx.lineTo(cx + bDist, cy + bDist);
+      ctx.lineTo(cx + bDist, cy + bDist - bLen);
+      ctx.stroke();
+
+      // Circular progress bar when holding to demolish (e.g. stone floor)
+      if (demolishProgress > 0) {
+        ctx.beginPath();
+        const startAng = -Math.PI / 2;
+        const endAng = startAng + Math.PI * 2 * Math.min(1.0, demolishProgress);
+        ctx.arc(cx, cy, r + 4, startAng, endAng);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+      }
+    }
+  },
+
+  updateAimReticle(options) {
+    if (!this.backend) return;
+    const {
+      targetPos,
+      isLocked = false,
+      cameraPos = null,
+      cameraUp = null,
+      isDemolish = false,
+      demolishProgress = 0,
+      demolishLabel = ""
+    } = options;
+
+    if (!targetPos || !Array.isArray(targetPos) || targetPos.length < 3) {
+      this.hideAimReticle();
+      return;
+    }
+
+    const signId = "bow_aim_reticle";
+    const camP = cameraPos || (window.cameraPos || [0, 10, 0]);
+
+    // Vector pointing towards camera
+    const dx = camP[0] - targetPos[0];
+    const dy = camP[1] - targetPos[1];
+    const dz = camP[2] - targetPos[2];
+    const dist = Math.hypot(dx, dy, dz) || 1.0;
+    const normal = [dx / dist, dy / dist, dz / dist];
+
+    // Offset slightly towards camera to stay clearly in front of surfaces without clipping into camera
+    const offsetDist = Math.min(0.15, Math.max(0.005, dist * 0.03));
+    const displayPos = [
+      targetPos[0] + normal[0] * offsetDist,
+      targetPos[1] + normal[1] * offsetDist,
+      targetPos[2] + normal[2] * offsetDist
+    ];
+
+    let up = cameraUp || [0, 1, 0];
+    // Keep apparent screen pixel size 100% constant across all distances (no minimum clamp explosion when close)
+    const targetScreenFactor = isDemolish ? 0.028 : 0.034;
+    const scaleSize = Math.max(0.002, dist * targetScreenFactor);
+
+    const stateKey = `${isLocked}_${isDemolish}_${Math.round(demolishProgress * 25)}_${demolishLabel}`;
+
+    if (!this.hasSign(signId)) {
+      const sign = this.createSign({
+        id: signId,
+        position: displayPos,
+        normal: normal,
+        up: up,
+        size: [scaleSize, scaleSize],
+        resolution: [256, 256],
+        drawFn: (ctx, w, h) => {
+          this._drawAimReticleCanvas(ctx, w, h, isLocked, isDemolish, demolishProgress, demolishLabel);
+        },
+        visible: true
+      });
+      if (sign) {
+        sign.noDepthTest = true;
+        sign._lastStateKey = stateKey;
+      }
+    } else {
+      const sign = this.signs.get(signId);
+      if (sign) {
+        sign.position = displayPos;
+        sign.normal = normal;
+        sign.up = up;
+        sign.scale = [scaleSize, scaleSize, 1];
+        sign.noDepthTest = true;
+        sign.visible = true;
+        if (sign._lastStateKey !== stateKey) {
+          sign._lastStateKey = stateKey;
+          sign.drawFn = (ctx, w, h) => {
+            this._drawAimReticleCanvas(ctx, w, h, isLocked, isDemolish, demolishProgress, demolishLabel);
+          };
+          sign.needsTextureUpdate = true;
+        }
+      }
+    }
+  },
+
+  hideAimReticle() {
+    const sign = this.signs.get("bow_aim_reticle");
+    if (sign && sign.visible) {
+      sign.visible = false;
+    }
+  },
+  createWebGPUBackend(device) {
+    // Left as placeholder since game uses WebGL mode by default
+    // If WebGPU mode is needed, port the WGSL code here.
+    return {
+      device: device,
+      parent: this,
+      createSign(options) { return null; },
+      removeSign(id) {},
+      updateSign(id, options) {},
+      updateAll(cameraPos) {},
+      render(passEncoder, viewProjMatrix, cameraPos) {}
+    };
+  }
+};
+
+window.World3DUI = World3DUI;
+
+// --- Shaders ---
       const modelVertexShaderSource = `#version 300 es
             in vec3 aPosition;
             in vec3 aColor;
@@ -235,7 +2246,7 @@
             float calculatePointLightOcclusion(vec3 fragPos, vec3 lightPos) {
                 if (uPointLightOccluderCount <= 0) return 1.0;
                 float vis = 1.0;
-                for (int j = 0; j < 48; j++) {
+                for (int j = 0; j < 24; j++) {
                     if (j >= uPointLightOccluderCount) break;
                     vec4 r0 = uPointLightOccluders[j * 3];
                     vec4 r1 = uPointLightOccluders[j * 3 + 1];
@@ -365,30 +2376,29 @@
                      vec3 pointTintAccum = vec3(0.0);
                      vec3 pointSpecAccum = vec3(0.0);
                      for (int i = 0; i < 16; i++) {
-                         if (i < uPointLightCount) {
-                             vec4 pl = uPointLights[i];
-                             vec4 plc = uPointLightColors[i];
-                             vec3 toLight = pl.xyz - vWorldPos;
-                             float d = length(toLight);
-                             float rad = pl.w;
-                             if (d < rad && rad > 0.001) {
-                                 vec3 L = d > 0.0001 ? (toLight / d) : normal;
-                                 float ndl = max(dot(normal, L), 0.0);
-                                 if (ndl > 0.001) {
-                                     float nOff = clamp(d * 0.06, 0.002, 0.012);
-                                     float occl = calculatePointLightOcclusion(vWorldPos + normal * nOff, pl.xyz);
-                                     if (occl > 0.001) {
-                                         float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
-                                         float atten = falloff * falloff * (3.0 - 2.0 * falloff);
-                                         float cageMask = smoothstep(0.011, 0.022, d);
-                                         float facing = ndl * smoothstep(0.0, 0.12, ndl);
-                                         float wLight = atten * cageMask * facing * occl * plc.w;
-                                         pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
-                                         pointTintAccum += plc.rgb * (0.045 * wLight);
-                                         vec3 H = normalize(L + viewDir);
-                                         float pSpec = pow(max(dot(normal, H), 0.0), 20.0) * 0.10 * wLight;
-                                         pointSpecAccum += plc.rgb * pSpec;
-                                     }
+                         if (i >= uPointLightCount) break;
+                         vec4 pl = uPointLights[i];
+                         vec4 plc = uPointLightColors[i];
+                         vec3 toLight = pl.xyz - vWorldPos;
+                         float d = length(toLight);
+                         float rad = pl.w;
+                         if (d < rad && rad > 0.001) {
+                             vec3 L = d > 0.0001 ? (toLight / d) : normal;
+                             float ndl = max(dot(normal, L), 0.0);
+                             if (ndl > 0.001) {
+                                 float nOff = clamp(d * 0.06, 0.002, 0.012);
+                                 float occl = calculatePointLightOcclusion(vWorldPos + normal * nOff, pl.xyz);
+                                 if (occl > 0.001) {
+                                     float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
+                                     float atten = falloff * falloff * (3.0 - 2.0 * falloff);
+                                     float cageMask = smoothstep(0.011, 0.022, d);
+                                     float facing = ndl * smoothstep(0.0, 0.12, ndl);
+                                     float wLight = atten * cageMask * facing * occl * plc.w;
+                                     pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
+                                     pointTintAccum += plc.rgb * (0.045 * wLight);
+                                     vec3 H = normalize(L + viewDir);
+                                     float pSpec = pow(max(dot(normal, H), 0.0), 20.0) * 0.10 * wLight;
+                                     pointSpecAccum += plc.rgb * pSpec;
                                  }
                              }
                          }
@@ -767,25 +2777,24 @@
                         vec3 pointLightAccum = vec3(0.0);
                         vec3 pointTintAccum = vec3(0.0);
                         for (int i = 0; i < 16; i++) {
-                            if (i < uPointLightCount) {
-                                vec4 pl = uPointLights[i];
-                                vec4 plc = uPointLightColors[i];
-                                vec3 toLight = pl.xyz - vWorldPos;
-                                float d = length(toLight);
-                                float rad = pl.w;
-                                if (d < rad && rad > 0.001) {
-                                    vec3 L = d > 0.0001 ? (toLight / d) : normal;
-                                    float ndl = max(dot(normal, L), 0.0);
-                                    if (ndl > 0.001) {
-                                        float occl = calculatePointLightOcclusion(vWorldPos + normal * 0.015, pl.xyz);
-                                        if (occl > 0.001) {
-                                            float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
-                                            float atten = falloff * falloff * (3.0 - 2.0 * falloff);
-                                            float facing = ndl * smoothstep(0.0, 0.12, ndl);
-                                            float wLight = atten * facing * occl * plc.w;
-                                            pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
-                                            pointTintAccum += plc.rgb * (0.04 * wLight);
-                                        }
+                            if (i >= uPointLightCount) break;
+                            vec4 pl = uPointLights[i];
+                            vec4 plc = uPointLightColors[i];
+                            vec3 toLight = pl.xyz - vWorldPos;
+                            float d = length(toLight);
+                            float rad = pl.w;
+                            if (d < rad && rad > 0.001) {
+                                vec3 L = d > 0.0001 ? (toLight / d) : normal;
+                                float ndl = max(dot(normal, L), 0.0);
+                                if (ndl > 0.001) {
+                                    float occl = calculatePointLightOcclusion(vWorldPos + normal * 0.015, pl.xyz);
+                                    if (occl > 0.001) {
+                                        float falloff = clamp(1.0 - d / rad, 0.0, 1.0);
+                                        float atten = falloff * falloff * (3.0 - 2.0 * falloff);
+                                        float facing = ndl * smoothstep(0.0, 0.12, ndl);
+                                        float wLight = atten * facing * occl * plc.w;
+                                        pointLightAccum += mix(vec3(0.75, 0.96, 0.92), plc.rgb, 0.60) * wLight;
+                                        pointTintAccum += plc.rgb * (0.04 * wLight);
                                     }
                                 }
                             }
@@ -2652,6 +4661,7 @@ window.cloud3DProgram = cloud3DProgram;
             if (useAnimTimer <= 0) {
                 useAnimTimer = 0;
                 isUsingItem = false;
+                if (typeof isSmashing !== "undefined") isSmashing = false;
                 activeItem = null;
                 
                 // If action button is still held down, trigger again (but not for BOW or ARM_CANNON to prevent auto-fire)
@@ -2661,6 +4671,14 @@ window.cloud3DProgram = cloud3DProgram;
                         if (slotItem && slotItem.name !== "BOW" && slotItem.name !== "WOODEN_ARM_CANNON" && slotItem.name !== "ARM_CANNON" && slotItem.name !== "IRON_BUCKET" && slotItem.name !== "WATER_BUCKET") {
                             useItem(slotItem, selectedActionSlotIndex, "action");
                         }
+                    } else if (
+                        !isTerrainModModeEnabled &&
+                        !isDemolishModeEnabled &&
+                        !isPlacingFloor &&
+                        !(window.PlanterSystem && window.activePlantingTargetPlanter && window.activePlantingSeedItem) &&
+                        typeof performSmashAction === "function"
+                    ) {
+                        performSmashAction();
                     }
                 }
             }
@@ -3097,13 +5115,11 @@ window.cloud3DProgram = cloud3DProgram;
         let moveSidewaysInput = 0;
 
         if (!_cachedInvOverlay) _cachedInvOverlay = document.getElementById("inventoryOverlay");
-        if (!_cachedChestOverlay) _cachedChestOverlay = document.getElementById("chestOverlay");
         const _cachedWarpOverlay = document.getElementById("warpOverlay");
         const isInvOpen = _cachedInvOverlay?.classList.contains("open");
-        const isCstOpen = _cachedChestOverlay?.classList.contains("open");
         const isWrpOpen = _cachedWarpOverlay?.classList.contains("open");
         const isFreeCamActive = (cameraMode === "freecam" || (typeof window.cameraMode !== "undefined" && window.cameraMode === "freecam"));
-        const isUIOpen = isInvOpen || isCstOpen || isWrpOpen || isFreeCamActive;
+        const isUIOpen = isInvOpen || isWrpOpen || isFreeCamActive;
 
         // Keyboard input
         if (!isUIOpen && (keysPressed[currentKeyBindings.forward] || keysPressed["ArrowUp"]))
@@ -5197,10 +7213,22 @@ window.cloud3DProgram = cloud3DProgram;
           lastFootstepPhase = walkPhase;
         }
 
-        const charInterval = 1000 / charAnimFps;
-        const needsEveryFrame = ragdollEnabled ||
+        const charInterval = 1000 / Math.max(1, charAnimFps || 30);
+        const isPlayerActionAnimActive =
+          (typeof isSmashing !== "undefined" && isSmashing) ||
+          (typeof isUsingItem !== "undefined" && isUsingItem && typeof useAnimTimer !== "undefined" && useAnimTimer > 0) ||
           (typeof window.bucketScoopTimer === "number" && window.bucketScoopTimer > 0) ||
           (typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0);
+        const isHighSpeedDashSkill =
+          (typeof window.tantoShirasayaState === "object" && window.tantoShirasayaState && window.tantoShirasayaState.mode === "dashing") ||
+          (typeof window.aegisShiftState === "object" && window.aegisShiftState && window.aegisShiftState.mode === "dashing");
+        const playerActionTransition = (isPlayerActionAnimActive !== !!window._wasPlayerActionAnimActive);
+        window._wasPlayerActionAnimActive = isPlayerActionAnimActive;
+
+        // Only ragdoll physics, high-speed melee dash skills, or exact action start/end transitions need immediate player mesh refresh;
+        // normal bare-hand / axe / pickaxe / shovel / bow / bucket animations smoothly follow charAnimFps just like walk/run/swim.
+        const playerNeedsEveryFrame = ragdollEnabled || isHighSpeedDashSkill || playerActionTransition;
+        const isCharIntervalDue = (timestamp - lastCharAnimTime >= charInterval);
         
         if (!isPlayerGrounded && !ragdollEnabled && !activeRidingBoat && !activeRidingMech && currentSwimFactor === 0.0) {
             jumpBlend = Math.min(1.0, jumpBlend + 10.0 * dt);
@@ -5213,14 +7241,21 @@ window.cloud3DProgram = cloud3DProgram;
           window.updatePlayerClones(dt);
         }
 
-        if (needsEveryFrame || timestamp - lastCharAnimTime >= charInterval) {
+        if (playerNeedsEveryFrame || isCharIntervalDue) {
           updateCharacterMesh(walkPhase);
+        }
+
+        // Clones ALWAYS follow charAnimFps independently — never dragged into 60Hz by player swings or ragdoll!
+        if (isCharIntervalDue) {
           if (typeof window.playerClonesState !== "undefined" && window.playerClonesState && window.playerClonesState.length > 0) {
               const refEye = (typeof window.eyePos !== "undefined" && window.eyePos) ? window.eyePos : [px, py, pz];
               const rx = refEye[0] || 0.0, ry = refEye[1] || 0.0, rz = refEye[2] || 0.0;
               const lodFn = (typeof window.computeClothHairLOD === "function") ? window.computeClothHairLOD : null;
               const defRad = (typeof RADIUS === "number") ? RADIUS : 8.0;
               const sVal = (typeof playerScale === "number") ? playerScale : ((typeof charScale === "number") ? charScale : 0.1);
+              const isDistCullOn = (typeof renderDistEnabled !== "undefined" ? renderDistEnabled : true);
+              const cloneMaxRenderDist = ((typeof objectRenderDistValue === "number" ? objectRenderDistValue : 5.0) + 2.0);
+              const cloneMaxDistSq = cloneMaxRenderDist * cloneMaxRenderDist;
               window._cloneMeshFrameCounter = ((window._cloneMeshFrameCounter || 0) + 1) | 0;
               const frameTick = window._cloneMeshFrameCounter;
 
@@ -5236,6 +7271,11 @@ window.cloud3DProgram = cloud3DProgram;
                 const dx = wx - rx, dy = wy - ry, dz = wz - rz;
                 const distSq = dx * dx + dy * dy + dz * dz;
 
+                const hasMeshBuf = !!(cs._meshBuffers && cs._meshBuffers.vertexBuffer);
+                if (isDistCullOn && hasMeshBuf && distSq > cloneMaxDistSq) {
+                  continue;
+                }
+
                 const prevLod = (typeof cs._lod === "number") ? cs._lod : 0;
                 const lodInfo = lodFn
                   ? lodFn(distSq, sVal, true)
@@ -5244,8 +7284,12 @@ window.cloud3DProgram = cloud3DProgram;
                 cs._lod = lodInfo.lod;
 
                 const appSig = `${cs.hoodOpen ? 1 : 0}_${cs.equippedTool || ""}_${cs.activeItem ? cs.activeItem.name : ""}_${cs.ridingBoat && cs.ridingBoat.active ? 1 : 0}`;
-                const forceNeedUpdate = !cs._meshBuffers || !cs._meshBuffers.vertexBuffer || cs._lastAppSig !== appSig || lodInfo.lod < prevLod || (cs.actionAnim && cs.actionAnim > 0.01);
-                if (!forceNeedUpdate && lodInfo.updateStride > 1 && ((frameTick + ci) % lodInfo.updateStride) !== 0) {
+                const isCloneSwinging = !!(cs.actionAnim && cs.actionAnim > 0.01);
+                const effectiveStride = isCloneSwinging
+                  ? (lodInfo.lod === 0 ? 1 : (lodInfo.lod === 1 ? 2 : 4))
+                  : (lodInfo.updateStride || 1);
+                const forceNeedUpdate = !hasMeshBuf || cs._lastAppSig !== appSig || lodInfo.lod < prevLod;
+                if (!forceNeedUpdate && effectiveStride > 1 && ((frameTick + ci) % effectiveStride) !== 0) {
                   continue;
                 }
                 cs._lastAppSig = appSig;
@@ -5260,10 +7304,7 @@ window.cloud3DProgram = cloud3DProgram;
                 );
               }
           }
-          if (!needsEveryFrame) {
-            lastCharAnimTime =
-              timestamp - ((timestamp - lastCharAnimTime) % charInterval);
-          }
+          lastCharAnimTime = timestamp - ((timestamp - lastCharAnimTime) % charInterval);
         }
 
         let eyePos;
@@ -5722,7 +7763,7 @@ window.cloud3DProgram = cloud3DProgram;
                 window.innerHeight,
               );
               if (screenPos) {
-                const minimalHammerSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: -2px; margin-right: 4px;"><path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9"/><path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64"/><path d="m20 8-5 5"/></svg>`;
+                const minimalHammerSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; width: 0.875rem; height: 0.875rem; vertical-align: -0.125rem; margin-right: 0.25rem;"><path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9"/><path d="M17.64 15 22 10.64a2.41 2.41 0 0 0 0-3.41L16.77 2.3a2.41 2.41 0 0 0-3.41 0L9 6.64"/><path d="m20 8-5 5"/></svg>`;
                 const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : (window.gameLanguage || "th");
                 const targetItemName = typeof getItemDisplayName === "function" ? getItemDisplayName(closestDemolishItem.type) : closestDemolishItem.type.toUpperCase().replace(/_/g, " ");
 
@@ -5789,11 +7830,11 @@ window.cloud3DProgram = cloud3DProgram;
                   ${actionInstructionText}
                 `;
 
-                const _newHtml_1 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(220, 38, 38, 0.95); border: 1px solid #ff4d4d; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                const _newHtml_1 = `<div style="margin: -0.5rem -1rem; padding: 0.5rem 1rem; position: relative; overflow: hidden; border-radius: 0.5rem; background: rgba(220, 38, 38, 0.95); border: 1px solid #ff4d4d; box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.5);">
                   ${isStoneFloor ? `<div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(255, 255, 255, 0.35); pointer-events: none; transition: width 0.05s ease-out;"></div>` : ""}
-                  <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #ffffff;">
+                  <div style="position: relative; z-index: 1; text-align: center; font-size: 0.6875rem; font-family: 'Google Sans', sans-serif; color: #ffffff;">
                     ${instructionsHTML}
-                    <span style="font-size: 9px; opacity: 0.8; display: block; margin-top: 4px;">${distText}</span>
+                    <span style="font-size: 0.5625rem; opacity: 0.8; display: block; margin-top: 0.25rem;">${distText}</span>
                   </div>
                 </div>`;
                 if (prompt._lastHTML !== _newHtml_1) {
@@ -5816,7 +7857,7 @@ window.cloud3DProgram = cloud3DProgram;
           } else if (false) {
             // Disabled orange terrain mod banner
             demolishHoldTimer = 0.0;
-            const _newHtml_2 = `<div style="margin: -8px -16px; padding: 10px 20px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(230, 81, 0, 0.95); border: 1px solid #ff9800; box-shadow: 0 4px 12px rgba(0,0,0,0.5); text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #ffffff;">
+            const _newHtml_2 = `<div style="margin: -0.5rem -1rem; padding: 0.625rem 1.25rem; position: relative; overflow: hidden; border-radius: 0.5rem; background: rgba(230, 81, 0, 0.95); border: 1px solid #ff9800; box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.5); text-align: center; font-size: 0.6875rem; font-family: 'Google Sans', sans-serif; color: #ffffff;">
               <strong>⛏️ โหมดปรับแต่งพื้นผิวดาว (TERRAIN MOD MODE)</strong><br/>
               คลิกซ้าย: ขุดหลุม / Left-click: Dig<br/>
               คลิกขวา: ถมดิน / Right-click: Raise
@@ -6124,10 +8165,29 @@ if (prompt._lastHTML !== _newHtml_2) {
                     if (typeof window.exitMechCamera === "function") {
                       window.exitMechCamera();
                     }
-                    if (typeof SpatialGrid !== "undefined" && typeof collectibles !== "undefined") {
-                      SpatialGrid.rebuild(collectibles);
+                    const dismountItems = [mechToDismount];
+                    if (mechToDismount.attachedParts && Array.isArray(mechToDismount.attachedParts)) {
+                      for (let entry of mechToDismount.attachedParts) {
+                        if (entry && entry.item && entry.item.active) dismountItems.push(entry.item);
+                      }
                     }
-                    pendingCollectibleRefresh = true;
+                    let allAppended = true;
+                    for (let mItem of dismountItems) {
+                      if (typeof SpatialGrid !== "undefined") {
+                        if (typeof SpatialGrid.update === "function") SpatialGrid.update(mItem);
+                        else { SpatialGrid.remove(mItem); SpatialGrid.insert(mItem); }
+                      }
+                      const ok = (typeof window.appendPlacedCollectibleToVBO === "function")
+                        ? window.appendPlacedCollectibleToVBO(mItem)
+                        : false;
+                      if (!ok) allAppended = false;
+                    }
+                    if (!allAppended && typeof refreshCollectiblesVBO === "function") {
+                      refreshCollectiblesVBO('main');
+                    }
+                    if (typeof refreshCollectiblesVBO === "function") {
+                      refreshCollectiblesVBO('dynamic');
+                    }
                   }
                 } else {
                   chestHoldTimer = 0.0;
@@ -6155,7 +8215,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               if (activeRidingMech && activeRidingMech._nearbyStand && !activeRidingMech.dockedStand) {
                 const dockPct = Math.min(100, Math.floor(((activeRidingMech._dockingTimer || 0) / 0.8) * 100));
-                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">⚙️ อยู่ใกล้ฐานตั้ง! กด [${interactBtn}] ค้าง เพื่อยึดหุ่นเข้ากับฐาน ${dockPct > 0 ? '(' + dockPct + '%)' : ''}</span>`;
+                extraStatus = `<br><span style="color: #6cebdf; font-size: 0.625rem;">⚙️ อยู่ใกล้ฐานตั้ง! กด [${interactBtn}] ค้าง เพื่อยึดหุ่นเข้ากับฐาน ${dockPct > 0 ? '(' + dockPct + '%)' : ''}</span>`;
               } else if (!fullyAssembled && activeRidingMech) {
                 let missing = [];
                 const attached = activeRidingMech.attachedParts || [];
@@ -6173,10 +8233,10 @@ if (prompt._lastHTML !== _newHtml_2) {
                 if (!attached.some(p => p.item && p.item.active && p.item.type === "robot_left_arm")) missing.push(getLabel("robot_left_arm"));
                 if (!attached.some(p => p.item && p.item.active && p.item.type === "robot_right_arm")) missing.push(getLabel("robot_right_arm"));
                 const warnMsg = (typeof window.t === "function") ? window.t("mech_missing_parts_warn", { missing: missing.join(", ") }) : `⚠️ Mech incomplete (Missing: ${missing.join(", ")}) — Assemble all 4 parts before piloting`;
-                extraStatus = `<br><span style="color: #ff8888; font-size: 10px;">${warnMsg}</span>`;
+                extraStatus = `<br><span style="color: #ff8888; font-size: 0.625rem;">${warnMsg}</span>`;
               } else if (activeRidingMech && activeRidingMech.dockedStand) {
                 let holdPct = Math.min(100, Math.floor(((activeRidingMech._undockHoldTimer || 0) / 0.35) * 100));
-                extraStatus = `<br><span style="color: #6cebdf; font-size: 10px;">🏗️ กด [${isGp ? throttleBtn : 'W'}] ค้าง (เดินหน้าอย่างเดียว) เพื่อปลดล็อคออกจากฐานตั้ง ${holdPct > 0 ? '(' + holdPct + '%)' : ''}</span>`;
+                extraStatus = `<br><span style="color: #6cebdf; font-size: 0.625rem;">🏗️ กด [${isGp ? throttleBtn : 'W'}] ค้าง (เดินหน้าอย่างเดียว) เพื่อปลดล็อคออกจากฐานตั้ง ${holdPct > 0 ? '(' + holdPct + '%)' : ''}</span>`;
               }
 
               if (prompt.style.display !== "none") {
@@ -6280,8 +8340,11 @@ if (prompt._lastHTML !== _newHtml_2) {
                     cockpitsToCheck.push(item);
                   }
                 }
-                if (cockpitsToCheck.length === 0 && typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
-                  for (let item of collectibles) {
+                if (cockpitsToCheck.length === 0) {
+                  const mechScanCandidates = (typeof SpatialGrid !== "undefined")
+                    ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], 6.0, item => item.active && item.type === "robot_cockpit" && !item.isPreview)
+                    : ((typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : []);
+                  for (let item of mechScanCandidates) {
                     if (item.active && item.type === "robot_cockpit" && !item.isPreview) {
                       const dx = item.position[0] - pVec[0];
                       const dy = item.position[1] - pVec[1];
@@ -6302,15 +8365,16 @@ if (prompt._lastHTML !== _newHtml_2) {
                       }
                     }
                   }
-                  if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
-                    for (let p of collectibles) {
-                      if (p.active && !p.isPreview && p !== item && p.type.startsWith("robot_") && p.type !== "robot_stand" && !mechParts.includes(p)) {
-                        const dx = p.position[0] - item.position[0];
-                        const dy = p.position[1] - item.position[1];
-                        const dz = p.position[2] - item.position[2];
-                        if (dx*dx + dy*dy + dz*dz < 4.0) {
-                          mechParts.push(p);
-                        }
+                  const nearRobotCandidates = (typeof SpatialGrid !== "undefined")
+                    ? SpatialGrid.queryRadius(item.position[0], item.position[1], item.position[2], 2.0, p => p.active && !p.isPreview && p !== item && p.type.startsWith("robot_") && p.type !== "robot_stand")
+                    : ((typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : []);
+                  for (let p of nearRobotCandidates) {
+                    if (p.active && !p.isPreview && p !== item && p.type.startsWith("robot_") && p.type !== "robot_stand" && !mechParts.includes(p)) {
+                      const dx = p.position[0] - item.position[0];
+                      const dy = p.position[1] - item.position[1];
+                      const dz = p.position[2] - item.position[2];
+                      if (dx*dx + dy*dy + dz*dz < 4.0) {
+                        mechParts.push(p);
                       }
                     }
                   }
@@ -6392,7 +8456,8 @@ if (prompt._lastHTML !== _newHtml_2) {
                   window.innerHeight,
                 );
                 if (screenPos) {
-                  const _newText_1 = `[${currentKeyBindings.interact.replace("Key", "").replace("Arrow", "")}]`;
+                  const _dropCount = (closestItem && closestItem.count > 1) ? Math.floor(closestItem.count) : 1;
+                  const _newText_1 = `[${currentKeyBindings.interact.replace("Key", "").replace("Arrow", "")}]` + (_dropCount > 1 ? ` x${_dropCount}` : "");
 if (prompt._lastText !== _newText_1) {
     prompt.textContent = _newText_1;
     prompt._lastText = _newText_1;
@@ -6459,9 +8524,9 @@ if (prompt._lastText !== _newText_1) {
                     chestPromptText = window.Seedian.toSeedian(chestPromptText);
                   }
 
-                  const _newHtml_5 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+                  const _newHtml_5 = `<div style="margin: -0.5rem -1rem; padding: 0.5rem 1rem; position: relative; overflow: hidden; border-radius: 0.5rem;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 183, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
-                    <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #dfb76c;">
+                    <div style="position: relative; z-index: 1; text-align: center; font-size: 0.6875rem; font-family: 'Google Sans', sans-serif; color: #dfb76c;">
                       ${chestPromptText}
                     </div>
                   </div>`;
@@ -6531,9 +8596,9 @@ if (prompt._lastHTML !== _newHtml_5) {
                     cookPromptText = window.Seedian.toSeedian(cookPromptText);
                   }
 
-                  const _newHtml_6 = `<div style="margin: -8px -16px; padding: 8px 16px; position: relative; overflow: hidden; border-radius: 8px;">
+                  const _newHtml_6 = `<div style="margin: -0.5rem -1rem; padding: 0.5rem 1rem; position: relative; overflow: hidden; border-radius: 0.5rem;">
                     <div style="position: absolute; bottom: 0; left: 0; height: 100%; width: ${holdPercent}%; background: rgba(223, 108, 108, 0.4); pointer-events: none; transition: width 0.05s ease-out;"></div>
-                    <div style="position: relative; z-index: 1; text-align: center; font-size: 11px; font-family: 'Google Sans', sans-serif; color: #df6c6c;">
+                    <div style="position: relative; z-index: 1; text-align: center; font-size: 0.6875rem; font-family: 'Google Sans', sans-serif; color: #df6c6c;">
                       ${cookPromptText}
                     </div>
                   </div>`;
@@ -6580,10 +8645,18 @@ if (prompt._lastHTML !== _newHtml_6) {
                       if (typeof window.enterBoatCamera === "function") {
                         window.enterBoatCamera();
                       }
+                      const wasBoatInStaticMain = activeRidingBoat._vboIndexCount > 0;
                       activeRidingBoat.isDynamic = true;
-                      pendingCollectibleRefresh = true;
+                      if (wasBoatInStaticMain) {
+                        const hid = (typeof window.hideStaticCollectibleInVBO === "function")
+                          ? window.hideStaticCollectibleInVBO(activeRidingBoat)
+                          : false;
+                        if (!hid && typeof refreshCollectiblesVBO === "function") {
+                          refreshCollectiblesVBO('main');
+                        }
+                      }
                       if (typeof refreshCollectiblesVBO === "function") {
-                        refreshCollectiblesVBO('all');
+                        refreshCollectiblesVBO('dynamic');
                       }
                       // Teleport player to the boat's exact position on boarding so the boat doesn't jump
                       if (activeRidingBoat.position) {
@@ -6688,7 +8761,27 @@ if (prompt._lastHTML !== _newHtml_6) {
 
                     window.tryAutoAssembleMechParts(activeRidingMech);
 
-                    pendingCollectibleRefresh = true;
+                    let allHiddenFromMain = true;
+                    const mountItems = [activeRidingMech];
+                    if (activeRidingMech.attachedParts && Array.isArray(activeRidingMech.attachedParts)) {
+                      for (let entry of activeRidingMech.attachedParts) {
+                        if (entry && entry.item && entry.item.active) mountItems.push(entry.item);
+                      }
+                    }
+                    for (let mItem of mountItems) {
+                      if (mItem._vboIndexCount > 0) {
+                        const hid = (typeof window.hideStaticCollectibleInVBO === "function")
+                          ? window.hideStaticCollectibleInVBO(mItem)
+                          : false;
+                        if (!hid) allHiddenFromMain = false;
+                      }
+                    }
+                    if (!allHiddenFromMain && typeof refreshCollectiblesVBO === "function") {
+                      refreshCollectiblesVBO('main');
+                    }
+                    if (typeof refreshCollectiblesVBO === "function") {
+                      refreshCollectiblesVBO('dynamic');
+                    }
 
                     if (activeRidingMech.position) {
                         const mPos = activeRidingMech.position;
@@ -6998,8 +9091,8 @@ if (prompt._lastText !== _newText_2) {
                 .replace("Arrow", "");
               if (closestNPCLocal.type === 'meganeura') {
                 const _newHtml_9 = `
-                  <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                  <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; width: 0.75rem; height: 0.75rem;">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                       <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                       <line x1="12" y1="22.08" x2="12" y2="12"></line>
@@ -7013,8 +9106,8 @@ if (npcPrompt._lastHTML !== _newHtml_9) {
 }
               } else if (closestNPCLocal.type === 'isopod') {
                 const _newHtml_10 = `
-                  <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                  <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; width: 0.75rem; height: 0.75rem;">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                       <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                       <line x1="12" y1="22.08" x2="12" y2="12"></line>
@@ -7028,8 +9121,8 @@ if (npcPrompt._lastHTML !== _newHtml_10) {
 }
               } else if (closestNPCLocal.type === 'obsidian_cube') {
                 const _newHtml_obsidian = `
-                  <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                  <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; width: 0.75rem; height: 0.75rem;">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                       <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                       <line x1="12" y1="22.08" x2="12" y2="12"></line>
@@ -7043,8 +9136,8 @@ if (npcPrompt._lastHTML !== _newHtml_obsidian) {
 }
               } else {
                 const _newHtml_11 = `
-                  <span style="display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;">
+                  <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; width: 0.75rem; height: 0.75rem;">
                       <path d="M9 10h.01M15 10h.01"></path>
                       <path d="M12 2a8 8 0 0 0-8 8v3a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-3a8 8 0 0 0-8-8z"></path>
                       <path d="M10 17v3M14 17v3"></path>
@@ -7597,13 +9690,35 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
           const isUint32 = collectibleIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+          const bytesPerIndex = isUint32 ? 4 : 2;
 
-          gl.drawElements(
-            gl.TRIANGLES,
-            collectibleIndicesLength,
-            type,
-            0,
-          );
+          if (
+            window.staticCollectiblesList &&
+            window.staticCollectiblesList.length > 0 &&
+            typeof getVisibleIndexRanges === "function" &&
+            eyePos
+          ) {
+            const shadowRanges = getVisibleIndexRanges(
+              window.staticCollectiblesList,
+              null,
+              objShadowDist,
+              eyePos,
+            );
+            for (let i = 0; i < shadowRanges.length; i++) {
+              const range = shadowRanges[i];
+              const count = range.end - range.start;
+              if (count > 0) {
+                gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
+              }
+            }
+          } else {
+            gl.drawElements(
+              gl.TRIANGLES,
+              collectibleIndicesLength,
+              type,
+              0,
+            );
+          }
         }
 
         // Dynamic Collectibles to depth (Cull by object/shadow render distance)
@@ -7625,13 +9740,33 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dynamicCollectibleIndexBuffer);
           const isUint32 = dynamicCollectibleIndicesLength > 65535;
           const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
-
-          gl.drawElements(
-            gl.TRIANGLES,
-            dynamicCollectibleIndicesLength,
-            type,
-            0,
-          );
+          if (
+            window.dynamicCollectiblesList &&
+            window.dynamicCollectiblesList.length > 0 &&
+            typeof getVisibleIndexRanges === "function"
+          ) {
+            const ranges = getVisibleIndexRanges(
+              window.dynamicCollectiblesList,
+              null,
+              objShadowDist,
+              eyePos,
+            );
+            const bytesPerIndex = isUint32 ? 4 : 2;
+            for (let i = 0; i < ranges.length; i++) {
+              const range = ranges[i];
+              const count = range.end - range.start;
+              if (count > 0) {
+                gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
+              }
+            }
+          } else {
+            gl.drawElements(
+              gl.TRIANGLES,
+              dynamicCollectibleIndicesLength,
+              type,
+              0,
+            );
+          }
         }
 
         if (
@@ -7653,12 +9788,33 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const isUint32Doors = doorWindowIndicesLength > 65535;
           const doorType = isUint32Doors ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
 
-          gl.drawElements(
-            gl.TRIANGLES,
-            doorWindowIndicesLength,
-            doorType,
-            0,
-          );
+          if (
+            window.doorWindowCollectiblesList &&
+            window.doorWindowCollectiblesList.length > 0 &&
+            typeof getVisibleIndexRanges === "function"
+          ) {
+            const ranges = getVisibleIndexRanges(
+              window.doorWindowCollectiblesList,
+              null,
+              objShadowDist,
+              eyePos,
+            );
+            const bytesPerIndex = isUint32Doors ? 4 : 2;
+            for (let i = 0; i < ranges.length; i++) {
+              const range = ranges[i];
+              const count = range.end - range.start;
+              if (count > 0) {
+                gl.drawElements(gl.TRIANGLES, count, doorType, range.start * bytesPerIndex);
+              }
+            }
+          } else {
+            gl.drawElements(
+              gl.TRIANGLES,
+              doorWindowIndicesLength,
+              doorType,
+              0,
+            );
+          }
         }
 
         if (activeRidingBoat && typeof drawDedicatedActiveBoatShadow === "function") {
@@ -8049,55 +10205,82 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           const refY = eyePos ? eyePos[1] : 0;
           const refZ = eyePos ? eyePos[2] : 0;
           const allCols = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : [];
-          for (let i = 0; i < allCols.length; i++) {
-            const c = allCols[i];
+          const curTopoVer = window._collectiblesTopologyVersion || 0;
+          if (
+            !window._cachedLightCollectibles ||
+            window._cachedLightColsSrc !== allCols ||
+            window._cachedLightColsLen !== allCols.length ||
+            window._cachedLightTopoVer !== curTopoVer
+          ) {
+            const lightArr = [];
+            for (let i = 0; i < allCols.length; i++) {
+              const c = allCols[i];
+              if (!c || !c.active || c.isPreview || !c.position) continue;
+              const t = c.type;
+              if (t === "lantern" || t === "glow_ore" || t === "glow_battery" || t === "campfire") {
+                lightArr.push(c);
+              }
+            }
+            window._cachedLightCollectibles = lightArr;
+            window._cachedLightColsSrc = allCols;
+            window._cachedLightColsLen = allCols.length;
+            window._cachedLightTopoVer = curTopoVer;
+          }
+          const lightCols = window._cachedLightCollectibles;
+          for (let i = 0; i < lightCols.length; i++) {
+            const c = lightCols[i];
             if (!c || !c.active || c.isPreview || !c.position) continue;
             const t = c.type;
-            if (t === "lantern" || t === "glow_ore" || t === "glow_battery" || t === "campfire") {
-              const px = c.position[0], py = c.position[1], pz = c.position[2];
-              const dx = px - refX, dy = py - refY, dz = pz - refZ;
-              const distSq = dx * dx + dy * dy + dz * dz;
-              if (distSq > 625.0) continue; // Within 25m of camera
-              const n = c.normal || [0, 1, 0];
-              const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + px * 2.8 + py * 2.8 + pz * 2.8);
-              if (t === "lantern") {
-                const lOff = 0.049 * 0.46; // Exact center of glowing crystal core & 4 corner pillars
-                _pointLightCandidates.push({
-                  x: px + n[0] * lOff,
-                  y: py + n[1] * lOff,
-                  z: pz + n[2] * lOff,
-                  rad: 0.62,
-                  r: 0.22, g: 0.95, b: 0.88,
-                  intensity: 0.42 * pulse,
-                  sortKey: distSq * 0.05 // Top priority for placed lanterns
-                });
-              } else if (t === "campfire") {
-                const flicker = 0.94 + 0.08 * Math.sin(leafAnimTime * 7.5 + px * 5.0 + pz * 5.0);
-                _pointLightCandidates.push({
-                  x: px + n[0] * 0.055,
-                  y: py + n[1] * 0.055,
-                  z: pz + n[2] * 0.055,
-                  rad: 0.65,
-                  r: 1.0, g: 0.62, b: 0.22,
-                  intensity: 0.38 * flicker,
-                  sortKey: distSq * 0.15
-                });
-              } else {
-                _pointLightCandidates.push({
-                  x: px + n[0] * 0.026,
-                  y: py + n[1] * 0.026,
-                  z: pz + n[2] * 0.026,
-                  rad: 0.38,
-                  r: 0.22, g: 0.95, b: 0.88,
-                  intensity: 0.25 * pulse,
-                  sortKey: distSq * 0.5
-                });
-              }
+            const px = c.position[0], py = c.position[1], pz = c.position[2];
+            const dx = px - refX, dy = py - refY, dz = pz - refZ;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq > 625.0) continue; // Within 25m of camera
+            const n = c.normal || [0, 1, 0];
+            const pulse = 0.96 + 0.05 * Math.sin(leafAnimTime * 3.0 + px * 2.8 + py * 2.8 + pz * 2.8);
+            if (t === "lantern") {
+              const lOff = 0.049 * 0.46; // Exact center of glowing crystal core & 4 corner pillars
+              _pointLightCandidates.push({
+                x: px + n[0] * lOff,
+                y: py + n[1] * lOff,
+                z: pz + n[2] * lOff,
+                rad: 0.62,
+                r: 0.22, g: 0.95, b: 0.88,
+                intensity: 0.42 * pulse,
+                sortKey: distSq * 0.05 // Top priority for placed lanterns
+              });
+            } else if (t === "campfire") {
+              const flicker = 0.94 + 0.08 * Math.sin(leafAnimTime * 7.5 + px * 5.0 + pz * 5.0);
+              _pointLightCandidates.push({
+                x: px + n[0] * 0.055,
+                y: py + n[1] * 0.055,
+                z: pz + n[2] * 0.055,
+                rad: 0.65,
+                r: 1.0, g: 0.62, b: 0.22,
+                intensity: 0.38 * flicker,
+                sortKey: distSq * 0.15
+              });
+            } else {
+              _pointLightCandidates.push({
+                x: px + n[0] * 0.026,
+                y: py + n[1] * 0.026,
+                z: pz + n[2] * 0.026,
+                rad: 0.38,
+                r: 0.22, g: 0.95, b: 0.88,
+                intensity: 0.25 * pulse,
+                sortKey: distSq * 0.5
+              });
             }
           }
 
           // Placement preview of lantern also casts light so player sees illumination while aiming
-          if (typeof floorPreviewCollectible !== "undefined" && floorPreviewCollectible && floorPreviewCollectible.active && floorPreviewCollectible.type === "lantern" && floorPreviewCollectible.position) {
+          const hasPreviewLantern = Boolean(
+            typeof floorPreviewCollectible !== "undefined" &&
+            floorPreviewCollectible &&
+            floorPreviewCollectible.active &&
+            floorPreviewCollectible.type === "lantern" &&
+            floorPreviewCollectible.position
+          );
+          if (hasPreviewLantern) {
             const fp = floorPreviewCollectible.position;
             const fn = floorPreviewCollectible.normal || [0, 1, 0];
             const lOff = 0.049 * 0.46;
@@ -8135,11 +10318,26 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
           }
 
-          // Nearby natural Glowing Ore veins in natureObstacles
+          // Nearby natural Glowing Ore veins in natureObstacles (cached list to avoid scanning all natureObstacles every frame)
           if (_pointLightCandidates.length < 16 && typeof natureObstacles !== "undefined" && Array.isArray(natureObstacles)) {
-            for (let i = 0; i < natureObstacles.length; i++) {
-              const obs = natureObstacles[i];
-              if (!obs || obs.type !== "glow_ore" || !obs.position) continue;
+            if (
+              !window._cachedNatureGlowOres ||
+              window._cachedNatureGlowOresSrc !== natureObstacles ||
+              window._cachedNatureGlowOresLen !== natureObstacles.length
+            ) {
+              const oreArr = [];
+              for (let i = 0; i < natureObstacles.length; i++) {
+                const obs = natureObstacles[i];
+                if (obs && obs.type === "glow_ore" && obs.position) oreArr.push(obs);
+              }
+              window._cachedNatureGlowOres = oreArr;
+              window._cachedNatureGlowOresSrc = natureObstacles;
+              window._cachedNatureGlowOresLen = natureObstacles.length;
+            }
+            const glowOres = window._cachedNatureGlowOres;
+            for (let i = 0; i < glowOres.length; i++) {
+              const obs = glowOres[i];
+              if (!obs || !obs.position || obs.chopped || obs.active === false) continue;
               const ox = obs.position[0], oy = obs.position[1], oz = obs.position[2];
               const dx = ox - refX, dy = oy - refY, dz = oz - refZ;
               const distSq = dx * dx + dy * dy + dz * dz;
@@ -8176,7 +10374,21 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           }
 
           // Gather 3D OBB Occluders (floors, walls, tables, roofs, chests, beds) near active point lights so light never passes through objects
+          // Cached by collectibles topology version + quantized active light positions to skip per-frame scans & wall/floor merging when static
           if (activePointLightCount > 0) {
+            let obbKey = curTopoVer + "|" + allCols.length + "|" + activePointLightCount;
+            for (let k = 0; k < activePointLightCount; k++) {
+              const pl = _pointLightCandidates[k];
+              obbKey += "|" + Math.round(pl.x * 50) + "," + Math.round(pl.y * 50) + "," + Math.round(pl.z * 50) + "," + Math.round(pl.rad * 100);
+            }
+            if (hasPreviewLantern) {
+              const fp = floorPreviewCollectible.position;
+              obbKey += "|P:" + Math.round(fp[0] * 50) + "," + Math.round(fp[1] * 50) + "," + Math.round(fp[2] * 50);
+            }
+
+            if (window._cachedPointLightOBBKey === obbKey && typeof window._cachedPointLightOBBCount === "number") {
+              activePointLightOccluderCount = window._cachedPointLightOBBCount;
+            } else {
             _pointLightOccluderCandidates.length = 0;
 
             const pushOBB = (cx, cy, cz, axisR, axisN, axisF, hx, hy, hz, priorityBias) => {
@@ -8215,8 +10427,26 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             const woodFloorPieces = [];
             const thinFloorPieces = [];
 
-            for (let i = 0; i < allCols.length; i++) {
-              const c = allCols[i];
+            let obbCols = allCols;
+            if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
+              const nearSet = new Set();
+              const nearArr = [];
+              for (let k = 0; k < activePointLightCount; k++) {
+                const pl = _pointLightCandidates[k];
+                const found = SpatialGrid.queryRadius(pl.x, pl.y, pl.z, 3.2);
+                for (let fi = 0; fi < found.length; fi++) {
+                  const item = found[fi];
+                  if (item && !nearSet.has(item)) {
+                    nearSet.add(item);
+                    nearArr.push(item);
+                  }
+                }
+              }
+              obbCols = nearArr;
+            }
+
+            for (let i = 0; i < obbCols.length; i++) {
+              const c = obbCols[i];
               if (!c || !c.active || c.isPreview || !c.position) continue;
               const t = c.type;
               const p = c.position;
@@ -8375,8 +10605,11 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
                 let hasCoDoor = (t === "wood_door");
                 let hasCoWall = false;
-                for (let m = 0; m < allCols.length; m++) {
-                  const other = allCols[m];
+                const coCandidates = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+                  ? SpatialGrid.queryRadius(p[0], p[1], p[2], 0.15)
+                  : obbCols;
+                for (let m = 0; m < coCandidates.length; m++) {
+                  const other = coCandidates[m];
                   if (!other || !other.active || other.isPreview || other === c || !other.position) continue;
                   if (other.type === "wood_door" || other.type === "wood_wall") {
                     const ox = other.position[0] - p[0], oy = other.position[1] - p[1], oz = other.position[2] - p[2];
@@ -8685,7 +10918,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             if (_pointLightOccluderCandidates.length > 1) {
               _pointLightOccluderCandidates.sort((a, b) => a.sortKey - b.sortKey);
             }
-            activePointLightOccluderCount = Math.min(48, _pointLightOccluderCandidates.length);
+            activePointLightOccluderCount = Math.min(24, _pointLightOccluderCandidates.length);
             for (let i = 0; i < activePointLightOccluderCount; i++) {
               const obb = _pointLightOccluderCandidates[i];
               const base = i * 12;
@@ -8701,6 +10934,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               f32_pointLightOccluders[base + 9] = obb.r2y;
               f32_pointLightOccluders[base + 10] = obb.r2z;
               f32_pointLightOccluders[base + 11] = obb.r2w;
+            }
+            window._cachedPointLightOBBKey = obbKey;
+            window._cachedPointLightOBBCount = activePointLightOccluderCount;
             }
           }
         }
@@ -9669,10 +11905,34 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, collectibleIndexBuffer);
             const isUint32 = collectibleIndicesLength > 65535;
-            if (isUint32) {
-              gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_INT, 0);
+            if (
+              frustumCullingEnabled &&
+              frustumPlanes &&
+              window.staticCollectiblesList &&
+              window.staticCollectiblesList.length > 0 &&
+              typeof getVisibleIndexRanges === "function"
+            ) {
+              const ranges = getVisibleIndexRanges(
+                window.staticCollectiblesList,
+                frustumPlanes,
+                renderDistEnabled ? curObjectDist : null,
+                eyePos,
+              );
+              const type = isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+              const bytesPerIndex = isUint32 ? 4 : 2;
+              for (let i = 0; i < ranges.length; i++) {
+                const range = ranges[i];
+                const count = range.end - range.start;
+                if (count > 0) {
+                  gl.drawElements(gl.TRIANGLES, count, type, range.start * bytesPerIndex);
+                }
+              }
             } else {
-              gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_SHORT, 0);
+              if (isUint32) {
+                gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_INT, 0);
+              } else {
+                gl.drawElements(gl.TRIANGLES, collectibleIndicesLength, gl.UNSIGNED_SHORT, 0);
+              }
             }
           }
 
@@ -9694,8 +11954,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dynamicCollectibleIndexBuffer);
             const isUint32Dynamic = dynamicCollectibleIndicesLength > 65535;
-            if (frustumCullingEnabled && frustumPlanes && window.dynamicCollectiblesList && window.dynamicCollectiblesList.length > 0) {
-              const ranges = getVisibleIndexRanges(window.dynamicCollectiblesList, frustumPlanes);
+            if (frustumCullingEnabled && frustumPlanes && window.dynamicCollectiblesList && window.dynamicCollectiblesList.length > 0 && typeof getVisibleIndexRanges === "function") {
+              const ranges = getVisibleIndexRanges(
+                window.dynamicCollectiblesList,
+                frustumPlanes,
+                renderDistEnabled ? curObjectDist : null,
+                eyePos,
+              );
               const type = isUint32Dynamic ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
               const bytesPerIndex = isUint32Dynamic ? 4 : 2;
               for (let i = 0; i < ranges.length; i++) {
@@ -9731,8 +11996,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, doorWindowIndexBuffer);
             const isUint32Doors = doorWindowIndicesLength > 65535;
-            if (frustumCullingEnabled && frustumPlanes && window.doorWindowCollectiblesList && window.doorWindowCollectiblesList.length > 0) {
-              const ranges = getVisibleIndexRanges(window.doorWindowCollectiblesList, frustumPlanes);
+            if (frustumCullingEnabled && frustumPlanes && window.doorWindowCollectiblesList && window.doorWindowCollectiblesList.length > 0 && typeof getVisibleIndexRanges === "function") {
+              const ranges = getVisibleIndexRanges(
+                window.doorWindowCollectiblesList,
+                frustumPlanes,
+                renderDistEnabled ? curObjectDist : null,
+                eyePos,
+              );
               const type = isUint32Doors ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
               const bytesPerIndex = isUint32Doors ? 4 : 2;
               for (let i = 0; i < ranges.length; i++) {

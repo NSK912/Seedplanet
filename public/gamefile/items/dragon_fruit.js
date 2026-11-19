@@ -2,15 +2,7 @@
 
 window.ItemRegistry = window.ItemRegistry || {};
 
-let _dragonFruitTemplateCache = null;
-
-function getDragonFruitTemplate() {
-  if (_dragonFruitTemplateCache) return _dragonFruitTemplateCache;
-
-  const localVertices = [];
-  const localColors = [];
-  const localIndices = [];
-
+function _buildDragonFruitLocalTemplate(localVertices, localColors, localIndices) {
   const colStem = [0.45, 0.55, 0.20];
   const colBodyDark = [0.80, 0.10, 0.38];
   const colBodyMid = [0.92, 0.14, 0.46];
@@ -129,13 +121,6 @@ function getDragonFruitTemplate() {
     addTri(pBaseL, pBaseR, pCrownTip, colScaleBase, colScaleBase, colCrownTip);
     addTri(pBaseR, pBaseL, pCrownTip, colScaleBase, colScaleBase, colCrownTip);
   }
-
-  _dragonFruitTemplateCache = {
-    vertices: new Float32Array(localVertices),
-    colors: new Float32Array(localColors),
-    indices: new Uint16Array(localIndices)
-  };
-  return _dragonFruitTemplateCache;
 }
 
 window.buildDragonFruitModel = function(
@@ -147,43 +132,9 @@ window.buildDragonFruitModel = function(
   colorEncoder
 ) {
   const S = scaleMultiplier || 1.0;
-  const ox = offset[0];
-  const oy = offset[1];
-  const oz = offset[2];
-
-  const tpl = getDragonFruitTemplate();
-  const lv = tpl.vertices;
-  const lc = tpl.colors;
-  const li = tpl.indices;
-  const baseIdx = rawVertices.length / 3;
-
-  const r0 = r[0] * S, r1 = r[1] * S, r2 = r[2] * S;
-  const n0 = n[0] * S, n1 = n[1] * S, n2 = n[2] * S;
-  const f0 = f[0] * S, f1 = f[1] * S, f2 = f[2] * S;
-
-  for (let i = 0, len = lv.length; i < len; i += 3) {
-    const lx = lv[i], ly = lv[i + 1], lz = lv[i + 2];
-    rawVertices.push(
-      ox + r0 * lx + n0 * ly + f0 * lz,
-      oy + r1 * lx + n1 * ly + f1 * lz,
-      oz + r2 * lx + n2 * ly + f2 * lz
-    );
-  }
-
-  if (typeof colorEncoder === "function") {
-    for (let i = 0, len = lc.length; i < len; i += 3) {
-      const enc = colorEncoder([lc[i], lc[i + 1], lc[i + 2]]);
-      rawColors.push(enc[0], enc[1], enc[2]);
-    }
-  } else {
-    for (let i = 0, len = lc.length; i < len; i += 3) {
-      rawColors.push(lc[i], lc[i + 1], lc[i + 2]);
-    }
-  }
-
-  for (let i = 0, len = li.length; i < len; i++) {
-    rawIndices.push(baseIdx + li[i]);
-  }
+  const tpl = window.DropTemplateCache.getOrBake("dragon_fruit_v1", _buildDragonFruitLocalTemplate);
+  if (!tpl) return;
+  window.DropTemplateCache.emit(tpl, offset, r, n, f, S, 0, rawVertices, rawColors, rawIndices, colorEncoder);
 };
 
 window.ItemRegistry["dragon_fruit"] = {

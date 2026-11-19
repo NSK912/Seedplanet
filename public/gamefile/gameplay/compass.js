@@ -38,36 +38,20 @@
     if (!container) {
       container = document.createElement('div');
       container.id = 'compassContainer';
-      container.className = 'game-ui visible';
-      container.style.cssText = `
-        position: fixed;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%) scale(var(--ui-hud-scale, 1));
-        transform-origin: top center;
-        width: 400px;
-        height: 48px;
-        z-index: 10000;
-        pointer-events: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        user-select: none;
-        background: transparent !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        clip-path: none !important;
-      `;
-      document.body.appendChild(container);
+      container.className = 'compass-embedded';
+      const hpHost = document.getElementById('playerHpVerticalContainer');
+      if (hpHost) {
+        hpHost.appendChild(container);
+      } else {
+        document.body.appendChild(container);
+      }
     }
 
     if (!compassCanvas) {
       compassCanvas = document.createElement('canvas');
       compassCanvas.id = 'compassCanvas';
-      compassCanvas.width = 1120; // High DPI 2x
-      compassCanvas.height = 112;
+      compassCanvas.width = 400; // High DPI 2x (matches ~200x30 embedded area)
+      compassCanvas.height = 60;
       compassCanvas.style.cssText = `
         width: 100%;
         height: 100%;
@@ -115,6 +99,7 @@
     ctx.clearRect(0, 0, w, h);
 
     const container = document.getElementById('compassContainer');
+    const hpHudContainer = document.getElementById('playerHpVerticalContainer');
     const startOverlay = document.getElementById('gameStartOverlay');
     const saveSelectOverlay = document.getElementById('saveSelectOverlay');
     
@@ -126,10 +111,13 @@
     const effectivelyStartOpen = isStartOpen || (typeof gameStarted !== 'undefined' && !gameStarted);
     
     if (effectivelyStartOpen || isSaveOpen) {
-      if (container && container.style.display !== 'none') container.style.display = 'none';
+      if (hpHudContainer && hpHudContainer.style.display !== 'none') hpHudContainer.style.display = 'none';
       return;
     }
 
+    if (hpHudContainer && hpHudContainer.style.display === 'none') {
+      hpHudContainer.style.display = 'flex';
+    }
     if (container && container.style.display === 'none') {
       container.style.display = 'flex';
     }
@@ -146,8 +134,8 @@
     }
 
     const centerX = w / 2;
-    const compassLineY = 62;
-    const barHalfWidth = w * 0.44; // FOV width on tape
+    const compassLineY = Math.round(h * 0.42); // ~25px on 60px high-DPI canvas
+    const barHalfWidth = w * 0.47; // FOV width on tape
     const fovDeg = 120;
     const pxPerDeg = (barHalfWidth * 2) / fovDeg;
 
@@ -162,7 +150,7 @@
     lineGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
     ctx.strokeStyle = lineGrad;
-    ctx.lineWidth = 2.0;
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
     ctx.moveTo(centerX - barHalfWidth, compassLineY);
     ctx.lineTo(centerX + barHalfWidth, compassLineY);
@@ -171,20 +159,20 @@
     // 2. Draw Center Diamond Pointer (Indicator)
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(centerX, compassLineY - 9);
-    ctx.lineTo(centerX + 6, compassLineY - 1);
+    ctx.moveTo(centerX, compassLineY - 7);
+    ctx.lineTo(centerX + 5, compassLineY);
     ctx.lineTo(centerX, compassLineY + 7);
-    ctx.lineTo(centerX - 6, compassLineY - 1);
+    ctx.lineTo(centerX - 5, compassLineY);
     ctx.closePath();
     ctx.fill();
 
     ctx.strokeStyle = '#dfb76c';
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.6;
     ctx.stroke();
 
     // 3. Clip to compass region for smooth edge fade
     ctx.beginPath();
-    ctx.rect(centerX - barHalfWidth - 10, 0, barHalfWidth * 2 + 20, h);
+    ctx.rect(centerX - barHalfWidth - 6, 0, barHalfWidth * 2 + 12, h);
     ctx.clip();
 
     ctx.textAlign = 'center';
@@ -194,10 +182,10 @@
 
     // STRICTLY N, E, S, W ONLY
     const cardinalLabels = {
-      0: { text: 'N', color: '#ff4d4d', font: 'bold 26px "Google Sans", sans-serif' },
-      90: { text: 'E', color: '#ffffff', font: 'bold 24px "Google Sans", sans-serif' },
-      180: { text: 'S', color: '#ffffff', font: 'bold 24px "Google Sans", sans-serif' },
-      270: { text: 'W', color: '#ffffff', font: 'bold 24px "Google Sans", sans-serif' }
+      0: { text: 'N', color: '#ff4d4d', font: 'bold 20px "Google Sans", sans-serif' },
+      90: { text: 'E', color: '#ffffff', font: 'bold 18px "Google Sans", sans-serif' },
+      180: { text: 'S', color: '#ffffff', font: 'bold 18px "Google Sans", sans-serif' },
+      270: { text: 'W', color: '#ffffff', font: 'bold 18px "Google Sans", sans-serif' }
     };
 
     const minDeg = Math.floor((camAngleDeg - fovDeg / 2) / 5) * 5;
@@ -221,36 +209,36 @@
 
       if (isMainCardinal) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 2.0;
         ctx.beginPath();
-        ctx.moveTo(x, compassLineY - 10);
-        ctx.lineTo(x, compassLineY + 10);
+        ctx.moveTo(x, compassLineY - 8);
+        ctx.lineTo(x, compassLineY + 8);
         ctx.stroke();
 
         const card = cardinalLabels[normDeg];
         ctx.font = card.font;
         ctx.fillStyle = card.color;
-        ctx.fillText(card.text, x, compassLineY + 24);
+        ctx.fillText(card.text, x, compassLineY + 21);
       } else if (isSubCardinal) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.moveTo(x, compassLineY - 6);
-        ctx.lineTo(x, compassLineY + 6);
+        ctx.moveTo(x, compassLineY - 5);
+        ctx.lineTo(x, compassLineY + 5);
         ctx.stroke();
       } else if (isMajor) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(x, compassLineY - 4);
-        ctx.lineTo(x, compassLineY + 4);
+        ctx.moveTo(x, compassLineY - 3.5);
+        ctx.lineTo(x, compassLineY + 3.5);
         ctx.stroke();
       } else {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1.0;
         ctx.beginPath();
-        ctx.moveTo(x, compassLineY - 2.5);
-        ctx.lineTo(x, compassLineY + 2.5);
+        ctx.moveTo(x, compassLineY - 2);
+        ctx.lineTo(x, compassLineY + 2);
         ctx.stroke();
       }
 
@@ -373,12 +361,12 @@
           ctx.save();
           ctx.globalAlpha = alpha;
 
-          const markerY = compassLineY - 26;
+          const markerY = Math.max(10, compassLineY - 14);
 
           // Render 3D icon or fallback to emoji symbol
           let drawn3D = false;
           if (m.itemType && typeof window !== 'undefined' && typeof window.create3DIconCanvas === 'function') {
-            const iconSize = 40;
+            const iconSize = 20;
             
             if (!window._compassImgCache) window._compassImgCache = {};
             const cacheKey = m.itemType + '_' + iconSize;
@@ -396,7 +384,7 @@
               try {
                 // Draw only if loaded (if it's an img tag) or if it's a canvas
                 if ((cachedImg.tagName === 'IMG' && cachedImg.complete && cachedImg.naturalWidth > 0) || cachedImg.tagName === 'CANVAS') {
-                  ctx.drawImage(cachedImg, x - iconSize / 2, markerY - 32, iconSize, iconSize);
+                  ctx.drawImage(cachedImg, x - iconSize / 2, markerY - iconSize / 2, iconSize, iconSize);
                   drawn3D = true;
                 }
               } catch (e) {}
@@ -404,14 +392,14 @@
           }
 
           if (!drawn3D) {
-            ctx.font = '20px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-            ctx.fillText(m.icon, x, markerY - 4);
+            ctx.font = '14px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+            ctx.fillText(m.icon, x, markerY - 1);
           }
 
           // Distance tag
-          ctx.font = 'bold 10px "Google Sans", sans-serif';
+          ctx.font = 'bold 9px "Google Sans", sans-serif';
           ctx.fillStyle = m.color;
-          ctx.fillText(`${Math.round(dist)}m`, x, markerY + 11);
+          ctx.fillText(`${Math.round(dist)}m`, x, markerY + 9);
 
           ctx.restore();
         }

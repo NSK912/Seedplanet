@@ -15,7 +15,39 @@
       }
 
 
-      function saveSettingsToLocalStorage() {
+      function _isInDevModeSaveGuard() {
+        return (typeof isDevMode !== "undefined" && !!isDevMode) ||
+               (typeof window !== "undefined" && !!window.isDevMode);
+      }
+
+      const _PLACED_STRUCTURE_TYPES = new Set([
+        "wood_planter_box", "wood_floor", "thin_wood_floor", "stone_floor",
+        "wood_stairs", "folding_ladder", "campfire", "wood_wall", "wood_window",
+        "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table",
+        "wood_chair", "lantern", "meganeura_item", "isopod_item",
+        "obsidian_pad_warp_item", "obsidian_compass_pad_item", "wood_boat",
+        "wood_wheel", "electric_engine", "boat_wing"
+      ]);
+
+      function _executeSaveSettingsNow() {
+        if (typeof window !== "undefined" && window._pendingSaveSettingsTimer) {
+          clearTimeout(window._pendingSaveSettingsTimer);
+          window._pendingSaveSettingsTimer = null;
+        }
+
+        // ห้ามเซฟใดๆ ลง LocalStorage โดยเด็ดขาด หากอยู่ในโหมดผู้พัฒนา (isDevMode / window.isDevMode = true)
+        if (_isInDevModeSaveGuard()) {
+          if (!window.hasShownDevSaveWarning) {
+            console.log("⚠️ โหมดผู้พัฒนาเปิดอยู่: ปิดระบบการบันทึก LocalStorage ทั้งหมด (Dev mode is active: all localStorage saving is locked)");
+            window.hasShownDevSaveWarning = true;
+          }
+          return;
+        }
+
+        if (typeof window !== "undefined" && window.isBuildingPlanet) {
+          return;
+        }
+
         const currentFxaa = typeof window.fxaaEnabled !== "undefined"
           ? window.fxaaEnabled
           : (typeof fxaaEnabled !== "undefined"
@@ -24,8 +56,7 @@
               ? window.taauEnabled
               : (typeof taauEnabled !== "undefined" ? taauEnabled : true)));
 
-        // บันทึกการตั้งค่าระบบ (Options Config เช่น เสียง, FXAA, Resolution) ลง LocalStorage เสมอ
-        // เพื่อให้การตั้งค่าคงอยู่ไม่ว่าจะเล่นในโหมดปกติหรือโหมดผู้พัฒนา
+        // บันทึกการตั้งค่าระบบ (Options Config เช่น เสียง, FXAA, Resolution)
         try {
           const optionsConfig = {
             sfxVolume,
@@ -53,6 +84,7 @@
             zoomLimitEnabled,
             ragdollEnabled,
             colorblindMode: typeof window.colorblindMode === "string" ? window.colorblindMode : (typeof colorblindMode === "string" ? colorblindMode : "none"),
+            language: (typeof getGameLanguage === "function") ? getGameLanguage() : undefined,
             fullscreen: isCurrentFullscreen
           };
           localStorage.setItem("seedplanet_options_config", JSON.stringify(optionsConfig));
@@ -60,21 +92,66 @@
           console.error("Failed to save options to localStorage:", e);
         }
 
-        // ห้ามเซฟตัวเกม (ผู้เล่น/โลก) ลง LocalStorage โดยเด็ดขาด หากอยู่ในโหมดผู้พัฒนา (isDevMode = true)
-        // Dev mode will NEVER save any player progress or world state to avoid overwriting normal player progress!
-        if (typeof isDevMode !== 'undefined' && isDevMode) {
-          if (!window.hasShownDevSaveWarning) {
-            console.log("⚠️ โหมดผู้พัฒนาเปิดอยู่: ปิดระบบการบันทึกสถานะผู้เล่น/โลก (Dev mode is active: world progress saving is disabled)");
-            window.hasShownDevSaveWarning = true;
-          }
-          return;
-        }
-
-        if (typeof window !== "undefined" && window.isBuildingPlanet) {
+        // ห้ามเขียนทับเซฟโลก (seedplanet_settings / activeSaveSlotId) ก่อนเริ่มเข้าเกมจริง
+        if (typeof gameStarted === "undefined" || !gameStarted) {
           return;
         }
 
         try {
+          // Single-pass scan over collectibles instead of 6 separate .filter() passes
+          const collectiblesState = [];
+          const removedWorldKeysSet = new Set(Array.isArray(window.savedRemovedWorldKeys) ? window.savedRemovedWorldKeys : []);
+          const demolishedHouseChestsSet = new Set(Array.isArray(window.demolishedHouseChests) ? window.demolishedHouseChests : []);
+          const houseChestsStorage = [];
+          const placedStructures = [];
+          const dynamicCollectibles = [];
+
+          const allCols = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : [];
+          for (let i = 0; i < allCols.length; i++) {
+            const c = allCols[i];
+            if (!c || c.isPreview) continue;
+            const isActive = !!c.active;
+            const isWorldGen = c.isWorldGenerated !== false;
+            const isHouseOrProc = !!(c.isHouse || c.isProceduralHouse);
+
+            if (!c.isDynamic && !c.isPlayerPlaced && isWorldGen) {
+              collectiblesState.push(isActive);
+            }
+            if ((!isActive || c.isDemolished) && !c.isPlayerPlaced && (c.isWorldGenerated || isHouseOrProc)) {
+              if (c.worldKey) {
+                removedWorldKeysSet.add(c.worldKey);
+              } else {
+                const px = c.position ? Math.round(c.position[0] * 1000) : 0;
+                const py = c.position ? Math.round(c.position[1] * 1000) : 0;
+                const pz = c.position ? Math.round(c.position[2] * 1000) : 0;
+                removedWorldKeysSet.add(`${c.type}_${px}_${py}_${pz}`);
+              }
+            }
+            if (c.type === "wood_chest" && (isHouseOrProc || c.isHouseChest)) {
+              if ((!isActive || c.isDemolished) && c.houseIndex !== undefined) {
+                demolishedHouseChestsSet.add(c.houseIndex);
+              } else if (isActive && !c.isDemolished && c.storage) {
+                houseChestsStorage.push({
+                  houseIndex: c.houseIndex,
+                  worldKey: c.worldKey,
+                  storage: c.storage
+                });
+              }
+            }
+            if (isActive) {
+              if (c.isDynamic) {
+                dynamicCollectibles.push(c);
+              }
+              if (!c.isWorldGenerated && !isHouseOrProc && !c.isRuin && (
+                c.isPlayerPlaced ||
+                _PLACED_STRUCTURE_TYPES.has(c.type) ||
+                (typeof c.type === "string" && c.type.startsWith("robot_"))
+              )) {
+                placedStructures.push(c);
+              }
+            }
+          }
+
           const settings = {
             sfxVolume,
             playerFootstepVolume,
@@ -170,28 +247,12 @@
             playerHunger: typeof playerHunger !== "undefined" ? playerHunger : 5,
             playerMaxHunger: typeof playerMaxHunger !== "undefined" ? playerMaxHunger : 5,
             batteryStates: (typeof window.BatterySystem !== "undefined" && window.BatterySystem.exportState) ? window.BatterySystem.exportState() : null,
-            collectiblesState: collectibles.filter(c => !c.isDynamic && !c.isPreview && !c.isPlayerPlaced && c.isWorldGenerated !== false).map((c) => c.active),
-            removedWorldKeys: Array.from(new Set([
-              ...(Array.isArray(window.savedRemovedWorldKeys) ? window.savedRemovedWorldKeys : []),
-              ...collectibles.filter(c => (!c.active || c.isDemolished) && !c.isPreview && !c.isPlayerPlaced && (c.isWorldGenerated || c.isProceduralHouse || c.isHouse)).map(c => {
-                if (c.worldKey) return c.worldKey;
-                const px = c.position ? Math.round(c.position[0] * 1000) : 0;
-                const py = c.position ? Math.round(c.position[1] * 1000) : 0;
-                const pz = c.position ? Math.round(c.position[2] * 1000) : 0;
-                return `${c.type}_${px}_${py}_${pz}`;
-              })
-            ])),
-            demolishedHouseChests: Array.from(new Set([
-              ...(Array.isArray(window.demolishedHouseChests) ? window.demolishedHouseChests : []),
-              ...collectibles.filter(c => (!c.active || c.isDemolished) && c.type === "wood_chest" && (c.isHouse || c.isProceduralHouse || c.isHouseChest) && c.houseIndex !== undefined).map(c => c.houseIndex)
-            ])),
-            houseChestsStorage: collectibles.filter(c => c.active && !c.isDemolished && c.type === "wood_chest" && (c.isHouse || c.isProceduralHouse || c.isHouseChest) && c.storage).map(c => ({
-              houseIndex: c.houseIndex,
-              worldKey: c.worldKey,
-              storage: c.storage
-            })),
-            placedStructures: collectibles.filter(c => c.active && !c.isPreview && !c.isWorldGenerated && !c.isProceduralHouse && !c.isHouse && !c.isRuin && (c.isPlayerPlaced || c.type === "wood_planter_box" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "stone_floor" || c.type === "wood_stairs" || c.type === "folding_ladder" || c.type === "campfire" || c.type === "wood_wall" || c.type === "wood_window" || c.type === "wood_door" || c.type === "wood_roof" || c.type === "wood_chest" || c.type === "wood_bed" || c.type === "wood_table" || c.type === "wood_chair" || c.type === "lantern" || c.type === "meganeura_item" || c.type === "isopod_item" || c.type === "obsidian_pad_warp_item" || c.type === "obsidian_compass_pad_item" || c.type === "wood_boat" || c.type === "wood_wheel" || c.type === "electric_engine" || c.type === "boat_wing" || (typeof c.type === "string" && c.type.startsWith("robot_")))),
-            dynamicCollectibles: collectibles.filter(c => c.isDynamic && c.active && !c.isPreview),
+            collectiblesState,
+            removedWorldKeys: Array.from(removedWorldKeysSet),
+            demolishedHouseChests: Array.from(demolishedHouseChestsSet),
+            houseChestsStorage,
+            placedStructures,
+            dynamicCollectibles,
             amphibiansState: amphibians.map((a) => ({
               theta: a.theta,
               phi: a.phi,
@@ -211,15 +272,56 @@
             voxelHoleRadiusMultiplier,
           };
 
-          if (activeSaveSlotId && typeof gameStarted !== "undefined" && gameStarted) {
-            localStorage.setItem(activeSaveSlotId, JSON.stringify(settings));
+          // Serialize ONCE instead of twice
+          const serializedSettings = JSON.stringify(settings);
+          if (activeSaveSlotId) {
+            localStorage.setItem(activeSaveSlotId, serializedSettings);
           }
-          localStorage.setItem("seedplanet_settings", JSON.stringify(settings));
+          localStorage.setItem("seedplanet_settings", serializedSettings);
         } catch (e) {
           console.error("Failed to save settings to localStorage:", e);
         }
       }
+
+      function saveSettingsToLocalStorage(immediate = false) {
+        if (_isInDevModeSaveGuard()) {
+          if (!window.hasShownDevSaveWarning) {
+            console.log("⚠️ โหมดผู้พัฒนาเปิดอยู่: ปิดระบบการบันทึก LocalStorage ทั้งหมด (Dev mode is active: all localStorage saving is locked)");
+            window.hasShownDevSaveWarning = true;
+          }
+          return;
+        }
+        if (typeof window !== "undefined" && window.isBuildingPlanet) {
+          return;
+        }
+        if (immediate === true) {
+          _executeSaveSettingsNow();
+          return;
+        }
+        if (typeof window !== "undefined") {
+          if (window._pendingSaveSettingsTimer) {
+            clearTimeout(window._pendingSaveSettingsTimer);
+          }
+          window._pendingSaveSettingsTimer = setTimeout(() => {
+            window._pendingSaveSettingsTimer = null;
+            _executeSaveSettingsNow();
+          }, 1200);
+        } else {
+          _executeSaveSettingsNow();
+        }
+      }
       window.saveSettingsToLocalStorage = saveSettingsToLocalStorage;
+
+      if (typeof window !== "undefined" && !window._saveFlushHooked) {
+        window._saveFlushHooked = true;
+        const _flushPendingSave = () => {
+          if (window._pendingSaveSettingsTimer && !_isInDevModeSaveGuard()) {
+            _executeSaveSettingsNow();
+          }
+        };
+        window.addEventListener("pagehide", _flushPendingSave);
+        window.addEventListener("beforeunload", _flushPendingSave);
+      }
 
       function applySettings(settings, applySystemSettings = true, rebuildPlanet = false) {
         if (!settings) return;
@@ -1560,19 +1662,19 @@
           const deleteBtnText = typeof t === "function" ? t("delete_save") || "ลบเซฟ" : "ลบเซฟ (Delete)";
 
           html += `
-            <div class="save-slot-row" data-slot-id="${slot.id}" style="display: flex; align-items: stretch; gap: 8px; width: 100%;">
+            <div class="save-slot-row" data-slot-id="${slot.id}" style="display: flex; align-items: stretch; gap: 0.5rem; width: 100%;">
               <div class="save-slot-card game-ui"  
                    data-slot-id="${slot.id}"
-                   onmouseover="this.style.background='rgba(223, 183, 108, 0.15)'; this.style.borderColor='#dfb76c'; this.style.boxShadow='0 0 12px rgba(223, 183, 108, 0.15)';" 
+                   onmouseover="this.style.background='rgba(223, 183, 108, 0.15)'; this.style.borderColor='#dfb76c'; this.style.boxShadow='0 0 0.75rem rgba(223, 183, 108, 0.15)';" 
                    onmouseout="this.style.background='rgba(223, 183, 108, 0.05)'; this.style.borderColor='rgba(223, 183, 108, 0.25)'; this.style.boxShadow='none';"
                    onclick="selectSaveSlotAndStart('${slot.id}')" 
-                   style="flex: 1; min-width: 0; background: rgba(223, 183, 108, 0.05); border: 1px solid rgba(223, 183, 108, 0.25); padding: 12px 14px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;">
+                   style="flex: 1; min-width: 0; background: rgba(223, 183, 108, 0.05); border: 1px solid rgba(223, 183, 108, 0.25); padding: 0.75rem 0.875rem; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 0.375rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: auto;">
-                  <span style="color: #dfb76c; font-weight: bold; font-size: 14px; text-shadow: 0 0 4px rgba(223, 183, 108, 0.3); font-family: 'Google Sans', sans-serif;">${slotTitle}</span>
-                  <span style="font-size: 11px; font-family: 'Google Sans', sans-serif;">${statusText}</span>
+                  <span style="color: #dfb76c; font-weight: bold; font-size: 0.875rem; text-shadow: 0 0 0.25rem rgba(223, 183, 108, 0.3); font-family: 'Google Sans', sans-serif;">${slotTitle}</span>
+                  <span style="font-size: 0.6875rem; font-family: 'Google Sans', sans-serif;">${statusText}</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; color: rgba(255,255,255,0.7); font-size: 11px; font-family: 'Google Sans', sans-serif;">
-                  <span style="color: rgba(255,255,255,0.45); font-size: 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px; margin-top: -2px;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg> LocalStorage KEY: ${slot.id}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; color: rgba(255,255,255,0.7); font-size: 0.6875rem; font-family: 'Google Sans', sans-serif;">
+                  <span style="color: rgba(255,255,255,0.45); font-size: 0.625rem;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 0.25rem; margin-top: -0.125rem; width: 0.75rem; height: 0.75rem;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg> LocalStorage KEY: ${slot.id}</span>
                   <span style="color: rgba(255,255,255,0.8);">${description}</span>
                 </div>
               </div>
@@ -1582,8 +1684,8 @@
                         data-slot-id="${slot.id}"
                         onclick="event.preventDefault(); event.stopPropagation(); deleteSaveSlot('${slot.id}', this, event)"
                         title="${deleteBtnText}"
-                        style="width: 76px; flex-shrink: 0; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; font-size: 10px; font-family: 'Google Sans', sans-serif; cursor: pointer; transition: all 0.2s; font-weight: bold;">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        style="width: 4.75rem; flex-shrink: 0; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.375rem; font-size: 0.625rem; font-family: 'Google Sans', sans-serif; cursor: pointer; transition: all 0.2s; font-weight: bold;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.9375rem; height: 0.9375rem;">
                     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                   </svg>
                   <span>${deleteBtnText}</span>
@@ -1878,7 +1980,7 @@
               updateUIMargins();
             }
 
-            saveSettingsToLocalStorage();
+            saveSettingsToLocalStorage(true);
 
             // Visual feedback
             const svgRotateIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; flex-shrink: 0;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>`;
@@ -1896,7 +1998,7 @@
         const btnExitToMenu = document.getElementById("btnExitToMenu");
         if (btnExitToMenu) {
           btnExitToMenu?.addEventListener("click", () => {
-            saveSettingsToLocalStorage();
+            saveSettingsToLocalStorage(true);
 
             const fade = document.getElementById("fadeToBlack");
             if (fade) fade.style.opacity = "1";
