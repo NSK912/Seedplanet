@@ -379,6 +379,7 @@
       }
 
       let _cachedFloorRoofCollectibles = [];
+      let _cachedLargeFloors = [];
       let _cachedFloorRoofCollectiblesLen = -1;
       let _cachedFloorRoofCollectiblesLastItem = null;
 
@@ -388,6 +389,7 @@
         if (typeof CollisionCore !== "undefined" && CollisionCore) {
           CollisionCore._cachedStructLen = -1;
           CollisionCore._cachedStructLastItem = null;
+          CollisionCore._cachedStructGridVer = -1;
         }
       }
       if (typeof window !== "undefined") {
@@ -402,6 +404,7 @@
           _cachedFloorRoofCollectiblesLen = len;
           _cachedFloorRoofCollectiblesLastItem = lastItem;
           const arr = [];
+          const largeArr = [];
           for (let i = 0; i < len; i++) {
             const c = collectibles[i];
             if (c && c.position) {
@@ -418,10 +421,14 @@
                 t === "obsidian_compass_pad_item"
               ) {
                 arr.push(c);
+                if (t === "stone_floor" || t === "wood_stairs" || t === "folding_ladder" || (typeof c.width === "number" && c.width > 1.0) || (typeof c.depth === "number" && c.depth > 1.0)) {
+                  largeArr.push(c);
+                }
               }
             }
           }
           _cachedFloorRoofCollectibles = arr;
+          _cachedLargeFloors = largeArr;
         }
         return _cachedFloorRoofCollectibles;
       }
@@ -438,7 +445,30 @@
             : baseTerrainRadius);
           
         const playerPos = [nx * currentFeetRadius, ny * currentFeetRadius, nz * currentFeetRadius];
-        const floorItems = _getFloorRoofCollectibles();
+        const allFloorItems = _getFloorRoofCollectibles();
+        let floorItems;
+        if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function" && allFloorItems.length > 48) {
+          floorItems = SpatialGrid.queryRadius(
+            playerPos[0],
+            playerPos[1],
+            playerPos[2],
+            1.4,
+            c => c && c.active && !c.isPreview && (
+              c.type === "wood_floor" ||
+              c.type === "thin_wood_floor" ||
+              c.type === "wood_roof" ||
+              c.type === "robot_stand" ||
+              c.type === "obsidian_pad_warp_item" ||
+              c.type === "obsidian_compass_pad_item"
+            )
+          );
+          for (let li = 0; li < _cachedLargeFloors.length; li++) {
+            const lf = _cachedLargeFloors[li];
+            if (lf && lf.active && !lf.isPreview) floorItems.push(lf);
+          }
+        } else {
+          floorItems = allFloorItems;
+        }
           
         for (let i = 0; i < floorItems.length; i++) {
           const other = floorItems[i];
@@ -903,8 +933,8 @@
       }
       window.getTerrainSurfaceAndCeiling = getTerrainSurfaceAndCeiling;
 
-      function checkCaveAndTerrainCollision(P_new, P_curr, centerRadius, charScale, swimFactor, wRadius, diveDepth, swimMoveFactor, charHeight) {
-        return CollisionCore.checkCaveAndTerrainCollision(P_new, P_curr, centerRadius, charScale, swimFactor, wRadius, diveDepth, swimMoveFactor, charHeight);
+      function checkCaveAndTerrainCollision(P_new, P_curr, centerRadius, charScale, swimFactor, wRadius, diveDepth, swimMoveFactor, charHeight, entityOpts = null) {
+        return CollisionCore.checkCaveAndTerrainCollision(P_new, P_curr, centerRadius, charScale, swimFactor, wRadius, diveDepth, swimMoveFactor, charHeight, entityOpts);
       }
 
       let tunnelVertexBuffer = null;
@@ -925,9 +955,9 @@
 
       function buildPlanetAsync(gridSize, seed, onProgress) {
         return new Promise((resolve) => {
-          currentCampfires = (typeof collectibles !== 'undefined' ? collectibles : []).filter(c => c.active && c.type === "campfire" && !c.isPreview);
+          currentCampfires = (typeof collectibles !== 'undefined' ? collectibles : []).filter(c => c.active && c.type === "campfire" && !c.isPreview && !c.isGroundDrop);
           
-          const rPlanet = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
+          const rPlanet = typeof RADIUS !== 'undefined' ? RADIUS : 64.0;
           const calculatedGrid = gridSize || (typeof currentGridSize !== 'undefined' ? currentGridSize : Math.max(100, Math.min(1600, Math.round(rPlanet * 12.5))));
           const effGridSize = Math.max(50, Math.min(calculatedGrid, 1600));
           currentGridSize = effGridSize;
@@ -949,7 +979,7 @@
           requestAnimationFrame(() => {
             if (onProgress) onProgress(5, "Surveying subterranean crust...", "[SYS_OK] Seed Planet Core Loaded");
             
-            const currentRadius = typeof RADIUS !== 'undefined' ? RADIUS : 32.0;
+            const currentRadius = typeof RADIUS !== 'undefined' ? RADIUS : 64.0;
             const currentHScale = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(currentRadius / 8.0, 0.70));
             if (typeof window !== 'undefined') {
               window.RADIUS = currentRadius;
@@ -1225,9 +1255,9 @@
         if (typeof window !== 'undefined' && typeof window.clearCache === 'function') {
           window.clearCache();
         }
-        currentCampfires = (typeof collectibles !== 'undefined' ? collectibles : []).filter(c => c.active && c.type === "campfire" && !c.isPreview);
+        currentCampfires = (typeof collectibles !== 'undefined' ? collectibles : []).filter(c => c.active && c.type === "campfire" && !c.isPreview && !c.isGroundDrop);
         
-        const rPlanet = typeof RADIUS !== 'undefined' ? RADIUS : 32.0;
+        const rPlanet = typeof RADIUS !== 'undefined' ? RADIUS : 64.0;
         const hScale = typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE : (0.6 * Math.pow(rPlanet / 8.0, 0.70));
         const calculatedGrid = gridSize || (typeof currentGridSize !== 'undefined' ? currentGridSize : Math.max(100, Math.min(1600, Math.round(rPlanet * 12.5))));
         const effGridSize = Math.max(50, Math.min(calculatedGrid, 1600));

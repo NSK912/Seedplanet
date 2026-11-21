@@ -392,7 +392,7 @@ const Physics = {
     },
 
     getCanonicalWaterRadius: function(planetRadius, wLevel, hScale) {
-        const pR = typeof planetRadius === "number" ? planetRadius : (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+        const pR = typeof planetRadius === "number" ? planetRadius : (typeof RADIUS !== "undefined" ? RADIUS : 64.0);
         const wl = typeof wLevel === "number" ? wLevel : (typeof waterLevel !== "undefined" ? waterLevel : 0.0);
         const hs = typeof hScale === "number" ? hScale : (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : (0.6 * Math.pow(pR / 8.0, 0.70)));
         return pR + wl * (hs * 0.25);
@@ -405,7 +405,7 @@ const Physics = {
         ny,
         nz,
         feetRadius = null,
-        planetRadius = (typeof RADIUS !== "undefined" ? RADIUS : 32.0),
+        planetRadius = (typeof RADIUS !== "undefined" ? RADIUS : 64.0),
         heightScale = (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1.0),
         seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0),
         waterEnabled: wEnabledArg = (typeof waterEnabled !== "undefined" ? waterEnabled : true),
@@ -436,11 +436,8 @@ const Physics = {
         let wRadiusLocal = 0;
         if (wEnabledArg) {
             wRadiusLocal = (typeof getWaterRadiusAt === "function")
-                ? getWaterRadiusAt(nx * sampleFeetRad, ny * sampleFeetRad, nz * sampleFeetRad)
+                ? getWaterRadiusAt(nx * sampleFeetRad, ny * sampleFeetRad, nz * sampleFeetRad, caveData)
                 : waterRadius;
-            if (caveData.insideTunnel && wRadiusLocal === 0) {
-                wRadiusLocal = waterRadius;
-            }
         }
 
         return {
@@ -463,7 +460,7 @@ const Physics = {
         phi,
         heading,
         charScale = (typeof playerScale !== "undefined" ? playerScale : 0.1),
-        planetRadius = (typeof RADIUS !== "undefined" ? RADIUS : 32.0),
+        planetRadius = (typeof RADIUS !== "undefined" ? RADIUS : 64.0),
         heightScale = (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1.0),
         seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0),
         wEnabled = (typeof waterEnabled !== "undefined" ? waterEnabled : true),
@@ -913,6 +910,9 @@ const CollisionCore = {
     }
 
     // 4. Custom Player-Built Structure Collisions (Wood wall, Wood window, Wood door, Floors, Stairs)
+    if (typeof collectibles !== "undefined" && collectibles && collectibles.length > 0 && typeof CollisionCore._ensureStructureCollisionCache === "function") {
+      CollisionCore._ensureStructureCollisionCache(collectibles);
+    }
     const itemsToCheck = prefiltered ? prefiltered.collectibles : (collectibles || []);
     
 
@@ -961,14 +961,19 @@ const CollisionCore = {
             let hasCoLocatedDoor = (other.type === "wood_door");
             let hasCoLocatedWindow = (other.type === "wood_window");
             if (other.type === "wood_wall") {
-              for (let d of itemsToCheck) {
-                if (d.active && (d.type === "wood_door" || d.type === "wood_window")) {
-                  const ox = d.position[0] - other.position[0];
-                  const oy = d.position[1] - other.position[1];
-                  const oz = d.position[2] - other.position[2];
-                  if (ox*ox + oy*oy + oz*oz < 0.005) {
-                    if (d.type === "wood_door") hasCoLocatedDoor = true;
-                    if (d.type === "wood_window") hasCoLocatedWindow = true;
+              if (other._coStructCacheVer === CollisionCore._coStructCacheVer) {
+                hasCoLocatedDoor = !!other._hasCoLocatedDoor;
+                hasCoLocatedWindow = !!other._hasCoLocatedWindow;
+              } else {
+                for (let d of itemsToCheck) {
+                  if (d.active && (d.type === "wood_door" || d.type === "wood_window")) {
+                    const ox = d.position[0] - other.position[0];
+                    const oy = d.position[1] - other.position[1];
+                    const oz = d.position[2] - other.position[2];
+                    if (ox*ox + oy*oy + oz*oz < 0.005) {
+                      if (d.type === "wood_door") hasCoLocatedDoor = true;
+                      if (d.type === "wood_window") hasCoLocatedWindow = true;
+                    }
                   }
                 }
               }
@@ -1613,6 +1618,26 @@ const CollisionCore = {
       : ((typeof activeRidingMech !== "undefined" && activeRidingMech) || (typeof window !== "undefined" && window.activeRidingMech));
     const playerFootOffset = isMech ? ((typeof window !== "undefined" && typeof window.mechSeatOffset !== "undefined") ? window.mechSeatOffset : 0.71) : 0.46 * charScale;
 
+    // Unified Option B diving helpers (never auto-enter isDivingMode from collision/depth alone)
+    const currentIsDiving = (entityOpts && typeof entityOpts.isDivingMode === "boolean")
+      ? entityOpts.isDivingMode
+      : (typeof isDivingMode !== "undefined" ? !!isDivingMode : false);
+    const pressingDiveDownNow = (entityOpts && typeof entityOpts.pressingDiveDown === "boolean")
+      ? entityOpts.pressingDiveDown
+      : (typeof keysPressed !== "undefined" && typeof currentKeyBindings !== "undefined" && !!keysPressed[currentKeyBindings.diveDown]);
+    const resolveEffectiveTop = (wRad, cData) => {
+      if (typeof window !== "undefined" && typeof window.getEffectiveSwimTopRadius === "function") {
+        return window.getEffectiveSwimTopRadius(wRad, swimMoveFactor, charScale, cData);
+      }
+      let topRad = wRad + (-0.22 + swimMoveFactor * 0.27) * charScale;
+      if (cData && cData.insideTunnel && cData.ceiling !== Infinity) {
+        const maxCaveCenter = cData.ceiling - 0.46 * charScale;
+        if (topRad > maxCaveCenter) topRad = maxCaveCenter;
+      }
+      return topRad;
+    };
+    const resolveIsDiving = (d) => currentIsDiving && (d > 0.005 * charScale || pressingDiveDownNow);
+
     // Check standard terrain surface and cave system mathematically
     const feetRadiusBefore = (centerRadius !== null) ? (centerRadius - playerFootOffset) : (r_planet + charHeight * h_scale);
     const caveData = typeof getTerrainSurfaceAndCeiling === "function"
@@ -1741,15 +1766,16 @@ const CollisionCore = {
       let testCenterRadius = Math.max(minCenter, Math.min(safeMaxCenter, pushR));
 
       if (swimFactor > 0.0) {
-        const targetSwimRadius = wRadius + (-0.22 + swimMoveFactor * 0.27) * charScale;
-        testDiveDepth = Math.max(0.0, targetSwimRadius - testCenterRadius);
+        const targetSwimRadius = resolveEffectiveTop(wRadius, updatedCaveData);
+        const maxDiveDepth = Math.max(0.0, targetSwimRadius - minCenter);
+        testDiveDepth = Math.max(0.0, Math.min(maxDiveDepth, targetSwimRadius - testCenterRadius));
       }
 
       return {
         P_new: [pushP[0], pushP[1], pushP[2]],
         playerCenterRadius: testCenterRadius,
         playerDiveDepth: testDiveDepth,
-        isDivingMode: testDiveDepth > 0.015 * charScale,
+        isDivingMode: resolveIsDiving(testDiveDepth),
         shouldBlock: false // 3D sliding handles blocking, never block player inputs completely
       };
     }
@@ -1775,7 +1801,7 @@ const CollisionCore = {
     function evaluatePosition(P, currentR) {
       let testCenterRadius = currentR;
       let testDiveDepth = diveDepth;
-      let testIsDiving = testDiveDepth > 0.01 * charScale;
+      let testIsDiving = resolveIsDiving(testDiveDepth);
 
       const thetaP = Math.acos(Math.max(-1, Math.min(1, P[1])));
       const phiP = Math.atan2(P[2], P[0]);
@@ -1867,7 +1893,7 @@ const CollisionCore = {
       }
       
       if (swimFactor > 0.0 || isBoatInWater) {
-        const targetSwimRadius = wRadius + (-0.22 + swimMoveFactor * 0.27) * charScale;
+        const targetSwimRadius = resolveEffectiveTop(wRadius, caveDataP);
         testCenterRadius = isBoatInWater ? Math.max(targetSwimRadius, currentR) : (targetSwimRadius - testDiveDepth);
 
         const testFeetRadius = testCenterRadius - playerFootOffset;
@@ -1888,7 +1914,7 @@ const CollisionCore = {
           if (terrainRadius <= effectiveBase + maxStepUp && !isTooSteep) {
             testCenterRadius = terrainRadius + playerFootOffset;
             testDiveDepth = Math.max(0.0, targetSwimRadius - testCenterRadius);
-            testIsDiving = testDiveDepth > 0.015 * charScale;
+            testIsDiving = resolveIsDiving(testDiveDepth);
           } else {
             return { colliding: true, isTooSteep: isTooSteep, centerRadius: testCenterRadius, diveDepth: testDiveDepth, isDiving: testIsDiving };
           }
@@ -2081,7 +2107,7 @@ const CollisionCore = {
         P_new: [P_curr[0], P_curr[1], P_curr[2]],
         playerCenterRadius: centerRadius,
         playerDiveDepth: diveDepth,
-        isDivingMode: diveDepth > 0.015 * charScale,
+        isDivingMode: resolveIsDiving(diveDepth),
         shouldBlock: true
       };
     }
@@ -2143,9 +2169,104 @@ const CollisionCore = {
       P_new: [P_curr[0], P_curr[1], P_curr[2]],
       playerCenterRadius: centerRadius,
       playerDiveDepth: diveDepth,
-      isDivingMode: diveDepth > 0.015 * charScale,
+      isDivingMode: resolveIsDiving(diveDepth),
       shouldBlock: true
     };
+  },
+
+  // Build cached structure list & precompute co-located door/window flags on wood_wall once per topology change (eliminates O(N^2) inner wall loops)
+  _ensureStructureCollisionCache: function(collectibles) {
+    const colLen = collectibles.length;
+    const lastColItem = colLen > 0 ? collectibles[colLen - 1] : null;
+    const gridVer = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.version === "number") ? SpatialGrid.version : 0;
+    if (
+      CollisionCore._cachedStructItems &&
+      CollisionCore._cachedStructLen === colLen &&
+      CollisionCore._cachedStructLastItem === lastColItem &&
+      CollisionCore._cachedStructGridVer === gridVer
+    ) {
+      return CollisionCore._cachedStructItems;
+    }
+
+    const structList = [];
+    const wallList = [];
+    const openingList = [];
+    const nextVer = ((CollisionCore._coStructCacheVer || 0) + 1) | 0;
+
+    for (let i = 0; i < colLen; i++) {
+      const item = collectibles[i];
+      if (!item || !item.position) continue;
+      const t = item.type;
+      if (
+        t === "wood_wall" ||
+        t === "wood_window" ||
+        t === "wood_door" ||
+        t === "wood_roof" ||
+        t === "robot_stand" ||
+        t === "wood_bed" ||
+        t === "wood_chest" ||
+        t === "wood_table" ||
+        t === "wood_planter_box" ||
+        t === "wood_chair"
+      ) {
+        structList.push(item);
+        if (t === "wood_wall") {
+          item._hasCoLocatedDoor = false;
+          item._hasCoLocatedWindow = false;
+          item._coStructCacheVer = nextVer;
+          if (item.active && !item.isPreview) wallList.push(item);
+        } else if ((t === "wood_door" || t === "wood_window") && item.active && !item.isPreview) {
+          openingList.push(item);
+        }
+      }
+    }
+
+    // Match openings to co-located walls using spatial buckets (cell 0.25m) so build is O(W + O)
+    if (wallList.length > 0 && openingList.length > 0) {
+      const cellInv = 4.0;
+      const wallBuckets = new Map();
+      for (let i = 0; i < wallList.length; i++) {
+        const w = wallList[i];
+        const p = w.position;
+        const key = `${Math.floor(p[0] * cellInv)},${Math.floor(p[1] * cellInv)},${Math.floor(p[2] * cellInv)}`;
+        let b = wallBuckets.get(key);
+        if (!b) { b = []; wallBuckets.set(key, b); }
+        b.push(w);
+      }
+      for (let i = 0; i < openingList.length; i++) {
+        const op = openingList[i];
+        const opPos = op.position;
+        const bx = Math.floor(opPos[0] * cellInv);
+        const by = Math.floor(opPos[1] * cellInv);
+        const bz = Math.floor(opPos[2] * cellInv);
+        const isDoor = op.type === "wood_door";
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const b = wallBuckets.get(`${bx + dx},${by + dy},${bz + dz}`);
+              if (!b) continue;
+              for (let wi = 0; wi < b.length; wi++) {
+                const w = b[wi];
+                const ox = opPos[0] - w.position[0];
+                const oy = opPos[1] - w.position[1];
+                const oz = opPos[2] - w.position[2];
+                if (ox * ox + oy * oy + oz * oz < 0.005) {
+                  if (isDoor) w._hasCoLocatedDoor = true;
+                  else w._hasCoLocatedWindow = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    CollisionCore._cachedStructItems = structList;
+    CollisionCore._cachedStructLen = colLen;
+    CollisionCore._cachedStructLastItem = lastColItem;
+    CollisionCore._cachedStructGridVer = gridVer;
+    CollisionCore._coStructCacheVer = nextVer;
+    return structList;
   },
 
   // Layer: Structures (Wood Walls, Wood Roofs, Wood Windows, Wood Doors) for both Player and Wheeled Boat
@@ -2166,13 +2287,16 @@ const CollisionCore = {
     if (!collectibles || !collectibles.length) return false;
 
     const currentPlayPos3D = [P_new[0] * groundRadius, P_new[1] * groundRadius, P_new[2] * groundRadius];
-    const colLen = collectibles.length;
-    const lastColItem = colLen > 0 ? collectibles[colLen - 1] : null;
-    if (!CollisionCore._cachedStructItems || CollisionCore._cachedStructLen !== colLen || CollisionCore._cachedStructLastItem !== lastColItem) {
-      const structList = [];
-      for (let i = 0; i < colLen; i++) {
-        const item = collectibles[i];
-        if (item && item.position && (
+    const structItems = CollisionCore._ensureStructureCollisionCache(collectibles);
+
+    let nearbyCollectibles;
+    if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
+      nearbyCollectibles = SpatialGrid.queryRadius(
+        currentPlayPos3D[0],
+        currentPlayPos3D[1],
+        currentPlayPos3D[2],
+        1.6,
+        item => item && item.active && !item.isPreview && item.position && (
           item.type === "wood_wall" ||
           item.type === "wood_window" ||
           item.type === "wood_door" ||
@@ -2183,26 +2307,20 @@ const CollisionCore = {
           item.type === "wood_table" ||
           item.type === "wood_planter_box" ||
           item.type === "wood_chair"
-        )) {
-          structList.push(item);
-        }
-      }
-      CollisionCore._cachedStructItems = structList;
-      CollisionCore._cachedStructLen = colLen;
-      CollisionCore._cachedStructLastItem = lastColItem;
-    }
-
-    const nearbyCollectibles = [];
-    const collFilterDistSq = 1.6 * 1.6;
-    const structItems = CollisionCore._cachedStructItems;
-    for (let i = 0; i < structItems.length; i++) {
-      const item = structItems[i];
-      if (item.active && !item.isPreview && item.position) {
-        const dx = currentPlayPos3D[0] - item.position[0];
-        const dy = currentPlayPos3D[1] - item.position[1];
-        const dz = currentPlayPos3D[2] - item.position[2];
-        if (dx*dx + dy*dy + dz*dz < collFilterDistSq) {
-          nearbyCollectibles.push(item);
+        )
+      );
+    } else {
+      nearbyCollectibles = [];
+      const collFilterDistSq = 1.6 * 1.6;
+      for (let i = 0; i < structItems.length; i++) {
+        const item = structItems[i];
+        if (item.active && !item.isPreview && item.position) {
+          const dx = currentPlayPos3D[0] - item.position[0];
+          const dy = currentPlayPos3D[1] - item.position[1];
+          const dz = currentPlayPos3D[2] - item.position[2];
+          if (dx*dx + dy*dy + dz*dz < collFilterDistSq) {
+            nearbyCollectibles.push(item);
+          }
         }
       }
     }
@@ -2279,14 +2397,19 @@ const CollisionCore = {
             if (isRidingBoat) {
               segments.push({ cx: 0.0, hw: 0.15 });
             } else {
-              for (let d of nearbyCollectibles) {
-                if (d.active && !d.isPreview && (d.type === "wood_door" || d.type === "wood_window")) {
-                  const ox = d.position[0] - other.position[0];
-                  const oy = d.position[1] - other.position[1];
-                  const oz = d.position[2] - other.position[2];
-                  if (ox*ox + oy*oy + oz*oz < 0.005) {
-                    if (d.type === "wood_door") hasCoLocatedDoor = true;
-                    else if (d.type === "wood_window") hasCoLocatedWindow = true;
+              if (other._coStructCacheVer === CollisionCore._coStructCacheVer) {
+                hasCoLocatedDoor = !!other._hasCoLocatedDoor;
+                hasCoLocatedWindow = !!other._hasCoLocatedWindow;
+              } else {
+                for (let d of nearbyCollectibles) {
+                  if (d.active && !d.isPreview && (d.type === "wood_door" || d.type === "wood_window")) {
+                    const ox = d.position[0] - other.position[0];
+                    const oy = d.position[1] - other.position[1];
+                    const oz = d.position[2] - other.position[2];
+                    if (ox*ox + oy*oy + oz*oz < 0.005) {
+                      if (d.type === "wood_door") hasCoLocatedDoor = true;
+                      else if (d.type === "wood_window") hasCoLocatedWindow = true;
+                    }
                   }
                 }
               }

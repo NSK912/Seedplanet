@@ -109,7 +109,7 @@
           const allCols = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : [];
           for (let i = 0; i < allCols.length; i++) {
             const c = allCols[i];
-            if (!c || c.isPreview) continue;
+            if (!c || c.isPreview || c.type === "wild_growing_plant") continue;
             const isActive = !!c.active;
             const isWorldGen = c.isWorldGenerated !== false;
             const isHouseOrProc = !!(c.isHouse || c.isProceduralHouse);
@@ -127,13 +127,14 @@
                 removedWorldKeysSet.add(`${c.type}_${px}_${py}_${pz}`);
               }
             }
-            if (c.type === "wood_chest" && (isHouseOrProc || c.isHouseChest)) {
+            if (c.type === "wood_chest" && (isHouseOrProc || c.isHouseChest || c.isRandomLootChest)) {
               if ((!isActive || c.isDemolished) && c.houseIndex !== undefined) {
                 demolishedHouseChestsSet.add(c.houseIndex);
               } else if (isActive && !c.isDemolished && c.storage) {
                 houseChestsStorage.push({
                   houseIndex: c.houseIndex,
                   worldKey: c.worldKey,
+                  isRandomLootChest: !!c.isRandomLootChest,
                   storage: c.storage
                 });
               }
@@ -142,7 +143,7 @@
               if (c.isDynamic) {
                 dynamicCollectibles.push(c);
               }
-              if (!c.isWorldGenerated && !isHouseOrProc && !c.isRuin && (
+              if (!c.isGroundDrop && !c.isWorldGenerated && !isHouseOrProc && !c.isRuin && (
                 c.isPlayerPlaced ||
                 _PLACED_STRUCTURE_TYPES.has(c.type) ||
                 (typeof c.type === "string" && c.type.startsWith("robot_"))
@@ -182,8 +183,8 @@
 
             // Planet parameters
             currentGridSize,
-            radius: typeof RADIUS !== "undefined" ? RADIUS : (typeof window !== "undefined" && typeof window.RADIUS !== "undefined" ? window.RADIUS : 32.0),
-            RADIUS: typeof RADIUS !== "undefined" ? RADIUS : (typeof window !== "undefined" && typeof window.RADIUS !== "undefined" ? window.RADIUS : 32.0),
+            radius: typeof RADIUS !== "undefined" ? RADIUS : (typeof window !== "undefined" && typeof window.RADIUS !== "undefined" ? window.RADIUS : 64.0),
+            RADIUS: typeof RADIUS !== "undefined" ? RADIUS : (typeof window !== "undefined" && typeof window.RADIUS !== "undefined" ? window.RADIUS : 64.0),
             globalSeed,
 
             waterEnabled,
@@ -242,6 +243,7 @@
             choppedTrees: Array.isArray(choppedTrees) ? choppedTrees : (window.choppedTrees || []),
             destroyedRocks: Array.isArray(destroyedRocks) ? destroyedRocks : (window.destroyedRocks || []),
             cutGrassPositions: Array.isArray(window.cutGrassPositions) ? window.cutGrassPositions : [],
+            wildPlantGrowthState: (typeof window.WildPlantGrowthSystem !== "undefined" && typeof window.WildPlantGrowthSystem.exportState === "function") ? window.WildPlantGrowthSystem.exportState() : null,
             playerHP,
             playerMaxHP,
             playerHunger: typeof playerHunger !== "undefined" ? playerHunger : 5,
@@ -523,16 +525,16 @@
         }
 
         // Planet parameters
-        let loadedRadius = 32.0;
-        if (typeof settings.RADIUS === "number" && settings.RADIUS >= 32.0 && typeof settings.radius === "number" && settings.radius >= 32.0 && settings.RADIUS !== settings.radius) {
+        let loadedRadius = 64.0;
+        if (typeof settings.RADIUS === "number" && settings.RADIUS >= 64.0 && typeof settings.radius === "number" && settings.radius >= 64.0 && settings.RADIUS !== settings.radius) {
           // If one of them was explicitly overridden (e.g. radius vs DEFAULT_SETTINGS.RADIUS), prefer the non-default or radius
-          loadedRadius = settings.radius !== 32.0 ? settings.radius : settings.RADIUS;
-        } else if (typeof settings.RADIUS === "number" && settings.RADIUS >= 32.0) {
+          loadedRadius = settings.radius !== 64.0 ? settings.radius : settings.RADIUS;
+        } else if (typeof settings.RADIUS === "number" && settings.RADIUS >= 64.0) {
           loadedRadius = settings.RADIUS;
-        } else if (typeof settings.radius === "number" && settings.radius >= 32.0) {
+        } else if (typeof settings.radius === "number" && settings.radius >= 64.0) {
           loadedRadius = settings.radius;
         } else if (typeof settings.currentGridSize === "number") {
-          loadedRadius = Math.max(32.0, settings.currentGridSize / 12.5);
+          loadedRadius = Math.max(64.0, settings.currentGridSize / 12.5);
         }
         
         if (typeof window.updatePlanetRadiusAndHeightScale === "function") {
@@ -547,7 +549,7 @@
         }
 
         const expectedGridSize = Math.max(100, Math.min(1600, Math.round(RADIUS * 12.5)));
-        if (typeof settings.currentGridSize === "number" && !(RADIUS > 32.0 && settings.currentGridSize === 400)) {
+        if (typeof settings.currentGridSize === "number" && !(RADIUS >= 64.0 && settings.currentGridSize === 400) && !(RADIUS > 64.0 && settings.currentGridSize === 800)) {
           currentGridSize = settings.currentGridSize;
         } else {
           currentGridSize = expectedGridSize;
@@ -1251,6 +1253,9 @@
           }
 
           window.collectibles = collectibles;
+          if (settings.wildPlantGrowthState && typeof window.WildPlantGrowthSystem !== "undefined" && typeof window.WildPlantGrowthSystem.importState === "function") {
+            window.WildPlantGrowthSystem.importState(settings.wildPlantGrowthState);
+          }
           if (typeof window.getPlacedObsidianPadsInOrder === "function") {
             window.getPlacedObsidianPadsInOrder();
           }
@@ -1301,8 +1306,8 @@
         zoomLimitEnabled: true,
         ragdollEnabled: false,
         characterModel: "classic",
-        currentGridSize: 400,
-        RADIUS: 32.0,
+        currentGridSize: 800,
+        RADIUS: 64.0,
         globalSeed: 13585,
         waterEnabled: true,
         caveWaterEnabled: true,
@@ -1355,12 +1360,19 @@
           if (saved) {
             settingsObj = JSON.parse(saved);
             if (settingsObj) {
-              if (settingsObj.RADIUS === 2.5 || settingsObj.RADIUS === 3.6 || settingsObj.RADIUS === 8.0) {
-                settingsObj.RADIUS = 32.0;
-                settingsObj.radius = 32.0;
-                settingsObj.currentGridSize = 400;
-              } else if (settingsObj.currentGridSize === 180 || settingsObj.currentGridSize === 500) {
-                settingsObj.currentGridSize = 400;
+              if (
+                settingsObj.RADIUS === 2.5 ||
+                settingsObj.RADIUS === 3.6 ||
+                settingsObj.RADIUS === 8.0 ||
+                settingsObj.RADIUS === 32.0 ||
+                (typeof settingsObj.RADIUS === "number" && settingsObj.RADIUS < 64.0) ||
+                (typeof settingsObj.radius === "number" && settingsObj.radius < 64.0)
+              ) {
+                settingsObj.RADIUS = 64.0;
+                settingsObj.radius = 64.0;
+                settingsObj.currentGridSize = 800;
+              } else if (settingsObj.currentGridSize === 180 || settingsObj.currentGridSize === 400 || settingsObj.currentGridSize === 500) {
+                settingsObj.currentGridSize = 800;
               }
               delete settingsObj.tunnels3D;
               delete settingsObj.tunnelsRadius;
@@ -1638,7 +1650,7 @@
           if (isEmpty) {
             description = typeof t === "function" ? t("slot_empty_desc") : "สร้างดวงดาวใหม่ด้วยขนาดและข้อมูลเริ่มต้น";
           } else {
-            const gridSize = data.currentGridSize || 400;
+            const gridSize = data.currentGridSize || 800;
             const seed = data.globalSeed || 13585;
             const rock =
               data.collectedCount && data.collectedCount.rock !== undefined

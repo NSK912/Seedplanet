@@ -33,3 +33,4 @@ window.ItemRegistry["branch"] = {
     );
   }
 };
+window.ItemRegistry["BRANCH"] = window.ItemRegistry["branch"];

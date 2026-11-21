@@ -5,7 +5,7 @@ window.ItemRegistry["rock"] = {
     let color = item.color || [0.5, 0.5, 0.5];
     if (item.type === "dirt" || item.type === "DIRT") color = [0.46, 0.30, 0.16];
 
-    const s = item.type === "big_rock" ? item.size * 2.0 : item.size * 1.5;
+    const s = (item.type === "big_rock" || item.type === "BIG_ROCK") ? item.size * 2.0 : item.size * 1.5;
     const p = item.position || [0, 0, 0];
     const r = item.R || [1, 0, 0];
     const n = item.normal || [0, 1, 0];
@@ -35,6 +35,8 @@ window.ItemRegistry["rock"] = {
   }
 };
 
+window.ItemRegistry["ROCK"] = window.ItemRegistry["rock"];
 window.ItemRegistry["big_rock"] = window.ItemRegistry["rock"];
+window.ItemRegistry["BIG_ROCK"] = window.ItemRegistry["rock"];
 window.ItemRegistry["dirt"] = window.ItemRegistry["rock"];
 window.ItemRegistry["DIRT"] = window.ItemRegistry["rock"];

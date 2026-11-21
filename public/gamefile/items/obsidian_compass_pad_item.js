@@ -225,5 +225,9 @@
 
   window.ItemRegistry = window.ItemRegistry || {};
   window.ItemRegistry["obsidian_pad_warp_item"] = renderHandler;
+  window.ItemRegistry["obsidian_pad_warp"] = renderHandler;
+  window.ItemRegistry["OBSIDIAN_PAD_WARP"] = renderHandler;
   window.ItemRegistry["obsidian_compass_pad_item"] = renderHandler;
+  window.ItemRegistry["obsidian_compass_pad"] = renderHandler;
+  window.ItemRegistry["OBSIDIAN_COMPASS_PAD"] = renderHandler;
 })();

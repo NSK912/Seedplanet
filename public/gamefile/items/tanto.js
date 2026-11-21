@@ -185,7 +185,6 @@
   window.ItemRegistry["tanto"] = {
     render: function(item, vertices, colors, indices, targetBuffer) {
       const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
-      const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.4 : 0.45);
       const p = (item && item.position) ? item.position : [0, 0, 0];
       const r = (item && item.R) ? item.R : [1, 0, 0];
       const n = (item && item.normal) ? item.normal : [0, 1, 0];
@@ -194,10 +193,20 @@
         // Slight 22-deg diagonal tilt so blade, circuit trace, and guard pop in 3D inventory cards
         const ax = [r[0] * 0.37 + n[0] * 0.93, r[1] * 0.37 + n[1] * 0.93, r[2] * 0.37 + n[2] * 0.93];
         const ed = [r[0] * 0.93 - n[0] * 0.37, r[1] * 0.93 - n[1] * 0.37, r[2] * 0.93 - n[2] * 0.37];
-        window.buildTantoModel(s, p, ax, ed, f, vertices, colors, indices);
+        window.buildTantoModel(1.0, p, ax, ed, f, vertices, colors, indices);
       } else {
-        // World drop: lay blade flat along R with cutting edge along F and thickness vertical along normal
-        window.buildTantoModel(s, p, r, f, n, vertices, colors, indices);
+        // World drop: lay blade flat along rotated R with cutting edge along F and lifted cleanly above terrain
+        const s = (item && typeof item.size === "number") ? Math.min(item.size, 0.065) : 0.052;
+        const rotAngle = (item && typeof item.seed === "number") ? (item.seed % (Math.PI * 2)) : 0;
+        const rot = window.DropTemplateCache.rotateBasis(r, f, rotAngle);
+        const lift = 0.048 * s;
+        const centerShift = -0.25 * s;
+        const gp = [
+          p[0] + n[0] * lift + rot.R[0] * centerShift,
+          p[1] + n[1] * lift + rot.R[1] * centerShift,
+          p[2] + n[2] * lift + rot.R[2] * centerShift
+        ];
+        window.buildTantoModel(s, gp, rot.R, rot.F, n, vertices, colors, indices);
       }
     }
   };

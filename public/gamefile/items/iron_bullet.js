@@ -6,11 +6,17 @@ window.ItemRegistry = window.ItemRegistry || {};
 window.buildIronBulletModel = function(item, vertices, colors, indices) {
   const p = (item && item.position) ? item.position : [0, 0, 0];
   const s = typeof playerScale !== 'undefined' ? playerScale : 0.1;
-  const radius = ((item && item.radius) ? item.radius : 0.18) * s;
+  const isGroundDrop = !!(item && item.isGroundDrop);
+  const radius = isGroundDrop
+    ? ((typeof item.size === "number") ? Math.min(item.size, 0.014) : 0.009)
+    : (((item && item.radius) ? item.radius : 0.18) * s);
+  const r = (isGroundDrop && item.R) ? item.R : [1, 0, 0];
+  const n = (isGroundDrop && item.normal) ? item.normal : [0, 1, 0];
+  const f = (isGroundDrop && item.F) ? item.F : [0, 0, 1];
 
   window.DropTemplateCache.render(
     "iron_bullet_std",
-    { position: p, R: [1, 0, 0], normal: [0, 1, 0], F: [0, 0, 1], scale: radius, yOff: 0 },
+    { position: p, R: r, normal: n, F: f, scale: radius, yOff: isGroundDrop ? 1.0 : 0 },
     (tv, tc, ti) => {
       const segsLat = 12;
       const segsLong = 16;

@@ -113,9 +113,9 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
 // =========================================================================
 (function initGroundDropSystem() {
   const DROP_META = {
-    tough_meat:        { label: "TOUGH_MEAT",        icon: "🥩",  size: 0.16,  color: [0.60, 0.16, 0.18], floatInWater: false },
-    leather:           { label: "LEATHER",           icon: "🟫",  size: 0.16,  color: [0.35, 0.38, 0.42], floatInWater: false },
-    hide:              { label: "LEATHER",           icon: "🟫",  size: 0.16,  color: [0.35, 0.38, 0.42], floatInWater: false },
+    tough_meat:        { label: "TOUGH_MEAT",        icon: "🥩",  size: 0.085, color: [0.60, 0.16, 0.18], floatInWater: false },
+    leather:           { label: "LEATHER",           icon: "🟫",  size: 0.085, color: [0.35, 0.38, 0.42], floatInWater: false },
+    hide:              { label: "LEATHER",           icon: "🟫",  size: 0.085, color: [0.35, 0.38, 0.42], floatInWater: false },
     log:               { label: "LOG",               icon: "🪵",  size: 0.085, color: [0.50, 0.30, 0.15], floatInWater: true  },
     branch:            { label: "BRANCH",            icon: "🌿",  size: 0.025, color: [0.50, 0.30, 0.15], floatInWater: true  },
     rock:              { label: "ROCK",              icon: "🪨",  size: 0.025, color: [0.50, 0.50, 0.50], floatInWater: false },
@@ -124,23 +124,87 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
     iron_ore:          { label: "IRON_ORE",          icon: "🟥",  size: 0.04,  color: [0.65, 0.35, 0.30], floatInWater: false },
     gold_ore:          { label: "GOLD_ORE",          icon: "🪙",  size: 0.04,  color: [0.85, 0.72, 0.20], floatInWater: false },
     glow_ore:          { label: "GLOW_ORE",          icon: "✨",  size: 0.04,  color: [0.30, 0.90, 0.85], floatInWater: false },
-    glow_battery:      { label: "GLOW_BATTERY",      icon: "🔋",  size: 0.06,  color: [0.30, 0.90, 0.85], floatInWater: false },
+    glow_battery:      { label: "GLOW_BATTERY",      icon: "🔋",  size: 0.065, color: [0.30, 0.90, 0.85], floatInWater: false },
+    glow_battery_empty:{ label: "GLOW_BATTERY_EMPTY",icon: "🪫",  size: 0.065, color: [0.35, 0.35, 0.38], floatInWater: false },
     dragon_fruit:      { label: "DRAGON_FRUIT",      icon: "🐉",  size: 0.038, color: [0.92, 0.14, 0.46], floatInWater: false },
     cotton_plant:      { label: "COTTON_PLANT",      icon: "☁️",  size: 0.06,  color: [0.96, 0.96, 0.94], floatInWater: false },
     crown_flower:      { label: "CROWN_FLOWER",      icon: "💮",  size: 0.06,  color: [0.92, 0.90, 0.96], floatInWater: false },
-    grass:             { label: "GRASS",             icon: "🌱",  size: 0.14,  color: [0.35, 0.62, 0.24], floatInWater: true  },
+    grass:             { label: "GRASS",             icon: "🌱",  size: 0.060, color: [0.35, 0.62, 0.24], floatInWater: true  },
     cloth:             { label: "CLOTH",             icon: "⬜",  size: 0.08,  color: [0.94, 0.93, 0.90], floatInWater: false },
     rubber_block:      { label: "RUBBER_BLOCK",      icon: "⬛",  size: 0.08,  color: [0.18, 0.18, 0.20], floatInWater: false },
-    fried_bug:         { label: "FRIED_BUG",         icon: "🍤",  size: 0.08,  color: [0.78, 0.48, 0.20], floatInWater: false },
-    isopod_item:       { label: "ISOPOD",            icon: "🦐",  size: 0.10,  color: [0.55, 0.50, 0.46], floatInWater: false },
-    meganeura_item:    { label: "MEGANEURA",         icon: "🦟",  size: 0.10,  color: [0.35, 0.65, 0.40], floatInWater: false },
-    obsidian_cube_item:{ label: "OBSIDIAN_CUBE",     icon: "🟪",  size: 0.08,  color: [0.22, 0.12, 0.35], floatInWater: false },
-    obsidian_flux_item:{ label: "OBSIDIAN_FLUX",     icon: "🟣",  size: 0.08,  color: [0.55, 0.22, 0.85], floatInWater: false },
-    axe:               { label: "AXE",               icon: "🪓",  size: 0.12,  color: [0.60, 0.60, 0.65], floatInWater: false },
-    pickaxe:           { label: "PICKAXE",           icon: "⛏️", size: 0.12,  color: [0.60, 0.60, 0.65], floatInWater: false },
-    shovel:            { label: "SHOVEL",            icon: "🪏",  size: 0.12,  color: [0.60, 0.60, 0.65], floatInWater: false },
-    tanto:             { label: "TANTO",             icon: "🗡️", size: 0.12,  color: [0.85, 0.85, 0.90], floatInWater: false },
-    aegis_shift:       { label: "AEGIS_SHIFT",       icon: "⛏️⚔️", size: 0.14, color: [0.75, 0.78, 0.88], floatInWater: false }
+    fried_bug:         { label: "FRIED_BUG",         icon: "🍤",  size: 0.072, color: [0.78, 0.48, 0.20], floatInWater: false },
+    isopod_item:       { label: "ISOPOD",            icon: "🦐",  size: 0.20,  color: [0.55, 0.50, 0.46], floatInWater: false },
+    isopod:            { label: "ISOPOD",            icon: "🦐",  size: 0.20,  color: [0.55, 0.50, 0.46], floatInWater: false },
+    meganeura_item:    { label: "MEGANEURA",         icon: "🦟",  size: 0.24,  color: [0.35, 0.65, 0.40], floatInWater: false },
+    meganeura:         { label: "MEGANEURA",         icon: "🦟",  size: 0.24,  color: [0.35, 0.65, 0.40], floatInWater: false },
+    obsidian_cube_item:{ label: "OBSIDIAN_CUBE",     icon: "🟪",  size: 0.075, color: [0.22, 0.12, 0.35], floatInWater: false },
+    obsidian_cube:     { label: "OBSIDIAN_CUBE",     icon: "🟪",  size: 0.075, color: [0.22, 0.12, 0.35], floatInWater: false },
+    obsidian_flux_item:{ label: "OBSIDIAN_FLUX",     icon: "🟣",  size: 0.078, color: [0.55, 0.22, 0.85], floatInWater: false },
+    obsidian_flux:     { label: "OBSIDIAN_FLUX",     icon: "🟣",  size: 0.078, color: [0.55, 0.22, 0.85], floatInWater: false },
+    axe:               { label: "AXE",               icon: "🪓",  size: 0.042, color: [0.60, 0.60, 0.65], floatInWater: false },
+    pickaxe:           { label: "PICKAXE",           icon: "⛏️", size: 0.042, color: [0.60, 0.60, 0.65], floatInWater: false },
+    shovel:            { label: "SHOVEL",            icon: "🪏",  size: 0.022, color: [0.60, 0.60, 0.65], floatInWater: false },
+    tanto:             { label: "TANTO",             icon: "🗡️", size: 0.052, color: [0.85, 0.85, 0.90], floatInWater: false },
+    aegis_shift:       { label: "AEGIS_SHIFT",       icon: "⛏️⚔️", size: 0.064, color: [0.75, 0.78, 0.88], floatInWater: false },
+    bow:               { label: "BOW",               icon: "🏹",  size: 0.085, color: [0.55, 0.38, 0.22], floatInWater: true  },
+    arrow:             { label: "ARROW",             icon: "🏹",  size: 0.050, color: [0.55, 0.40, 0.25], floatInWater: true  },
+    iron_bullet:       { label: "IRON_BULLET",       icon: "⚫",  size: 0.009, color: [0.75, 0.78, 0.82], floatInWater: false },
+    wooden_arm_cannon: { label: "WOODEN_ARM_CANNON", icon: "🪵",  size: 0.24,  color: [0.55, 0.38, 0.22], floatInWater: true  },
+    iron_bucket:       { label: "IRON_BUCKET",       icon: "🪣",  size: 0.040, color: [0.62, 0.66, 0.72], floatInWater: false },
+    water_bucket:      { label: "WATER_BUCKET",      icon: "🪣",  size: 0.040, color: [0.22, 0.62, 0.92], floatInWater: false },
+    double_breasted_suit:  { label: "DOUBLE_BREASTED_SUIT",  icon: "🧥", size: 0.056, color: [0.24, 0.25, 0.27], floatInWater: true  },
+    black_slacks:          { label: "BLACK_SLACKS",          icon: "👖", size: 0.050, color: [0.22, 0.23, 0.25], floatInWater: true  },
+    opera_cape:            { label: "OPERA_CAPE",            icon: "🧛", size: 0.056, color: [0.10, 0.11, 0.13], floatInWater: true  },
+    traveler_hoodie:       { label: "TRAVELER_HOODIE",       icon: "🧥", size: 0.056, color: [0.93, 0.90, 0.85], floatInWater: true  },
+    hoodie_cloak:          { label: "TRAVELER_HOODIE",       icon: "🧥", size: 0.056, color: [0.93, 0.90, 0.85], floatInWater: true  },
+    white_shirt_short:     { label: "WHITE_SHIRT_SHORT",     icon: "👔", size: 0.050, color: [0.98, 0.98, 0.99], floatInWater: true  },
+    black_pleated_skirt:   { label: "BLACK_PLEATED_SKIRT",   icon: "👗", size: 0.050, color: [0.13, 0.14, 0.16], floatInWater: true  },
+    black_leggings:        { label: "BLACK_LEGGINGS",        icon: "👖", size: 0.048, color: [0.13, 0.14, 0.16], floatInWater: true  },
+    white_bodysuit_top:    { label: "WHITE_BODYSUIT_TOP",    icon: "👕", size: 0.046, color: [0.97, 0.98, 0.99], floatInWater: true  },
+    white_bodysuit_shorts: { label: "WHITE_BODYSUIT_SHORTS", icon: "🩳", size: 0.044, color: [0.97, 0.98, 0.99], floatInWater: true  },
+    traveler_boots:        { label: "TRAVELER_BOOTS",        icon: "🥾", size: 0.042, color: [0.15, 0.16, 0.18], floatInWater: false },
+    hoodie_boots:          { label: "TRAVELER_BOOTS",        icon: "🥾", size: 0.042, color: [0.15, 0.16, 0.18], floatInWater: false },
+    oxford_shoes:          { label: "OXFORD_SHOES",          icon: "👞", size: 0.042, color: [0.09, 0.10, 0.12], floatInWater: false },
+    dress_boots:           { label: "DRESS_BOOTS",           icon: "🥾", size: 0.042, color: [0.09, 0.10, 0.12], floatInWater: false }
+  };
+
+  // Placeable structures / furniture / vehicles / mechs (27 items + aliases).
+  // Kept SEPARATE from DROP_META so isGroundDropType() stays false for placed buildings,
+  // while getMeta() and renderPlaceableDrop() give ground-dropped items crisp normalized miniature 3D models.
+  const PLACEABLE_DROP_META = {
+    wood_floor:               { label: "WOOD_FLOOR",        icon: "🟫", size: 0.058, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.75 },
+    plank:                    { label: "WOOD_FLOOR",        icon: "🟫", size: 0.058, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.75 },
+    thin_wood_floor:          { label: "THIN_WOOD_FLOOR",   icon: "🪵", size: 0.058, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.75 },
+    stone_floor:              { label: "STONE_FLOOR",       icon: "🧱", size: 0.058, color: [0.55, 0.55, 0.57], floatInWater: false, mockSize: 0.08, mockExtra: { width: 0.75, depth: 0.75, isIconPreview: true } },
+    wood_wall:                { label: "WOOD_WALL",         icon: "🧱", size: 0.062, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.25 },
+    wood_window:              { label: "WOOD_WINDOW",       icon: "🪟", size: 0.062, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.25 },
+    wood_door:                { label: "WOOD_DOOR",         icon: "🚪", size: 0.064, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.25 },
+    wood_roof:                { label: "WOOD_ROOF",         icon: "🏠", size: 0.064, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.25, mockExtra: { angle: 0.0 } },
+    wood_stairs:              { label: "WOOD_STAIRS",       icon: "🪜", size: 0.064, color: [0.65, 0.45, 0.25], floatInWater: true,  mockSize: 0.25, mockExtra: { stairTop: [-0.175, 0.175, -0.175], stairBottom: [0.175, -0.175, 0.175] } },
+    folding_ladder:           { label: "FOLDING_LADDER",    icon: "🪜", size: 0.064, color: [0.55, 0.58, 0.62], floatInWater: false, mockSize: 0.25, mockExtra: { stairTop: [-0.175, 0.175, -0.175], stairBottom: [0.175, -0.175, 0.175] } },
+    campfire:                 { label: "CAMPFIRE",          icon: "🔥", size: 0.056, color: [0.50, 0.36, 0.22], floatInWater: false, mockSize: 0.25 },
+    lantern:                  { label: "LANTERN",           icon: "🏮", size: 0.044, color: [0.95, 0.78, 0.35], floatInWater: false, mockSize: 0.25 },
+    wood_bed:                 { label: "WOOD_BED",          icon: "🛏️", size: 0.064, color: [0.58, 0.40, 0.22], floatInWater: true,  mockSize: 0.25 },
+    wood_chair:               { label: "WOOD_CHAIR",        icon: "🪑", size: 0.054, color: [0.58, 0.40, 0.22], floatInWater: true,  mockSize: 0.25 },
+    wood_table:               { label: "WOOD_TABLE",        icon: "🪑", size: 0.060, color: [0.56, 0.38, 0.21], floatInWater: true,  mockSize: 0.25 },
+    wood_chest:               { label: "WOOD_CHEST",        icon: "🧰", size: 0.056, color: [0.52, 0.35, 0.18], floatInWater: true,  mockSize: 0.25 },
+    wood_planter_box:         { label: "WOOD_PLANTER_BOX",  icon: "🪴", size: 0.058, color: [0.52, 0.35, 0.19], floatInWater: true,  mockSize: 0.25 },
+    obsidian_pad_warp_item:   { label: "OBSIDIAN_PAD_WARP", icon: "🧭", size: 0.058, color: [0.18, 0.14, 0.26], floatInWater: false, mockSize: 0.25 },
+    obsidian_pad_warp:        { label: "OBSIDIAN_PAD_WARP", icon: "🧭", size: 0.058, color: [0.18, 0.14, 0.26], floatInWater: false, mockSize: 0.25 },
+    obsidian_compass_pad_item:{ label: "OBSIDIAN_PAD_WARP", icon: "🧭", size: 0.058, color: [0.18, 0.14, 0.26], floatInWater: false, mockSize: 0.25 },
+    obsidian_compass_pad:     { label: "OBSIDIAN_PAD_WARP", icon: "🧭", size: 0.058, color: [0.18, 0.14, 0.26], floatInWater: false, mockSize: 0.25 },
+    wood_boat:                { label: "WOOD_BOAT",         icon: "⛵", size: 0.072, color: [0.56, 0.38, 0.20], floatInWater: false, mockSize: 0.25 },
+    boat_wing:                { label: "BOAT_WING",         icon: "🪽", size: 0.068, color: [0.86, 0.80, 0.68], floatInWater: true,  mockSize: 0.25 },
+    wood_wheel:               { label: "WOOD_WHEEL",        icon: "🛞", size: 0.052, color: [0.55, 0.38, 0.22], floatInWater: true,  mockSize: 0.25 },
+    electric_engine:          { label: "ELECTRIC_ENGINE",   icon: "⚙️", size: 0.054, color: [0.75, 0.75, 0.78], floatInWater: false, mockSize: 0.25 },
+    robot_stand:              { label: "ROBOT_STAND",       icon: "🤖", size: 0.066, color: [0.22, 0.22, 0.25], floatInWater: false, mockSize: 0.25 },
+    robot_cockpit:            { label: "ROBOT_COCKPIT",     icon: "🤖", size: 0.066, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
+    robot_left_arm:           { label: "ROBOT_LEFT_ARM",    icon: "🦾", size: 0.062, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
+    robot_right_arm:          { label: "ROBOT_RIGHT_ARM",   icon: "🦾", size: 0.062, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
+    robot_left_leg:           { label: "ROBOT_LEFT_LEG",    icon: "🦿", size: 0.064, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
+    robot_right_leg:          { label: "ROBOT_RIGHT_LEG",   icon: "🦿", size: 0.064, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
+    robot_core:               { label: "ROBOT_CORE",        icon: "💠", size: 0.054, color: [0.30, 0.85, 0.90], floatInWater: false, mockSize: 0.25 },
+    robot_module:             { label: "ROBOT_MODULE",      icon: "🧩", size: 0.054, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 }
   };
 
   function normalizeDropType(type) {
@@ -150,6 +214,12 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
   function isGroundDropType(type) {
     if (!type) return false;
     return Object.prototype.hasOwnProperty.call(DROP_META, normalizeDropType(type));
+  }
+
+  function getPlaceableDropMeta(type) {
+    if (!type) return null;
+    const key = normalizeDropType(type);
+    return Object.prototype.hasOwnProperty.call(PLACEABLE_DROP_META, key) ? PLACEABLE_DROP_META[key] : null;
   }
 
   function isGroundDrop(item) {
@@ -162,6 +232,9 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
     const key = normalizeDropType(type);
     if (Object.prototype.hasOwnProperty.call(DROP_META, key)) {
       return DROP_META[key];
+    }
+    if (Object.prototype.hasOwnProperty.call(PLACEABLE_DROP_META, key)) {
+      return PLACEABLE_DROP_META[key];
     }
     return {
       label: key ? key.toUpperCase() : "BRANCH",
@@ -242,6 +315,7 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
     if (!key) return false;
     if (key === "cotton_plant" || key === "crown_flower") return false;
     if (opts && opts.extra && opts.extra.isAttachedToTree) return false;
+    if (opts && opts.extra && opts.extra.isPlayerDropped) return true;
     return isGroundDropType(key);
   }
 
@@ -297,11 +371,13 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
         if (hostEntry) {
           const host = hostEntry.drop;
           host.count = Math.max(1, host.count || 1) + addCount;
+          host._groundDropAgeSec = 0;
           return host;
         }
         if (addCount > STACK_THRESHOLD || (nearbyTotal + addCount) > STACK_THRESHOLD) {
           const host = nearby[0].drop;
           host.count = nearbyTotal + addCount;
+          host._groundDropAgeSec = 0;
           for (let i = 1; i < nearby.length; i++) {
             markCollected(nearby[i].drop);
           }
@@ -346,6 +422,7 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
       isGroundDrop: true,
       _dropSettled: false,
       _settleFrames: 0,
+      _groundDropAgeSec: 0,
       seed: (typeof opts.seed === "number") ? opts.seed : Math.random()
     };
     if (addCount > 1) {
@@ -510,6 +587,9 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
       const obs = natureList.find(o => o && o.id === obsId);
       if (obs) obs.active = false;
     }
+    if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onCollectibleHarvested === "function") {
+      window.WildPlantGrowthSystem.onCollectibleHarvested(item);
+    }
 
     if (item.isDynamic) {
       if (
@@ -528,23 +608,380 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
       if (typeof pendingCollectibleRefresh !== "undefined") pendingCollectibleRefresh = true;
       window.pendingCollectibleRefresh = true;
     }
+    if (isRemovableDynamicDrop(item)) {
+      _deadDynamicDropCount++;
+    }
     return true;
+  }
+
+  // =========================================================================
+  // AUTO-TRANSFER EXPIRED GROUND DROPS & LANDED AMMO TO NEAREST RANDOM LOOT CHEST
+  // Strictly excludes planet-generated static world items (branches/rocks/plants/fruits/boats).
+  // =========================================================================
+  const AUTO_TRANSFER_TTL_SEC = 120; // 2 minutes on the ground before auto-transfer
+  const AUTO_TRANSFER_SWEEP_INTERVAL_SEC = 1.0;
+  const DEAD_DROP_COMPACT_THRESHOLD = 24;
+  let _autoTransferSweepAccum = 0;
+  let _deadDynamicDropCount = 0;
+  let _cachedLootChestsList = null;
+  let _cachedLootChestsSource = null;
+  let _cachedLootChestsLen = -1;
+  let _cachedLootChestsGridVer = -1;
+
+  function isRemovableDynamicDrop(c) {
+    if (!c || !c.isDynamic || c.isWorldGenerated || c.isPlayerPlaced || c.worldKey) return false;
+    return !!(c.isGroundDrop || c.type === "arrow");
+  }
+
+  function compactInactiveDrops(colList) {
+    const list = Array.isArray(colList)
+      ? colList
+      : ((typeof collectibles !== "undefined" && Array.isArray(collectibles))
+        ? collectibles
+        : (typeof window !== "undefined" && Array.isArray(window.collectibles) ? window.collectibles : null));
+    if (!list || list.length === 0) {
+      _deadDynamicDropCount = 0;
+      return 0;
+    }
+    let writeIdx = 0;
+    let removed = 0;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (c && c.active === false && isRemovableDynamicDrop(c)) {
+        removed++;
+        continue;
+      }
+      if (writeIdx !== i) {
+        list[writeIdx] = c;
+      }
+      writeIdx++;
+    }
+    if (removed > 0) {
+      list.length = writeIdx;
+      _cachedLootChestsList = null;
+      if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.rebuild === "function") {
+        SpatialGrid.rebuild(list);
+      }
+    }
+    _deadDynamicDropCount = 0;
+    return removed;
+  }
+
+  function getAutoTransferTtlSec() {
+    if (typeof window !== "undefined" && typeof window.GROUND_DROP_TRANSFER_TTL_SEC === "number" && window.GROUND_DROP_TRANSFER_TTL_SEC > 0) {
+      return window.GROUND_DROP_TRANSFER_TTL_SEC;
+    }
+    return AUTO_TRANSFER_TTL_SEC;
+  }
+
+  function isAutoTransferEligible(c) {
+    if (!c || c.active === false || c.isPreview || c.isAttachedToTree) return false;
+    // Planet-generated static world collectibles (rocks, branches, cotton, crown flower, tree fruits)
+    // and world-generated beach boats/chests are never touched.
+    if (!c.isDynamic || c.isWorldGenerated) return false;
+    if (!c.position || c.position.length < 3) return false;
+
+    // 1. All dynamic ground drops (chopped/mined/looted/dropped items, dropped structures/boats/ammo, detached fruits)
+    if (c.isGroundDrop) return true;
+
+    // 2. Fired projectiles / ammo that landed on the ground (arrows, iron bullets, etc.)
+    if (c.type === "arrow") {
+      if (c.isStuck) return true;
+      if (c.attachedToNPC && (c.attachedToNPC.hp <= 0 || c.attachedToNPC.ragdollEnabled)) return true;
+      return false;
+    }
+
+    return false;
+  }
+
+  // Single canonical resolver converting ANY ground collectible/drop/landed ammo to inventory/chest item metadata
+  function resolveDropItemData(drop) {
+    if (!drop) return null;
+    let rawName = null;
+    if (drop.dropItemName) {
+      rawName = String(drop.dropItemName).trim().toUpperCase();
+    } else if (drop.type === "arrow" && drop.ammoType) {
+      rawName = String(drop.ammoType).trim().toUpperCase();
+    } else {
+      const meta = getMeta(drop.type);
+      rawName = (meta && meta.label)
+        ? String(meta.label).trim().toUpperCase()
+        : String(drop.type || "BRANCH").trim().toUpperCase();
+    }
+
+    const def = (typeof window !== "undefined" && typeof window.getItemDefinition === "function")
+      ? window.getItemDefinition(rawName)
+      : null;
+    const canonicalName = (def && def.id) ? def.id : rawName;
+    const metaFallback = getMeta(drop.type);
+    const icon = drop.dropItemIcon || (def && def.icon) || (metaFallback && metaFallback.icon) || "📦";
+    const label = drop.dropItemLabel || canonicalName;
+    const maxStack = Math.max(1, (def && typeof def.maxStack === "number") ? def.maxStack : 30);
+    const count = Math.max(1, Math.floor(drop.count || 1));
+
+    const itemData = {
+      name: canonicalName,
+      icon: icon,
+      label: label,
+      count: count
+    };
+    if (typeof drop.dropRechargeTime === "number") {
+      itemData.rechargeTime = drop.dropRechargeTime;
+    }
+    return { itemData, maxStack };
+  }
+
+  function buildChestItemFromDrop(drop) {
+    return resolveDropItemData(drop);
+  }
+
+  function getActiveRandomLootChests(colList) {
+    if (!Array.isArray(colList)) return [];
+    const gridVer = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.version === "number") ? SpatialGrid.version : -1;
+    if (
+      _cachedLootChestsList &&
+      _cachedLootChestsSource === colList &&
+      _cachedLootChestsLen === colList.length &&
+      _cachedLootChestsGridVer === gridVer
+    ) {
+      // Fast filter in case a cached loot chest was just demolished (active flipped to false)
+      let allActive = true;
+      for (let i = 0; i < _cachedLootChestsList.length; i++) {
+        if (!_cachedLootChestsList[i] || _cachedLootChestsList[i].active === false) {
+          allActive = false;
+          break;
+        }
+      }
+      if (allActive) return _cachedLootChestsList;
+    }
+
+    const chests = [];
+    for (let i = 0; i < colList.length; i++) {
+      const c = colList[i];
+      if (!c || c.active === false || c.isPreview || c.isGroundDrop) continue;
+      if (c.type !== "wood_chest" || !c.isRandomLootChest) continue;
+      if (!c.position || c.position.length < 3) continue;
+      chests.push(c);
+    }
+    _cachedLootChestsList = chests;
+    _cachedLootChestsSource = colList;
+    _cachedLootChestsLen = colList.length;
+    _cachedLootChestsGridVer = gridVer;
+    return chests;
+  }
+
+  function findRandomLootChestsByDistance(pos, colList, preloadedChests) {
+    if (!pos) return [];
+    const sourceChests = Array.isArray(preloadedChests) ? preloadedChests : getActiveRandomLootChests(colList);
+    if (sourceChests.length === 0) return [];
+    const px = pos[0], py = pos[1], pz = pos[2];
+    const chests = [];
+    for (let i = 0; i < sourceChests.length; i++) {
+      const c = sourceChests[i];
+      if (!c || c.active === false || !c.position) continue;
+      const dx = c.position[0] - px;
+      const dy = c.position[1] - py;
+      const dz = c.position[2] - pz;
+      chests.push({ chest: c, distSq: dx * dx + dy * dy + dz * dz });
+    }
+    if (chests.length > 1) {
+      chests.sort((a, b) => a.distSq - b.distSq);
+    }
+    return chests;
+  }
+
+  function depositIntoChestStorage(chest, itemData, maxStack, amount) {
+    if (!chest || !itemData || amount <= 0) return 0;
+    if (!Array.isArray(chest.storage)) {
+      chest.storage = Array(20).fill(null);
+    } else {
+      while (chest.storage.length < 20) chest.storage.push(null);
+    }
+    let remaining = amount;
+    let deposited = 0;
+    const hasCustomCharge = typeof itemData.rechargeTime === "number";
+
+    // Pass 1: stack into existing matching slots (only when stackable and no distinct rechargeTime)
+    if (maxStack > 1 && !hasCustomCharge) {
+      for (let i = 0; i < 20 && remaining > 0; i++) {
+        const slot = chest.storage[i];
+        if (!slot || slot.name !== itemData.name) continue;
+        if (typeof slot.rechargeTime === "number") continue;
+        const cur = Math.max(1, Math.floor(slot.count || 1));
+        const space = maxStack - cur;
+        if (space > 0) {
+          const add = Math.min(space, remaining);
+          slot.count = cur + add;
+          remaining -= add;
+          deposited += add;
+        }
+      }
+    }
+
+    // Pass 2: place into empty slots
+    for (let i = 0; i < 20 && remaining > 0; i++) {
+      if (chest.storage[i] !== null && chest.storage[i] !== undefined) continue;
+      const add = Math.min(maxStack, remaining);
+      const entry = {
+        name: itemData.name,
+        icon: itemData.icon,
+        label: itemData.label,
+        count: add
+      };
+      if (hasCustomCharge) {
+        entry.rechargeTime = itemData.rechargeTime;
+      }
+      chest.storage[i] = entry;
+      remaining -= add;
+      deposited += add;
+    }
+
+    return deposited;
+  }
+
+  function depositDropToNearestLootChest(drop, colList, opts) {
+    const list = Array.isArray(colList)
+      ? colList
+      : ((typeof collectibles !== "undefined" && Array.isArray(collectibles))
+        ? collectibles
+        : (typeof window !== "undefined" && Array.isArray(window.collectibles) ? window.collectibles : null));
+    if (!drop || !list || !isAutoTransferEligible(drop)) {
+      return { deposited: 0, remaining: drop ? (drop.count || 1) : 0, chest: null, openChestModified: false };
+    }
+
+    const built = resolveDropItemData(drop);
+    if (!built || !built.itemData) {
+      return { deposited: 0, remaining: drop.count || 1, chest: null, openChestModified: false };
+    }
+
+    const orderedChests = findRandomLootChestsByDistance(drop.position, list, opts && opts.cachedLootChests);
+    if (orderedChests.length === 0) {
+      return { deposited: 0, remaining: built.itemData.count, chest: null, openChestModified: false };
+    }
+
+    let remaining = built.itemData.count;
+    let depositedTotal = 0;
+    let firstTargetChest = null;
+    let openChestModified = false;
+    const curOpen = (typeof currentOpenChest !== "undefined") ? currentOpenChest : null;
+
+    for (let i = 0; i < orderedChests.length && remaining > 0; i++) {
+      const targetChest = orderedChests[i].chest;
+      const added = depositIntoChestStorage(targetChest, built.itemData, built.maxStack, remaining);
+      if (added > 0) {
+        if (!firstTargetChest) firstTargetChest = targetChest;
+        depositedTotal += added;
+        remaining -= added;
+        if (curOpen && curOpen === targetChest) {
+          openChestModified = true;
+        }
+      }
+    }
+
+    if (depositedTotal > 0) {
+      if (remaining <= 0) {
+        if (drop.attachedToNPC) drop.attachedToNPC = null;
+        drop.count = 0;
+        markCollected(drop);
+      } else {
+        drop.count = remaining;
+        drop._groundDropAgeSec = 0;
+      }
+      if (openChestModified && !(opts && opts.deferChestRender) && typeof renderChest === "function") {
+        renderChest();
+      }
+    }
+
+    return { deposited: depositedTotal, remaining: remaining, chest: firstTargetChest, openChestModified: openChestModified };
+  }
+
+  function processExpiredDrops(dtSec, colList) {
+    const dtVal = (typeof dtSec === "number" && dtSec > 0 && dtSec < 10) ? dtSec : (1 / 60);
+    _autoTransferSweepAccum += dtVal;
+    if (_autoTransferSweepAccum < AUTO_TRANSFER_SWEEP_INTERVAL_SEC) return 0;
+    const elapsedSec = _autoTransferSweepAccum;
+    _autoTransferSweepAccum = 0;
+
+    const list = Array.isArray(colList)
+      ? colList
+      : ((typeof collectibles !== "undefined" && Array.isArray(collectibles))
+        ? collectibles
+        : (typeof window !== "undefined" && Array.isArray(window.collectibles) ? window.collectibles : null));
+    if (!list || list.length === 0) return 0;
+
+    // Scan ONLY dynamic items via SpatialGrid.dynamicItems when synced (avoids iterating 3,000+ static world items)
+    let scanList = list;
+    if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.ensureSynced === "function" && Array.isArray(SpatialGrid.dynamicItems)) {
+      SpatialGrid.ensureSynced(list);
+      scanList = SpatialGrid.dynamicItems;
+    }
+
+    const ttlSec = getAutoTransferTtlSec();
+    let transferredDrops = 0;
+    let cachedLootChests = null;
+    let anyOpenChestModified = false;
+
+    for (let i = 0; i < scanList.length; i++) {
+      const c = scanList[i];
+      if (!isAutoTransferEligible(c)) continue;
+      c._groundDropAgeSec = (typeof c._groundDropAgeSec === "number" ? c._groundDropAgeSec : 0) + elapsedSec;
+      if (c._groundDropAgeSec >= ttlSec) {
+        if (cachedLootChests === null) {
+          cachedLootChests = getActiveRandomLootChests(list);
+        }
+        const res = depositDropToNearestLootChest(c, list, {
+          cachedLootChests: cachedLootChests,
+          deferChestRender: true
+        });
+        if (res.deposited > 0) {
+          transferredDrops++;
+          if (res.openChestModified) anyOpenChestModified = true;
+        } else {
+          // No random loot chest available or all full: retry gently in 15s without losing the item
+          c._groundDropAgeSec = Math.max(0, ttlSec - 15);
+        }
+      }
+    }
+
+    if (anyOpenChestModified && typeof renderChest === "function") {
+      renderChest();
+    }
+
+    if (_deadDynamicDropCount >= DEAD_DROP_COMPACT_THRESHOLD) {
+      compactInactiveDrops(list);
+    }
+
+    return transferredDrops;
   }
 
   window.GroundDropSystem = {
     META: DROP_META,
+    PLACEABLE_META: PLACEABLE_DROP_META,
     STACK_THRESHOLD,
     STACK_MERGE_RADIUS,
+    AUTO_TRANSFER_TTL_SEC,
     normalizeDropType,
     isGroundDropType,
+    getPlaceableDropMeta,
     isGroundDrop,
     isStackableDropType,
+    isAutoTransferEligible,
+    resolveDropItemData,
+    buildChestItemFromDrop,
+    depositDropToNearestLootChest,
+    processExpiredDrops,
+    compactInactiveDrops,
     getMeta,
     computeSurfaceBasis,
     spawn,
     spawnBatch,
     takeFromDrop,
-    markCollected
+    markCollected,
+    getRarity: function(itemOrType) {
+      return (typeof window !== "undefined" && typeof window.getItemRarity === "function")
+        ? window.getItemRarity(itemOrType)
+        : "COMMON";
+    }
   };
 })();
 
@@ -583,6 +1020,7 @@ function detachTreeAttachedFruits(tree) {
       c.isGroundDrop = true;
       c._dropSettled = false;
       c._settleFrames = 0;
+      c._groundDropAgeSec = 0;
       c.vel = computeInwardVel(c.position, tree.normal);
       c.spin = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05];
       c.spinSpeed = 0.02;
@@ -802,6 +1240,103 @@ window.DropTemplateCache = {
       opts.colorTransform
     );
     return true;
+  },
+  // Bake any full-scale placeable structure/furniture/vehicle/mech ONCE into a normalized
+  // unit-bounding-box miniature template (X/Z centered at 0, bottom flush at Y = 0), then emit at meta.size.
+  renderPlaceableDrop(item, meta, rawHandler, vertices, colors, indices) {
+    if (!item || !meta || !rawHandler || typeof rawHandler.render !== "function") return false;
+    const normType = String(item.type || "").toLowerCase();
+    const key = `placeable_drop_v1_${normType}`;
+    const tpl = this.getOrBake(key, (tv, tc, ti) => {
+      const savedGlobals = {};
+      const guarded = {
+        getHeightOnSphere: () => 0,
+        globalSeed: 12345,
+        RADIUS: 0.0,
+        HEIGHT_SCALE: 1.0,
+        waterLevel: 0.0,
+        waterEnabled: false,
+        playerScale: 0.1,
+        waterRadius: 10.0,
+        collectibles: [],
+        _spatialDoors: null,
+        _spatialWindows: null,
+        _spatialRoofs: null,
+        _spatialFloors: null,
+        floorPreviewCollectible: null
+      };
+      for (const k in guarded) {
+        savedGlobals[k] = window[k];
+        window[k] = guarded[k];
+      }
+      try {
+        const mockItem = Object.assign({
+          position: [0, 0, 0],
+          R: [1, 0, 0],
+          F: [0, 0, 1],
+          normal: [0, 1, 0],
+          size: typeof meta.mockSize === "number" ? meta.mockSize : 0.25,
+          seed: 123.45,
+          color: meta.color || [0.65, 0.45, 0.25],
+          type: normType,
+          isPreview: false,
+          isValidPlacement: true,
+          isGroundDrop: false,
+          angle: 0
+        }, meta.mockExtra || {});
+        rawHandler.render(mockItem, tv, tc, ti, "preview");
+      } finally {
+        for (const k in savedGlobals) {
+          if (savedGlobals[k] === undefined) {
+            delete window[k];
+          } else {
+            window[k] = savedGlobals[k];
+          }
+        }
+      }
+      if (tv.length >= 3) {
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        let minZ = Infinity, maxZ = -Infinity;
+        for (let i = 0; i < tv.length; i += 3) {
+          const x = tv[i], y = tv[i + 1], z = tv[i + 2];
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+          if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+        }
+        const cx = (minX + maxX) * 0.5;
+        const cz = (minZ + maxZ) * 0.5;
+        const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 0.0001);
+        const inv = 1.0 / span;
+        for (let i = 0; i < tv.length; i += 3) {
+          tv[i]     = (tv[i]     - cx)   * inv;
+          tv[i + 1] = (tv[i + 1] - minY) * inv;
+          tv[i + 2] = (tv[i + 2] - cz)   * inv;
+        }
+      }
+    });
+    if (!tpl) return false;
+    const p = item.position || [0, 0, 0];
+    const r = item.R || [1, 0, 0];
+    const n = item.normal || [0, 1, 0];
+    const f = item.F || [0, 0, 1];
+    const seed = (typeof item.seed === "number") ? item.seed : 0;
+    const basis = this.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2));
+    const scale = (typeof item.size === "number" && item.size > 0 && item.size <= 0.12) ? item.size : meta.size;
+    _emitCachedDropTemplate(
+      tpl,
+      p,
+      basis.R,
+      n,
+      basis.F,
+      scale,
+      0.03,
+      vertices,
+      colors,
+      indices,
+      null
+    );
+    return true;
   }
 };
 
@@ -813,6 +1348,7 @@ window.ItemRegistry["cotton_plant"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     if (typeof window.buildCottonPlant !== "function") return;
     const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
+    const isDropped = !isIcon && !!(item && (item.isGroundDrop || item.isPlayerDropped));
     const p = item.position || [0, 0, 0];
     const n = item.normal || [0, 1, 0];
     const r = item.R || [1, 0, 0];
@@ -820,10 +1356,13 @@ window.ItemRegistry["cotton_plant"] = {
     const seed = typeof item.seed === "number" ? item.seed : 123.45;
     const bucket = Math.abs(Math.floor(seed * 7.13)) % 8;
     const key = `cotton_plant_${isIcon ? "icon" : "world"}_v${bucket}`;
+    const basis = isDropped ? window.DropTemplateCache.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2)) : { R: r, F: f };
+    const scale = isDropped ? 0.46 : 1.0;
+    const yOff = isDropped ? 0.004 : 0.0;
 
     window.DropTemplateCache.render(
       key,
-      { position: p, R: r, normal: n, F: f, scale: 1.0, yOff: 0.0 },
+      { position: p, R: basis.R, normal: n, F: basis.F, scale: scale, yOff: yOff },
       (tv, tc, ti) => {
         const prevDisable = window._disableTreeColorEncoding;
         if (isIcon) {
@@ -853,6 +1392,7 @@ window.ItemRegistry["crown_flower"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     if (typeof window.buildCrownFlowerPlant !== "function") return;
     const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
+    const isDropped = !isIcon && !!(item && (item.isGroundDrop || item.isPlayerDropped));
     const p = item.position || [0, 0, 0];
     const n = item.normal || [0, 1, 0];
     const r = item.R || [1, 0, 0];
@@ -860,10 +1400,13 @@ window.ItemRegistry["crown_flower"] = {
     const seed = typeof item.seed === "number" ? item.seed : 123.45;
     const bucket = Math.abs(Math.floor(seed * 7.13)) % 8;
     const key = `crown_flower_${isIcon ? "icon" : "world"}_v${bucket}`;
+    const basis = isDropped ? window.DropTemplateCache.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2)) : { R: r, F: f };
+    const scale = isDropped ? 0.38 : 1.0;
+    const yOff = isDropped ? 0.004 : 0.0;
 
     window.DropTemplateCache.render(
       key,
-      { position: p, R: r, normal: n, F: f, scale: 1.0, yOff: 0.0 },
+      { position: p, R: basis.R, normal: n, F: basis.F, scale: scale, yOff: yOff },
       (tv, tc, ti) => {
         const prevDisable = window._disableTreeColorEncoding;
         if (isIcon) {
@@ -929,27 +1472,35 @@ window.buildGrassBladeModel = function(item, vertices, colors, indices, targetBu
     return;
   }
 
-  const gHeight = (item && typeof item.bladeHeight === "number") ? item.bladeHeight : 0.145;
-  const gWidth = (item && typeof item.bladeWidth === "number") ? Math.max(0.013, item.bladeWidth) : 0.016;
+  const isDropped = !!(item && (item.isGroundDrop || item.isPlayerDropped));
+  const gHeight = isDropped
+    ? 0.060
+    : ((item && typeof item.bladeHeight === "number") ? item.bladeHeight : 0.145);
+  const gWidth = isDropped
+    ? 0.022
+    : ((item && typeof item.bladeWidth === "number") ? Math.max(0.013, item.bladeWidth) : 0.016);
   const curve = (item && typeof item.bladeCurve === "number") ? item.bladeCurve : 0.35;
   const hScale = gHeight / 0.145;
   const qCurve = Math.round(curve * 10) / 10;
   const qWidth = Math.round(gWidth * 1000) / 1000;
+  const rotSeed = (item && typeof item.seed === "number") ? item.seed : 0;
+  const basis = isDropped ? window.DropTemplateCache.rotateBasis(r, f, (rotSeed * 6.28318) % (Math.PI * 2)) : { R: r, F: f };
 
   window.DropTemplateCache.render(
-    `grass_world_${colKey}_w${qWidth}_c${qCurve}`,
-    { position: p, R: r, normal: n, F: f, scale: hScale, yOff: 0.0 },
+    `grass_world_${colKey}_w${qWidth}_c${qCurve}${isDropped ? "_drop" : ""}`,
+    { position: p, R: basis.R, normal: n, F: basis.F, scale: hScale, yOff: 0.0 },
     (tv, tc, ti) => {
       const lift = 0.005 / (hScale || 1);
       const liftTop = 0.011 / (hScale || 1);
       const baseH = 0.145;
+      const zOff = isDropped ? -baseH * 0.5 : 0.0;
       tv.push(
-         qWidth, lift, 0.0,
-        -qWidth, lift, 0.0,
-         qWidth * qCurve, liftTop, baseH,
-         qWidth, lift, 0.0,
-         qWidth * qCurve, liftTop, baseH,
-        -qWidth, lift, 0.0
+         qWidth, lift, zOff,
+        -qWidth, lift, zOff,
+         qWidth * qCurve, liftTop, zOff + baseH,
+         qWidth, lift, zOff,
+         qWidth * qCurve, liftTop, zOff + baseH,
+        -qWidth, lift, zOff
       );
       tc.push(
         -botColor[0] - 10.0, botColor[1], botColor[2],
@@ -977,20 +1528,22 @@ window.ItemRegistry["GRASS"] = window.ItemRegistry["grass"];
 // Register "log" item 3D renderer (explicit DropTemplateCache)
 window.ItemRegistry["log"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
+    const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
     const lColor = item.color || [0.50, 0.30, 0.15];
     const p = item.position || [0, 0, 0];
     const r = item.R || [1, 0, 0];
     const f = item.F || [0, 0, 1];
     const n = item.normal || [0, 1, 0];
     const s = (typeof item.size === "number") ? item.size : 0.085;
+    const yOff = isIcon ? 0.0 : 0.25;
 
     if (item.seed === undefined) item.seed = Math.random();
-    const rot = window.DropTemplateCache.rotateBasis(r, f, item.seed * Math.PI * 2);
+    const rot = isIcon ? { R: r, F: f } : window.DropTemplateCache.rotateBasis(r, f, item.seed * Math.PI * 2);
     const key = `log_${window.DropTemplateCache.quantizeColor(lColor)}`;
 
     window.DropTemplateCache.render(
       key,
-      { position: p, R: rot.R, normal: n, F: rot.F, scale: s, yOff: 0.14 },
+      { position: p, R: rot.R, normal: n, F: rot.F, scale: s, yOff: yOff },
       (tv, tc, ti) => {
         buildTaperedSegment(
           [-0.55, 0, 0],
@@ -1009,6 +1562,7 @@ window.ItemRegistry["log"] = {
     );
   }
 };
+window.ItemRegistry["LOG"] = window.ItemRegistry["log"];
 
 // Register "planet_core" item 3D renderer
 window.ItemRegistry["planet_core"] = {
@@ -1228,45 +1782,150 @@ function buildCollectibles(count, seed) {
         const rBase = (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
         const numStoneFloors = Math.min(18, Math.max(4, Math.round(3 + Math.sqrt(rBase))));
         const placedHouses = [];
+        const placedVillages = [];
         const natureObsList = (typeof window !== "undefined" && Array.isArray(window.allDeterministicNatureObstacles) && window.allDeterministicNatureObstacles.length > 0)
           ? window.allDeterministicNatureObstacles
           : ((typeof natureObstacles !== "undefined" && natureObstacles) ? natureObstacles : (typeof window !== "undefined" && window.natureObstacles ? window.natureObstacles : []));
 
-        for (let i = 0; i < numStoneFloors; i++) {
-          let foundFlatSpot = false;
-          let wx = 0, wy = 0, wz = 0;
-          let nx = 0, ny = 0, nz = 0;
-          let R = [1, 0, 0], F = [0, 0, 1];
-          const wfSize = 0.25;
-          const wfW = wfSize * 1.2;
-          const gridX = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
-          const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
-          const totalW = gridX * wfW;
-          const totalD = gridY * wfW;
-          const halfW = totalW / 2;
-          const halfD = totalD / 2;
-          const houseRadius = Math.sqrt(halfW * halfW + halfD * halfD);
+        const minHouseLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.05;
+        const sampleH_house = (th, ph) => (typeof getVisualHeightOnSphere === "function")
+          ? getVisualHeightOnSphere(th, ph, seed)
+          : getHeightOnSphere(th, ph, seed);
 
-          // Attempt up to 80 times to find a clear, flat location avoiding trees, rocks, holes/caves, and cliffs
-          for (let attempt = 0; attempt < 80; attempt++) {
-            const u = Math.random();
-            const v = Math.random();
-            const theta = Math.acos(2 * u - 1);
-            const phi = 2 * Math.PI * v;
-            const h = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(theta, phi, seed) : getHeightOnSphere(theta, phi, seed);
-            const minLandHeight = (typeof waterLevel !== 'undefined' ? waterLevel : 1.0) * (typeof HEIGHT_SCALE !== 'undefined' ? HEIGHT_SCALE * 0.25 : 0.15) + 0.05;
-            
-            if (h < minLandHeight) continue;
+        // Temporary spatial hashes for O(1) obstacle/debris lookup during village & house placement
+        const _genCellInv = 0.5; // 2.0m cells
+        const _genNatureGrid = new Map();
+        for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
+          const obs = natureObsList[oIdx];
+          if (!obs || !obs.position) continue;
+          const k = `${Math.floor(obs.position[0] * _genCellInv)},${Math.floor(obs.position[1] * _genCellInv)},${Math.floor(obs.position[2] * _genCellInv)}`;
+          let bucket = _genNatureGrid.get(k);
+          if (!bucket) { bucket = []; _genNatureGrid.set(k, bucket); }
+          bucket.push(obs);
+        }
+        const _genDebrisGrid = new Map();
+        const _genBlockingStructs = [];
+        for (let cIdx = 0; cIdx < collectibles.length; cIdx++) {
+          const c = collectibles[cIdx];
+          if (!c || !c.active || !c.position) continue;
+          if (c.type === "stone_floor" || c.type === "campfire") {
+            _genBlockingStructs.push(c);
+          } else if (c.type === "rock" || c.type === "big_rock" || c.type === "branch") {
+            const k = `${Math.floor(c.position[0] * _genCellInv)},${Math.floor(c.position[1] * _genCellInv)},${Math.floor(c.position[2] * _genCellInv)}`;
+            let bucket = _genDebrisGrid.get(k);
+            if (!bucket) { bucket = []; _genDebrisGrid.set(k, bucket); }
+            bucket.push(c);
+          }
+        }
+        let _clearedNatureDirtyMin = Infinity;
+        let _clearedNatureDirtyMax = -1;
+        const _flushClearedNatureBuffer = () => {
+          if (_clearedNatureDirtyMax <= _clearedNatureDirtyMin) return;
+          const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : window.natureRawVertices;
+          const vBuffer = (typeof natureVertexBuffer !== "undefined") ? natureVertexBuffer : window.natureVertexBuffer;
+          if (rawVerts && typeof gl !== "undefined" && gl && vBuffer) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+            const slice = (rawVerts instanceof Float32Array)
+              ? rawVerts.subarray(_clearedNatureDirtyMin, _clearedNatureDirtyMax)
+              : new Float32Array(rawVerts.slice(_clearedNatureDirtyMin, _clearedNatureDirtyMax));
+            gl.bufferSubData(gl.ARRAY_BUFFER, _clearedNatureDirtyMin * 4, slice);
+          }
+          _clearedNatureDirtyMin = Infinity;
+          _clearedNatureDirtyMax = -1;
+        };
 
-            const candNx = Math.sin(theta) * Math.cos(phi);
-            const candNy = Math.cos(theta);
-            const candNz = Math.sin(theta) * Math.sin(phi);
-            const r = RADIUS + h * HEIGHT_SCALE;
-            const candWx = r * candNx;
-            const candWy = r * candNy;
-            const candWz = r * candNz;
+        // Reusable helper: clear rocks, branches, and natural trees/rocks within a radius
+        const clearAreaAround = (cx, cy, cz, clearRad) => {
+          const clearRadSq = clearRad * clearRad;
+          const minCx = Math.floor((cx - clearRad) * _genCellInv);
+          const maxCx = Math.floor((cx + clearRad) * _genCellInv);
+          const minCy = Math.floor((cy - clearRad) * _genCellInv);
+          const maxCy = Math.floor((cy + clearRad) * _genCellInv);
+          const minCz = Math.floor((cz - clearRad) * _genCellInv);
+          const maxCz = Math.floor((cz + clearRad) * _genCellInv);
+          const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : window.natureRawVertices;
 
-            // Frame basis
+          for (let gx = minCx; gx <= maxCx; gx++) {
+            for (let gy = minCy; gy <= maxCy; gy++) {
+              for (let gz = minCz; gz <= maxCz; gz++) {
+                const key = `${gx},${gy},${gz}`;
+                const dBucket = _genDebrisGrid.get(key);
+                if (dBucket) {
+                  for (let bi = 0; bi < dBucket.length; bi++) {
+                    const c = dBucket[bi];
+                    if (!c || !c.active || c.isHouse || c.isProceduralHouse || c.isVillageCampfire || !c.position) continue;
+                    const cdx = c.position[0] - cx;
+                    const cdy = c.position[1] - cy;
+                    const cdz = c.position[2] - cz;
+                    if (cdx*cdx + cdy*cdy + cdz*cdz <= clearRadSq) {
+                      c.active = false;
+                    }
+                  }
+                }
+                const nBucket = _genNatureGrid.get(key);
+                if (nBucket) {
+                  for (let ni = 0; ni < nBucket.length; ni++) {
+                    const obs = nBucket[ni];
+                    if (!obs || !obs.position || obs._genCleared) continue;
+                    const odx = obs.position[0] - cx;
+                    const ody = obs.position[1] - cy;
+                    const odz = obs.position[2] - cz;
+                    if (odx*odx + ody*ody + odz*odz <= clearRadSq) {
+                      obs._genCleared = true;
+                      if (obs.type === "tree") {
+                        if (typeof choppedTrees !== "undefined" && !choppedTrees.includes(obs.id)) choppedTrees.push(obs.id);
+                        else if (window.choppedTrees && !window.choppedTrees.includes(obs.id)) window.choppedTrees.push(obs.id);
+                      } else {
+                        if (typeof destroyedRocks !== "undefined" && !destroyedRocks.includes(obs.id)) destroyedRocks.push(obs.id);
+                        else if (window.destroyedRocks && !window.destroyedRocks.includes(obs.id)) window.destroyedRocks.push(obs.id);
+                      }
+                      if (obs.meshStart !== undefined && obs.meshEnd !== undefined && rawVerts) {
+                        const startF = obs.meshStart * 3;
+                        const endF = obs.meshEnd * 3;
+                        for (let j = startF; j < endF; j++) rawVerts[j] = 0;
+                        if (startF < _clearedNatureDirtyMin) _clearedNatureDirtyMin = startF;
+                        if (endF > _clearedNatureDirtyMax) _clearedNatureDirtyMax = endF;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        };
+
+        // Reusable helper: validate a flat, cave-free, obstacle-free house footprint (reused by Village & Standalone Houses)
+        const validateHouseSpot = (theta, phi, halfW, halfD, houseRadius, existingHouses, opts = {}) => {
+          const h = sampleH_house(theta, phi);
+          if (h < minHouseLandHeight) return null;
+
+          const candNx = Math.sin(theta) * Math.cos(phi);
+          const candNy = Math.cos(theta);
+          const candNz = Math.sin(theta) * Math.sin(phi);
+          const r = RADIUS + h * HEIGHT_SCALE;
+          const candWx = r * candNx;
+          const candWy = r * candNy;
+          const candWz = r * candNz;
+
+          let candR, candF;
+          if (opts.customFDir) {
+            // Project desired forward vector (e.g. facing toward village campfire) onto tangent plane
+            const fDotN = opts.customFDir[0] * candNx + opts.customFDir[1] * candNy + opts.customFDir[2] * candNz;
+            let fx = opts.customFDir[0] - candNx * fDotN;
+            let fy = opts.customFDir[1] - candNy * fDotN;
+            let fz = opts.customFDir[2] - candNz * fDotN;
+            const fLen = Math.hypot(fx, fy, fz);
+            if (fLen > 1e-5) {
+              candF = [fx / fLen, fy / fLen, fz / fLen];
+              // R = F x N so that N x R = F (right-handed basis matching existing house frame)
+              let rx = candF[1] * candNz - candF[2] * candNy;
+              let ry = candF[2] * candNx - candF[0] * candNz;
+              let rz = candF[0] * candNy - candF[1] * candNx;
+              const rLen = Math.hypot(rx, ry, rz) || 1;
+              candR = [rx / rLen, ry / rLen, rz / rLen];
+            }
+          }
+          if (!candR || !candF) {
             let txR, txY, txZ;
             if (Math.abs(candNy) < 0.9) {
               txR = -candNz; txY = 0; txZ = candNx;
@@ -1274,316 +1933,278 @@ function buildCollectibles(count, seed) {
               txR = 1; txY = 0; txZ = 0;
             }
             const lenTxR = Math.sqrt(txR * txR + txY * txY + txZ * txZ) || 1;
-            const candR = [txR / lenTxR, txY / lenTxR, txZ / lenTxR];
-            const candF = [
+            candR = [txR / lenTxR, txY / lenTxR, txZ / lenTxR];
+            candF = [
               candNy * candR[2] - candNz * candR[1],
               candNz * candR[0] - candNx * candR[2],
               candNx * candR[1] - candNy * candR[0]
             ];
             const lenF = Math.sqrt(candF[0]*candF[0] + candF[1]*candF[1] + candF[2]*candF[2]) || 1;
             candF[0] /= lenF; candF[1] /= lenF; candF[2] /= lenF;
+          }
 
-            // ============================================
-            // 1. Check distance to already placed houses
-            // ============================================
-            let overlapsHouse = false;
-            for (let ph = 0; ph < placedHouses.length; ph++) {
-              const prevH = placedHouses[ph];
-              const pdx = candWx - prevH.x;
-              const pdy = candWy - prevH.y;
-              const pdz = candWz - prevH.z;
-              const minAllowedDist = houseRadius + prevH.radius + 1.2;
-              if (pdx*pdx + pdy*pdy + pdz*pdz < minAllowedDist * minAllowedDist) {
-                overlapsHouse = true;
-                break;
+          const minHouseGap = (typeof opts.minHouseGap === "number") ? opts.minHouseGap : 1.2;
+          const maxDev = (typeof opts.maxDev === "number") ? opts.maxDev : 0.016;
+          const maxDelta = (typeof opts.maxDelta === "number") ? opts.maxDelta : 0.022;
+          const maxSlope = (typeof opts.maxSlope === "number") ? opts.maxSlope : 0.08;
+          const minDotUp = (typeof opts.minDotUp === "number") ? opts.minDotUp : 0.994;
+
+          // 1. Check distance to already placed/candidate houses
+          for (let ph = 0; ph < existingHouses.length; ph++) {
+            const prevH = existingHouses[ph];
+            const pdx = candWx - prevH.x;
+            const pdy = candWy - prevH.y;
+            const pdz = candWz - prevH.z;
+            const minAllowedDist = houseRadius + prevH.radius + minHouseGap;
+            if (pdx*pdx + pdy*pdy + pdz*pdz < minAllowedDist * minAllowedDist) {
+              return null;
+            }
+          }
+
+          // Optional campfire / plaza center clearance
+          if (opts.avoidCenter && typeof opts.avoidCenterRad === "number") {
+            const adx = candWx - opts.avoidCenter[0];
+            const ady = candWy - opts.avoidCenter[1];
+            const adz = candWz - opts.avoidCenter[2];
+            const minCenDist = houseRadius + opts.avoidCenterRad;
+            if (adx*adx + ady*ady + adz*adz < minCenDist * minCenDist) {
+              return null;
+            }
+          }
+
+          // 2. Check HOLES: Cave tunnels, openings, pits ("หลุม")
+          const tunnels = (typeof window !== "undefined" && window.tunnels3D) ? window.tunnels3D : (typeof tunnels3D !== "undefined" ? tunnels3D : []);
+          if (tunnels && tunnels.length > 0) {
+            const maxCaveClearance = houseRadius + 0.65;
+            for (let tIdx = 0; tIdx < tunnels.length; tIdx++) {
+              const tun = tunnels[tIdx];
+              if (tun.isDug) continue;
+              const tdx = candWx - tun.x;
+              const tdy = candWy - tun.y;
+              const tdz = candWz - tun.z;
+              const safeDist = tun.r + maxCaveClearance;
+              if (tdx*tdx + tdy*tdy + tdz*tdz < safeDist * safeDist) {
+                return null;
               }
             }
-            if (overlapsHouse) continue;
+          }
 
-            // ============================================
-            // 2. Check HOLES: Cave tunnels, openings, pits ("หลุม" / "หลุ่ม")
-            // ============================================
-            let overlapsHole = false;
+          const sampleOffsets = [
+            [0, 0],
+            [-halfW, -halfD],
+            [halfW, -halfD],
+            [-halfW, halfD],
+            [halfW, halfD],
+            [0, -halfD],
+            [0, halfD],
+            [-halfW, 0],
+            [halfW, 0]
+          ];
 
-            // A) Direct check against all 3D cave tunnel spheres (only natural caves so dug holes don't shift house seeds)
-            const tunnels = (typeof window !== "undefined" && window.tunnels3D) ? window.tunnels3D : (typeof tunnels3D !== "undefined" ? tunnels3D : []);
-            if (tunnels && tunnels.length > 0) {
-              const maxCaveClearance = houseRadius + 0.65;
-              for (let tIdx = 0; tIdx < tunnels.length; tIdx++) {
-                const tun = tunnels[tIdx];
-                if (tun.isDug) continue;
-                const tdx = candWx - tun.x;
-                const tdy = candWy - tun.y;
-                const tdz = candWz - tun.z;
-                const safeDist = tun.r + maxCaveClearance;
-                if (tdx*tdx + tdy*tdy + tdz*tdz < safeDist * safeDist) {
-                  overlapsHole = true;
-                  break;
-                }
-              }
-            }
-            if (overlapsHole) continue;
-
-            // B) Sample points across the house footprint checking isPositionInsideCave
-            // Test 9 sample points: center, 4 corners, 4 edge midpoints
-            const sampleOffsets = [
-              [0, 0],
-              [-halfW, -halfD],
-              [halfW, -halfD],
-              [-halfW, halfD],
-              [halfW, halfD],
-              [0, -halfD],
-              [0, halfD],
-              [-halfW, 0],
-              [halfW, 0]
-            ];
-
-            if (typeof isPositionInsideCave === "function") {
-              for (let sIdx = 0; sIdx < sampleOffsets.length; sIdx++) {
-                const [sx, sy] = sampleOffsets[sIdx];
-                const spX = candWx + candR[0]*sx + candF[0]*sy;
-                const spY = candWy + candR[1]*sx + candF[1]*sy;
-                const spZ = candWz + candR[2]*sx + candF[2]*sy;
-                if (isPositionInsideCave(spX, spY, spZ, 0.45)) {
-                  overlapsHole = true;
-                  break;
-                }
-              }
-            }
-            if (overlapsHole) continue;
-
-            // C) Check terrain surface for depressions, craters, dips, or steep slopes ("หลุมภูมิประเทศ")
-            let terrainOk = true;
-            let minH = h;
-            let maxH = h;
-            const sampleHeights = [];
+          if (typeof isPositionInsideCave === "function") {
             for (let sIdx = 0; sIdx < sampleOffsets.length; sIdx++) {
               const [sx, sy] = sampleOffsets[sIdx];
-              const spX = candWx + candR[0]*(sx * 1.15) + candF[0]*(sy * 1.15);
-              const spY = candWy + candR[1]*(sx * 1.15) + candF[1]*(sy * 1.15);
-              const spZ = candWz + candR[2]*(sx * 1.15) + candF[2]*(sy * 1.15);
-              const cDist = Math.sqrt(spX*spX + spY*spY + spZ*spZ) || 1;
-              const cny = spY / cDist;
-              const cnx = spX / cDist;
-              const cnz = spZ / cDist;
-              const cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, cny)));
-              const cPhi = Math.atan2(cnz, cnx);
-              const cH = typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(cTheta, cPhi, seed) : getHeightOnSphere(cTheta, cPhi, seed);
-
-              sampleHeights.push(cH);
-              if (cH < minLandHeight) {
-                terrainOk = false;
-                break;
-              }
-              if (cH < minH) minH = cH;
-              if (cH > maxH) maxH = cH;
-
-              // House footprint must be level: maximum 0.016 elevation deviation from center
-              if (Math.abs(cH - h) > 0.016) {
-                terrainOk = false;
-                break;
+              const spX = candWx + candR[0]*sx + candF[0]*sy;
+              const spY = candWy + candR[1]*sx + candF[1]*sy;
+              const spZ = candWz + candR[2]*sx + candF[2]*sy;
+              if (isPositionInsideCave(spX, spY, spZ, 0.45)) {
+                return null;
               }
             }
+          }
 
-            // Height delta across footprint must not exceed 0.022 (~1.8% slope)
-            if (!terrainOk || (maxH - minH) > 0.022) continue;
+          // C) Check terrain surface flatness
+          let minH = h;
+          let maxH = h;
+          for (let sIdx = 0; sIdx < sampleOffsets.length; sIdx++) {
+            const [sx, sy] = sampleOffsets[sIdx];
+            const spX = candWx + candR[0]*(sx * 1.15) + candF[0]*(sy * 1.15);
+            const spY = candWy + candR[1]*(sx * 1.15) + candF[1]*(sy * 1.15);
+            const spZ = candWz + candR[2]*(sx * 1.15) + candF[2]*(sy * 1.15);
+            const cDist = Math.sqrt(spX*spX + spY*spY + spZ*spZ) || 1;
+            const cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, spY / cDist)));
+            const cPhi = Math.atan2(spZ, spX);
+            const cH = sampleH_house(cTheta, cPhi);
 
-            // ============================================
-            // D) Calculate true local terrain normal to prevent tilted houses (ป้องกันบ้านสุ่มเอียง)
-            // Calculate gradients along local candR and candF axes
-            // ============================================
-            const deltaProbe = 0.15;
-            const probeRx = candWx + candR[0] * deltaProbe;
-            const probeRy = candWy + candR[1] * deltaProbe;
-            const probeRz = candWz + candR[2] * deltaProbe;
-            const distPrR = Math.sqrt(probeRx*probeRx + probeRy*probeRy + probeRz*probeRz) || 1;
-            const hProbeR = typeof getVisualHeightOnSphere === "function" 
-              ? getVisualHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeRy / distPrR))), Math.atan2(probeRz, probeRx), seed)
-              : getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeRy / distPrR))), Math.atan2(probeRz, probeRx), seed);
+            if (cH < minHouseLandHeight) return null;
+            if (cH < minH) minH = cH;
+            if (cH > maxH) maxH = cH;
+            if (Math.abs(cH - h) > maxDev) return null;
+          }
+          if ((maxH - minH) > maxDelta) return null;
 
-            const probeFx = candWx + candF[0] * deltaProbe;
-            const probeFy = candWy + candF[1] * deltaProbe;
-            const probeFz = candWz + candF[2] * deltaProbe;
-            const distPrF = Math.sqrt(probeFx*probeFx + probeFy*probeFy + probeFz*probeFz) || 1;
-            const hProbeF = typeof getVisualHeightOnSphere === "function"
-              ? getVisualHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeFy / distPrF))), Math.atan2(probeFz, probeFx), seed)
-              : getHeightOnSphere(Math.acos(Math.max(-1.0, Math.min(1.0, probeFy / distPrF))), Math.atan2(probeFz, probeFx), seed);
+          // D) True local terrain normal (ป้องกันบ้านสุ่มเอียง)
+          const deltaProbe = 0.15;
+          const probeRx = candWx + candR[0] * deltaProbe;
+          const probeRy = candWy + candR[1] * deltaProbe;
+          const probeRz = candWz + candR[2] * deltaProbe;
+          const distPrR = Math.sqrt(probeRx*probeRx + probeRy*probeRy + probeRz*probeRz) || 1;
+          const hProbeR = sampleH_house(Math.acos(Math.max(-1.0, Math.min(1.0, probeRy / distPrR))), Math.atan2(probeRz, probeRx));
 
-            const slopeR = ((hProbeR - h) * HEIGHT_SCALE) / deltaProbe;
-            const slopeF = ((hProbeF - h) * HEIGHT_SCALE) / deltaProbe;
+          const probeFx = candWx + candF[0] * deltaProbe;
+          const probeFy = candWy + candF[1] * deltaProbe;
+          const probeFz = candWz + candF[2] * deltaProbe;
+          const distPrF = Math.sqrt(probeFx*probeFx + probeFy*probeFy + probeFz*probeFz) || 1;
+          const hProbeF = sampleH_house(Math.acos(Math.max(-1.0, Math.min(1.0, probeFy / distPrF))), Math.atan2(probeFz, probeFx));
 
-            // Discard locations with surface gradient/slope > 0.08 (strictly ~4.5 degrees)
-            if (Math.abs(slopeR) > 0.08 || Math.abs(slopeF) > 0.08) continue;
+          const slopeR = ((hProbeR - h) * HEIGHT_SCALE) / deltaProbe;
+          const slopeF = ((hProbeF - h) * HEIGHT_SCALE) / deltaProbe;
+          if (Math.abs(slopeR) > maxSlope || Math.abs(slopeF) > maxSlope) return null;
 
-            // Compute exact terrain surface normal
-            let terrNx = candNx - candR[0] * slopeR - candF[0] * slopeF;
-            let terrNy = candNy - candR[1] * slopeR - candF[1] * slopeF;
-            let terrNz = candNz - candR[2] * slopeR - candF[2] * slopeF;
-            const lenTerrN = Math.sqrt(terrNx*terrNx + terrNy*terrNy + terrNz*terrNz) || 1;
-            terrNx /= lenTerrN; terrNy /= lenTerrN; terrNz /= lenTerrN;
+          let terrNx = candNx - candR[0] * slopeR - candF[0] * slopeF;
+          let terrNy = candNy - candR[1] * slopeR - candF[1] * slopeF;
+          let terrNz = candNz - candR[2] * slopeR - candF[2] * slopeF;
+          const lenTerrN = Math.sqrt(terrNx*terrNx + terrNy*terrNy + terrNz*terrNz) || 1;
+          terrNx /= lenTerrN; terrNy /= lenTerrN; terrNz /= lenTerrN;
 
-            // If normal tilts by more than 5 degrees away from spherical up, skip to guarantee perfectly upright houses
-            const dotUp = terrNx * candNx + terrNy * candNy + terrNz * candNz;
-            if (dotUp < 0.994) continue; // cos(6.3 deg) ~ 0.994
+          const dotUp = terrNx * candNx + terrNy * candNy + terrNz * candNz;
+          if (dotUp < minDotUp) return null;
 
-            // Re-orthogonalize candR and candF against the true surface normal
-            let adjR = [
-              candR[0] - terrNx * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz),
-              candR[1] - terrNy * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz),
-              candR[2] - terrNz * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz)
-            ];
-            const lenAdjR = Math.sqrt(adjR[0]*adjR[0] + adjR[1]*adjR[1] + adjR[2]*adjR[2]) || 1;
-            adjR[0] /= lenAdjR; adjR[1] /= lenAdjR; adjR[2] /= lenAdjR;
+          let adjR = [
+            candR[0] - terrNx * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz),
+            candR[1] - terrNy * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz),
+            candR[2] - terrNz * (candR[0]*terrNx + candR[1]*terrNy + candR[2]*terrNz)
+          ];
+          const lenAdjR = Math.sqrt(adjR[0]*adjR[0] + adjR[1]*adjR[1] + adjR[2]*adjR[2]) || 1;
+          adjR[0] /= lenAdjR; adjR[1] /= lenAdjR; adjR[2] /= lenAdjR;
 
-            let adjF = [
-              terrNy * adjR[2] - terrNz * adjR[1],
-              terrNz * adjR[0] - terrNx * adjR[2],
-              terrNx * adjR[1] - terrNy * adjR[0]
-            ];
-            const lenAdjF = Math.sqrt(adjF[0]*adjF[0] + adjF[1]*adjF[1] + adjF[2]*adjF[2]) || 1;
-            adjF[0] /= lenAdjF; adjF[1] /= lenAdjF; adjF[2] /= lenAdjF;
+          let adjF = [
+            terrNy * adjR[2] - terrNz * adjR[1],
+            terrNz * adjR[0] - terrNx * adjR[2],
+            terrNx * adjR[1] - terrNy * adjR[0]
+          ];
+          const lenAdjF = Math.sqrt(adjF[0]*adjF[0] + adjF[1]*adjF[1] + adjF[2]*adjF[2]) || 1;
+          adjF[0] /= lenAdjF; adjF[1] /= lenAdjF; adjF[2] /= lenAdjF;
 
-            // ============================================
-            // 3. Check TREES ("ต้นไม้") & ROCKS ("หิน") in natureObstacles
-            // ============================================
-            let overlapsNature = false;
+          // 3. Check TREES & ROCKS in natureObstacles via spatial hash (optional skip for village plaza fallback since clearAreaAround clears them)
+          if (!opts.allowClearNature) {
             const treeClearance = 0.55;
             const rockClearance = 0.45;
+            const searchR = houseRadius + 1.25;
+            const searchRSq = (houseRadius + 3.0) * (houseRadius + 3.0);
+            const minNx = Math.floor((candWx - searchR) * _genCellInv);
+            const maxNx = Math.floor((candWx + searchR) * _genCellInv);
+            const minNy = Math.floor((candWy - searchR) * _genCellInv);
+            const maxNy = Math.floor((candWy + searchR) * _genCellInv);
+            const minNz = Math.floor((candWz - searchR) * _genCellInv);
+            const maxNz = Math.floor((candWz + searchR) * _genCellInv);
+            for (let gx = minNx; gx <= maxNx; gx++) {
+              for (let gy = minNy; gy <= maxNy; gy++) {
+                for (let gz = minNz; gz <= maxNz; gz++) {
+                  const nBucket = _genNatureGrid.get(`${gx},${gy},${gz}`);
+                  if (!nBucket) continue;
+                  for (let oIdx = 0; oIdx < nBucket.length; oIdx++) {
+                    const obs = nBucket[oIdx];
+                    if (!obs || !obs.position || obs._genCleared) continue;
+                    const odx = obs.position[0] - candWx;
+                    const ody = obs.position[1] - candWy;
+                    const odz = obs.position[2] - candWz;
+                    const distSq = odx*odx + ody*ody + odz*odz;
+                    if (distSq > searchRSq) continue;
 
-            for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
-              const obs = natureObsList[oIdx];
-              if (!obs || !obs.position) continue;
-              const ox = obs.position[0];
-              const oy = obs.position[1];
-              const oz = obs.position[2];
-              
-              const odx = ox - candWx;
-              const ody = oy - candWy;
-              const odz = oz - candWz;
-              const distSq = odx*odx + ody*ody + odz*odz;
+                    const localR = odx * candR[0] + ody * candR[1] + odz * candR[2];
+                    const localF = odx * candF[0] + ody * candF[1] + odz * candF[2];
+                    const localN = odx * candNx + ody * candNy + odz * candNz;
+                    if (Math.abs(localN) > 2.5) continue;
 
-              if (distSq > (houseRadius + 3.0) * (houseRadius + 3.0)) continue;
-
-              const localR = odx * candR[0] + ody * candR[1] + odz * candR[2];
-              const localF = odx * candF[0] + ody * candF[1] + odz * candF[2];
-              const localN = odx * candNx + ody * candNy + odz * candNz;
-
-              if (Math.abs(localN) > 2.5) continue;
-
-              const isTree = (obs.type === "tree" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.TREE));
-              const isRock = (obs.type === "rock" || obs.type === "big_rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore" || obs.type === "copper_ore" || obs.type === "coal_ore" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.ROCK));
-
-              if (isTree) {
-                const rad = obs.trunkBaseRadius ? Math.max(0.2, obs.trunkBaseRadius) : 0.25;
-                const allowedW = halfW + treeClearance + rad;
-                const allowedD = halfD + treeClearance + rad;
-                if (Math.abs(localR) < allowedW && Math.abs(localF) < allowedD) {
-                  overlapsNature = true;
-                  break;
-                }
-              } else if (isRock) {
-                const rad = obs.radius ? Math.min(0.5, obs.radius * 0.5) : 0.25;
-                const allowedW = halfW + rockClearance + rad;
-                const allowedD = halfD + rockClearance + rad;
-                if (Math.abs(localR) < allowedW && Math.abs(localF) < allowedD) {
-                  overlapsNature = true;
-                  break;
+                    const isTree = (obs.type === "tree" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.TREE));
+                    const isRock = (obs.type === "rock" || obs.type === "big_rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore" || obs.type === "copper_ore" || obs.type === "coal_ore" || (typeof COLLISION_LAYERS !== "undefined" && obs.layer === COLLISION_LAYERS.ROCK));
+                    if (isTree) {
+                      const rad = obs.trunkBaseRadius ? Math.max(0.2, obs.trunkBaseRadius) : 0.25;
+                      if (Math.abs(localR) < halfW + treeClearance + rad && Math.abs(localF) < halfD + treeClearance + rad) return null;
+                    } else if (isRock) {
+                      const rad = obs.radius ? Math.min(0.5, obs.radius * 0.5) : 0.25;
+                      if (Math.abs(localR) < halfW + rockClearance + rad && Math.abs(localF) < halfD + rockClearance + rad) return null;
+                    }
+                  }
                 }
               }
             }
-
-            if (overlapsNature) continue;
-
-            // ============================================
-            // 4. Check items already in collectibles (branches, rock items)
-            // ============================================
-            let overlapsCollectible = false;
-            for (let cIdx = 0; cIdx < collectibles.length; cIdx++) {
-              const c = collectibles[cIdx];
-              if (!c.active || !c.position) continue;
-              if (c.type === "rock" || c.type === "big_rock" || c.type === "branch" || c.type === "stone_floor") {
-                const cdx = c.position[0] - candWx;
-                const cdy = c.position[1] - candWy;
-                const cdz = c.position[2] - candWz;
-                if (cdx*cdx + cdy*cdy + cdz*cdz < (houseRadius + 0.45) * (houseRadius + 0.45)) {
-                  overlapsCollectible = true;
-                  break;
-                }
-              }
-            }
-            if (overlapsCollectible) continue;
-
-            // All checks passed! Valid spot found.
-            wx = candWx; wy = candWy; wz = candWz;
-            nx = terrNx; ny = terrNy; nz = terrNz;
-            R = adjR; F = adjF;
-            foundFlatSpot = true;
-            placedHouses.push({
-              x: wx,
-              y: wy,
-              z: wz,
-              nx: nx,
-              ny: ny,
-              nz: nz,
-              R: R,
-              F: F,
-              radius: houseRadius,
-              totalW: totalW,
-              totalD: totalD,
-              gridX: gridX,
-              gridY: gridY,
-              wfW: wfW,
-              entranceDoor: null
-            });
-            break;
           }
 
-          if (!foundFlatSpot) continue;
+          // 4. Check existing collectibles (stone_floor / campfire always avoided; rocks/branches checked via spatial hash)
+          for (let sIdx = 0; sIdx < _genBlockingStructs.length; sIdx++) {
+            const c = _genBlockingStructs[sIdx];
+            if (!c.active || !c.position) continue;
+            const cdx = c.position[0] - candWx;
+            const cdy = c.position[1] - candWy;
+            const cdz = c.position[2] - candWz;
+            const pad = (c.type === "campfire") ? 0.85 : 0.45;
+            if (cdx*cdx + cdy*cdy + cdz*cdz < (houseRadius + pad) * (houseRadius + pad)) {
+              return null;
+            }
+          }
+          if (!opts.allowClearNature) {
+            const debSearchR = houseRadius + 0.50;
+            const debPadSq = (houseRadius + 0.45) * (houseRadius + 0.45);
+            const minDx = Math.floor((candWx - debSearchR) * _genCellInv);
+            const maxDx = Math.floor((candWx + debSearchR) * _genCellInv);
+            const minDy = Math.floor((candWy - debSearchR) * _genCellInv);
+            const maxDy = Math.floor((candWy + debSearchR) * _genCellInv);
+            const minDz = Math.floor((candWz - debSearchR) * _genCellInv);
+            const maxDz = Math.floor((candWz + debSearchR) * _genCellInv);
+            for (let gx = minDx; gx <= maxDx; gx++) {
+              for (let gy = minDy; gy <= maxDy; gy++) {
+                for (let gz = minDz; gz <= maxDz; gz++) {
+                  const dBucket = _genDebrisGrid.get(`${gx},${gy},${gz}`);
+                  if (!dBucket) continue;
+                  for (let bi = 0; bi < dBucket.length; bi++) {
+                    const c = dBucket[bi];
+                    if (!c.active || !c.position) continue;
+                    const cdx = c.position[0] - candWx;
+                    const cdy = c.position[1] - candWy;
+                    const cdz = c.position[2] - candWz;
+                    if (cdx*cdx + cdy*cdy + cdz*cdz < debPadSq) {
+                      return null;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          return {
+            x: candWx, y: candWy, z: candWz,
+            nx: terrNx, ny: terrNy, nz: terrNz,
+            R: adjR, F: adjF,
+            radius: houseRadius
+          };
+        };
+
+        // Reusable helper: build a complete or ruined procedural house at a validated spot
+        const buildProceduralHouseAt = (spot, spec) => {
+          const {
+            i, gridX, gridY, wfSize, wfW, totalW, totalD, houseRadius,
+            isPerfect, isHeavilyRuined, villageIndex = -1, preferredDoorSide = null
+          } = spec;
+          const wx = spot.x, wy = spot.y, wz = spot.z;
+          const nx = spot.nx, ny = spot.ny, nz = spot.nz;
+          const R = spot.R, F = spot.F;
+
+          placedHouses.push({
+            x: wx,
+            y: wy,
+            z: wz,
+            nx: nx,
+            ny: ny,
+            nz: nz,
+            R: R,
+            F: F,
+            radius: houseRadius,
+            totalW: totalW,
+            totalD: totalD,
+            gridX: gridX,
+            gridY: gridY,
+            wfW: wfW,
+            entranceDoor: null,
+            villageIndex: villageIndex,
+            isVillageHouse: villageIndex >= 0
+          });
 
           // Extra safety clearance for surrounding border
-          const houseClearRadSq = (Math.max(totalW, totalD) * 0.65) * (Math.max(totalW, totalD) * 0.65);
-          for (let cIdx = 0; cIdx < collectibles.length; cIdx++) {
-            const c = collectibles[cIdx];
-            if (!c || !c.active || c.isHouse || c.isProceduralHouse || !c.position) continue;
-            if (c.type === "rock" || c.type === "big_rock" || c.type === "branch") {
-              const cdx = c.position[0] - wx;
-              const cdy = c.position[1] - wy;
-              const cdz = c.position[2] - wz;
-              if (cdx*cdx + cdy*cdy + cdz*cdz <= houseClearRadSq) {
-                c.active = false;
-              }
-            }
-          }
+          clearAreaAround(wx, wy, wz, Math.max(totalW, totalD) * 0.65);
 
-          for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
-            const obs = natureObsList[oIdx];
-            if (!obs || !obs.position) continue;
-            const odx = obs.position[0] - wx;
-            const ody = obs.position[1] - wy;
-            const odz = obs.position[2] - wz;
-            if (odx*odx + ody*ody + odz*odz <= houseClearRadSq) {
-              if (obs.type === "tree") {
-                if (typeof choppedTrees !== "undefined" && !choppedTrees.includes(obs.id)) choppedTrees.push(obs.id);
-                else if (window.choppedTrees && !window.choppedTrees.includes(obs.id)) window.choppedTrees.push(obs.id);
-              } else {
-                if (typeof destroyedRocks !== "undefined" && !destroyedRocks.includes(obs.id)) destroyedRocks.push(obs.id);
-                else if (window.destroyedRocks && !window.destroyedRocks.includes(obs.id)) window.destroyedRocks.push(obs.id);
-              }
-              const rawVerts = (typeof natureRawVertices !== "undefined") ? natureRawVertices : window.natureRawVertices;
-              const vBuffer = (typeof natureVertexBuffer !== "undefined") ? natureVertexBuffer : window.natureVertexBuffer;
-              if (obs.meshStart !== undefined && obs.meshEnd !== undefined && rawVerts) {
-                const startF = obs.meshStart * 3;
-                const endF = obs.meshEnd * 3;
-                for (let j = startF; j < endF; j++) rawVerts[j] = 0;
-                if (typeof gl !== "undefined" && gl && vBuffer) {
-                  gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-                  gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, new Float32Array(rawVerts.slice(startF, endF)));
-                }
-              }
-            }
-          }
-
-          collectibles.push({
+          const stoneFoundationItem = {
             type: "stone_floor",
             position: [wx, wy, wz],
             normal: [nx, ny, nz],
@@ -1597,8 +2218,11 @@ function buildCollectibles(count, seed) {
             seed: seed + i * 5000,
             isHouse: true,
             isProceduralHouse: true,
+            villageIndex: villageIndex,
             hideFromCompass: true
-          });
+          };
+          collectibles.push(stoneFoundationItem);
+          _genBlockingStructs.push(stoneFoundationItem);
 
           const stoneH = wfSize * 0.15;
           const baseWfH = (typeof woodFloorHeight === "number") ? woodFloorHeight : ((typeof window !== "undefined" && typeof window.woodFloorHeight === "number") ? window.woodFloorHeight : 0.05);
@@ -1610,10 +2234,9 @@ function buildCollectibles(count, seed) {
           const roofStyle = Math.random() > 0.3 ? "gable" : "flat";
           const roofAxis = Math.random() > 0.5 ? "X" : "Y";
           
-          const isPerfect = true;
-          const missingWallProb = 0;
-          const missingRoofProb = 0;
-          const missingFloorProb = 0;
+          const missingWallProb = isPerfect ? 0 : (isHeavilyRuined ? 0.62 : 0.35);
+          const missingRoofProb = isPerfect ? 0 : (isHeavilyRuined ? 0.85 : 0.55);
+          const missingFloorProb = isPerfect ? 0 : (isHeavilyRuined ? 0.32 : 0.12);
           
           const cells = [];
           for (let gx = 0; gx < gridX; gx++) {
@@ -1632,7 +2255,55 @@ function buildCollectibles(count, seed) {
             }
           }
 
-          // Enforce structural support rule: A roof must be supported by its perimeter wall
+          // Ensure ruined houses always remain recognizable (at least 2 floors & 1 wall) and visibly damaged
+          if (!isPerfect) {
+            let floorCount = 0;
+            let wallCount = 0;
+            let missingParts = 0;
+            const totalCells = gridX * gridY;
+            for (let gx = 0; gx < gridX; gx++) {
+              for (let gy = 0; gy < gridY; gy++) {
+                const c = cells[gx][gy];
+                if (c.hasFloor) floorCount++; else missingParts++;
+                if (!c.hasRoof) missingParts++;
+                if (gx === 0) { if (c.wallLeft) wallCount++; else missingParts++; }
+                if (gx === gridX - 1) { if (c.wallRight) wallCount++; else missingParts++; }
+                if (gy === 0) { if (c.wallBottom) wallCount++; else missingParts++; }
+                if (gy === gridY - 1) { if (c.wallTop) wallCount++; else missingParts++; }
+              }
+            }
+            // Keep at least 2 wooden floor tiles on the foundation
+            const minFloors = Math.min(2, totalCells);
+            for (let gx = 0; gx < gridX && floorCount < minFloors; gx++) {
+              for (let gy = 0; gy < gridY && floorCount < minFloors; gy++) {
+                if (!cells[gx][gy].hasFloor) {
+                  cells[gx][gy].hasFloor = true;
+                  floorCount++;
+                }
+              }
+            }
+            // Keep at least 1 perimeter wall remnant so it clearly reads as a ruined house
+            if (wallCount === 0) {
+              outerWallRestore:
+              for (let gx = 0; gx < gridX; gx++) {
+                for (let gy = 0; gy < gridY; gy++) {
+                  const c = cells[gx][gy];
+                  if (!c.hasFloor) continue;
+                  if (gx === 0) { c.wallLeft = true; wallCount++; break outerWallRestore; }
+                  if (gx === gridX - 1) { c.wallRight = true; wallCount++; break outerWallRestore; }
+                  if (gy === 0) { c.wallBottom = true; wallCount++; break outerWallRestore; }
+                  if (gy === gridY - 1) { c.wallTop = true; wallCount++; break outerWallRestore; }
+                }
+              }
+            }
+            // Guarantee at least one visible break (remove a corner roof + wall if RNG rolled intact)
+            if (missingParts === 0) {
+              cells[0][0].hasRoof = false;
+              cells[0][0].wallLeft = false;
+            }
+          }
+
+          // Enforce structural support rule: A roof must be supported by its perimeter wall (no floating roofs)
           for (let gx = 0; gx < gridX; gx++) {
             for (let gy = 0; gy < gridY; gy++) {
               const c = cells[gx][gy];
@@ -1642,6 +2313,65 @@ function buildCollectibles(count, seed) {
                 if (gx === gridX - 1 && !c.wallRight) c.hasRoof = false;
                 if (gy === 0 && !c.wallBottom) c.hasRoof = false;
                 if (gy === gridY - 1 && !c.wallTop) c.hasRoof = false;
+              }
+            }
+          }
+
+          // Enforce interior roof support (prevents floating gable peaks or disconnected interior flat roofs)
+          if (roofStyle === "gable") {
+            let changed = true;
+            while (changed) {
+              changed = false;
+              for (let gx = 0; gx < gridX; gx++) {
+                for (let gy = 0; gy < gridY; gy++) {
+                  const c = cells[gx][gy];
+                  if (!c.hasRoof) continue;
+                  if (roofAxis === "X" && gx > 0 && gx < gridX - 1) {
+                    if (!cells[gx - 1][gy].hasRoof || !cells[gx + 1][gy].hasRoof) {
+                      c.hasRoof = false;
+                      changed = true;
+                    }
+                  } else if (roofAxis === "Y" && gy > 0 && gy < gridY - 1) {
+                    if (!cells[gx][gy - 1].hasRoof || !cells[gx][gy + 1].hasRoof) {
+                      c.hasRoof = false;
+                      changed = true;
+                    }
+                  }
+                }
+              }
+            }
+          } else {
+            // Flat roof: interior roof tiles must connect via orthogonal roof neighbors to a wall-supported perimeter roof
+            const supported = Array.from({ length: gridX }, () => Array(gridY).fill(false));
+            const queue = [];
+            for (let gx = 0; gx < gridX; gx++) {
+              for (let gy = 0; gy < gridY; gy++) {
+                const c = cells[gx][gy];
+                if (!c.hasRoof) continue;
+                const isPerimeter = (gx === 0 || gx === gridX - 1 || gy === 0 || gy === gridY - 1);
+                if (isPerimeter) {
+                  supported[gx][gy] = true;
+                  queue.push([gx, gy]);
+                }
+              }
+            }
+            const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+            for (let qi = 0; qi < queue.length; qi++) {
+              const [cx, cy] = queue[qi];
+              for (let d = 0; d < dirs.length; d++) {
+                const nx2 = cx + dirs[d][0];
+                const ny2 = cy + dirs[d][1];
+                if (nx2 >= 0 && nx2 < gridX && ny2 >= 0 && ny2 < gridY && cells[nx2][ny2].hasRoof && !supported[nx2][ny2]) {
+                  supported[nx2][ny2] = true;
+                  queue.push([nx2, ny2]);
+                }
+              }
+            }
+            for (let gx = 0; gx < gridX; gx++) {
+              for (let gy = 0; gy < gridY; gy++) {
+                if (cells[gx][gy].hasRoof && !supported[gx][gy]) {
+                  cells[gx][gy].hasRoof = false;
+                }
               }
             }
           }
@@ -1661,10 +2391,21 @@ function buildCollectibles(count, seed) {
 
           let entranceDoor = null;
           if (doorCandidates.length > 0 && (isPerfect || Math.random() < 0.75)) {
-            entranceDoor = doorCandidates[Math.floor(Math.random() * doorCandidates.length)];
+            if (preferredDoorSide) {
+              const preferred = doorCandidates.filter(dc => dc.side === preferredDoorSide);
+              if (preferred.length > 0) {
+                entranceDoor = preferred[Math.floor(Math.random() * preferred.length)];
+              }
+            }
+            if (!entranceDoor) {
+              entranceDoor = doorCandidates[Math.floor(Math.random() * doorCandidates.length)];
+            }
           }
           if (placedHouses.length > 0) {
-            placedHouses[placedHouses.length - 1].entranceDoor = entranceDoor;
+            const lastHouse = placedHouses[placedHouses.length - 1];
+            lastHouse.entranceDoor = entranceDoor;
+            lastHouse.isRuined = !isPerfect;
+            lastHouse.ruinLevel = isPerfect ? 0 : (isHeavilyRuined ? 2 : 1);
           }
           
           for (let gx = 0; gx < gridX; gx++) {
@@ -1892,7 +2633,302 @@ function buildCollectibles(count, seed) {
                }
             }
           }
+          return placedHouses.length - 1;
+        };
+
+        // =========================================================
+        // A) PROCEDURAL VILLAGE SYSTEM (หมู่บ้าน 3-5 หลัง ล้อมรอบกองไฟตรงกลาง)
+        // สุ่มบ้านสมบูรณ์กับบ้านพังครึ่งต่อครึ่ง (50/50) ดึงโค้ดสร้างบ้านเดิมมาใช้ทั้งหมด
+        // =========================================================
+        let houseSeedCounter = 0;
+        const villageTargetHouses = 3 + Math.floor(Math.random() * 3); // 3, 4, or 5 houses
+
+        const trySpawnVillage = (relaxedPass = false) => {
+          const maxCenterAttempts = relaxedPass ? 160 : 120;
+          const ringDists = relaxedPass ? [1.75, 2.1, 2.45, 2.85, 3.3, 3.75] : [1.75, 2.05, 2.4, 2.8, 3.2];
+          const angleTweaks = [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42];
+          const tunnels = (typeof window !== "undefined" && window.tunnels3D) ? window.tunnels3D : (typeof tunnels3D !== "undefined" ? tunnels3D : []);
+
+          for (let attempt = 0; attempt < maxCenterAttempts; attempt++) {
+            const u = Math.random();
+            const v = Math.random();
+            const vTheta = Math.acos(2 * u - 1);
+            const vPhi = 2 * Math.PI * v;
+            const vH = sampleH_house(vTheta, vPhi);
+            if (vH < minHouseLandHeight) continue;
+
+            const vNx = Math.sin(vTheta) * Math.cos(vPhi);
+            const vNy = Math.cos(vTheta);
+            const vNz = Math.sin(vTheta) * Math.sin(vPhi);
+            const vRDist = RADIUS + vH * HEIGHT_SCALE;
+            const vWx = vRDist * vNx;
+            const vWy = vRDist * vNy;
+            const vWz = vRDist * vNz;
+
+            // Ensure village campfire plaza is not inside a cave tunnel
+            let centerInCave = false;
+            if (tunnels && tunnels.length > 0) {
+              for (let tIdx = 0; tIdx < tunnels.length; tIdx++) {
+                const tun = tunnels[tIdx];
+                if (tun.isDug) continue;
+                const tdx = vWx - tun.x, tdy = vWy - tun.y, tdz = vWz - tun.z;
+                const safeDist = tun.r + 1.1;
+                if (tdx*tdx + tdy*tdy + tdz*tdz < safeDist * safeDist) { centerInCave = true; break; }
+              }
+            }
+            if (centerInCave) continue;
+            if (typeof isPositionInsideCave === "function" && isPositionInsideCave(vWx, vWy, vWz, 0.6)) continue;
+
+            // Local tangent frame for campfire plaza
+            let txR, txY, txZ;
+            if (Math.abs(vNy) < 0.9) { txR = -vNz; txY = 0; txZ = vNx; }
+            else { txR = 1; txY = 0; txZ = 0; }
+            const lenTxR = Math.hypot(txR, txY, txZ) || 1;
+            const vR = [txR / lenTxR, txY / lenTxR, txZ / lenTxR];
+            const vF = [
+              vNy * vR[2] - vNz * vR[1],
+              vNz * vR[0] - vNx * vR[2],
+              vNx * vR[1] - vNy * vR[0]
+            ];
+            const lenVF = Math.hypot(vF[0], vF[1], vF[2]) || 1;
+            vF[0] /= lenVF; vF[1] /= lenVF; vF[2] /= lenVF;
+
+            // Quick flatness check at campfire center
+            const probeD = 0.25;
+            const pRx = vWx + vR[0] * probeD, pRy = vWy + vR[1] * probeD, pRz = vWz + vR[2] * probeD;
+            const dPR = Math.hypot(pRx, pRy, pRz) || 1;
+            const hPR = sampleH_house(Math.acos(Math.max(-1, Math.min(1, pRy / dPR))), Math.atan2(pRz, pRx));
+            const pFx = vWx + vF[0] * probeD, pFy = vWy + vF[1] * probeD, pFz = vWz + vF[2] * probeD;
+            const dPF = Math.hypot(pFx, pFy, pFz) || 1;
+            const hPF = sampleH_house(Math.acos(Math.max(-1, Math.min(1, pFy / dPF))), Math.atan2(pFz, pFx));
+            const slR = ((hPR - vH) * HEIGHT_SCALE) / probeD;
+            const slF = ((hPF - vH) * HEIGHT_SCALE) / probeD;
+            const maxPlazaSlope = relaxedPass ? 0.16 : 0.10;
+            if (Math.abs(slR) > maxPlazaSlope || Math.abs(slF) > maxPlazaSlope) continue;
+
+            // Try finding 3-5 valid house spots arranged in a ring around the central campfire
+            const baseAngle = Math.random() * Math.PI * 2;
+            const candidateSpots = [];
+            const tempPlaced = placedHouses.slice();
+
+            for (let slot = 0; slot < villageTargetHouses; slot++) {
+              const wfSize = 0.25;
+              const wfW = wfSize * 1.2;
+              const gridX = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+              const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+              const totalW = gridX * wfW;
+              const totalD = gridY * wfW;
+              const halfW = totalW / 2;
+              const halfD = totalD / 2;
+              const houseRadius = Math.sqrt(halfW * halfW + halfD * halfD);
+
+              const slotAngle = baseAngle + (slot / villageTargetHouses) * Math.PI * 2;
+              let foundSlotSpot = null;
+
+              slotSearch:
+              for (let rIdx = 0; rIdx < ringDists.length; rIdx++) {
+                const dist = ringDists[rIdx];
+                for (let aIdx = 0; aIdx < angleTweaks.length; aIdx++) {
+                  const ang = slotAngle + angleTweaks[aIdx];
+                  const tx = vWx + (Math.cos(ang) * vR[0] + Math.sin(ang) * vF[0]) * dist;
+                  const ty = vWy + (Math.cos(ang) * vR[1] + Math.sin(ang) * vF[1]) * dist;
+                  const tz = vWz + (Math.cos(ang) * vR[2] + Math.sin(ang) * vF[2]) * dist;
+                  const tLen = Math.hypot(tx, ty, tz) || 1;
+                  const cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, ty / tLen)));
+                  let cPhi = Math.atan2(tz, tx);
+                  if (cPhi < 0) cPhi += Math.PI * 2;
+
+                  // Orient house forward (+F) inward toward the village campfire
+                  const inwardDir = [vWx - tx, vWy - ty, vWz - tz];
+                  const spot = validateHouseSpot(cTheta, cPhi, halfW, halfD, houseRadius, tempPlaced, {
+                    customFDir: inwardDir,
+                    minHouseGap: 0.55,
+                    avoidCenter: [vWx, vWy, vWz],
+                    avoidCenterRad: 0.90,
+                    maxDev: relaxedPass ? 0.028 : 0.018,
+                    maxDelta: relaxedPass ? 0.042 : 0.026,
+                    maxSlope: relaxedPass ? 0.14 : 0.095,
+                    minDotUp: relaxedPass ? 0.986 : 0.992,
+                    allowClearNature: relaxedPass
+                  });
+                  if (spot) {
+                    foundSlotSpot = { spot, gridX, gridY, wfSize, wfW, totalW, totalD, houseRadius };
+                    break slotSearch;
+                  }
+                }
+              }
+
+              if (foundSlotSpot) {
+                candidateSpots.push(foundSlotSpot);
+                tempPlaced.push(foundSlotSpot.spot);
+              }
+            }
+
+            // Need at least 3 houses to form a village (3-5 houses)
+            if (candidateSpots.length >= 3) {
+              const vIdx = placedVillages.length;
+              // Clear obstacles around central campfire plaza
+              clearAreaAround(vWx, vWy, vWz, 0.85);
+
+              // True terrain normal for campfire
+              let cfNx = vNx - vR[0] * slR - vF[0] * slF;
+              let cfNy = vNy - vR[1] * slR - vF[1] * slF;
+              let cfNz = vNz - vR[2] * slR - vF[2] * slF;
+              const cfNLen = Math.hypot(cfNx, cfNy, cfNz) || 1;
+              cfNx /= cfNLen; cfNy /= cfNLen; cfNz /= cfNLen;
+
+              let cfR = [
+                vR[0] - cfNx * (vR[0]*cfNx + vR[1]*cfNy + vR[2]*cfNz),
+                vR[1] - cfNy * (vR[0]*cfNx + vR[1]*cfNy + vR[2]*cfNz),
+                vR[2] - cfNz * (vR[0]*cfNx + vR[1]*cfNy + vR[2]*cfNz)
+              ];
+              const cfRLen = Math.hypot(cfR[0], cfR[1], cfR[2]) || 1;
+              cfR = [cfR[0] / cfRLen, cfR[1] / cfRLen, cfR[2] / cfRLen];
+              let cfF = [
+                cfNy * cfR[2] - cfNz * cfR[1],
+                cfNz * cfR[0] - cfNx * cfR[2],
+                cfNx * cfR[1] - cfNy * cfR[0]
+              ];
+              const cfFLen = Math.hypot(cfF[0], cfF[1], cfF[2]) || 1;
+              cfF = [cfF[0] / cfFLen, cfF[1] / cfFLen, cfF[2] / cfFLen];
+
+              const cfPos = [vWx + cfNx * 0.005, vWy + cfNy * 0.005, vWz + cfNz * 0.005];
+              const cfSizeVal = (typeof campfireSize === "number") ? campfireSize : 0.25;
+              const villageCampfire = {
+                type: "campfire",
+                position: cfPos,
+                normal: [cfNx, cfNy, cfNz],
+                R: cfR,
+                F: cfF,
+                U: [cfNx, cfNy, cfNz],
+                color: [0.50, 0.36, 0.22],
+                size: cfSizeVal,
+                active: true,
+                isDynamic: false,
+                isPreview: false,
+                isVillageCampfire: true,
+                villageIndex: vIdx,
+                isWorldGenerated: true,
+                isPlayerPlaced: false,
+                hideFromCompass: true,
+                seed: seed + 77000 + vIdx * 500,
+                worldKey: `village_campfire_${vIdx}`
+              };
+              collectibles.push(villageCampfire);
+              _genBlockingStructs.push(villageCampfire);
+
+              if (typeof suppressGrassUnder === "function") {
+                const cfSupRad = (typeof getSuppressRadius === "function") ? getSuppressRadius("campfire", cfSizeVal) : 0.35;
+                suppressGrassUnder(cfPos, cfSupRad);
+              }
+
+              // 50/50 split of intact vs ruined houses inside the village
+              const vCount = candidateSpots.length;
+              const numIntact = Math.floor(vCount / 2) + ((vCount % 2 === 1 && Math.random() < 0.5) ? 1 : 0);
+              const intactFlags = [];
+              for (let k = 0; k < vCount; k++) intactFlags.push(k < numIntact);
+              for (let k = intactFlags.length - 1; k > 0; k--) {
+                const j = Math.floor(Math.random() * (k + 1));
+                const tmp = intactFlags[k];
+                intactFlags[k] = intactFlags[j];
+                intactFlags[j] = tmp;
+              }
+
+              const villageHouseIndices = [];
+              let intactBuilt = 0;
+              let ruinedBuilt = 0;
+              for (let k = 0; k < vCount; k++) {
+                const cs = candidateSpots[k];
+                const isPerf = intactFlags[k];
+                const isHeavy = !isPerf && (Math.random() < 0.45);
+                if (isPerf) intactBuilt++; else ruinedBuilt++;
+                const hIdx = buildProceduralHouseAt(cs.spot, {
+                  i: houseSeedCounter++,
+                  gridX: cs.gridX,
+                  gridY: cs.gridY,
+                  wfSize: cs.wfSize,
+                  wfW: cs.wfW,
+                  totalW: cs.totalW,
+                  totalD: cs.totalD,
+                  houseRadius: cs.houseRadius,
+                  isPerfect: isPerf,
+                  isHeavilyRuined: isHeavy,
+                  villageIndex: vIdx,
+                  preferredDoorSide: "top" // +F points inward toward village campfire
+                });
+                villageHouseIndices.push(hIdx);
+              }
+
+              placedVillages.push({
+                index: vIdx,
+                center: [vWx, vWy, vWz],
+                normal: [cfNx, cfNy, cfNz],
+                R: cfR,
+                F: cfF,
+                campfire: villageCampfire,
+                houseIndices: villageHouseIndices,
+                intactCount: intactBuilt,
+                ruinedCount: ruinedBuilt
+              });
+              return true;
+            }
+          }
+          return false;
+        };
+
+        if (!trySpawnVillage(false)) {
+          trySpawnVillage(true);
         }
+
+        // =========================================================
+        // B) STANDALONE PROCEDURAL HOUSES (บ้านสุ่มเดี่ยวส่วนที่เหลือทั่วดาว)
+        // =========================================================
+        const remainingStandaloneHouses = Math.max(0, numStoneFloors - placedHouses.length);
+        for (let s = 0; s < remainingStandaloneHouses; s++) {
+          const wfSize = 0.25;
+          const wfW = wfSize * 1.2;
+          const gridX = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+          const gridY = 2 + Math.floor(Math.random() * 3); // 2, 3, 4
+          const totalW = gridX * wfW;
+          const totalD = gridY * wfW;
+          const halfW = totalW / 2;
+          const halfD = totalD / 2;
+          const houseRadius = Math.sqrt(halfW * halfW + halfD * halfD);
+
+          let foundSpot = null;
+          for (let attempt = 0; attempt < 80; attempt++) {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = Math.acos(2 * u - 1);
+            const phi = 2 * Math.PI * v;
+            const spot = validateHouseSpot(theta, phi, halfW, halfD, houseRadius, placedHouses, { minHouseGap: 1.2 });
+            if (spot) {
+              foundSpot = spot;
+              break;
+            }
+          }
+          if (!foundSpot) continue;
+
+          const isPerf = Math.random() < 0.5;
+          const isHeavy = !isPerf && (Math.random() < 0.45);
+          buildProceduralHouseAt(foundSpot, {
+            i: houseSeedCounter++,
+            gridX,
+            gridY,
+            wfSize,
+            wfW,
+            totalW,
+            totalD,
+            houseRadius,
+            isPerfect: isPerf,
+            isHeavilyRuined: isHeavy,
+            villageIndex: -1,
+            preferredDoorSide: null
+          });
+        }
+
+        // Flush all cleared tree/rock vertex edits to GPU in a single batched bufferSubData call
+        _flushClearedNatureBuffer();
 
         // =========================================================
         // PROCEDURAL BOATS (WOOD_BOAT ONLY - สุ่มวางตามบ้านสุ่ม และชายหาด)
@@ -2107,16 +3143,313 @@ function buildCollectibles(count, seed) {
         // Dragon fruits grow attached to white-red trees as collectible entities
         syncTreeAttachedFruits();
 
+        // =========================================================
+        // 3. RANDOM LOOT CHESTS (กล่องสุ่มตามกลุ่มต้นไม้ และชายหาด)
+        // - Spawns near tree clusters & beaches
+        // - Randomly half-buried & tilted OR normally snapped to terrain & grid
+        // - Loot rolled from ITEM_RARITIES (COMMON / RARE only; excludes CRAFT_ONLY & SYSTEM items)
+        // - Max 3 distinct items per chest, max 3 count per item
+        // =========================================================
+        {
+          const lootRng = mulberry32(seed + 71337);
+          const placedLootChestPositions = [];
+          const savedLootChests = (typeof window !== "undefined" && Array.isArray(window.savedHouseChestsStorage))
+            ? window.savedHouseChestsStorage
+            : [];
+          const sampleH = (th, ph) => (typeof getVisualHeightOnSphere === "function"
+            ? getVisualHeightOnSphere(th, ph, seed)
+            : getHeightOnSphere(th, ph, seed));
+
+          const gridArcStep = 0.30 / Math.max(8, RADIUS);
+
+          const isClearForLootChest = (wx, wy, wz, minTreeClear, minChestClear) => {
+            if (typeof isPositionInsideCave === "function" && isPositionInsideCave(wx, wy, wz, 0.25)) {
+              return false;
+            }
+            // Avoid overlapping houses
+            for (let ph = 0; ph < placedHouses.length; ph++) {
+              const hItem = placedHouses[ph];
+              const dx = wx - hItem.x, dy = wy - hItem.y, dz = wz - hItem.z;
+              const minD = (hItem.radius || 0.6) + 0.75;
+              if (dx * dx + dy * dy + dz * dz < minD * minD) return false;
+            }
+            // Avoid overlapping beach/house boats
+            for (let pb = 0; pb < placedBoatPositions.length; pb++) {
+              const bP = placedBoatPositions[pb];
+              const dx = wx - bP[0], dy = wy - bP[1], dz = wz - bP[2];
+              if (dx * dx + dy * dy + dz * dz < 0.85 * 0.85) return false;
+            }
+            // Avoid overlapping other random loot chests
+            const minCSq = minChestClear * minChestClear;
+            for (let pc = 0; pc < placedLootChestPositions.length; pc++) {
+              const cP = placedLootChestPositions[pc];
+              const dx = wx - cP[0], dy = wy - cP[1], dz = wz - cP[2];
+              if (dx * dx + dy * dy + dz * dz < minCSq) return false;
+            }
+            // Avoid clipping directly inside trees or boulders
+            const minTSq = minTreeClear * minTreeClear;
+            for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
+              const obs = natureObsList[oIdx];
+              if (!obs || !obs.position) continue;
+              const dx = wx - obs.position[0];
+              const dy = wy - obs.position[1];
+              const dz = wz - obs.position[2];
+              const dSq = dx * dx + dy * dy + dz * dz;
+              if (dSq < minTSq) return false;
+            }
+            return true;
+          };
+
+          const trySpawnLootChestAt = (rawTheta, rawPhi, zone, minTreeClear, minChestClear) => {
+            // Randomly choose placement style: ~55% half-buried & tilted, ~45% normal grid-snapped
+            const isBuriedTilted = lootRng() < 0.55;
+            let theta = Math.max(0.08, Math.min(Math.PI - 0.08, rawTheta));
+            let phi = rawPhi;
+
+            if (!isBuriedTilted) {
+              // Normal grid snap on planet surface (0.30m grid matching wood floor/chest placement)
+              theta = Math.max(0.08, Math.min(Math.PI - 0.08, Math.round(theta / gridArcStep) * gridArcStep));
+              const phiStep = gridArcStep / Math.max(0.2, Math.sin(theta));
+              phi = Math.round(phi / phiStep) * phiStep;
+            }
+
+            const h = sampleH(theta, phi);
+            const terrainRad = RADIUS + h * HEIGHT_SCALE;
+            const hDiff = terrainRad - waterRad;
+
+            if (zone === "beach") {
+              // Dry/damp beach sand strictly above water line
+              if (hDiff < 0.006 || hDiff > 0.115) return false;
+            } else {
+              // Forest land well above water line
+              if (hDiff < 0.04) return false;
+            }
+
+            // Slope check
+            const eps = 0.015;
+            const hT = sampleH(Math.min(Math.PI - 0.05, theta + eps), phi);
+            const hP = sampleH(theta, phi + eps);
+            const dhScale = HEIGHT_SCALE / (eps * Math.max(1, terrainRad));
+            const slopeVal = Math.hypot((hT - h) * dhScale, (hP - h) * dhScale);
+            const maxSlope = zone === "beach" ? 0.35 : (isBuriedTilted ? 0.62 : 0.48);
+            if (slopeVal > maxSlope) return false;
+
+            const sinT = Math.sin(theta), cosT = Math.cos(theta);
+            const sinP = Math.sin(phi), cosP = Math.cos(phi);
+            const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+
+            // Surface base position (half-buried sinks 0.028..0.042m out of 0.0855m chest height)
+            const buryDepth = isBuriedTilted ? (0.028 + lootRng() * 0.014) : -0.001;
+            const spawnRad = terrainRad - buryDepth;
+            const wx = spawnRad * nx;
+            const wy = spawnRad * ny;
+            const wz = spawnRad * nz;
+
+            if (!isClearForLootChest(wx, wy, wz, minTreeClear, minChestClear)) return false;
+
+            const east = [-sinP, 0, cosP];
+            const north = [-cosT * cosP, sinT, -cosT * sinP];
+
+            // Cardinal 90° snap for normal grid placement, free random yaw + pitch/roll for buried tilted
+            const heading = isBuriedTilted
+              ? (lootRng() * Math.PI * 2)
+              : (Math.floor(lootRng() * 4) * (Math.PI / 2));
+            const cosH = Math.cos(heading), sinH = Math.sin(heading);
+
+            let cN = [nx, ny, nz];
+            let cR = [
+              east[0] * cosH - north[0] * sinH,
+              east[1] * cosH - north[1] * sinH,
+              east[2] * cosH - north[2] * sinH
+            ];
+            let cF = [
+              north[0] * cosH + east[0] * sinH,
+              north[1] * cosH + east[1] * sinH,
+              north[2] * cosH + east[2] * sinH
+            ];
+
+            if (isBuriedTilted) {
+              // Apply random roll (~10°..24°) and pitch (~9°..22°) keeping strict right-handed orthonormality
+              const rollSign = lootRng() < 0.5 ? -1 : 1;
+              const pitchSign = lootRng() < 0.5 ? -1 : 1;
+              const rollAng = rollSign * (0.18 + lootRng() * 0.24);
+              const pitchAng = pitchSign * (0.16 + lootRng() * 0.22);
+
+              const cosR = Math.cos(rollAng), sinR = Math.sin(rollAng);
+              const r1 = [
+                cR[0] * cosR + cN[0] * sinR,
+                cR[1] * cosR + cN[1] * sinR,
+                cR[2] * cosR + cN[2] * sinR
+              ];
+              const n1 = [
+                -cR[0] * sinR + cN[0] * cosR,
+                -cR[1] * sinR + cN[1] * cosR,
+                -cR[2] * sinR + cN[2] * cosR
+              ];
+
+              const cosP = Math.cos(pitchAng), sinP2 = Math.sin(pitchAng);
+              const n2 = [
+                n1[0] * cosP + cF[0] * sinP2,
+                n1[1] * cosP + cF[1] * sinP2,
+                n1[2] * cosP + cF[2] * sinP2
+              ];
+              const f2 = [
+                -n1[0] * sinP2 + cF[0] * cosP,
+                -n1[1] * sinP2 + cF[1] * cosP,
+                -n1[2] * sinP2 + cF[2] * cosP
+              ];
+
+              cR = r1;
+              cN = n2;
+              cF = f2;
+            }
+
+            const posKey = `${Math.round(wx * 1000)}_${Math.round(wy * 1000)}_${Math.round(wz * 1000)}`;
+            const lootWorldKey = `wood_chest_loot_${zone}_${posKey}`;
+
+            // Restore saved chest storage if previously opened/looted; otherwise roll fresh rarity-based loot
+            let chestStorage = null;
+            if (savedLootChests.length > 0) {
+              const savedMatch = savedLootChests.find(s => s && s.worldKey === lootWorldKey);
+              if (savedMatch && Array.isArray(savedMatch.storage)) {
+                chestStorage = savedMatch.storage.slice(0, 20);
+                while (chestStorage.length < 20) chestStorage.push(null);
+              }
+            }
+            if (!chestStorage) {
+              const chestItemRng = mulberry32(seed + 91900 + placedLootChestPositions.length * 1013 + (zone === "beach" ? 5000 : 0));
+              chestStorage = (typeof window !== "undefined" && typeof window.generateRandomLootChestStorage === "function")
+                ? window.generateRandomLootChestStorage(chestItemRng)
+                : Array(20).fill(null);
+            }
+
+            collectibles.push({
+              type: "wood_chest",
+              position: [wx, wy, wz],
+              normal: cN,
+              R: cR,
+              F: cF,
+              active: true,
+              isDynamic: false,
+              size: 0.25,
+              isPreview: false,
+              storage: chestStorage,
+              isWorldGenerated: true,
+              isPlayerPlaced: false,
+              isRandomLootChest: true,
+              lootZone: zone,
+              placementStyle: isBuriedTilted ? "buried_tilted" : "grid_snapped",
+              hideFromCompass: true,
+              seed: seed + 91000 + placedLootChestPositions.length * 521,
+              worldKey: lootWorldKey
+            });
+
+            placedLootChestPositions.push([wx, wy, wz]);
+            return true;
+          };
+
+          // A) Tree Cluster Chests (กล่องสุ่มตามกลุ่มต้นไม้)
+          const treeObs = [];
+          for (let oIdx = 0; oIdx < natureObsList.length; oIdx++) {
+            const obs = natureObsList[oIdx];
+            if (obs && obs.type === "tree" && obs.position) {
+              treeObs.push(obs);
+            }
+          }
+
+          if (treeObs.length > 0) {
+            // Prioritize trees that belong to a cluster (>= 2 neighbor trees within 3.2m)
+            const clusterTrees = [];
+            const clusterRadSq = 3.2 * 3.2;
+            const stride = Math.max(1, Math.floor(treeObs.length / 180));
+            for (let t = 0; t < treeObs.length; t += stride) {
+              const a = treeObs[t].position;
+              let neighbors = 0;
+              for (let u = 0; u < treeObs.length; u++) {
+                if (u === t) continue;
+                const b = treeObs[u].position;
+                const dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+                if (dx * dx + dy * dy + dz * dz <= clusterRadSq) {
+                  neighbors++;
+                  if (neighbors >= 2) break;
+                }
+              }
+              if (neighbors >= 2) clusterTrees.push(treeObs[t]);
+            }
+            const treePool = clusterTrees.length > 0 ? clusterTrees : treeObs;
+
+            // Deterministic Fisher-Yates shuffle of candidate cluster trees
+            const shuffledTrees = treePool.slice();
+            for (let sIdx = shuffledTrees.length - 1; sIdx > 0; sIdx--) {
+              const j = Math.floor(lootRng() * (sIdx + 1));
+              const tmp = shuffledTrees[sIdx];
+              shuffledTrees[sIdx] = shuffledTrees[j];
+              shuffledTrees[j] = tmp;
+            }
+
+            const targetTreeChests = Math.min(10, Math.max(4, Math.round(3 + Math.sqrt(rBase))));
+            let treeChestsSpawned = 0;
+
+            for (let ti = 0; ti < shuffledTrees.length && treeChestsSpawned < targetTreeChests; ti++) {
+              const tr = shuffledTrees[ti];
+              const tp = tr.position;
+              const tLen = Math.hypot(tp[0], tp[1], tp[2]) || 1;
+              const tnx = tp[0] / tLen, tny = tp[1] / tLen, tnz = tp[2] / tLen;
+              const tTheta = Math.acos(Math.max(-1.0, Math.min(1.0, tny)));
+              const tPhi = Math.atan2(tnz, tnx);
+              const tSinP = Math.sin(tPhi), tCosP = Math.cos(tPhi);
+              const tSinT = Math.sin(tTheta), tCosT = Math.cos(tTheta);
+              const tEast = [-tSinP, 0, tCosP];
+              const tNorth = [-tCosT * tCosP, tSinT, -tCosT * tSinP];
+
+              // Try up to 4 offsets around the tree trunk (0.34m..0.72m)
+              for (let aTry = 0; aTry < 4; aTry++) {
+                const ang = lootRng() * Math.PI * 2;
+                const dist = 0.34 + lootRng() * 0.38;
+                const offX = (Math.cos(ang) * tEast[0] + Math.sin(ang) * tNorth[0]) * dist;
+                const offY = (Math.cos(ang) * tEast[1] + Math.sin(ang) * tNorth[1]) * dist;
+                const offZ = (Math.cos(ang) * tEast[2] + Math.sin(ang) * tNorth[2]) * dist;
+                const cx = tp[0] + offX, cy = tp[1] + offY, cz = tp[2] + offZ;
+                const cLen = Math.hypot(cx, cy, cz) || 1;
+                const cTheta = Math.acos(Math.max(-1.0, Math.min(1.0, cy / cLen)));
+                const cPhi = Math.atan2(cz, cx);
+
+                if (trySpawnLootChestAt(cTheta, cPhi, "forest", 0.28, 1.8)) {
+                  treeChestsSpawned++;
+                  break;
+                }
+              }
+            }
+          }
+
+          // B) Beach Chests (กล่องสุ่มตามชายหาด)
+          const targetBeachChests = Math.min(8, Math.max(4, Math.round(2 + Math.sqrt(rBase))));
+          let beachChestsSpawned = 0;
+
+          for (let attempt = 0; attempt < 220 && beachChestsSpawned < targetBeachChests; attempt++) {
+            const u = lootRng();
+            const v = lootRng();
+            const candTheta = Math.acos(2 * u - 1);
+            const candPhi = 2 * Math.PI * v;
+
+            if (trySpawnLootChestAt(candTheta, candPhi, "beach", 0.30, 1.9)) {
+              beachChestsSpawned++;
+            }
+          }
+        }
+
         Math.random = _origRandom;
 
         for (let i = 0; i < collectibles.length; i++) {
           const c = collectibles[i];
           c.isWorldGenerated = true;
           if (c.isPlayerPlaced === undefined) c.isPlayerPlaced = false;
-          const px = c.position ? Math.round(c.position[0] * 1000) : 0;
-          const py = c.position ? Math.round(c.position[1] * 1000) : 0;
-          const pz = c.position ? Math.round(c.position[2] * 1000) : 0;
-          c.worldKey = `${c.type}_${px}_${py}_${pz}`;
+          if (!c.worldKey) {
+            const px = c.position ? Math.round(c.position[0] * 1000) : 0;
+            const py = c.position ? Math.round(c.position[1] * 1000) : 0;
+            const pz = c.position ? Math.round(c.position[2] * 1000) : 0;
+            c.worldKey = `${c.type}_${px}_${py}_${pz}`;
+          }
         }
 
         const staticWorldCollectibles = collectibles.filter(c => !c.isDynamic);
@@ -2158,6 +3491,7 @@ function buildCollectibles(count, seed) {
         }
 
         window.placedHouses = placedHouses;
+        window.placedVillages = placedVillages;
         if (typeof window.respawnPlayerClonesNearHouses === "function") {
           window.respawnPlayerClonesNearHouses();
         }
@@ -2300,8 +3634,105 @@ function buildCollectibles(count, seed) {
           success: false
         };
       }
+      function getVillageSpawnLocation(villageIndex = 0) {
+        const villages = (typeof window !== "undefined" && Array.isArray(window.placedVillages) && window.placedVillages.length > 0)
+          ? window.placedVillages
+          : [];
+        const houses = (typeof window !== "undefined" && Array.isArray(window.placedHouses))
+          ? window.placedHouses
+          : [];
+
+        const village = villages[villageIndex] || villages[0];
+        if (!village || !village.center) {
+          return getHouseSpawnLocation();
+        }
+
+        const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+        const pRad = (typeof RADIUS !== "undefined") ? RADIUS : 32;
+        const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
+        const wLevel = (typeof waterLevel !== "undefined") ? waterLevel : 1.0;
+        const effectiveWaterRad = pRad + wLevel * (hScale * 0.25) + 0.05;
+
+        const [vx, vy, vz] = village.center;
+        const vR = village.R || [1, 0, 0];
+        const vF = village.F || [0, 0, 1];
+
+        // Pick a clear spot around the village center campfire (0.80m - 1.20m) not overlapping any house
+        const testDists = [0.85, 1.05, 1.25];
+        const testAngles = [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4, Math.PI, (5 * Math.PI) / 4, (3 * Math.PI) / 2, (7 * Math.PI) / 4];
+
+        for (let dIdx = 0; dIdx < testDists.length; dIdx++) {
+          const dist = testDists[dIdx];
+          for (let aIdx = 0; aIdx < testAngles.length; aIdx++) {
+            const ang = testAngles[aIdx];
+            const candWx = vx + (Math.cos(ang) * vR[0] + Math.sin(ang) * vF[0]) * dist;
+            const candWy = vy + (Math.cos(ang) * vR[1] + Math.sin(ang) * vF[1]) * dist;
+            const candWz = vz + (Math.cos(ang) * vR[2] + Math.sin(ang) * vF[2]) * dist;
+
+            const candDist = Math.hypot(candWx, candWy, candWz) || 1;
+            const candNx = candWx / candDist;
+            const candNy = candWy / candDist;
+            const candNz = candWz / candDist;
+
+            const theta = Math.acos(Math.max(-1.0, Math.min(1.0, candNy)));
+            let phi = Math.atan2(candNz, candNx);
+            if (phi < 0) phi += Math.PI * 2;
+
+            const hVal = typeof getVisualHeightOnSphere === "function"
+              ? getVisualHeightOnSphere(theta, phi, seed)
+              : (typeof getHeightOnSphere === "function" ? getHeightOnSphere(theta, phi, seed) : 0);
+            const surfaceRad = pRad + hVal * hScale;
+            if (surfaceRad < effectiveWaterRad) continue;
+            if (typeof isPositionInsideCave === "function" && isPositionInsideCave(candWx, candWy, candWz, 0.3)) continue;
+
+            // Make sure spawn spot is outside every house footprint
+            let insideHouse = false;
+            for (let hi = 0; hi < houses.length; hi++) {
+              const h = houses[hi];
+              if (!h) continue;
+              const dx = candWx - h.x, dy = candWy - h.y, dz = candWz - h.z;
+              const safeR = (h.radius || 0.6) + 0.35;
+              if (dx * dx + dy * dy + dz * dz < safeR * safeR) {
+                insideHouse = true;
+                break;
+              }
+            }
+            if (insideHouse) continue;
+
+            // Compute heading so player faces inward toward the central village campfire
+            const sinT = Math.sin(theta), cosT = Math.cos(theta);
+            const sinP = Math.sin(phi), cosP = Math.cos(phi);
+            const east = [-sinP, 0, cosP];
+            const north = [-cosT * cosP, sinT, -cosT * sinP];
+            const toFireX = vx - candWx, toFireY = vy - candWy, toFireZ = vz - candWz;
+            const dEast = toFireX * east[0] + toFireY * east[1] + toFireZ * east[2];
+            const dNorth = toFireX * north[0] + toFireY * north[1] + toFireZ * north[2];
+            const heading = Math.atan2(dEast, dNorth);
+
+            return {
+              theta,
+              phi,
+              heading,
+              village,
+              villageIndex: village.index,
+              x: candWx,
+              y: candWy,
+              z: candWz,
+              success: true
+            };
+          }
+        }
+
+        // Fallback: spawn in front of an intact house inside the village (or first village house)
+        if (Array.isArray(village.houseIndices) && village.houseIndices.length > 0) {
+          const intactIdx = village.houseIndices.find(idx => houses[idx] && !houses[idx].isRuined);
+          return getHouseSpawnLocation(intactIdx !== undefined ? intactIdx : village.houseIndices[0]);
+        }
+        return getHouseSpawnLocation();
+      }
       window.getHouseSpawnLocation = getHouseSpawnLocation;
       window.getRandomHouseSpawn = getHouseSpawnLocation;
+      window.getVillageSpawnLocation = getVillageSpawnLocation;
 
       window.addBox = addBox;
       function addBox(center, w, h, d, color, right, up, forward, outVertices, outColors, outIndices) {
@@ -2612,32 +4043,34 @@ function buildCollectibles(count, seed) {
           if (!c || !c.active || !c.position) continue;
           const px = c.position[0], py = c.position[1], pz = c.position[2];
           const t = c.type;
-          if (t === "wood_door") {
-            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
-            let arr = spatialDoors.get(key);
-            if (!arr) { arr = []; spatialDoors.set(key, arr); }
-            arr.push(c);
-          } else if (t === "wood_window") {
-            const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
-            let arr = spatialWindows.get(key);
-            if (!arr) { arr = []; spatialWindows.set(key, arr); }
-            arr.push(c);
-          } else if (t === "wood_roof") {
-            const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
-            let arr = spatialRoofs.get(key);
-            if (!arr) { arr = []; spatialRoofs.set(key, arr); }
-            arr.push(c);
-          } else if (t === "thin_wood_floor" || t === "wood_floor") {
-            const key = Math.floor(px) + "_" + Math.floor(py) + "_" + Math.floor(pz);
-            let arr = spatialFloors.get(key);
-            if (!arr) { arr = []; spatialFloors.set(key, arr); }
-            arr.push(c);
+          if (!c.isGroundDrop) {
+            if (t === "wood_door") {
+              const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+              let arr = spatialDoors.get(key);
+              if (!arr) { arr = []; spatialDoors.set(key, arr); }
+              arr.push(c);
+            } else if (t === "wood_window") {
+              const key = Math.floor(px / 0.5) + "_" + Math.floor(py / 0.5) + "_" + Math.floor(pz / 0.5);
+              let arr = spatialWindows.get(key);
+              if (!arr) { arr = []; spatialWindows.set(key, arr); }
+              arr.push(c);
+            } else if (t === "wood_roof") {
+              const key = Math.floor(px / 2.0) + "_" + Math.floor(py / 2.0) + "_" + Math.floor(pz / 2.0);
+              let arr = spatialRoofs.get(key);
+              if (!arr) { arr = []; spatialRoofs.set(key, arr); }
+              arr.push(c);
+            } else if (t === "thin_wood_floor" || t === "wood_floor") {
+              const key = Math.floor(px) + "_" + Math.floor(py) + "_" + Math.floor(pz);
+              let arr = spatialFloors.get(key);
+              if (!arr) { arr = []; spatialFloors.set(key, arr); }
+              arr.push(c);
+            }
           }
           if (!c.isPreview) {
-            if (t === "campfire") {
+            if (t === "campfire" && !c.isGroundDrop) {
               activeCampfires.push(c);
               lightCollectibles.push(c);
-            } else if (t === "lantern" || t === "glow_ore" || t === "glow_battery") {
+            } else if ((t === "lantern" && !c.isGroundDrop) || t === "glow_ore" || t === "glow_battery") {
               lightCollectibles.push(c);
             }
           }
@@ -2664,15 +4097,17 @@ function buildCollectibles(count, seed) {
           if (!arr) { arr = []; map.set(key, arr); }
           if (!arr.includes(c)) arr.push(c);
         };
-        if (t === "wood_door") addToMap(window._spatialDoors, 0.5);
-        else if (t === "wood_window") addToMap(window._spatialWindows, 0.5);
-        else if (t === "wood_roof") addToMap(window._spatialRoofs, 2.0);
-        else if (t === "thin_wood_floor" || t === "wood_floor") addToMap(window._spatialFloors, 1.0);
+        if (!c.isGroundDrop) {
+          if (t === "wood_door") addToMap(window._spatialDoors, 0.5);
+          else if (t === "wood_window") addToMap(window._spatialWindows, 0.5);
+          else if (t === "wood_roof") addToMap(window._spatialRoofs, 2.0);
+          else if (t === "thin_wood_floor" || t === "wood_floor") addToMap(window._spatialFloors, 1.0);
+        }
         if (!c.isPreview) {
-          if (t === "campfire") {
+          if (t === "campfire" && !c.isGroundDrop) {
             if (!window._activeCampfiresList.includes(c)) window._activeCampfiresList.push(c);
             if (!window._lightCollectiblesList.includes(c)) window._lightCollectiblesList.push(c);
-          } else if (t === "lantern" || t === "glow_ore" || t === "glow_battery") {
+          } else if ((t === "lantern" && !c.isGroundDrop) || t === "glow_ore" || t === "glow_battery") {
             if (!window._lightCollectiblesList.includes(c)) window._lightCollectiblesList.push(c);
           }
         }
@@ -2735,30 +4170,30 @@ function buildCollectibles(count, seed) {
         if (targetBuffer === 'main') {
           window._boatSleepCheckTick = (window._boatSleepCheckTick || 0) + 1;
           for (let item of collectibles) {
-            if (!item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window" && item.type !== "wood_planter_box") {
+            if (!item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window" && item.type !== "wood_planter_box" && item.type !== "wild_growing_plant") {
               delete item.meshStart;
               delete item.meshEnd;
             }
           }
           const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
-          itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window" && c.type !== "wood_planter_box" && c !== currentActiveBoat);
+          itemsToProcess = collectibles.filter(c => !c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window" && c.type !== "wood_planter_box" && c.type !== "wild_growing_plant" && c !== currentActiveBoat);
         } else if (targetBuffer === 'dynamic') {
           for (let item of collectibles) {
-            if ((item.isDynamic && item.type !== "wood_door" && item.type !== "wood_window") || item.type === "wood_planter_box") {
+            if ((item.isDynamic && (item.isGroundDrop || (item.type !== "wood_door" && item.type !== "wood_window"))) || item.type === "wood_planter_box" || item.type === "wild_growing_plant") {
               delete item.meshStart;
               delete item.meshEnd;
             }
           }
           const currentActiveBoat = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) || (typeof window !== "undefined" && window.activeRidingBoat);
-          itemsToProcess = collectibles.filter(c => ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box") && c !== currentActiveBoat);
+          itemsToProcess = collectibles.filter(c => ((c.isDynamic && (c.isGroundDrop || (c.type !== "wood_door" && c.type !== "wood_window"))) || c.type === "wood_planter_box" || c.type === "wild_growing_plant") && c !== currentActiveBoat);
         } else if (targetBuffer === 'doors') {
           for (let item of collectibles) {
-            if (item.type === "wood_door" || item.type === "wood_window") {
+            if (!item.isGroundDrop && (item.type === "wood_door" || item.type === "wood_window")) {
               delete item.meshStart;
               delete item.meshEnd;
             }
           }
-          itemsToProcess = collectibles.filter(c => c.type === "wood_door" || c.type === "wood_window");
+          itemsToProcess = collectibles.filter(c => !c.isGroundDrop && (c.type === "wood_door" || c.type === "wood_window"));
         } else {
           itemsToProcess = (typeof floorPreviewCollectible !== 'undefined' && floorPreviewCollectible ? [floorPreviewCollectible] : []);
         }
@@ -2875,9 +4310,21 @@ function buildCollectibles(count, seed) {
 
           const startIdx = indices.length;
 
-          const handler = window.ItemRegistry[item.type];
-          if (handler && typeof handler.render === "function") {
-            handler.render(item, vertices, colors, indices, targetBuffer);
+          const rawHandler = window.ItemRegistry[item.type];
+          const placeableDropMeta = (item.isGroundDrop && targetBuffer !== 'preview' && !item.isPreview && window.GroundDropSystem && typeof window.GroundDropSystem.getPlaceableDropMeta === "function")
+            ? window.GroundDropSystem.getPlaceableDropMeta(item.type)
+            : null;
+          if (placeableDropMeta && rawHandler && typeof rawHandler.render === "function") {
+            window.DropTemplateCache.renderPlaceableDrop(item, placeableDropMeta, rawHandler, vertices, colors, indices);
+          } else {
+            const handler = (rawHandler && typeof rawHandler.render === "function")
+              ? rawHandler
+              : (item.isGroundDrop
+                  ? (window.ItemRegistry["cloth"] || window.ItemRegistry["branch"] || window.ItemRegistry["rock"])
+                  : null);
+            if (handler && typeof handler.render === "function") {
+              handler.render(item, vertices, colors, indices, targetBuffer);
+            }
           }
           if (targetBuffer === 'main' || targetBuffer === 'dynamic' || targetBuffer === 'doors') {
             item.meshStart = startIdx;
@@ -3119,8 +4566,8 @@ function buildCollectibles(count, seed) {
         }
 
         const t = item.type;
-        // 1) Dynamic items & planter boxes: rebuild ONLY 'dynamic' buffer
-        if (item.isDynamic || t === "wood_planter_box") {
+        // 1) Dynamic items, planter boxes & wild growing plants: rebuild ONLY 'dynamic' buffer
+        if (item.isDynamic || t === "wood_planter_box" || t === "wild_growing_plant") {
           refreshCollectiblesVBO('dynamic');
           return true;
         }
@@ -3219,7 +4666,7 @@ function buildCollectibles(count, seed) {
       window.updateCollectibleInVBO = function(item) {
         if (!item || !item.active || item.isPreview) return false;
         window._collectiblesTopologyVersion = (window._collectiblesTopologyVersion || 0) + 1;
-        if (item.isDynamic || item.type === "wood_planter_box") {
+        if (item.isDynamic || item.type === "wood_planter_box" || item.type === "wild_growing_plant") {
           refreshCollectiblesVBO('dynamic');
           return true;
         }
@@ -4745,7 +6192,7 @@ function buildCollectibles(count, seed) {
                : collectibles;
              for (let i = 0; i < boatCandidates.length; i++) {
                const other = boatCandidates[i];
-               if (other && other.active && other.type === "wood_boat" && !other.isPreview && other.position) {
+               if (other && other.active && other.type === "wood_boat" && !other.isPreview && !other.isGroundDrop && other.position) {
                  const dx = other.position[0] - targetPos[0];
                  const dy = other.position[1] - targetPos[1];
                  const dz = other.position[2] - targetPos[2];
@@ -6702,6 +8149,7 @@ function buildCollectibles(count, seed) {
 
         const maxDistLimit = curObjectDist + 1.0;
         const maxDistSq = maxDistLimit * maxDistLimit;
+        let cachedCoreRadius = null;
 
         for (let c of collectibles) {
           if (!c.active || !c.isDynamic) continue;
@@ -6741,7 +8189,7 @@ function buildCollectibles(count, seed) {
           }
 
           // Early skip for sleeping parked boats on land until structures change
-          if (c.type === "wood_boat" && c._isSleeping && !c.isInWater && !c.isFlying && !c.isAirborne && !c.isGliding) {
+          if (c.type === "wood_boat" && !c.isGroundDrop && c._isSleeping && !c.isInWater && !c.isFlying && !c.isAirborne && !c.isGliding) {
             const wakeTick = window._boatSleepCheckTick || 0;
             if (c._sleepWakeTick === wakeTick) {
               continue;
@@ -6751,7 +8199,7 @@ function buildCollectibles(count, seed) {
 
           // Throttle parked boats gently bobbing on water (~15 Hz instead of every frame)
           const frameDtSec = (typeof dt === "number" && dt > 0 && dt < 0.25) ? dt : (1 / 60);
-          if (c.type === "wood_boat" && c.isInWater && c._waterSettled && !c.isFlying && !c.isAirborne && !c.isGliding) {
+          if (c.type === "wood_boat" && !c.isGroundDrop && c.isInWater && c._waterSettled && !c.isFlying && !c.isAirborne && !c.isGliding) {
             c._waterBobTimer = (c._waterBobTimer || 0) + frameDtSec;
             if (c._waterBobTimer < 0.066) {
               continue;
@@ -6762,7 +8210,7 @@ function buildCollectibles(count, seed) {
           const _oldP = c.position ? [c.position[0], c.position[1], c.position[2]] : null;
           const _oldR = c.R ? [c.R[0], c.R[1], c.R[2]] : null;
 
-          if (c.type === "arrow") {
+          if (c.type === "arrow" && !c.isGroundDrop) {
              if (c.attachedToNPC) {
                  const npc = c.attachedToNPC;
                  const isNpcValid = typeof amphibians !== "undefined" && amphibians && amphibians.includes(npc);
@@ -7130,8 +8578,11 @@ function buildCollectibles(count, seed) {
              const terrainRad = RADIUS + terrainH * HEIGHT_SCALE;
              
              const current_dist = Math.sqrt(p[0]**2 + p[1]**2 + p[2]**2);
-             const coreCollectible = collectibles.find(c => c.type === "planet_core");
-             const coreRadius = coreCollectible ? coreCollectible.radius : 2.0;
+             if (cachedCoreRadius === null) {
+                 const coreCollectible = collectibles.find(item => item && item.type === "planet_core");
+                 cachedCoreRadius = coreCollectible ? coreCollectible.radius : 2.0;
+             }
+             const coreRadius = cachedCoreRadius;
              if (current_dist <= coreRadius) {
                  c.animPhaseActive = false;
                  p[0] = nx * (coreRadius + 0.001);
@@ -7139,6 +8590,7 @@ function buildCollectibles(count, seed) {
                  p[2] = nz * (coreRadius + 0.001);
                  c.vel = [0, 0, 0];
                  c.isStuck = true;
+                 c._groundDropAgeSec = 0;
                  
                  if (typeof playPlaceSound === "function") {
                      playPlaceSound();
@@ -7156,6 +8608,7 @@ function buildCollectibles(count, seed) {
                  
                  c.vel = [0, 0, 0];
                  c.isStuck = true;
+                 c._groundDropAgeSec = 0;
                  
                  if (typeof playPlaceSound === "function") {
                      playPlaceSound();
@@ -7295,8 +8748,9 @@ function buildCollectibles(count, seed) {
             let inWater = false;
             if (waterEnabled && terrainRadius < waterRadius) {
                 if (preCaveData && preCaveData.insideTunnel) {
-                    let wRadiusLocal = typeof getWaterRadiusAt === "function" ? getWaterRadiusAt(c.position[0], c.position[1], c.position[2]) : waterRadius;
-                    if (wRadiusLocal === 0) wRadiusLocal = waterRadius;
+                    const wRadiusLocal = typeof getWaterRadiusAt === "function"
+                      ? getWaterRadiusAt(c.position[0], c.position[1], c.position[2], preCaveData)
+                      : waterRadius;
                     inWater = (wRadiusLocal > terrainRadius);
                 } else {
                     inWater = true;
@@ -7304,10 +8758,10 @@ function buildCollectibles(count, seed) {
             }
             preInWater = inWater;
             
-            let isLogFloat = ((c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || c.type === "wood_boat") && inWater && r <= waterRadius + 0.1);
+            let isLogFloat = ((c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || (c.type === "wood_boat" && !c.isGroundDrop)) && inWater && r <= waterRadius + 0.1);
 
-            const hasWingBoat = (c.type === "wood_boat") && !!(c.hasWing || c.hasWings);
-            const isWheeledBoat = (c.type === "wood_boat") && !!(c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
+            const hasWingBoat = (c.type === "wood_boat" && !c.isGroundDrop) && !!(c.hasWing || c.hasWings);
+            const isWheeledBoat = (c.type === "wood_boat" && !c.isGroundDrop) && !!(c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
             const groundRadCheck = inWater ? (waterRadius - 0.04) : terrainRadius;
             isAirborneWingedBoat = hasWingBoat && !inWater && (c.isFlying || c.isGliding || (r - groundRadCheck > 0.15));
 
@@ -7316,7 +8770,7 @@ function buildCollectibles(count, seed) {
                 const depth = waterRadius - r;
                 // Target radius for the log to float is slightly below the water surface so it looks half-submerged
                 let targetR = waterRadius - 0.005; 
-                if (c.type === "wood_boat") {
+                if (c.type === "wood_boat" && !c.isGroundDrop) {
                     let wpx = c.position[0], wpy = c.position[1], wpz = c.position[2];
                     let rLen = Math.sqrt(wpx*wpx + wpy*wpy + wpz*wpz) || 1;
                     const wave = getWaterWave(wpx/rLen*waterRadius, wpy/rLen*waterRadius, wpz/rLen*waterRadius, waterAnimTime, waveStrength);
@@ -7413,7 +8867,7 @@ function buildCollectibles(count, seed) {
           
           // Random tumbling rotation logic for the logs
           if (!c.spinAxis) {
-              if (c.type === "wood_boat") {
+              if (c.type === "wood_boat" && !c.isGroundDrop) {
                   c.spinAxis = [0, 1, 0];
                   c.spinSpeed = 0;
               } else {
@@ -7451,8 +8905,9 @@ function buildCollectibles(count, seed) {
           let groundRadius = preInWater ? waterRadius : terrainRadius;
           let isInWater = preInWater;
           
-          let collisionRadius = groundRadius + (c.type === "wood_boat" ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
-          if (c.type === "wood_boat" && !isInWater) {
+          let isWoodBoat = (c.type === "wood_boat" && !c.isGroundDrop);
+          let collisionRadius = groundRadius + (isWoodBoat ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
+          if (isWoodBoat && !isInWater) {
              const cPos = c.position;
              if (typeof Physics !== "undefined" && typeof Physics.getFloorSurfaceRadiusAt === "function") {
                collisionRadius = Physics.getFloorSurfaceRadiusAt(cPos[0], cPos[1], cPos[2], collisionRadius);
@@ -7461,7 +8916,6 @@ function buildCollectibles(count, seed) {
           let pitchGrade = 0;
           let rollGrade = 0;
           
-          let isWoodBoat = c.type === "wood_boat";
           let isWheeledBoat = isWoodBoat && (c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
 
           if (isWheeledBoat && !isInWater) {
@@ -7502,7 +8956,7 @@ function buildCollectibles(count, seed) {
               }
           } else if (isInWater) {
               // Wood boat keeps exact original water depth (-0.04), item drops settle at ground/water
-              collisionRadius = (c.type === "wood_boat") ? (waterRadius - 0.04) : (terrainRadius + (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
+              collisionRadius = isWoodBoat ? (waterRadius - 0.04) : (terrainRadius + (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           }
           
           if (rAfter < collisionRadius) {
@@ -7521,7 +8975,7 @@ function buildCollectibles(count, seed) {
             // bounce and friction (soft realistic bounce for ground drops so they settle quickly!)
             const dot = c.vel[0] * nx + c.vel[1] * ny + c.vel[2] * nz;
             if (dot < 0) {
-                let restitution = (isWheeledBoat || c.type === "wood_boat") ? 0.0 : (isItemDrop ? 0.28 : 0.45);
+                let restitution = (isWheeledBoat || isWoodBoat) ? 0.0 : (isItemDrop ? 0.28 : 0.45);
                 c.vel[0] -= dot * nx * (1.0 + restitution);
                 c.vel[1] -= dot * ny * (1.0 + restitution);
                 c.vel[2] -= dot * nz * (1.0 + restitution);
@@ -7580,7 +9034,7 @@ function buildCollectibles(count, seed) {
 
             // Stop moving if very slow
             const speedSq = c.vel[0]**2 + c.vel[1]**2 + c.vel[2]**2;
-            if (c.type === "wood_boat") {
+            if (isWoodBoat) {
               c.isInWater = isInWater;
               if (isInWater && Math.abs(collisionRadius - r) < 0.015 && speedSq < 0.0002) {
                 c._waterSettled = true;
@@ -7589,7 +9043,7 @@ function buildCollectibles(count, seed) {
               }
             }
 
-            if (c.type === "wood_boat" && !isInWater && !isWheeledBoat) {
+            if (isWoodBoat && !isInWater && !isWheeledBoat) {
                 // Non-wheeled boat on land cannot move (completely static and stable)
                 c.vel[0] = 0;
                 c.vel[1] = 0;
@@ -7607,7 +9061,7 @@ function buildCollectibles(count, seed) {
                     c._isSleeping = true;
                     c._sleepWakeTick = window._boatSleepCheckTick || 0;
                 }
-            } else if (c.type !== "wood_boat") {
+            } else if (!isWoodBoat) {
                 c._settleFrames = (c._settleFrames || 0) + 1;
                 if ((speedSq < 0.00018 && Math.abs(c.spinSpeed || 0) < 0.03) || c._settleFrames >= 16) {
                   // Snap cleanly to ground surface and put drop to sleep (0 CPU / 0 VBO rebuild cost!)
@@ -7653,7 +9107,7 @@ function buildCollectibles(count, seed) {
             }
           } else {
              // apply spin
-             if (c.type !== "wood_boat") {
+             if (!isWoodBoat) {
                  const sAngle = c.spinSpeed;
                  const sCos = Math.cos(sAngle);
                  const sSin = Math.sin(sAngle);
@@ -7689,7 +9143,7 @@ function buildCollectibles(count, seed) {
              }
           }
           
-          if (c.type === "wood_boat" && c.isInWater && c._waterSettled) {
+          if (isWoodBoat && c.isInWater && c._waterSettled) {
             const refP = c._lastVboPos || _oldP;
             const refR = c._lastVboR || _oldR;
             const posMoved = refP && (Math.abs(c.position[0] - refP[0]) > 0.0008 || Math.abs(c.position[1] - refP[1]) > 0.0008 || Math.abs(c.position[2] - refP[2]) > 0.0008);
@@ -7705,6 +9159,11 @@ function buildCollectibles(count, seed) {
           }
         }
         
+        if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.processExpiredDrops === "function") {
+            const sweepDt = (typeof dt === "number" && dt > 0 && dt < 0.25) ? dt : (1 / 60);
+            window.GroundDropSystem.processExpiredDrops(sweepDt, collectibles);
+        }
+
         if (activeRidingBoat && activeRidingBoat._moved) {
             activeRidingBoat._moved = false;
         }
@@ -7745,6 +9204,27 @@ function buildCollectibles(count, seed) {
         VEHICLE: "VEHICLE"      // ยานพาหนะ
       };
       window.ITEM_CATEGORIES = ITEM_CATEGORIES;
+
+      // ระดับ/ชนิดที่มาของไอเทม (Item Rarity / Acquisition Type)
+      // 1. COMMON     : ไอเทมทั่วไป
+      // 2. RARE       : ไอเทมหายาก
+      // 3. CRAFT_ONLY : ไอเทมคราฟเท่านั้น
+      // 4. SYSTEM     : ไอเทมระบบ (ไม่สุ่มในกล่องสุ่ม)
+      const ITEM_RARITIES = {
+        COMMON: "COMMON",         // ไอเทมทั่วไป
+        RARE: "RARE",             // ไอเทมหายาก
+        CRAFT_ONLY: "CRAFT_ONLY", // ไอเทมคราฟเท่านั้น
+        SYSTEM: "SYSTEM"          // ไอเทมระบบ
+      };
+      window.ITEM_RARITIES = ITEM_RARITIES;
+
+      const ITEM_RARITY_LABELS = {
+        COMMON:     { th: "ไอเทมทั่วไป",       en: "Common",      ja: "一般アイテム" },
+        RARE:       { th: "ไอเทมหายาก",        en: "Rare",        ja: "レアアイテム" },
+        CRAFT_ONLY: { th: "ไอเทมคราฟเท่านั้น", en: "Craft Only",  ja: "クラフト限定" },
+        SYSTEM:     { th: "ไอเทมระบบ",         en: "System Item", ja: "システムアイテム" }
+      };
+      window.ITEM_RARITY_LABELS = ITEM_RARITY_LABELS;
 
       const ITEM_DEFINITIONS = {
         // --- 1. หมวดไอเทม พรี-วาง (PRE_PLACE) ---
@@ -8025,6 +9505,7 @@ function buildCollectibles(count, seed) {
         "OBSIDIAN_PAD_WARP": {
           id: "OBSIDIAN_PAD_WARP",
           category: ITEM_CATEGORIES.PRE_PLACE,
+          rarity: ITEM_RARITIES.CRAFT_ONLY,
           name_th: "แท่นวาร์ปออบซิเดียน",
           name_en: "OBSIDIAN PAD Warp",
           icon: "🧭",
@@ -8141,6 +9622,7 @@ function buildCollectibles(count, seed) {
         "AEGIS_SHIFT": {
           id: "AEGIS_SHIFT",
           category: ITEM_CATEGORIES.HOLDABLE,
+          rarity: ITEM_RARITIES.CRAFT_ONLY,
           name_th: "อีเตอร์ดาบใหญ่",
           name_en: "Aegis-Shift",
           name_ja: "イージスシフト",
@@ -8271,6 +9753,7 @@ function buildCollectibles(count, seed) {
         "TANTO": {
           id: "TANTO",
           category: ITEM_CATEGORIES.HOLDABLE,
+          rarity: ITEM_RARITIES.CRAFT_ONLY,
           name_th: "ทันโตะ",
           name_en: "Tanto",
           name_ja: "短刀",
@@ -8531,6 +10014,7 @@ function buildCollectibles(count, seed) {
         "OBSIDIAN_FLUX": {
           id: "OBSIDIAN_FLUX",
           category: ITEM_CATEGORIES.HOLDABLE,
+          rarity: ITEM_RARITIES.CRAFT_ONLY,
           name_th: "ออบซิเดียนฟลักซ์",
           name_en: "Obsidian Flux",
           icon: "⚫",
@@ -8542,6 +10026,8 @@ function buildCollectibles(count, seed) {
         "WHITE_BODYSUIT_TOP": {
           id: "WHITE_BODYSUIT_TOP",
           category: ITEM_CATEGORIES.HOLDABLE,
+          rarity: ITEM_RARITIES.SYSTEM,
+          isSystemItem: true,
           equipSlot: "shirt",
           name_th: "เสื้อบอดี้สูทแขนสั้นสีขาว",
           name_en: "White Short-Sleeve Bodysuit Top",
@@ -8554,6 +10040,8 @@ function buildCollectibles(count, seed) {
         "WHITE_BODYSUIT_SHORTS": {
           id: "WHITE_BODYSUIT_SHORTS",
           category: ITEM_CATEGORIES.HOLDABLE,
+          rarity: ITEM_RARITIES.SYSTEM,
+          isSystemItem: true,
           equipSlot: "pants",
           name_th: "กางเกงขาสั้นบอดี้สูทสีขาว",
           name_en: "White Bodysuit Shorts",
@@ -8685,6 +10173,113 @@ function buildCollectibles(count, seed) {
           maxStack: 1
         }
       };
+
+      // ตารางจัดกลุ่มชนิดไอเทมทั้ง 3 ระดับ (แก้ไข/ย้ายหมวดได้จากจุดเดียว)
+      const ITEM_RARITY_GROUPS = {
+        // ไอเทมคราฟเท่านั้น (CRAFT_ONLY)
+        CRAFT_ONLY: [
+          "AEGIS_SHIFT",
+          "TANTO",
+          "OBSIDIAN_PAD_WARP",
+          "OBSIDIAN_FLUX",
+          "ROBOT_STAND",
+          "ROBOT_COCKPIT",
+          "ROBOT_LEFT_ARM",
+          "ROBOT_RIGHT_ARM",
+          "ROBOT_LEFT_LEG",
+          "ROBOT_RIGHT_LEG",
+          "ELECTRIC_ENGINE",
+          "BOAT_WING",
+          "WOODEN_ARM_CANNON",
+          "ARM_CANNON",
+          "GLOW_BATTERY",
+          "GLOW_BATTERY_EMPTY",
+          "IRON_BULLET",
+          "FOLDING_LADDER",
+          "LANTERN",
+          "TRAVELER_BOOTS",
+          "OXFORD_SHOES",
+          "DRESS_BOOTS",
+          "WHITE_SHIRT_SHORT",
+          "BLACK_PLEATED_SKIRT",
+          "BLACK_LEGGINGS",
+          "DOUBLE_BREASTED_SUIT",
+          "BLACK_SLACKS",
+          "OPERA_CAPE"
+        ],
+        // ไอเทมหายาก (RARE)
+        RARE: [
+          "GOLD_ORE",
+          "GLOW_ORE",
+          "OBSIDIAN_CUBE",
+          "DRAGON_FRUIT",
+          "CROWN_FLOWER",
+          "TOUGH_MEAT",
+          "LEATHER",
+          "MEGANEURA",
+          "ISOPOD",
+          "TRAVELER_HOODIE"
+        ],
+        // ไอเทมระบบ (SYSTEM - ไม่นำมาสุ่มในกล่อง)
+        SYSTEM: [
+          "WHITE_BODYSUIT_TOP",
+          "WHITE_BODYSUIT_SHORTS"
+        ],
+        // ไอเทมทั่วไป (COMMON)
+        COMMON: [
+          "STONE_FLOOR",
+          "WOOD_FLOOR",
+          "THIN_WOOD_FLOOR",
+          "WOOD_STAIRS",
+          "WOOD_WALL",
+          "WOOD_WINDOW",
+          "WOOD_DOOR",
+          "WOOD_ROOF",
+          "WOOD_CHEST",
+          "WOOD_BED",
+          "WOOD_TABLE",
+          "WOOD_PLANTER_BOX",
+          "WOOD_CHAIR",
+          "CAMPFIRE",
+          "WOOD_BOAT",
+          "WOOD_WHEEL",
+          "AXE",
+          "PICKAXE",
+          "SHOVEL",
+          "IRON_BUCKET",
+          "WATER_BUCKET",
+          "BOW",
+          "BRANCH",
+          "FRIED_BUG",
+          "COTTON_PLANT",
+          "GRASS",
+          "CLOTH",
+          "RUBBER_BLOCK",
+          "ROCK",
+          "BIG_ROCK",
+          "DIRT",
+          "LOG",
+          "IRON_ORE",
+          "ARROW"
+        ]
+      };
+      window.ITEM_RARITY_GROUPS = ITEM_RARITY_GROUPS;
+
+      Object.keys(ITEM_RARITY_GROUPS).forEach(tierKey => {
+        const list = ITEM_RARITY_GROUPS[tierKey];
+        for (let i = 0; i < list.length; i++) {
+          const def = ITEM_DEFINITIONS[list[i]];
+          if (def && !def.rarity) {
+            def.rarity = ITEM_RARITIES[tierKey];
+          }
+        }
+      });
+      Object.keys(ITEM_DEFINITIONS).forEach(k => {
+        if (ITEM_DEFINITIONS[k] && !ITEM_DEFINITIONS[k].rarity) {
+          ITEM_DEFINITIONS[k].rarity = ITEM_RARITIES.COMMON;
+        }
+      });
+
       window.ITEM_DEFINITIONS = ITEM_DEFINITIONS;
       if (window.ItemRegistry && typeof window.ItemRegistry === "object") {
         Object.assign(window.ItemRegistry, ITEM_DEFINITIONS);
@@ -8693,18 +10288,143 @@ function buildCollectibles(count, seed) {
       }
 
       // Helper functions for Backend Item System
+      const _ITEM_DEF_ALIASES = {
+        CHEST: "WOOD_CHEST",
+        PLANK: "WOOD_FLOOR",
+        MEGANEURA_ITEM: "MEGANEURA",
+        ISOPOD_ITEM: "ISOPOD",
+        DRAGONFRUIT: "DRAGON_FRUIT",
+        OBSIDIAN_CUBE_ITEM: "OBSIDIAN_CUBE",
+        OBSIDIAN_PAD_WARP_ITEM: "OBSIDIAN_PAD_WARP",
+        OBSIDIAN_COMPASS_PAD: "OBSIDIAN_PAD_WARP",
+        OBSIDIAN_COMPASS_PAD_ITEM: "OBSIDIAN_PAD_WARP",
+        OBSIDIAN_FLUX_ITEM: "OBSIDIAN_FLUX",
+        HIDE: "LEATHER",
+        HOODIE_CLOAK: "TRAVELER_HOODIE",
+        HOODIE_BOOTS: "TRAVELER_BOOTS"
+      };
+
       function getItemDefinition(itemOrName) {
         if (!itemOrName) return null;
         let key = typeof itemOrName === "string" ? itemOrName : (itemOrName.name || itemOrName.id || itemOrName.label || itemOrName.type || "");
-        key = String(key).toUpperCase();
-        if (key === "CHEST") key = "WOOD_CHEST";
-        if (key === "MEGANEURA_ITEM") key = "MEGANEURA";
-        if (key === "ISOPOD_ITEM") key = "ISOPOD";
-        if (key === "DRAGONFRUIT") key = "DRAGON_FRUIT";
-        if (key === "OBSIDIAN_CUBE_ITEM") key = "OBSIDIAN_CUBE";
+        key = String(key).trim().toUpperCase();
+        if (_ITEM_DEF_ALIASES[key]) key = _ITEM_DEF_ALIASES[key];
         return ITEM_DEFINITIONS[key] || null;
       }
       window.getItemDefinition = getItemDefinition;
+
+      function getItemRarity(itemOrName) {
+        if (typeof itemOrName === "string") {
+          const up = itemOrName.trim().toUpperCase();
+          if (ITEM_RARITIES[up]) return ITEM_RARITIES[up];
+        }
+        const def = getItemDefinition(itemOrName);
+        if (def && def.rarity && ITEM_RARITIES[def.rarity]) {
+          return def.rarity;
+        }
+        return ITEM_RARITIES.COMMON;
+      }
+      window.getItemRarity = getItemRarity;
+
+      function isCommonItem(itemOrName) {
+        return getItemRarity(itemOrName) === ITEM_RARITIES.COMMON;
+      }
+      window.isCommonItem = isCommonItem;
+
+      function isRareItem(itemOrName) {
+        return getItemRarity(itemOrName) === ITEM_RARITIES.RARE;
+      }
+      window.isRareItem = isRareItem;
+
+      function isCraftOnlyItem(itemOrName) {
+        return getItemRarity(itemOrName) === ITEM_RARITIES.CRAFT_ONLY;
+      }
+      window.isCraftOnlyItem = isCraftOnlyItem;
+
+      function isSystemItem(itemOrName) {
+        const def = getItemDefinition(itemOrName);
+        if (def && def.isSystemItem) return true;
+        return getItemRarity(itemOrName) === ITEM_RARITIES.SYSTEM;
+      }
+      window.isSystemItem = isSystemItem;
+
+      // สุ่มของในกล่องสุ่มตามระดับไอเทม (1 กล่องสุ่มไม่เกิน 3 ไอเทม, จำนวนชิ้นไม่เกิน 3 อัน, ไม่สุ่มไอเทมคราฟเท่านั้นและไอเทมระบบ)
+      function generateRandomLootChestStorage(rngFn) {
+        const rand = typeof rngFn === "function" ? rngFn : Math.random;
+        const storage = Array(20).fill(null);
+        const defs = (typeof window !== "undefined" && window.ITEM_DEFINITIONS) ? window.ITEM_DEFINITIONS : ITEM_DEFINITIONS;
+        const rarities = (typeof window !== "undefined" && window.ITEM_RARITIES) ? window.ITEM_RARITIES : ITEM_RARITIES;
+        if (!defs || !rarities) return storage;
+
+        const commonPool = [];
+        const rarePool = [];
+        const seenIds = new Set();
+
+        const keys = Object.keys(defs);
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          const def = defs[k];
+          if (!def || !def.id || def.id !== k) continue;
+          if (seenIds.has(def.id)) continue;
+          if (def.isSystemItem || def.isDisabled) continue;
+          const r = def.rarity || rarities.COMMON;
+          if (r === rarities.CRAFT_ONLY || r === rarities.SYSTEM) continue;
+          seenIds.add(def.id);
+          if (r === rarities.RARE) {
+            rarePool.push(def);
+          } else {
+            commonPool.push(def);
+          }
+        }
+
+        if (commonPool.length === 0 && rarePool.length === 0) return storage;
+
+        // 1..3 items per chest (25% -> 1 item, 45% -> 2 items, 30% -> 3 items)
+        const countRoll = rand();
+        const numItems = countRoll < 0.25 ? 1 : (countRoll < 0.70 ? 2 : 3);
+        const pickedIds = new Set();
+
+        for (let slotIdx = 0; slotIdx < numItems; slotIdx++) {
+          // 22% chance for RARE, 78% chance for COMMON
+          let useRare = rarePool.length > 0 && (commonPool.length === 0 || rand() < 0.22);
+          let pool = useRare ? rarePool : commonPool;
+          let available = pool.filter(d => !pickedIds.has(d.id));
+          if (available.length === 0) {
+            pool = useRare ? commonPool : rarePool;
+            available = pool.filter(d => !pickedIds.has(d.id));
+          }
+          if (available.length === 0) break;
+
+          const chosen = available[Math.floor(rand() * available.length)];
+          pickedIds.add(chosen.id);
+
+          const maxQty = Math.min(3, Math.max(1, chosen.maxStack || 30));
+          const qty = maxQty <= 1 ? 1 : (1 + Math.floor(rand() * maxQty));
+
+          storage[slotIdx] = {
+            name: chosen.id,
+            icon: chosen.icon || "📦",
+            count: qty,
+            label: chosen.id
+          };
+        }
+
+        return storage;
+      }
+      window.generateRandomLootChestStorage = generateRandomLootChestStorage;
+
+      function getItemRarityLabel(itemOrNameOrRarity, lang) {
+        const rarity = getItemRarity(itemOrNameOrRarity);
+        const curLang = lang || (typeof window.getGameLanguage === "function" ? window.getGameLanguage() : (window.gameLanguage || getStoredLanguageFallback()));
+        const entry = ITEM_RARITY_LABELS[rarity] || ITEM_RARITY_LABELS.COMMON;
+        if (curLang === "seedian") {
+          return (window.Seedian && typeof window.Seedian.toSeedian === "function") ? window.Seedian.toSeedian(entry.th) : entry.th;
+        }
+        if (curLang === "th") return entry.th;
+        if (curLang === "ja") return entry.ja || entry.en;
+        return entry.en;
+      }
+      window.getItemRarityLabel = getItemRarityLabel;
 
       function getItemCategory(itemOrName, actor = null) {
         const def = getItemDefinition(itemOrName);

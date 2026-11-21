@@ -99,6 +99,7 @@
       // Bottom Inventory Buttons
       bottom_btn_action: "แอคชั่น UI",
       bottom_btn_split: "แบ่งจำนวนไอเทม",
+      bottom_btn_drop: "ทิ้งลงพื้น",
       bottom_btn_destroy: "ทำลายไอเทม",
 
       // Key Bindings
@@ -417,6 +418,7 @@
       // Bottom Inventory Buttons
       bottom_btn_action: "ACTION UI",
       bottom_btn_split: "SPLIT STACK",
+      bottom_btn_drop: "DROP ITEM",
       bottom_btn_destroy: "DESTROY ITEM",
 
       // Key Bindings
@@ -736,6 +738,7 @@
       // Bottom Inventory Buttons
       bottom_btn_action: "アクションUI",
       bottom_btn_split: "スタック分割",
+      bottom_btn_drop: "地面に落とす",
       bottom_btn_destroy: "アイテム破棄",
 
       // Key Bindings

@@ -83,12 +83,19 @@ window.updateAaaLoading = updateAaaLoading;
 
 function startGameWithSlot(loadedData, devMode = false) {
   if (loadedData) {
-    if (loadedData.RADIUS === 2.5 || loadedData.RADIUS === 3.6 || loadedData.RADIUS === 8.0) {
-      loadedData.RADIUS = 32.0;
-      loadedData.radius = 32.0;
-      loadedData.currentGridSize = 400;
-    } else if (loadedData.currentGridSize === 180 || loadedData.currentGridSize === 500) {
-      loadedData.currentGridSize = 400;
+    if (
+      loadedData.RADIUS === 2.5 ||
+      loadedData.RADIUS === 3.6 ||
+      loadedData.RADIUS === 8.0 ||
+      loadedData.RADIUS === 32.0 ||
+      (typeof loadedData.RADIUS === "number" && loadedData.RADIUS < 64.0) ||
+      (typeof loadedData.radius === "number" && loadedData.radius < 64.0)
+    ) {
+      loadedData.RADIUS = 64.0;
+      loadedData.radius = 64.0;
+      loadedData.currentGridSize = 800;
+    } else if (loadedData.currentGridSize === 180 || loadedData.currentGridSize === 400 || loadedData.currentGridSize === 500) {
+      loadedData.currentGridSize = 800;
     }
   }
   if (gameStarted) return;
@@ -154,8 +161,8 @@ function startGameWithSlot(loadedData, devMode = false) {
 
   // 1. ตั้งค่าพื้นฐานและสุ่มค่าหากเป็นเซฟใหม่ก่อนนำไปใช้งาน
   if (!loadedData) {
-    // หากเป็นเซฟใหม่ ให้สุ่มค่า Seed และขนาดเริ่มต้น (RADIUS สุ่มจาก [32, 64, 96, 128, 160])
-    const START_RADIUS_OPTIONS = [32, 64, 96, 128, 160];
+    // หากเป็นเซฟใหม่ ให้สุ่มค่า Seed และขนาดเริ่มต้น (RADIUS สุ่มจาก [64, 96, 128, 160])
+    const START_RADIUS_OPTIONS = [64, 96, 128, 160];
     const initialRadius = START_RADIUS_OPTIONS[Math.floor(Math.random() * START_RADIUS_OPTIONS.length)];
     if (typeof updatePlanetRadiusAndHeightScale === "function") {
       updatePlanetRadiusAndHeightScale(initialRadius);
@@ -213,6 +220,9 @@ function startGameWithSlot(loadedData, devMode = false) {
     window.demolishedHouseChests = [];
     window.savedHouseChestsStorage = [];
     window.cutGrassPositions = [];
+    if (typeof window.WildPlantGrowthSystem !== "undefined" && typeof window.WildPlantGrowthSystem.reset === "function") {
+      window.WildPlantGrowthSystem.reset();
+    }
     if (typeof savedAmphibiansState !== "undefined") savedAmphibiansState = null;
     playerHP = 5;
     playerMaxHP = 5;
@@ -314,6 +324,11 @@ function startGameWithSlot(loadedData, devMode = false) {
       }
 
       window.collectibles = collectibles;
+      if (settingsToApply && settingsToApply.wildPlantGrowthState && typeof window.WildPlantGrowthSystem !== "undefined" && typeof window.WildPlantGrowthSystem.importState === "function") {
+        window.WildPlantGrowthSystem.importState(settingsToApply.wildPlantGrowthState);
+      } else if (typeof window.WildPlantGrowthSystem !== "undefined" && typeof window.WildPlantGrowthSystem.reset === "function") {
+        window.WildPlantGrowthSystem.reset();
+      }
       if (typeof SpatialGrid !== "undefined" && SpatialGrid.rebuild) {
         SpatialGrid.rebuild(collectibles);
       }
@@ -323,15 +338,18 @@ function startGameWithSlot(loadedData, devMode = false) {
       
       refreshCollectiblesVBO();
 
-      // 5. สุ่มสปอนตัวละครที่บ้านสุ่ม (House Spawn) สำหรับเซฟใหม่หรือเซฟที่ยังไม่มีพิกัด
+      // 5. สปอนตัวละครที่หมู่บ้าน (Village Spawn) สำหรับดาวใหม่หรือเซฟที่ยังไม่มีพิกัด (fallback เป็นบ้านสุ่ม)
       if (!loadedData || typeof loadedData.charTheta !== "number") {
-        if (typeof window.getHouseSpawnLocation === "function") {
-          const houseSpawn = window.getHouseSpawnLocation();
-          if (houseSpawn && typeof houseSpawn.theta === "number") {
-            charTheta = houseSpawn.theta;
-            charPhi = houseSpawn.phi;
-            console.log("🏠 สปอนตัวละครที่บ้านสุ่ม (Spawned at procedural house):", houseSpawn);
+        const spawnLoc = (typeof window.getVillageSpawnLocation === "function")
+          ? window.getVillageSpawnLocation()
+          : ((typeof window.getHouseSpawnLocation === "function") ? window.getHouseSpawnLocation() : null);
+        if (spawnLoc && typeof spawnLoc.theta === "number") {
+          charTheta = spawnLoc.theta;
+          charPhi = spawnLoc.phi;
+          if (typeof spawnLoc.heading === "number" && typeof charHeading !== "undefined") {
+            charHeading = spawnLoc.heading;
           }
+          console.log("🏘️ สปอนตัวละครที่หมู่บ้าน/บ้านสุ่ม (Spawned at village):", spawnLoc);
         }
       }
 

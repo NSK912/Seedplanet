@@ -3,11 +3,11 @@ var canvas = null;
 var gl = null;
 var isWebGL2 = true;
 var supportUint32 = true;
-var RADIUS = 32.0;
-var HEIGHT_SCALE = 0.6 * Math.pow(32.0 / 8.0, 0.70);
+var RADIUS = 64.0;
+var HEIGHT_SCALE = 0.6 * Math.pow(64.0 / 8.0, 0.70);
 var globalSeed = 0;
 
-var currentGridSize = 400;
+var currentGridSize = 800;
 
 var PLANET_CORE_POS = [0, 0, 0];
 function getPlanetCorePosition() {
@@ -24,7 +24,7 @@ function setPlanetCorePosition(x, y, z) {
 }
 
 function updatePlanetRadiusAndHeightScale(newRadius) {
-  const r = Math.max(32.0, parseFloat(newRadius) || 32.0);
+  const r = Math.max(64.0, parseFloat(newRadius) || 64.0);
   RADIUS = r;
   // Dynamic height scaling (8.0 is 0.6 baseline, larger radius has proportionate mountains)
   HEIGHT_SCALE = 0.6 * Math.pow(r / 8.0, 0.70);
@@ -44,9 +44,9 @@ function updatePlanetRadiusAndHeightScale(newRadius) {
 }
 
 if (typeof window !== 'undefined') {
-  window.RADIUS = 32.0;
-  window.HEIGHT_SCALE = 0.6 * Math.pow(32.0 / 8.0, 0.70);
-  window.currentGridSize = 400;
+  window.RADIUS = 64.0;
+  window.HEIGHT_SCALE = 0.6 * Math.pow(64.0 / 8.0, 0.70);
+  window.currentGridSize = 800;
   window.globalSeed = 0;
   window.PLANET_CORE_POS = PLANET_CORE_POS;
   window.getPlanetCorePosition = getPlanetCorePosition;
@@ -173,6 +173,37 @@ function ensureCustomCursor() {
           filter: brightness(1.25) !important;
           outline: 2px solid rgba(223, 183, 108, 0.85) !important;
           outline-offset: -1px;
+        }
+        .cut-frame.virtual-hover,
+        .crafting-recipe-card.virtual-hover,
+        .inventory-header h2.virtual-hover,
+        .inventory-header .close-btn.virtual-hover,
+        .craft-tile.virtual-hover,
+        .inventory-slot.virtual-hover,
+        .action-slot.virtual-hover,
+        .touch-btn.virtual-hover,
+        .mech-stand-slot.virtual-hover,
+        .custom-scrollbar-track.virtual-hover,
+        .custom-scrollbar-thumb.virtual-hover,
+        .seedian-footer-btn.virtual-hover,
+        .seedian-card.virtual-hover,
+        #inventoryBottomButtons > button.virtual-hover,
+        .start-btn.virtual-hover,
+        .inventory-btn.virtual-hover,
+        #gameplayFullscreenBtn.virtual-hover,
+        #inventorySettings button.game-ui.virtual-hover,
+        .key-bind-btn.virtual-hover,
+        .gp-bind-btn.virtual-hover,
+        #chestTakeAllBtn.virtual-hover,
+        #trashCancelBtn.virtual-hover,
+        #trashConfirmBtn.virtual-hover,
+        #antialiasCancelBtn.virtual-hover,
+        #antialiasConfirmBtn.virtual-hover,
+        .save-slot-card.virtual-hover,
+        .save-slot-delete-btn.virtual-hover,
+        #btnSaveSelectBack.virtual-hover,
+        .custom-select-display.virtual-hover {
+          outline: none !important;
         }
       `;
       if (document.head) document.head.appendChild(style);
@@ -3402,6 +3433,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           const btns = [
             document.getElementById("btnInventoryActionUI"),
             document.getElementById("btnInventorySplit"),
+            document.getElementById("btnInventoryDrop"),
             document.getElementById("btnInventoryDestroy")
           ].filter(el => el && el.offsetParent !== null);
           return btns[this.uiNav.index] || btns[0];
@@ -3616,6 +3648,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         const bottomBtns = [
           document.getElementById("btnInventoryActionUI"),
           document.getElementById("btnInventorySplit"),
+          document.getElementById("btnInventoryDrop"),
           document.getElementById("btnInventoryDestroy")
         ].filter(el => el && el.offsetParent !== null);
 
@@ -3993,6 +4026,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       const bottomBtns = [
         document.getElementById("btnInventoryActionUI"),
         document.getElementById("btnInventorySplit"),
+        document.getElementById("btnInventoryDrop"),
         document.getElementById("btnInventoryDestroy")
       ].filter(b => b && b.offsetParent !== null);
 
@@ -4003,13 +4037,14 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       }
     },
 
-    // Y (Button 3) Shortcut -> Jump directly to/from 3 bottom action buttons in UI
+    // Y (Button 3) Shortcut -> Jump directly to/from 4 bottom action buttons in UI
     triggerUIBottomButtonsShortcut: function() {
       if (!this.checkIsUIOpen()) return;
 
       const bottomBtns = [
         document.getElementById("btnInventoryActionUI"),
         document.getElementById("btnInventorySplit"),
+        document.getElementById("btnInventoryDrop"),
         document.getElementById("btnInventoryDestroy")
       ].filter(b => b && b.offsetParent !== null);
 

@@ -2,7 +2,10 @@
 
 window.ItemRegistry["shovel"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    const s = item.size || 0.25;
+    const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
+    const s = isIcon
+      ? ((typeof item.size === "number") ? item.size : 0.25)
+      : ((typeof item.size === "number") ? Math.min(item.size, 0.030) : 0.022);
     const p = item.position || [0, 0, 0];
     const r = item.R || [1, 0, 0];
     const f = item.F || [0, 0, 1];
@@ -13,7 +16,7 @@ window.ItemRegistry["shovel"] = {
 
     window.DropTemplateCache.render(
       "shovel_v1",
-      { position: p, R: rot.R, normal: n, F: rot.F, scale: s, yOff: 0.05 },
+      { position: p, R: rot.R, normal: n, F: rot.F, scale: s, yOff: isIcon ? 0.05 : 0.28 },
       (tv, tc, ti) => {
         const handleColor = [0.4, 0.25, 0.15];
         buildTaperedSegment([-1.2, 0, 0], [0.72, 0, 0], 0.08, 0.08, 5, handleColor, tv, tc, ti);
@@ -32,3 +35,4 @@ window.ItemRegistry["shovel"] = {
     );
   }
 };
+window.ItemRegistry["SHOVEL"] = window.ItemRegistry["shovel"];

@@ -119,7 +119,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           <!-- Version Info -->
           <div style="color: #64748b; font-size: 0.75rem; font-weight: 500; font-family: 'Google Sans', sans-serif; margin-left: 0.5rem;">
             <span style="font-weight: 700; margin-right: 0.25rem;">NSK App</span>
-            ver 2.0.16
+            ver 2.0.17
           </div>
         </div>
       </div>
@@ -320,8 +320,6 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         color: #dfb76c;
         border: 1px solid rgba(223, 183, 108, 0.4);
         border-radius: 0;
-        --cut: 0.375rem;
-        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
         padding: 0;
         cursor: pointer;
         backdrop-filter: blur(0.5rem);
@@ -637,17 +635,13 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           </div>
         </div>
 
-        <!-- 3 ปุ่มด้านล่างกระเป๋า -->
-        <div id="inventoryBottomButtons" class="game-ui" style="display: none; gap: 0.625rem; align-items: center; justify-content: center; width: 100%; max-width: 30rem; margin: 0.75rem auto 0 auto; box-sizing: border-box;">
+        <!-- 4 ปุ่มด้านล่างกระเป๋า -->
+        <div id="inventoryBottomButtons" class="game-ui" style="display: none; gap: 0.5rem; align-items: center; justify-content: center; width: 100%; max-width: 38rem; margin: 0.75rem auto 0 auto; box-sizing: border-box;">
           <button id="btnInventoryActionUI" class="game-ui clickable" style="
             flex: 1;
             height: 2.375rem;
             background: rgba(223, 183, 108, 0.12);
-            border: 1px solid rgba(223, 183, 108, 0.45);
             color: #dfb76c;
-            border-radius: 0 !important;
-            --cut: 0.5rem;
-            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
             font-size: 0.6875rem;
             font-weight: bold;
             cursor: pointer;
@@ -657,8 +651,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             gap: 0.4375rem;
             transition: all 0.2s;
             font-family: 'Google Sans', sans-serif;
+            white-space: nowrap;
           ">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem; flex-shrink: 0;">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="rgba(223, 183, 108, 0.25)"></polygon>
             </svg>
             <span data-i18n="bottom_btn_action">แอคชั่น UI</span>
@@ -667,11 +662,7 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             flex: 1;
             height: 2.375rem;
             background: rgba(56, 189, 248, 0.12);
-            border: 1px solid rgba(56, 189, 248, 0.45);
             color: #38bdf8;
-            border-radius: 0 !important;
-            --cut: 0.5rem;
-            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
             font-size: 0.6875rem;
             font-weight: bold;
             cursor: pointer;
@@ -681,8 +672,9 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             gap: 0.4375rem;
             transition: all 0.2s;
             font-family: 'Google Sans', sans-serif;
+            white-space: nowrap;
           ">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem; flex-shrink: 0;">
               <!-- Back sci-fi square -->
               <rect x="8" y="3" width="13" height="13" rx="1.5" fill="rgba(56, 189, 248, 0.22)" stroke="#38bdf8" stroke-dasharray="2.5 2.5"></rect>
               <!-- Front sci-fi square overlapping -->
@@ -692,15 +684,11 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             </svg>
             <span data-i18n="bottom_btn_split">แบ่งจำนวนไอเทม</span>
           </button>
-          <button id="btnInventoryDestroy" class="game-ui clickable" style="
+          <button id="btnInventoryDrop" class="game-ui clickable" style="
             flex: 1;
             height: 2.375rem;
-            background: rgba(239, 68, 68, 0.12);
-            border: 1px solid rgba(239, 68, 68, 0.45);
-            color: #ef4444;
-            border-radius: 0 !important;
-            --cut: 0.5rem;
-            clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+            background: rgba(251, 146, 60, 0.12);
+            color: #fb923c;
             font-size: 0.6875rem;
             font-weight: bold;
             cursor: pointer;
@@ -710,8 +698,32 @@ document.body.insertAdjacentHTML("afterbegin", `<div
             gap: 0.4375rem;
             transition: all 0.2s;
             font-family: 'Google Sans', sans-serif;
+            white-space: nowrap;
           ">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem; flex-shrink: 0;">
+              <path d="M12 3v12"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="rgba(251, 146, 60, 0.2)"></path>
+            </svg>
+            <span data-i18n="bottom_btn_drop">ทิ้งลงพื้น</span>
+          </button>
+          <button id="btnInventoryDestroy" class="game-ui clickable" style="
+            flex: 1;
+            height: 2.375rem;
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            font-size: 0.6875rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4375rem;
+            transition: all 0.2s;
+            font-family: 'Google Sans', sans-serif;
+            white-space: nowrap;
+          ">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; width: 0.9375rem; height: 0.9375rem; flex-shrink: 0;">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               <line x1="10" y1="11" x2="10" y2="17"></line>
@@ -1512,17 +1524,16 @@ document.body.insertAdjacentHTML("afterbegin", `<div
           min="25"
           max="3200"
           step="25"
-          value="400"
+          value="800"
         />
-        <div class="value-display" id="sizeDisplay">400 x 400</div>
+        <div class="value-display" id="sizeDisplay">800 x 800</div>
         <div class="warning">⚠️ ขนาดใหญ่ (500+) อาจช้า</div>
       </div>
 
       <div class="control-group">
         <label>🌍 รัศมีดาว (Planet Radius)</label>
         <div style="display: flex; gap: 0.25rem; margin-bottom: 0.375rem; flex-wrap: wrap;">
-          <button class="btn-radius-preset" data-radius="32" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">32 (มาตรฐาน)</button>
-          <button class="btn-radius-preset" data-radius="64" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">64</button>
+          <button class="btn-radius-preset" data-radius="64" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">64 (มาตรฐาน)</button>
           <button class="btn-radius-preset" data-radius="96" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">96</button>
           <button class="btn-radius-preset" data-radius="128" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">128</button>
           <button class="btn-radius-preset" data-radius="160" style="flex: 1; padding: 0.25rem 0.125rem; font-size: 0.6875rem; background: rgba(0,0,0,0.6); border: 1px solid rgba(223,183,108,0.3); color: #dfb76c; cursor: pointer; transition: all 0.2s;">160</button>
@@ -1530,12 +1541,12 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <input
           type="range"
           id="radiusInput"
-          min="32.0"
+          min="64.0"
           max="160.0"
           step="1.0"
-          value="32.0"
+          value="64.0"
         />
-        <div class="value-display" id="radiusDisplay">32.00</div>
+        <div class="value-display" id="radiusDisplay">64.00</div>
       </div>
 
       <div class="control-group">
@@ -4863,7 +4874,7 @@ window.addEventListener("keyup", (e) => {
         sizeInput.value = val;
         sizeDisplay.textContent = val + " x " + val;
         
-        const newRadius = Math.max(32.0, Math.min(160.0, val / 12.5));
+        const newRadius = Math.max(64.0, Math.min(160.0, val / 12.5));
         if (typeof window.updatePlanetRadiusAndHeightScale === "function") {
           window.updatePlanetRadiusAndHeightScale(newRadius);
         } else {
@@ -4893,7 +4904,7 @@ window.addEventListener("keyup", (e) => {
         );
       }
 
-      const RADIUS_PRESETS = [32, 64, 96, 128, 160];
+      const RADIUS_PRESETS = [64, 96, 128, 160];
 
       function updateRadiusButtonStates() {
         document.querySelectorAll(".btn-radius-preset").forEach((btn) => {
@@ -4915,7 +4926,8 @@ window.addEventListener("keyup", (e) => {
 
       document.querySelectorAll(".btn-radius-preset").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const r = parseFloat(btn.dataset.radius);
+          const parsedR = parseFloat(btn.dataset.radius);
+          const r = Number.isFinite(parsedR) ? Math.max(64.0, parsedR) : 0;
           if (r) {
             if (typeof window.updatePlanetRadiusAndHeightScale === "function") {
               window.updatePlanetRadiusAndHeightScale(r);
@@ -4957,7 +4969,7 @@ window.addEventListener("keyup", (e) => {
         if (val > 3200) val = 3200;
         sizeDisplay.textContent = val + " x " + val;
         
-        let tempRadius = Math.max(32.0, val / 12.5);
+        let tempRadius = Math.max(64.0, val / 12.5);
         if (radiusInput) radiusInput.value = tempRadius.toFixed(2);
         if (radiusDisplay) radiusDisplay.textContent = tempRadius.toFixed(2);
 
@@ -4977,7 +4989,7 @@ window.addEventListener("keyup", (e) => {
       });
 
       radiusInput?.addEventListener("input", () => {
-        let val = parseFloat(radiusInput.value) || 32.0;
+        let val = Math.max(64.0, parseFloat(radiusInput.value) || 64.0);
         radiusDisplay.textContent = val.toFixed(2);
         
         let gSize = Math.round(val * 12.5);
@@ -4989,7 +5001,7 @@ window.addEventListener("keyup", (e) => {
       });
 
       radiusInput?.addEventListener("change", () => {
-        let val = parseFloat(radiusInput.value) || 32.0;
+        let val = Math.max(64.0, parseFloat(radiusInput.value) || 64.0);
         if (typeof window.updatePlanetRadiusAndHeightScale === "function") {
           window.updatePlanetRadiusAndHeightScale(val);
         } else {
@@ -5014,7 +5026,7 @@ window.addEventListener("keyup", (e) => {
       });
 
       randomBtn?.addEventListener("click", () => {
-        // สุ่ม RADIUS จากชุด [32, 64, 96, 128, 160] และสเกล Grid กับ Noise ให้เหมาะสม
+        // สุ่ม RADIUS จากชุด [64, 96, 128, 160] และสเกล Grid กับ Noise ให้เหมาะสม
         const randRadius = RADIUS_PRESETS[Math.floor(Math.random() * RADIUS_PRESETS.length)];
         if (typeof window.updatePlanetRadiusAndHeightScale === "function") {
           window.updatePlanetRadiusAndHeightScale(randRadius);
@@ -5962,11 +5974,13 @@ window.addEventListener("keyup", (e) => {
           activeRidingBoat = null;
           activeRidingMech = null;
         } else {
-          if (typeof resetChibiRagdollPhysics === "function") {
-            resetChibiRagdollPhysics();
-          }
-          if (typeof window !== "undefined" && window.chibiGlbModel && typeof window.chibiGlbModel._resetNodeTransforms === "function") {
-            window.chibiGlbModel._resetNodeTransforms();
+          if (typeof window !== "undefined" && !window.GLB_DISABLED) {
+            if (typeof resetChibiRagdollPhysics === "function") {
+              resetChibiRagdollPhysics();
+            }
+            if (window.chibiGlbModel && typeof window.chibiGlbModel._resetNodeTransforms === "function") {
+              window.chibiGlbModel._resetNodeTransforms();
+            }
           }
           if (fallRagdollTimeout) {
             clearTimeout(fallRagdollTimeout);
@@ -6041,8 +6055,50 @@ window.addEventListener("keyup", (e) => {
       }
 
       // ============================================
-      // ระบบควบคุมการว่ายน้ำและดำน้ำ (Shared with Player & PlayerClones)
+      // ระบบควบคุมการว่ายน้ำและดำน้ำชุดเดียว (Unified for Surface, Caves, Player & PlayerClones)
       // ============================================
+      window.getEffectiveSwimTopRadius = function(
+        effWaterRadius,
+        swimMoveFactor = 0.0,
+        charScale = 0.1,
+        caveData = null
+      ) {
+        let topRad = effWaterRadius + (-0.22 + (swimMoveFactor || 0.0) * 0.27) * charScale;
+        if (caveData && caveData.insideTunnel && caveData.ceiling !== Infinity) {
+          const maxCaveCenter = caveData.ceiling - 0.46 * charScale;
+          if (topRad > maxCaveCenter) topRad = maxCaveCenter;
+        }
+        return topRad;
+      };
+
+      window.syncEntityDiveStateFromRadius = function(
+        state,
+        centerRadius,
+        effWaterRadius,
+        floorBaseRadius,
+        charScale = 0.1,
+        caveData = null,
+        pressingDiveDown = false
+      ) {
+        if (!state || centerRadius === null || centerRadius === undefined) return;
+        const effectiveTopRadius = window.getEffectiveSwimTopRadius(
+          effWaterRadius,
+          state.swimMovementFactor || 0.0,
+          charScale,
+          caveData
+        );
+        const bottomRadius = floorBaseRadius + 0.46 * charScale;
+        const maxDiveDepth = Math.max(0.0, effectiveTopRadius - bottomRadius);
+        const clampedDepth = Math.max(0.0, Math.min(maxDiveDepth, effectiveTopRadius - centerRadius));
+        state.diveDepth = clampedDepth;
+        // Option B: Never auto-activate isDivingMode from physical depth alone;
+        // only clear it when pushed all the way to the top surface/ceiling without holding diveDown.
+        if (clampedDepth <= 0.005 * charScale && !pressingDiveDown) {
+          state.diveDepth = 0.0;
+          state.isDivingMode = false;
+        }
+      };
+
       window.updateEntitySwimmingAndDiving = function(
         state, // { currentSwimFactor, lastSwimFactor, swimMovementFactor, diveDepth, isDivingMode, centerRadius }
         currentFeetRadius,
@@ -6053,12 +6109,15 @@ window.addEventListener("keyup", (e) => {
         rotationX = 0,
         moveForwardInput = 0,
         isRiding = false,
-        dt = 1 / 60
+        dt = 1 / 60,
+        caveData = null,
+        applyInput = true
       ) {
         if (!state) return;
+        const effWaterRadius = (wRadiusLocal > 0) ? wRadiusLocal : waterRadius;
         if (isRiding) {
           state.currentSwimFactor = 0.0;
-        } else if (typeof waterEnabled !== "undefined" && waterEnabled && currentFeetRadius < wRadiusLocal) {
+        } else if (typeof waterEnabled !== "undefined" && waterEnabled && wRadiusLocal > 0 && currentFeetRadius < wRadiusLocal) {
           const depth = wRadiusLocal - currentFeetRadius;
           // Use hysteresis: if we were already swimming (lastSwimFactor > 0.01), we use a much lower threshold
           // (0.2 * charScale instead of 0.48 * charScale) to prevent oscillation when moving or bobbing.
@@ -6075,53 +6134,85 @@ window.addEventListener("keyup", (e) => {
           state.currentSwimFactor = 0.0;
         }
 
-        // Initialize diveDepth if transitioning to swimming to prevent sudden yanking/springing
-        if (state.currentSwimFactor > 0.0 && (state.lastSwimFactor || 0) === 0.0 && state.centerRadius) {
-          const targetSwimRadius = waterRadius + (-0.22 + (state.swimMovementFactor || 0) * 0.27) * charScale;
-          const bottomRadius = terrainRadius + 0.46 * charScale;
-          const maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
-          state.diveDepth = Math.max(0.0, Math.min(maxDiveDepth, targetSwimRadius - state.centerRadius));
-          state.isDivingMode = state.diveDepth > 0.015 * charScale;
+        const floorBaseRadius = (caveData && caveData.insideTunnel && typeof caveData.ground === "number")
+          ? caveData.ground
+          : terrainRadius;
+
+        // Initialize diveDepth smoothly on water entry to prevent sudden snapping,
+        // while keeping isDivingMode = false (Option B: must press diveDown key everywhere).
+        if (state.currentSwimFactor > 0.0 && (state.lastSwimFactor || 0) === 0.0) {
+          state.isDivingMode = false;
+          if (state.centerRadius !== null && state.centerRadius !== undefined) {
+            window.syncEntityDiveStateFromRadius(
+              state,
+              state.centerRadius,
+              effWaterRadius,
+              floorBaseRadius,
+              charScale,
+              caveData,
+              false
+            );
+          } else {
+            state.diveDepth = 0.0;
+          }
         }
         state.lastSwimFactor = state.currentSwimFactor;
 
-        // Smooth swimMovementFactor based on movement state
-        const isMoving = Math.abs(moveForwardInput) > 0.05;
         const rateFactor = dt ? dt * 60 : 1.0;
-        if (state.currentSwimFactor > 0.0) {
-          if (isMoving) {
-            state.swimMovementFactor = (state.swimMovementFactor || 0) + (1.0 - (state.swimMovementFactor || 0)) * 0.08 * rateFactor;
+
+        // Smooth swimMovementFactor once per frame (skip on post-move re-clamp pass)
+        if (applyInput !== false) {
+          const isMoving = Math.abs(moveForwardInput) > 0.05;
+          if (state.currentSwimFactor > 0.0) {
+            if (isMoving) {
+              state.swimMovementFactor = (state.swimMovementFactor || 0) + (1.0 - (state.swimMovementFactor || 0)) * 0.08 * rateFactor;
+            } else {
+              state.swimMovementFactor = (state.swimMovementFactor || 0) + (0.0 - (state.swimMovementFactor || 0)) * 0.08 * rateFactor;
+            }
           } else {
-            state.swimMovementFactor = (state.swimMovementFactor || 0) + (0.0 - (state.swimMovementFactor || 0)) * 0.08 * rateFactor;
+            state.swimMovementFactor = (state.swimMovementFactor || 0) + (0.0 - (state.swimMovementFactor || 0)) * 0.12 * rateFactor;
           }
-        } else {
-          state.swimMovementFactor = (state.swimMovementFactor || 0) + (0.0 - (state.swimMovementFactor || 0)) * 0.12 * rateFactor;
         }
 
-        // Calculate and clamp diving depth
+        // Unified diving depth & mode logic (identical across ocean surface & submerged caves)
         if (state.currentSwimFactor > 0.0) {
-          const targetSwimRadius = waterRadius + (-0.22 + (state.swimMovementFactor || 0) * 0.27) * charScale;
-          const bottomRadius = terrainRadius + 0.46 * charScale;
-          const maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
+          const effectiveTopRadius = window.getEffectiveSwimTopRadius(
+            effWaterRadius,
+            state.swimMovementFactor || 0.0,
+            charScale,
+            caveData
+          );
+          const bottomRadius = floorBaseRadius + 0.46 * charScale;
+          const maxDiveDepth = Math.max(0.0, effectiveTopRadius - bottomRadius);
+
+          const hasKeyState = !!(state.isPlayer && typeof keysPressed !== "undefined" && typeof currentKeyBindings !== "undefined");
+          const pressingDiveDown = hasKeyState && !!keysPressed[currentKeyBindings.diveDown];
+          const pressingDiveUp = hasKeyState && !!(
+            keysPressed["Space"] ||
+            keysPressed["ShiftRight"] ||
+            keysPressed[currentKeyBindings.diveUp]
+          );
 
           let targetDiveDepthChange = 0.0;
-          const diveSpeed = 0.012 * charScale;
+          if (applyInput !== false) {
+            const diveSpeed = 0.012 * charScale * rateFactor;
 
-          if (state.isDivingMode && moveForwardInput !== 0) {
-            if (Math.abs(rotationX) > 0.05) {
-              targetDiveDepthChange += moveForwardInput * rotationX * diveSpeed * 1.5;
-            }
-          }
-
-          if (state.isPlayer && typeof keysPressed !== "undefined" && typeof currentKeyBindings !== "undefined") {
-            if (keysPressed[currentKeyBindings.diveDown]) {
+            if (pressingDiveDown) {
               targetDiveDepthChange += diveSpeed;
-            } else if (
-              keysPressed["Space"] ||
-              keysPressed["ShiftRight"] ||
-              keysPressed[currentKeyBindings.diveUp]
-            ) {
+              // Option B: Pressing diveDown is the single unified trigger to enter camera-pitch diving mode
+              if (maxDiveDepth > 0.005 * charScale) {
+                state.isDivingMode = true;
+              }
+            } else if (pressingDiveUp) {
               targetDiveDepthChange -= diveSpeed;
+            } else if (!state.isDivingMode && (state.diveDepth || 0.0) > 0.0) {
+              // Natural upward buoyancy when entering deep surface/cave water without activating diving mode
+              targetDiveDepthChange -= diveSpeed * 0.85;
+            }
+
+            // Camera-pitch diving applies ONLY while actively in diving mode
+            if (state.isDivingMode && moveForwardInput !== 0 && Math.abs(rotationX) > 0.05) {
+              targetDiveDepthChange += moveForwardInput * rotationX * diveSpeed * 1.5;
             }
           }
 
@@ -6130,9 +6221,7 @@ window.addEventListener("keyup", (e) => {
             Math.min(maxDiveDepth, (state.diveDepth || 0.0) + targetDiveDepthChange),
           );
 
-          if (state.diveDepth > 0.015 * charScale) {
-            state.isDivingMode = true;
-          } else if (state.diveDepth <= 0.005 * charScale) {
+          if (state.diveDepth <= 0.005 * charScale && !pressingDiveDown) {
             state.diveDepth = 0.0;
             state.isDivingMode = false;
           }
@@ -6149,7 +6238,9 @@ window.addEventListener("keyup", (e) => {
         terrainRadius,
         charScale,
         rotationX,
-        moveForwardInput
+        moveForwardInput,
+        caveData = null,
+        applyInput = true
       ) {
         const pState = {
           currentSwimFactor: typeof currentSwimFactor !== "undefined" ? currentSwimFactor : 0.0,
@@ -6172,7 +6263,9 @@ window.addEventListener("keyup", (e) => {
           rotationX,
           moveForwardInput,
           isRiding,
-          typeof timeScale !== "undefined" ? (timeScale / 60) : (1 / 60)
+          typeof timeScale !== "undefined" ? (timeScale / 60) : (1 / 60),
+          caveData,
+          applyInput
         );
 
         currentSwimFactor = pState.currentSwimFactor;

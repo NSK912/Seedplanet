@@ -10,14 +10,17 @@ window.buildToughMeatModel = function(item, vertices, colors, indices, targetBuf
   const r = (item && item.R) ? item.R : [1, 0, 0];
   const n = (item && item.normal) ? item.normal : [0, 1, 0];
   const f = (item && item.F) ? item.F : [0, 0, 1];
-  const s = isIcon ? 1.0 : ((item && typeof item.size === "number") ? item.size : 0.16);
-  const yOff = isIcon ? 0.0 : 0.08;
+  const rawS = (item && typeof item.size === "number") ? item.size : 0.085;
+  const s = isIcon ? 1.0 : Math.min(rawS, 0.095);
+  const yOff = isIcon ? 0.0 : 0.145;
+  const seed = (item && typeof item.seed === "number") ? item.seed : 0;
+  const basis = isIcon ? { R: r, F: f } : window.DropTemplateCache.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2));
 
   if (typeof buildContinuousSpine !== "function" || typeof buildLowPolySphere !== "function") return;
 
   window.DropTemplateCache.render(
     "tough_meat",
-    { position: p, R: r, normal: n, F: f, scale: s, yOff: yOff },
+    { position: p, R: basis.R, normal: n, F: basis.F, scale: s, yOff: yOff },
     (tv, tc, ti) => {
       const upN = [0, 1, 0];
       const pal = (typeof window !== "undefined" && window.GeorgiacetusPalette) ? window.GeorgiacetusPalette : {

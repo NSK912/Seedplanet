@@ -139,21 +139,26 @@ window.buildDragonFruitModel = function(
 
 window.ItemRegistry["dragon_fruit"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    const p = item.position;
+    const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
+    const p = item.position || [0, 0, 0];
     const r = item.R || [1, 0, 0];
     const n = item.normal || [0, 1, 0];
     const f = item.F || [0, 0, 1];
-    const s = item.size || 0.04;
+    const s = item.size || 0.038;
 
-    const scale = s * 2.2;
+    const scale = isIcon ? (s * 2.2) : (Math.min(s, 0.05) * 2.2);
     // When attached to a tree branch, anchor the stem socket (y = -0.16) directly at the branch position p
     // so pBottomStem (y = -0.22) embeds inside the existing branch with zero gap.
-    const liftDist = item.isAttachedToTree ? (scale * 0.16) : (s * 0.45);
+    const liftDist = isIcon ? 0.0 : (item.isAttachedToTree ? (scale * 0.16) : (scale * 0.22));
     const elevatedPos = [
       p[0] + n[0] * liftDist,
       p[1] + n[1] * liftDist,
       p[2] + n[2] * liftDist,
     ];
+    const seed = (item && typeof item.seed === "number") ? item.seed : 1234;
+    const basis = (isIcon || item.isAttachedToTree)
+      ? { R: r, F: f }
+      : window.DropTemplateCache.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2));
 
     const colorEncoder = item.isAttachedToTree
       ? function(col) {
@@ -168,10 +173,10 @@ window.ItemRegistry["dragon_fruit"] = {
       : null;
 
     window.buildDragonFruitModel(
-      item.seed || 1234,
+      seed,
       scale,
       elevatedPos,
-      r, n, f,
+      basis.R, n, basis.F,
       vertices, colors, indices,
       colorEncoder
     );

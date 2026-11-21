@@ -15,6 +15,32 @@
 
 
   function getCloneVectors(cState, charScale, planetRadius) {
+    const isSwimming = (cState.currentSwimFactor || 0) > 0.0;
+    const isRidingBoat = !!(cState.ridingBoat && cState.ridingBoat.active && cState.ridingBoat.position);
+    const waterBucket = isSwimming
+      ? Math.round(((typeof waterAnimTime !== "undefined") ? waterAnimTime : (window.performance.now() * 0.001)) * 60)
+      : 0;
+    const bp = isRidingBoat ? cState.ridingBoat.position : null;
+    const vc = cState._vecCache;
+    if (
+      vc &&
+      vc.theta === cState.theta &&
+      vc.phi === cState.phi &&
+      vc.heading === cState.heading &&
+      vc.centerRadius === cState.centerRadius &&
+      vc.charScale === charScale &&
+      vc.planetRadius === planetRadius &&
+      vc.swimFactor === (cState.currentSwimFactor || 0) &&
+      vc.swimMove === (cState.swimMovementFactor || 0) &&
+      vc.diveDepth === (cState.diveDepth || 0) &&
+      vc.isIdle === !!cState.isIdle &&
+      vc.isRidingBoat === isRidingBoat &&
+      vc.waterBucket === waterBucket &&
+      (!isRidingBoat || (vc.bpx === bp[0] && vc.bpy === bp[1] && vc.bpz === bp[2]))
+    ) {
+      return vc.result;
+    }
+
     const cSinT = Math.sin(cState.theta);
     const cCosT = Math.cos(cState.theta);
     const cSinP = Math.sin(cState.phi);
@@ -26,32 +52,56 @@
 
     const heightScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
     const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
-    const cloneFeetRadInit = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
-      ? (cState.centerRadius - 0.46 * charScale)
-      : null;
-    const surf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
-      ? Physics.resolveEntitySurfaceAndWater({
-          theta: cState.theta,
-          phi: cState.phi,
-          nx: cNx,
-          ny: cNy,
-          nz: cNz,
-          feetRadius: cloneFeetRadInit,
-          planetRadius,
-          heightScale,
-          seed
-        })
-      : null;
-    const terrainRad = surf ? surf.terrainRad : (planetRadius + ((typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(cState.theta, cState.phi, seed) : 0) * heightScale);
-    const isSwimming = (cState.currentSwimFactor || 0) > 0.0;
 
-    const cloneFeetRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
-      ? (cState.centerRadius - 0.46 * charScale)
-      : terrainRad;
-    let supportFloorRad = terrainRad;
-    if (!isSwimming && typeof getFloorTopRadiusAt === "function") {
-      supportFloorRad = getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, cloneFeetRad, !cState.isGrounded, cState.verticalVel || 0);
-      supportFloorRad = clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, supportFloorRad, planetRadius, !!cState.isTraversingDoor);
+    // Reuse surface/floor resolution computed by updateCloneVerticalPhysics when theta/phi match (avoids 2x redundant terrain+floor queries per clone per frame)
+    const cs = cState._cachedSurf;
+    const canReuseSurf = !!(
+      cs &&
+      cs.planetRadius === planetRadius &&
+      Math.abs(cs.theta - cState.theta) < 1e-5 &&
+      Math.abs(cs.phi - cState.phi) < 1e-5
+    );
+
+    let terrainRad;
+    let supportFloorRad;
+    let waterRadiusForSwim;
+    let caveDataForSwim = null;
+
+    if (canReuseSurf) {
+      terrainRad = cs.terrainRad;
+      supportFloorRad = cs.currentSupportRad;
+      waterRadiusForSwim = cs.wRadiusLocal > 0 ? cs.wRadiusLocal : cs.cWaterRad;
+      caveDataForSwim = cs.caveData || null;
+    } else {
+      const cloneFeetRadInit = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
+        ? (cState.centerRadius - 0.46 * charScale)
+        : null;
+      const surf = (typeof Physics !== "undefined" && typeof Physics.resolveEntitySurfaceAndWater === "function")
+        ? Physics.resolveEntitySurfaceAndWater({
+            theta: cState.theta,
+            phi: cState.phi,
+            nx: cNx,
+            ny: cNy,
+            nz: cNz,
+            feetRadius: cloneFeetRadInit,
+            planetRadius,
+            heightScale,
+            seed
+          })
+        : null;
+      terrainRad = surf ? surf.terrainRad : (planetRadius + ((typeof getVisualHeightOnSphere === "function") ? getVisualHeightOnSphere(cState.theta, cState.phi, seed) : 0) * heightScale);
+      const cloneFeetRad = (typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001)
+        ? (cState.centerRadius - 0.46 * charScale)
+        : terrainRad;
+      supportFloorRad = terrainRad;
+      if (!isSwimming && typeof getFloorTopRadiusAt === "function") {
+        supportFloorRad = getFloorTopRadiusAt(cNx, cNy, cNz, terrainRad, cloneFeetRad, !cState.isGrounded, cState.verticalVel || 0);
+        supportFloorRad = clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, supportFloorRad, planetRadius, !!cState.isTraversingDoor);
+      }
+      waterRadiusForSwim = surf
+        ? (surf.wRadiusLocal > 0 ? surf.wRadiusLocal : surf.waterRadius)
+        : (planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * (heightScale * 0.25));
+      caveDataForSwim = surf ? surf.caveData : null;
     }
 
     const baseGroundRad = supportFloorRad + 0.46 * charScale;
@@ -80,14 +130,11 @@
     let finalF = [cF[0], cF[1], cF[2]];
 
     if (isSwimming && typeof window.computeSwimmingTransform === "function") {
-      const waterRadius = surf
-        ? (surf.wRadiusLocal > 0 ? surf.wRadiusLocal : surf.waterRadius)
-        : (planetRadius + (typeof waterLevel !== "undefined" ? waterLevel : 0.0) * (heightScale * 0.25));
       const swimRes = window.computeSwimmingTransform({
         swimFactor: cState.currentSwimFactor,
         swimMovementFactor: cState.swimMovementFactor || 0.0,
         diveDepth: cState.diveDepth || 0.0,
-        waterRadius,
+        waterRadius: waterRadiusForSwim,
         terrainRadius: terrainRad,
         charScale,
         isWalking: !cState.isIdle,
@@ -95,34 +142,23 @@
         N: cN,
         F: finalF,
         R: finalR,
-        baseGroundRadius: terrainRad + 0.46 * charScale
+        baseGroundRadius: terrainRad + 0.46 * charScale,
+        caveData: caveDataForSwim
       });
       finalGroundRad = swimRes.groundRadius;
-      if (surf && surf.caveData) {
-        if (surf.caveData.insideTunnel) {
-          const minCenter = surf.caveData.ground + 0.46 * charScale;
-          const maxCenter = (surf.caveData.ceiling !== Infinity) ? (surf.caveData.ceiling - 0.46 * charScale) : Infinity;
-          if (finalGroundRad < minCenter) finalGroundRad = minCenter;
-          if (finalGroundRad > maxCenter) finalGroundRad = maxCenter;
-        } else {
-          const minCenter = terrainRad + 0.46 * charScale;
-          if (finalGroundRad < minCenter) finalGroundRad = minCenter;
-        }
-      }
       cN = swimRes.finalN;
       finalF = swimRes.finalF;
       finalR = swimRes.finalR;
     }
 
     let finalCPos = [finalGroundRad * cNx, finalGroundRad * cNy, finalGroundRad * cNz];
-    if (cState.ridingBoat && cState.ridingBoat.active && cState.ridingBoat.position) {
+    if (isRidingBoat) {
       const boat = cState.ridingBoat;
       if (boat.normal && boat.F && boat.R) {
         cN = [boat.normal[0], boat.normal[1], boat.normal[2]];
         finalF = [boat.F[0], boat.F[1], boat.F[2]];
         finalR = [boat.R[0], boat.R[1], boat.R[2]];
       }
-      const bp = boat.position;
       const bn = boat.normal || cN;
       // Match player's exact seat offset from player.js: bp + finalN * 0.46 * charScale
       finalCPos = [
@@ -132,12 +168,32 @@
       ];
     }
 
-    return { cPos: finalCPos, cR: finalR, cF: finalF, cN };
+    const result = { cPos: finalCPos, cR: finalR, cF: finalF, cN };
+    cState._vecCache = {
+      theta: cState.theta,
+      phi: cState.phi,
+      heading: cState.heading,
+      centerRadius: cState.centerRadius,
+      charScale,
+      planetRadius,
+      swimFactor: cState.currentSwimFactor || 0,
+      swimMove: cState.swimMovementFactor || 0,
+      diveDepth: cState.diveDepth || 0,
+      isIdle: !!cState.isIdle,
+      isRidingBoat,
+      waterBucket,
+      bpx: bp ? bp[0] : 0,
+      bpy: bp ? bp[1] : 0,
+      bpz: bp ? bp[2] : 0,
+      result
+    };
+    return result;
   }
 
   function clearOldCloneFaceSigns() {
     if (typeof World3DUI !== "undefined" && typeof World3DUI.removeSign === "function") {
-      for (let i = 0; i < 40; i++) {
+      const maxSigns = Math.max(40, (typeof window !== "undefined" && Array.isArray(window.playerClonesState) ? window.playerClonesState.length : 0) + 10);
+      for (let i = 0; i < maxSigns; i++) {
         const sid = "clone_face_" + i;
         if (typeof World3DUI.hasSign === "function" ? World3DUI.hasSign(sid) : true) {
           World3DUI.removeSign(sid);
@@ -993,6 +1049,46 @@
     };
   }
 
+  // Per-clone temporary blacklist for unreachable targets (WeakMap avoids polluting save serialization)
+  const _cloneUnreachableTargets = new WeakMap();
+
+  function markCloneTargetUnreachable(cState, target, durationSec = 25) {
+    if (!cState || !target) return;
+    let map = _cloneUnreachableTargets.get(cState);
+    if (!map) {
+      map = new Map();
+      _cloneUnreachableTargets.set(cState, map);
+    }
+    const now = Date.now();
+    if (map.size > 24) {
+      for (const [k, exp] of map.entries()) {
+        if (exp <= now) map.delete(k);
+      }
+    }
+    map.set(target, now + durationSec * 1000);
+  }
+
+  function isCloneTargetUnreachable(cState, target) {
+    if (!cState || !target) return false;
+    const map = _cloneUnreachableTargets.get(cState);
+    if (!map) return false;
+    const exp = map.get(target);
+    if (!exp) return false;
+    if (Date.now() >= exp) {
+      map.delete(target);
+      return false;
+    }
+    return true;
+  }
+
+  function getCloneFeetRadius(cState, planetRadius) {
+    const charScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
+    if (cState && typeof cState.centerRadius === "number" && !Number.isNaN(cState.centerRadius) && cState.centerRadius > 0.001) {
+      return cState.centerRadius - 0.46 * charScale;
+    }
+    return planetRadius;
+  }
+
   function findTargetTree(cState, planetRadius) {
     const natureObs = (typeof natureObstacles !== "undefined" && Array.isArray(natureObstacles))
       ? natureObstacles
@@ -1001,14 +1097,18 @@
 
     const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
     const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
-    const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+    const cFeetRad = getCloneFeetRadius(cState, planetRadius);
+    const cPos = [cFeetRad * cSinT * cCosP, cFeetRad * cCosT, cFeetRad * cSinT * cSinP];
 
     let bestTree = null;
     let minD = 12.0;
 
     for (let i = 0; i < natureObs.length; i++) {
       const obs = natureObs[i];
-      if (!obs || !obs.position || obs.type !== "tree") continue;
+      if (!obs || !obs.position || obs.type !== "tree" || obs.isWildRelocatedTreeCollider) continue;
+      if (isCloneTargetUnreachable(cState, obs)) continue;
+      const obsRad = Math.hypot(obs.position[0], obs.position[1], obs.position[2]) || planetRadius;
+      if (Math.abs(obsRad - cFeetRad) > 1.35) continue;
       const dx = obs.position[0] - cPos[0];
       const dy = obs.position[1] - cPos[1];
       const dz = obs.position[2] - cPos[2];
@@ -1029,7 +1129,8 @@
 
     const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
     const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
-    const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+    const cFeetRad = getCloneFeetRadius(cState, planetRadius);
+    const cPos = [cFeetRad * cSinT * cCosP, cFeetRad * cCosT, cFeetRad * cSinT * cSinP];
 
     let bestOre = null;
     let minD = 14.0;
@@ -1040,6 +1141,9 @@
       const isOre = obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore";
       const isRock = obs.type === "rock";
       if (!isOre && !isRock) continue;
+      if (isCloneTargetUnreachable(cState, obs)) continue;
+      const obsRad = Math.hypot(obs.position[0], obs.position[1], obs.position[2]) || planetRadius;
+      if (Math.abs(obsRad - cFeetRad) > 1.35) continue;
 
       const dx = obs.position[0] - cPos[0];
       const dy = obs.position[1] - cPos[1];
@@ -1068,7 +1172,8 @@
 
     const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
     const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
-    const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+    const cFeetRad = getCloneFeetRadius(cState, planetRadius);
+    const cPos = [cFeetRad * cSinT * cCosP, cFeetRad * cCosT, cFeetRad * cSinT * cSinP];
 
     let bestAnimal = null;
     let minD = 12.0;
@@ -1076,6 +1181,7 @@
     for (let i = 0; i < amphibs.length; i++) {
       const npc = amphibs[i];
       if (!npc || npc.ragdollEnabled || (npc.hp !== undefined && npc.hp <= 0)) continue;
+      if (isCloneTargetUnreachable(cState, npc)) continue;
       let nPos = npc.position;
       if (npc.ragdollPos && npc.ragdollInitialized) nPos = npc.ragdollPos;
       if (!nPos) continue;
@@ -1100,7 +1206,12 @@
 
     const cSinT = Math.sin(cState.theta), cCosT = Math.cos(cState.theta);
     const cSinP = Math.sin(cState.phi), cCosP = Math.cos(cState.phi);
-    const cPos = [planetRadius * cSinT * cCosP, planetRadius * cCosT, planetRadius * cSinT * cSinP];
+    const cFeetRad = getCloneFeetRadius(cState, planetRadius);
+    const cPos = [cFeetRad * cSinT * cCosP, cFeetRad * cCosT, cFeetRad * cSinT * cSinP];
+    const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
+    const wLvl = (typeof waterLevel !== "undefined") ? waterLevel : 0.0;
+    const isWaterOn = (typeof waterEnabled !== "undefined") ? waterEnabled : true;
+    const approxWaterRad = planetRadius + wLvl * (hScale * 0.25);
 
     let bestDrop = null;
     let minD = 8.0;
@@ -1108,10 +1219,16 @@
     for (let i = 0; i < colList.length; i++) {
       const it = colList[i];
       if (!it || !it.active || it.isPreview || it.isAttachedToTree || !it.position) continue;
+      if (isCloneTargetUnreachable(cState, it)) continue;
       const isResourceDrop = (typeof window !== "undefined" && window.GroundDropSystem)
         ? (window.GroundDropSystem.isGroundDrop(it) && it.type !== "axe" && it.type !== "pickaxe" && it.type !== "shovel" && it.type !== "tanto" && it.type !== "aegis_shift")
         : (it.type === "log" || it.type === "branch" || it.type === "rock" || it.type === "big_rock" || it.type === "iron_ore" || it.type === "gold_ore" || it.type === "glow_ore" || it.type === "isopod_item" || it.type === "meganeura_item" || it.type === "dragon_fruit" || it.type === "tough_meat" || it.type === "leather" || it.type === "hide" || it.type === "grass" || it.type === "cloth" || it.type === "rubber_block");
       if (!isResourceDrop) continue;
+
+      const dropRad = Math.hypot(it.position[0], it.position[1], it.position[2]) || planetRadius;
+      // Skip drops sunk too deep underwater (swimming clones stay near water surface and cannot reach deep seabed)
+      if (isWaterOn && (approxWaterRad - dropRad) > 0.16) continue;
+      if (Math.abs(dropRad - cFeetRad) > 1.25) continue;
 
       const dx = it.position[0] - cPos[0];
       const dy = it.position[1] - cPos[1];
@@ -1352,6 +1469,8 @@
 
     cState.isUsingChest = false;
     cState.chestHoldTimer = 0.0;
+    cState._actionMissCount = 0;
+    cState._dropFailTimer = 0.0;
 
     if (chosen.action === "DEPOSIT_CHEST") {
       cState.currentActivity = "DEPOSIT_CHEST";
@@ -1368,17 +1487,23 @@
       setCloneExpression(cState, "(ʘ‿ʘ)");
       cState.timer = 8.0;
     } else if (chosen.action === "DEPLOY_WHEELED_BOAT") {
-      const deployedBoat = placeCloneBoatFromInventory(cState, planetRadius);
-      if (deployedBoat && isBoatUsableByClone(deployedBoat, planetRadius, cState)) {
-        cState.ridingBoat = deployedBoat;
-        cState.resumeActivityAfterBoat = "WANDER";
-        cState.currentActivity = "DRIVE_BOAT";
-        cState.boatDriveTimer = 16.0 + Math.random() * 8.0;
-        cState.boatBlockedTimer = 0.0;
-        cState.equippedTool = null;
-        setCloneExpression(cState, "(¬‿¬)");
-      } else if (deployedBoat) {
-        demolishCloneBoatToInventory(cState, deployedBoat);
+      if ((cState._boatDeployCooldown || 0) <= 0) {
+        const deployedBoat = placeCloneBoatFromInventory(cState, planetRadius);
+        if (deployedBoat && isBoatUsableByClone(deployedBoat, planetRadius, cState)) {
+          cState.ridingBoat = deployedBoat;
+          cState.resumeActivityAfterBoat = "WANDER";
+          cState.currentActivity = "DRIVE_BOAT";
+          cState.boatDriveTimer = 16.0 + Math.random() * 8.0;
+          cState.boatBlockedTimer = 0.0;
+          cState.equippedTool = null;
+          setCloneExpression(cState, "(¬‿¬)");
+        } else if (deployedBoat) {
+          demolishCloneBoatToInventory(cState, deployedBoat);
+          cState._boatDeployCooldown = 5.0;
+          cState.currentActivity = "WANDER";
+          cState.timer = 2.5;
+        }
+      } else {
         cState.currentActivity = "WANDER";
         cState.timer = 2.5;
       }
@@ -1483,8 +1608,8 @@
     lastTrackedHousesRef = houses;
     lastTrackedHousesCount = numHouses;
 
-    // Target clone count: half of the procedural houses count (at least 1 if houses exist)
-    const cloneCount = numHouses > 0 ? Math.max(1, Math.floor(numHouses / 2)) : 0;
+    // Target clone count: 1 PlayerClone per procedural house (village + standalone houses)
+    const cloneCount = numHouses;
     if (cloneCount === 0) {
       window.playerClonesState = [];
       return;
@@ -1725,6 +1850,16 @@
       : terrainRad;
     const currentSupportRad = clampCloneExteriorHouseFloor(cNx, cNy, cNz, terrainRad, rawSupportRad, planetRadius, !!cState.isTraversingDoor);
     const targetGroundCenterRad = currentSupportRad + 0.46 * charScale;
+    cState._cachedSurf = {
+      theta: cState.theta,
+      phi: cState.phi,
+      planetRadius,
+      terrainRad,
+      currentSupportRad,
+      cWaterRad,
+      wRadiusLocal,
+      caveData: surf ? surf.caveData : null
+    };
 
     if (typeof cState.centerRadius !== "number" || Number.isNaN(cState.centerRadius) || cState.centerRadius <= 0.001) {
       cState.centerRadius = targetGroundCenterRad;
@@ -1751,26 +1886,15 @@
             charScale,
             isWalking: !cState.isIdle,
             waterTime: wTime,
-            baseGroundRadius: targetGroundCenterRad
+            baseGroundRadius: targetGroundCenterRad,
+            caveData: surf ? surf.caveData : null
           });
           swimCenterRad = swimRes.groundRadius;
         } else {
           const targetSwimRadius = effWaterRad + (-0.22 + (cState.swimMovementFactor || 0) * 0.27) * charScale;
           const subSwimRadius = targetSwimRadius - (cState.diveDepth || 0);
           swimCenterRad = targetGroundCenterRad * (1.0 - swimFactor) + subSwimRadius * swimFactor;
-        }
-        if (surf && surf.caveData) {
-          if (surf.caveData.insideTunnel) {
-            const minCenter = surf.caveData.ground + 0.46 * charScale;
-            const maxCenter = (surf.caveData.ceiling !== Infinity) ? (surf.caveData.ceiling - 0.46 * charScale) : Infinity;
-            if (swimCenterRad < minCenter) swimCenterRad = minCenter;
-            if (swimCenterRad > maxCenter) swimCenterRad = maxCenter;
-          } else {
-            const minCenter = terrainRad + 0.46 * charScale;
-            if (swimCenterRad < minCenter) swimCenterRad = minCenter;
-          }
-        } else if (swimCenterRad < targetGroundCenterRad) {
-          swimCenterRad = targetGroundCenterRad;
+          if (swimCenterRad < targetGroundCenterRad) swimCenterRad = targetGroundCenterRad;
         }
         cState.centerRadius = swimCenterRad;
       }
@@ -1778,7 +1902,7 @@
       cState.isGrounded = true;
       cState.jumpY = 0;
       cState.jumpVy = 0;
-      return { terrainRad, currentSupportRad, cNx, cNy, cNz, cWaterRad, wRadiusLocal };
+      return { terrainRad, currentSupportRad, cNx, cNy, cNz, cWaterRad, wRadiusLocal, caveData: surf ? surf.caveData : null };
     }
 
     const minGroundRadius = targetGroundCenterRad;
@@ -1824,36 +1948,81 @@
 
     cState.jumpY = 0;
     cState.jumpVy = 0;
-    return { terrainRad, currentSupportRad, cNx, cNy, cNz, cWaterRad, wRadiusLocal };
+    return { terrainRad, currentSupportRad, cNx, cNy, cNz, cWaterRad, wRadiusLocal, caveData: surf ? surf.caveData : null };
   }
 
   function findHouseDoorCollectible(house, houseIndex) {
     const colList = (typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : (window.collectibles || []);
-    if (typeof houseIndex === "number" && houseIndex >= 0) {
-      for (let i = 0; i < colList.length; i++) {
-        const c = colList[i];
-        if (c && c.active && !c.isPreview && c.type === "wood_door" && c.houseIndex === houseIndex && c.position && c.F) {
-          return c;
+    const gridVer = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.version === "number") ? SpatialGrid.version : 0;
+    const cacheSig = (gridVer << 16) ^ colList.length;
+
+    if (house && house._cachedDoorSig === cacheSig) {
+      const cached = house._cachedDoorItem;
+      if (!cached) return null;
+      if (cached.active && !cached.isPreview && cached.type === "wood_door" && cached.position && cached.F) {
+        return cached;
+      }
+    }
+
+    let foundDoor = null;
+    if (house && typeof house.x === "number" && typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function") {
+      const nearDoors = SpatialGrid.queryRadius(
+        house.x,
+        house.y,
+        house.z,
+        2.6,
+        c => c && c.active && !c.isPreview && c.type === "wood_door" && c.position && c.F
+      );
+      if (typeof houseIndex === "number" && houseIndex >= 0) {
+        for (let i = 0; i < nearDoors.length; i++) {
+          if (nearDoors[i].houseIndex === houseIndex) {
+            foundDoor = nearDoors[i];
+            break;
+          }
+        }
+      }
+      if (!foundDoor && nearDoors.length > 0) {
+        let bestDistSq = 2.5 * 2.5;
+        for (let i = 0; i < nearDoors.length; i++) {
+          const c = nearDoors[i];
+          const dx = c.position[0] - house.x, dy = c.position[1] - house.y, dz = c.position[2] - house.z;
+          const dSq = dx * dx + dy * dy + dz * dz;
+          if (dSq < bestDistSq) {
+            bestDistSq = dSq;
+            foundDoor = c;
+          }
+        }
+      }
+    } else {
+      if (typeof houseIndex === "number" && houseIndex >= 0) {
+        for (let i = 0; i < colList.length; i++) {
+          const c = colList[i];
+          if (c && c.active && !c.isPreview && c.type === "wood_door" && c.houseIndex === houseIndex && c.position && c.F) {
+            foundDoor = c;
+            break;
+          }
+        }
+      }
+      if (!foundDoor && house && typeof house.x === "number") {
+        let bestDistSq = 2.5 * 2.5;
+        for (let i = 0; i < colList.length; i++) {
+          const c = colList[i];
+          if (!c || !c.active || c.isPreview || c.type !== "wood_door" || !c.position || !c.F) continue;
+          const dx = c.position[0] - house.x, dy = c.position[1] - house.y, dz = c.position[2] - house.z;
+          const dSq = dx * dx + dy * dy + dz * dz;
+          if (dSq < bestDistSq) {
+            bestDistSq = dSq;
+            foundDoor = c;
+          }
         }
       }
     }
-    if (house && typeof house.x === "number") {
-      let bestDoor = null;
-      let bestDistSq = Infinity;
-      const maxDistSq = 2.5 * 2.5;
-      for (let i = 0; i < colList.length; i++) {
-        const c = colList[i];
-        if (!c || !c.active || c.isPreview || c.type !== "wood_door" || !c.position || !c.F) continue;
-        const dx = c.position[0] - house.x, dy = c.position[1] - house.y, dz = c.position[2] - house.z;
-        const dSq = dx * dx + dy * dy + dz * dz;
-        if (dSq < maxDistSq && dSq < bestDistSq) {
-          bestDistSq = dSq;
-          bestDoor = c;
-        }
-      }
-      if (bestDoor) return bestDoor;
+
+    if (house) {
+      house._cachedDoorSig = cacheSig;
+      house._cachedDoorItem = foundDoor;
     }
-    return null;
+    return foundDoor;
   }
 
   function resolveCloneDoorwayWaypoint(cState, planetRadius, houses) {
@@ -2089,8 +2258,8 @@
     }
     if (!window.playerClonesState || window.playerClonesState.length === 0) return;
 
-    const dtClamped = Math.min(0.05, Math.max(0.001, dt || 0.016));
-    _chestEnsureTimer -= dtClamped;
+    const baseDtClamped = Math.min(0.05, Math.max(0.001, dt || 0.016));
+    _chestEnsureTimer -= baseDtClamped;
     if (_chestEnsureTimer <= 0) {
       ensureHouseChests();
       _chestEnsureTimer = 2.0;
@@ -2102,9 +2271,36 @@
     const wLevel = (typeof waterLevel !== "undefined") ? waterLevel : 1.0;
     const minDryRadius = planetRadius + wLevel * (heightScale * 0.25) + 0.05;
     const houses = (typeof window !== "undefined" && window.placedHouses) ? window.placedHouses : [];
+    const refEye = (typeof window !== "undefined" && window.eyePos) ? window.eyePos : null;
+    const cloneMaxActiveDist = ((typeof objectRenderDistValue === "number" ? objectRenderDistValue : 5.0) + 2.5);
+    const cloneMaxActiveDistSq = cloneMaxActiveDist * cloneMaxActiveDist;
+    window._cloneUpdateFrameTick = ((window._cloneUpdateFrameTick || 0) + 1) | 0;
+    const updateTick = window._cloneUpdateFrameTick;
 
     for (let i = 0; i < window.playerClonesState.length; i++) {
       const cState = window.playerClonesState[i];
+
+      // Distance-throttle far off-screen clones (outside render range & not driving boats) to 15Hz instead of 60Hz
+      let dtClamped = baseDtClamped;
+      const isRidingBoatNow = !!(cState.ridingBoat && cState.ridingBoat.active);
+      if (refEye && !isRidingBoatNow && typeof cState.centerRadius === "number" && cState.centerRadius > 0.001) {
+        const sT = Math.sin(cState.theta || 0), cT = Math.cos(cState.theta || 0);
+        const sP = Math.sin(cState.phi || 0), cP = Math.cos(cState.phi || 0);
+        const cr = cState.centerRadius;
+        const dx = cr * sT * cP - (refEye[0] || 0);
+        const dy = cr * cT - (refEye[1] || 0);
+        const dz = cr * sT * sP - (refEye[2] || 0);
+        if (dx * dx + dy * dy + dz * dz > cloneMaxActiveDistSq) {
+          cState._pendingFarDt = (cState._pendingFarDt || 0) + baseDtClamped;
+          if (((updateTick + i) & 3) !== 0) {
+            continue;
+          }
+          dtClamped = Math.min(0.10, cState._pendingFarDt);
+          cState._pendingFarDt = 0;
+        } else if (cState._pendingFarDt) {
+          cState._pendingFarDt = 0;
+        }
+      }
 
       // Normalize speed if clone was initialized with legacy high speed (> 0.35)
       if (!cState.speedInitialized || cState.moveSpeed > 0.35) {
@@ -2151,7 +2347,7 @@
       const cFeetRad = cState.centerRadius ? (cState.centerRadius - 0.46 * charScale) : terrainRad;
       const wRadiusLocal = vertInfo.wRadiusLocal;
 
-      const isRiding = !!(cState.ridingBoat && cState.ridingBoat.active);
+      const isRiding = isRidingBoatNow;
       const isMovingInput = !cState.isIdle ? 1.0 : 0.0;
 
       if (typeof window.updateEntitySwimmingAndDiving === "function") {
@@ -2165,15 +2361,39 @@
           0.0,
           isMovingInput,
           isRiding,
-          dtClamped
+          dtClamped,
+          vertInfo.caveData || null
         );
       }
 
-      // If clone enters water while not riding a boat and has WOOD_BOAT in inventory, deploy & ride it (same as player!)
+      if (cState._boatDeployCooldown > 0) {
+        cState._boatDeployCooldown = Math.max(0, cState._boatDeployCooldown - dtClamped);
+      }
+
+      // If clone enters water while not riding a boat and has WOOD_BOAT in inventory, deploy & ride it (with cooldown + usability guard to prevent deploy/demolish loops!)
       const cloneInWaterNow = ((cState.currentSwimFactor || 0) > 0.1) || checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, cFeetRad);
-      if (!isRiding && cloneInWaterNow) {
-        if (getCloneItemCount(cState, "WOOD_BOAT") > 0 && checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, cFeetRad)) {
-          const deployedBoat = placeCloneBoatFromInventory(cState, planetRadius);
+      if (!isRiding && cloneInWaterNow && (cState._boatDeployCooldown || 0) <= 0) {
+        // Avoid deploying a boat if already right next to the active non-wander target (would immediately disembark & loop)
+        let tooCloseToGoalForBoat = false;
+        if (cState.currentActivity && cState.currentActivity !== "WANDER" && cState.currentActivity !== "IDLE" && typeof cState.targetTheta === "number" && typeof cState.targetPhi === "number") {
+          const gDNorth = -(cState.targetTheta - cState.theta) * planetRadius;
+          let gDPhi = cState.targetPhi - cState.phi;
+          while (gDPhi > Math.PI) gDPhi -= Math.PI * 2;
+          while (gDPhi < -Math.PI) gDPhi += Math.PI * 2;
+          const gDEast = gDPhi * (planetRadius * Math.max(0.05, Math.sin(cState.theta)));
+          if (Math.hypot(gDNorth, gDEast) <= 0.85) {
+            tooCloseToGoalForBoat = true;
+          }
+        }
+        if (!tooCloseToGoalForBoat && getCloneItemCount(cState, "WOOD_BOAT") > 0 && checkCloneBoatWaterContact(cState.theta, cState.phi, planetRadius, cFeetRad)) {
+          // Only attach wheels/engine if the wheeled boat would actually be driveable (has engine + battery); otherwise deploy plain rowing boat in water
+          const hasWheelItem = getCloneItemCount(cState, "WOOD_WHEEL") > 0;
+          const hasEngineItem = getCloneItemCount(cState, "ELECTRIC_ENGINE") > 0;
+          const hasBatteryItem = getCloneItemCount(cState, "GLOW_BATTERY") > 0;
+          const attachParts = !hasWheelItem || (hasEngineItem && hasBatteryItem);
+          const deployedBoat = (typeof window !== "undefined" && typeof window.useEntityItem === "function")
+            ? (window.useEntityItem(cState, { name: "WOOD_BOAT" }, { planetRadius, attachCarriedParts: attachParts }) ? (cState.ownedBoat || null) : null)
+            : placeCloneBoatFromInventory(cState, planetRadius);
           if (deployedBoat && isBoatUsableByClone(deployedBoat, planetRadius, cState)) {
             cState.ridingBoat = deployedBoat;
             if (cState.currentActivity !== "DRIVE_BOAT" && cState.currentActivity !== "STEAL_BOAT") {
@@ -2186,6 +2406,7 @@
             cState.currentSwimFactor = 0.0;
           } else if (deployedBoat) {
             demolishCloneBoatToInventory(cState, deployedBoat);
+            cState._boatDeployCooldown = 6.0;
           }
         }
       }
@@ -2211,6 +2432,7 @@
         const canDrive = isBoatUsableByClone(boat, planetRadius, cState);
         if (!canDrive) {
           demolishCloneBoatToInventory(cState, boat);
+          cState._boatDeployCooldown = 6.0;
           cState.currentActivity = cState.resumeActivityAfterBoat || "WANDER";
           cState.resumeActivityAfterBoat = null;
           cState.timer = Math.max(cState.timer || 0, 3.0);
@@ -2253,6 +2475,7 @@
 
         if (arrivedAtWaterGoal) {
           demolishCloneBoatToInventory(cState, boat);
+          cState._boatDeployCooldown = 5.0;
           cState.currentActivity = cState.resumeActivityAfterBoat;
           cState.resumeActivityAfterBoat = null;
           continue;
@@ -2338,6 +2561,7 @@
         if (cannotContinueDriving || cState.boatDriveTimer <= 0) {
           // Demolish/pack boat back into clone's inventory first, then continue walking!
           demolishCloneBoatToInventory(cState, boat);
+          cState._boatDeployCooldown = 6.0;
           cState.currentActivity = cState.resumeActivityAfterBoat || "WANDER";
           cState.resumeActivityAfterBoat = null;
           cState.timer = Math.max(cState.timer || 0, 3.0);
@@ -2410,15 +2634,18 @@
         }
       }
 
+      let isPerformingStationaryAction = false;
+
       // =========================================================================
       // STATE 3: CHOPPING TREES (WOOD GATHERING - SHARED WITH PLAYER)
       // =========================================================================
       if (cState.currentActivity === "CHOP_WOOD") {
         const tree = cState.targetObstacle;
         const natureObs = (typeof natureObstacles !== "undefined") ? natureObstacles : (window.natureObstacles || []);
-        const isValidTree = tree && natureObs.includes(tree) && (typeof window.checkToolTargetValid !== "function" || window.checkToolTargetValid("AXE", tree.type));
+        const isValidTree = tree && !tree.isWildRelocatedTreeCollider && natureObs.includes(tree) && (typeof window.checkToolTargetValid !== "function" || window.checkToolTargetValid("AXE", tree.type));
         if (!isValidTree) {
           cState.targetObstacle = null;
+          cState._actionMissCount = 0;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
           setCloneTargetPos(cState, tree.position[0], tree.position[1], tree.position[2], planetRadius);
@@ -2432,31 +2659,57 @@
           while (dPhi < -Math.PI) dPhi += Math.PI * 2;
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
+          const treeRad = Math.hypot(tree.position[0], tree.position[1], tree.position[2]) || planetRadius;
+          const vertDiff = Math.abs(treeRad - cFeetRad);
 
           if (distToTarget <= 0.75) {
-            cState.walkBlend = 0.0;
-            cState.heading = Math.atan2(dEast, dNorth);
-            if (!cState.actionAnim || cState.actionAnim <= 0.05) {
-              cState.actionAnim = 1.0;
-            }
-            cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
-
-            if (cState.actionSwingTimer >= 0.75) {
-              cState.actionSwingTimer = 0.0;
-              if (typeof window.useEntityItem === "function") {
-                window.useEntityItem(cState, { name: "AXE" }, {
-                  targetEntity: tree,
-                  targetPos: tree.position,
-                  reachOverride: 0.9
-                });
+            if (vertDiff > 0.55) {
+              // Target tree is on a different vertical level (e.g. surface above cave/water) -> blacklist and move on
+              markCloneTargetUnreachable(cState, tree, 25);
+              cState.targetObstacle = null;
+              cState._actionMissCount = 0;
+              executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+            } else {
+              isPerformingStationaryAction = true;
+              cState.walkBlend = 0.0;
+              cState.heading = Math.atan2(dEast, dNorth);
+              if (!cState.actionAnim || cState.actionAnim <= 0.05) {
+                cState.actionAnim = 1.0;
               }
+              cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
 
-              if (!natureObs.includes(tree)) {
-                setCloneExpression(cState, "(^o^)");
-                cState.targetObstacle = null;
-                cState.workCycles = (cState.workCycles || 0) + 1;
-                tryCloneCrafting(cState, planetRadius);
-                executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+              if (cState.actionSwingTimer >= 0.75) {
+                cState.actionSwingTimer = 0.0;
+                const prevHits = (tree.hits || 0) + (tree.handHits || 0);
+                if (typeof window.useEntityItem === "function") {
+                  window.useEntityItem(cState, { name: "AXE" }, {
+                    targetEntity: tree,
+                    targetPos: tree.position,
+                    reachOverride: 0.9
+                  });
+                }
+
+                if (!natureObs.includes(tree)) {
+                  setCloneExpression(cState, "(^o^)");
+                  cState.targetObstacle = null;
+                  cState._actionMissCount = 0;
+                  cState.workCycles = (cState.workCycles || 0) + 1;
+                  tryCloneCrafting(cState, planetRadius);
+                  executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+                } else {
+                  const newHits = (tree.hits || 0) + (tree.handHits || 0);
+                  if (newHits === prevHits) {
+                    cState._actionMissCount = (cState._actionMissCount || 0) + 1;
+                    if (cState._actionMissCount >= 2) {
+                      markCloneTargetUnreachable(cState, tree, 25);
+                      cState.targetObstacle = null;
+                      cState._actionMissCount = 0;
+                      executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+                    }
+                  } else {
+                    cState._actionMissCount = 0;
+                  }
+                }
               }
             }
           }
@@ -2472,6 +2725,7 @@
         const isValidOre = ore && natureObs.includes(ore) && (typeof window.checkToolTargetValid !== "function" || window.checkToolTargetValid("PICKAXE", ore.type));
         if (!isValidOre) {
           cState.targetObstacle = null;
+          cState._actionMissCount = 0;
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         } else {
           setCloneTargetPos(cState, ore.position[0], ore.position[1], ore.position[2], planetRadius);
@@ -2485,31 +2739,56 @@
           while (dPhi < -Math.PI) dPhi += Math.PI * 2;
           const dEast = dPhi * (planetRadius * sinT);
           const distToTarget = Math.sqrt(dNorth * dNorth + dEast * dEast);
+          const oreRad = Math.hypot(ore.position[0], ore.position[1], ore.position[2]) || planetRadius;
+          const vertDiff = Math.abs(oreRad - cFeetRad);
 
           if (distToTarget <= 0.75) {
-            cState.walkBlend = 0.0;
-            cState.heading = Math.atan2(dEast, dNorth);
-            if (!cState.actionAnim || cState.actionAnim <= 0.05) {
-              cState.actionAnim = 1.0;
-            }
-            cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
-
-            if (cState.actionSwingTimer >= 0.75) {
-              cState.actionSwingTimer = 0.0;
-              if (typeof window.useEntityItem === "function") {
-                window.useEntityItem(cState, { name: "PICKAXE" }, {
-                  targetEntity: ore,
-                  targetPos: ore.position,
-                  reachOverride: 0.9
-                });
+            if (vertDiff > 0.55) {
+              markCloneTargetUnreachable(cState, ore, 25);
+              cState.targetObstacle = null;
+              cState._actionMissCount = 0;
+              executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+            } else {
+              isPerformingStationaryAction = true;
+              cState.walkBlend = 0.0;
+              cState.heading = Math.atan2(dEast, dNorth);
+              if (!cState.actionAnim || cState.actionAnim <= 0.05) {
+                cState.actionAnim = 1.0;
               }
+              cState.actionSwingTimer = (cState.actionSwingTimer || 0) + dtClamped;
 
-              if (!natureObs.includes(ore)) {
-                setCloneExpression(cState, "(★‿★)");
-                cState.targetObstacle = null;
-                cState.workCycles = (cState.workCycles || 0) + 1;
-                tryCloneCrafting(cState, planetRadius);
-                executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+              if (cState.actionSwingTimer >= 0.75) {
+                cState.actionSwingTimer = 0.0;
+                const prevHits = (ore.hits || 0) + (ore.handHits || 0);
+                if (typeof window.useEntityItem === "function") {
+                  window.useEntityItem(cState, { name: "PICKAXE" }, {
+                    targetEntity: ore,
+                    targetPos: ore.position,
+                    reachOverride: 0.9
+                  });
+                }
+
+                if (!natureObs.includes(ore)) {
+                  setCloneExpression(cState, "(★‿★)");
+                  cState.targetObstacle = null;
+                  cState._actionMissCount = 0;
+                  cState.workCycles = (cState.workCycles || 0) + 1;
+                  tryCloneCrafting(cState, planetRadius);
+                  executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+                } else {
+                  const newHits = (ore.hits || 0) + (ore.handHits || 0);
+                  if (newHits === prevHits) {
+                    cState._actionMissCount = (cState._actionMissCount || 0) + 1;
+                    if (cState._actionMissCount >= 2) {
+                      markCloneTargetUnreachable(cState, ore, 25);
+                      cState.targetObstacle = null;
+                      cState._actionMissCount = 0;
+                      executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+                    }
+                  } else {
+                    cState._actionMissCount = 0;
+                  }
+                }
               }
             }
           }
@@ -2655,7 +2934,17 @@
               }
             }
             cState.targetDrop = null;
+            cState._dropFailTimer = 0.0;
             executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+          } else if (distToTarget <= 0.14) {
+            // Horizontally right over the drop, but vertical reach failed (e.g. sunk underwater or on another elevation)
+            cState._dropFailTimer = (cState._dropFailTimer || 0) + dtClamped;
+            if (cState._dropFailTimer >= 0.75) {
+              markCloneTargetUnreachable(cState, drop, 25);
+              cState.targetDrop = null;
+              cState._dropFailTimer = 0.0;
+              executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
+            }
           }
         }
       }
@@ -2743,7 +3032,7 @@
         if (cState.timer <= 0 || cState.thinkTimer <= 0) {
           executeCloneActionOnSight(cState, planetRadius, houses, seed, heightScale, minDryRadius);
         }
-      } else if (!cState.isUsingChest) {
+      } else if (!cState.isUsingChest && !isPerformingStationaryAction) {
         // Walking towards current waypoint / target (with house doorway routing & shared wall collision)
         if (typeof window.ActorCore !== "undefined" && typeof window.ActorCore.stepActorAnimState === "function") {
           window.ActorCore.stepActorAnimState(cState, dtClamped, { phaseOnly: true, isWalking: true });
@@ -2807,10 +3096,33 @@
         const rawDistToTarget = Math.sqrt(rawDNorth * rawDNorth + rawDEast * rawDEast);
 
         if ((rawDistToTarget <= 0.04 && cState.currentActivity !== "DEPOSIT_CHEST") || cState.timer <= 0) {
+          // If timed out before completing a target action, blacklist that target temporarily so clone moves on
+          if (cState.timer <= 0) {
+            if (cState.targetDrop) {
+              markCloneTargetUnreachable(cState, cState.targetDrop, 20);
+              cState.targetDrop = null;
+            }
+            if (cState.targetObstacle) {
+              markCloneTargetUnreachable(cState, cState.targetObstacle, 20);
+              cState.targetObstacle = null;
+            }
+            if (cState.targetAnimal) {
+              markCloneTargetUnreachable(cState, cState.targetAnimal, 15);
+              cState.targetAnimal = null;
+            }
+          }
           cState.isIdle = true;
           cState.timer = 1.0 + Math.random() * 1.5;
           cState.thinkTimer = cState.timer * 0.8;
         }
+      } else if (isPerformingStationaryAction && cState.timer <= 0) {
+        if (cState.targetObstacle) {
+          markCloneTargetUnreachable(cState, cState.targetObstacle, 20);
+          cState.targetObstacle = null;
+        }
+        cState.isIdle = true;
+        cState.timer = 1.0 + Math.random() * 1.2;
+        cState.thinkTimer = cState.timer * 0.8;
       }
     }
   };
@@ -2889,14 +3201,27 @@
       // Enable face texture for clones (renders SVG traveler face or emoji face)
       gl.uniform1f(charUseFaceTexLoc, 1.0);
     }
-    const charHasMainTexLoc = gl.getUniformLocation(charProgram, "uHasMainTex");
+    if (charProgram._cachedHasMainTexLoc === undefined) {
+      charProgram._cachedHasMainTexLoc = gl.getUniformLocation(charProgram, "uHasMainTex");
+    }
+    const charHasMainTexLoc = charProgram._cachedHasMainTexLoc;
     if (charHasMainTexLoc) {
       gl.uniform1f(charHasMainTexLoc, 0.0);
     }
-    const charCloneSeedLoc = gl.getUniformLocation(charProgram, "uCloneSeed");
+    if (charProgram._cachedCloneSeedLoc === undefined) {
+      charProgram._cachedCloneSeedLoc = gl.getUniformLocation(charProgram, "uCloneSeed");
+    }
+    const charCloneSeedLoc = charProgram._cachedCloneSeedLoc;
     if (charFaceTexLoc) {
       gl.uniform1i(charFaceTexLoc, 3);
     }
+
+    const isDistCullOn = (typeof renderDistEnabled !== "undefined" ? renderDistEnabled : true);
+    const cloneMaxRenderDist = ((typeof objectRenderDistValue === "number" ? objectRenderDistValue : 5.0) + 2.0);
+    const cloneMaxDistSq = cloneMaxRenderDist * cloneMaxRenderDist;
+    const activeFrustumPlanes = opts.frustumPlanes || ((typeof frustumPlanes !== "undefined") ? frustumPlanes : null);
+    const hasFrustumCull = !!(activeFrustumPlanes && typeof FrustumCullingSystem !== "undefined" && typeof FrustumCullingSystem.isSphereInFrustum === "function");
+    const cloneCullRad = Math.max(0.28, charScale * 2.8);
 
     const mulMat = (typeof multiplyMatrices === "function") ? multiplyMatrices : function(a, b) {
       const r = new Array(16);
@@ -2914,6 +3239,21 @@
 
     for (let i = 0; i < window.playerClonesState.length; i++) {
       const cState = window.playerClonesState[i];
+      if (!cState) continue;
+
+      // Cheap pre-cull using approximate spherical position before running getCloneVectors or binding textures/VBOs
+      if (eyePos && isDistCullOn) {
+        const approxR = cState.centerRadius || planetRadius;
+        const sT = Math.sin(cState.theta || 0), cT = Math.cos(cState.theta || 0);
+        const sP = Math.sin(cState.phi || 0), cP = Math.cos(cState.phi || 0);
+        const adx = approxR * sT * cP - eyePos[0];
+        const ady = approxR * cT - eyePos[1];
+        const adz = approxR * sT * sP - eyePos[2];
+        if (adx * adx + ady * ady + adz * adz > cloneMaxDistSq) {
+          continue;
+        }
+      }
+
       ensureCloneAppearance(cState);
       const { cPos, cR, cF, cN } = getCloneVectors(cState, charScale, planetRadius);
       // Grounded position matches Player's getCharacterMatrix (breathing offset bOffset is handled inside updateCharacterMesh)
@@ -2924,9 +3264,13 @@
         const dy = finalPos[1] - eyePos[1];
         const dz = finalPos[2] - eyePos[2];
         const dSq = dx * dx + dy * dy + dz * dz;
-        if (dSq < minCameraDistToCloneSq) {
-          continue; 
+        if (dSq < minCameraDistToCloneSq || (isDistCullOn && dSq > cloneMaxDistSq)) {
+          continue;
         }
+      }
+
+      if (hasFrustumCull && !FrustumCullingSystem.isSphereInFrustum(finalPos[0], finalPos[1], finalPos[2], cloneCullRad, activeFrustumPlanes)) {
+        continue;
       }
 
       f32_cloneModel[0] = cR[0] * charScale; f32_cloneModel[1] = cR[1] * charScale; f32_cloneModel[2] = cR[2] * charScale; f32_cloneModel[3] = 0;
@@ -3030,10 +3374,14 @@
     }
   };
 
-  window.renderPlayerClonesShadow = function(gl, depthModelLoc, charIndicesLengthArg, supportUint32, depthPosLoc) {
+  window.renderPlayerClonesShadow = function(gl, depthModelLoc, charIndicesLengthArg, supportUint32, depthPosLoc, eyePosArg) {
     if (!window.playerClonesState || window.playerClonesState.length === 0) return;
     const charScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
     const planetRadius = (typeof RADIUS !== "undefined") ? RADIUS : 8.0;
+    const refEye = eyePosArg || (typeof window !== "undefined" ? window.eyePos : null);
+    const isDistCullOn = (typeof renderDistEnabled !== "undefined" ? renderDistEnabled : true);
+    const cloneMaxShadowDist = Math.min(8.5, (typeof objectRenderDistValue === "number" ? objectRenderDistValue : 5.0) + 2.0);
+    const cloneMaxShadowDistSq = cloneMaxShadowDist * cloneMaxShadowDist;
     
     let currentIndicesLen = charIndicesLengthArg;
     let useCloneBuffers = false;
@@ -3045,6 +3393,20 @@
 
     for (let i = 0; i < window.playerClonesState.length; i++) {
       const cState = window.playerClonesState[i];
+      if (!cState) continue;
+
+      if (refEye && isDistCullOn) {
+        const approxR = cState.centerRadius || planetRadius;
+        const sT = Math.sin(cState.theta || 0), cT = Math.cos(cState.theta || 0);
+        const sP = Math.sin(cState.phi || 0), cP = Math.cos(cState.phi || 0);
+        const adx = approxR * sT * cP - (refEye[0] || 0);
+        const ady = approxR * cT - (refEye[1] || 0);
+        const adz = approxR * sT * sP - (refEye[2] || 0);
+        if (adx * adx + ady * ady + adz * adz > cloneMaxShadowDistSq) {
+          continue;
+        }
+      }
+
       ensureCloneAppearance(cState);
       const { cPos, cR, cF, cN } = getCloneVectors(cState, charScale, planetRadius);
       const finalPos = cPos;

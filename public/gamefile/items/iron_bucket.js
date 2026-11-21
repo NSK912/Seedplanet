@@ -84,15 +84,21 @@ window.buildIronBucketModel = function(scale, centerPos, rVec, nVec, fVec, verti
 
 window.ItemRegistry["iron_bucket"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    const s = (item && item.size) ? item.size * 2.2 : 0.55;
+    const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
+    const s = isIcon
+      ? ((item && item.size) ? item.size * 2.2 : 0.55)
+      : ((item && typeof item.size === "number") ? Math.min(item.size, 0.050) : 0.040);
     const p = (item && item.position) ? item.position : [0, 0, 0];
     const r = (item && item.R) ? item.R : [1, 0, 0];
     const n = (item && item.normal) ? item.normal : [0, 1, 0];
     const f = (item && item.F) ? item.F : [0, 0, 1];
     const hasWater = !!(item && item.hasWater);
+    const basis = isIcon
+      ? { R: r, F: f }
+      : window.DropTemplateCache.rotateBasis(r, f, (item && typeof item.seed === "number") ? (item.seed % (Math.PI * 2)) : 0);
     window.DropTemplateCache.render(
       hasWater ? "water_bucket_v1" : "iron_bucket_v1",
-      { position: p, R: r, normal: n, F: f, scale: s, yOff: 0 },
+      { position: p, R: basis.R, normal: n, F: basis.F, scale: s, yOff: isIcon ? 0 : 0.36 },
       (tv, tc, ti) => {
         window.buildIronBucketModel(1.0, [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], tv, tc, ti, hasWater, 0);
       },
@@ -104,14 +110,20 @@ window.ItemRegistry["IRON_BUCKET"] = window.ItemRegistry["iron_bucket"];
 
 window.ItemRegistry["water_bucket"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
-    const s = (item && item.size) ? item.size * 2.2 : 0.55;
+    const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
+    const s = isIcon
+      ? ((item && item.size) ? item.size * 2.2 : 0.55)
+      : ((item && typeof item.size === "number") ? Math.min(item.size, 0.050) : 0.040);
     const p = (item && item.position) ? item.position : [0, 0, 0];
     const r = (item && item.R) ? item.R : [1, 0, 0];
     const n = (item && item.normal) ? item.normal : [0, 1, 0];
     const f = (item && item.F) ? item.F : [0, 0, 1];
+    const basis = isIcon
+      ? { R: r, F: f }
+      : window.DropTemplateCache.rotateBasis(r, f, (item && typeof item.seed === "number") ? (item.seed % (Math.PI * 2)) : 0);
     window.DropTemplateCache.render(
       "water_bucket_v1",
-      { position: p, R: r, normal: n, F: f, scale: s, yOff: 0 },
+      { position: p, R: basis.R, normal: n, F: basis.F, scale: s, yOff: isIcon ? 0 : 0.36 },
       (tv, tc, ti) => {
         window.buildIronBucketModel(1.0, [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], tv, tc, ti, true, 0);
       },

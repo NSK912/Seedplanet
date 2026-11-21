@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789500000227';
+  const version = '1789500000254';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -58,6 +58,7 @@
     'gamefile/items/gold_ore.js',
     'gamefile/items/glow_ore.js',
     'gamefile/items/branch.js',
+    'gamefile/items/bow.js',
     'gamefile/items/arrow.js',
     'gamefile/items/wooden_arm_cannon.js',
     'gamefile/items/stone_floor.js',
@@ -99,6 +100,7 @@
     'gamefile/items/glow_battery.js',
     'gamefile/items/iron_bucket.js',
     'gamefile/items/wood_planter_box.js',
+    'gamefile/items/wild_plant_growth.js',
     'gamefile/items/tanto.js',
     'gamefile/items/aegis_shift.js',
 
@@ -112,7 +114,7 @@
     'gamefile/npcs/npc.js',
 
     // --- Gameplay Core & System ---
-    'gamefile/gameplay/GLBLoader.js',
+    // GLBLoader.js disabled (Chibi GLB is no longer used)
     'gamefile/gameplay/capsuleModel.js',
     // --- Craftable Clothing & Footwear ---
     'gamefile/items/traveler_boots.js',
@@ -124,6 +126,7 @@
     'gamefile/items/double_breasted_suit.js',
     'gamefile/items/black_slacks.js',
     'gamefile/items/opera_cape.js',
+    'gamefile/items/clothing_drops.js',
     'gamefile/gameplay/inventory.js',
     'gamefile/gameplay/player.js',
     'gamefile/gameplay/ActorCore.js',

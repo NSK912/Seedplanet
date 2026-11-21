@@ -136,7 +136,7 @@
 
     const planetRadius = (typeof customRadius === "number" && customRadius > 0)
       ? customRadius
-      : (typeof global.RADIUS !== "undefined" ? global.RADIUS : 32.0);
+      : (typeof global.RADIUS !== "undefined" ? global.RADIUS : 64.0);
     const heightScale = (typeof customHeightScale === "number" && customHeightScale > 0)
       ? customHeightScale
       : (typeof global.HEIGHT_SCALE !== "undefined" ? global.HEIGHT_SCALE : (0.6 * Math.pow(planetRadius / 8.0, 0.70)));
@@ -828,7 +828,7 @@
     }
 
     // Seed, Radius, or HeightScale change invalidates cache
-    const curRad = typeof global.RADIUS !== 'undefined' ? global.RADIUS : 32.0;
+    const curRad = typeof global.RADIUS !== 'undefined' ? global.RADIUS : 64.0;
     const curHs = typeof global.HEIGHT_SCALE !== 'undefined' ? global.HEIGHT_SCALE : (0.6 * Math.pow(curRad / 8.0, 0.70));
     if (lastMeshCacheSeed !== global.globalSeed || lastMeshCacheRadius !== curRad || lastMeshCacheHeightScale !== curHs) {
       clearTunnelMeshCache();

@@ -183,7 +183,6 @@
   window.ItemRegistry["aegis_shift"] = {
     render: function(item, vertices, colors, indices, targetBuffer) {
       const isIcon = (targetBuffer === "preview" || (item && item.isIconPreview));
-      const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.4 : 0.46);
       const p = (item && item.position) ? item.position : [0, 0, 0];
       const r = (item && item.R) ? item.R : [1, 0, 0];
       const n = (item && item.normal) ? item.normal : [0, 1, 0];
@@ -192,9 +191,19 @@
       if (isIcon) {
         const ax = [r[0] * 0.34 + n[0] * 0.94, r[1] * 0.34 + n[1] * 0.94, r[2] * 0.34 + n[2] * 0.94];
         const ed = [r[0] * 0.94 - n[0] * 0.34, r[1] * 0.94 - n[1] * 0.34, r[2] * 0.94 - n[2] * 0.34];
-        window.buildAegisShiftModel(s, p, ax, ed, f, vertices, colors, indices, mode);
+        window.buildAegisShiftModel(1.0, p, ax, ed, f, vertices, colors, indices, mode);
       } else {
-        window.buildAegisShiftModel(s, p, r, f, n, vertices, colors, indices, mode);
+        const s = (item && typeof item.size === "number") ? Math.min(item.size, 0.075) : 0.064;
+        const rotAngle = (item && typeof item.seed === "number") ? (item.seed % (Math.PI * 2)) : 0;
+        const rot = window.DropTemplateCache.rotateBasis(r, f, rotAngle);
+        const lift = 0.048 * s;
+        const centerShift = -0.08 * s;
+        const gp = [
+          p[0] + n[0] * lift + rot.R[0] * centerShift,
+          p[1] + n[1] * lift + rot.R[1] * centerShift,
+          p[2] + n[2] * lift + rot.R[2] * centerShift
+        ];
+        window.buildAegisShiftModel(s, gp, rot.R, rot.F, n, vertices, colors, indices, mode);
       }
     }
   };

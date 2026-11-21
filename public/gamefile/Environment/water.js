@@ -389,7 +389,7 @@
     waterSSREnabledLoc = gl.getUniformLocation(waterProgram, "uSSREnabled");
     waterViewProjLoc = gl.getUniformLocation(waterProgram, "uViewProjMatrix");
 
-    const initialGridSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 400;
+    const initialGridSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 800;
     const initialWaterLevel = typeof waterLevel !== 'undefined' ? waterLevel : 1.0;
     const initialRadius = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
 
@@ -404,7 +404,7 @@
     return (wave1 + wave2 + wave3 + wave4) * strength * 1.8;
   }
 
-  function getWaterRadiusAt(x, y, z) {
+  function getWaterRadiusAt(x, y, z, caveDataOpt) {
     const wEnabled = typeof waterEnabled !== 'undefined' ? waterEnabled : true;
     if (!wEnabled) return 0;
     
@@ -429,6 +429,17 @@
       : (typeof getHeightOnSphere === 'function' ? getHeightOnSphere(theta, phi, seed) : 0);
     const groundRad = planetR + groundH * hScale;
 
+    let insideTunnel = !!(caveDataOpt && caveDataOpt.insideTunnel);
+    if (!caveDataOpt && r < groundRad - 0.05 && typeof getTerrainSurfaceAndCeiling === 'function') {
+      const cInfo = getTerrainSurfaceAndCeiling(nx, ny, nz, r);
+      insideTunnel = !!(cInfo && cInfo.insideTunnel);
+    }
+
+    if (insideTunnel) {
+      const cwEnabled = (typeof caveWaterEnabled !== 'undefined') ? !!caveWaterEnabled : true;
+      return cwEnabled ? baseWaterRadius : 0;
+    }
+
     // If natural terrain is above water surface, this position is dry land
     if (groundRad >= baseWaterRadius + 0.015) {
       return 0;
@@ -445,7 +456,7 @@
     if (!glContext) return;
     const gl = glContext;
 
-    const gSize = gridSize || (typeof currentGridSize !== 'undefined' ? currentGridSize : 400);
+    const gSize = gridSize || (typeof currentGridSize !== 'undefined' ? currentGridSize : 800);
     const level = wLevel !== undefined ? wLevel : (typeof waterLevel !== 'undefined' ? waterLevel : 1.0);
     const rad = planetR || (typeof RADIUS !== 'undefined' ? RADIUS : 8.0);
 
@@ -560,7 +571,7 @@
     if (!glContext) return;
     const gl = glContext;
 
-    const gSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 400;
+    const gSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 800;
     const planetR = typeof RADIUS !== 'undefined' ? RADIUS : 8.0;
     const wLevel = typeof waterLevel !== 'undefined' ? waterLevel : 1.0;
     const seed = typeof window !== 'undefined' && typeof window.globalSeed !== 'undefined' ? window.globalSeed : 12345;
@@ -708,7 +719,7 @@
     if (!wEnabled || !waterVertexBuffer || !waterVerticesCache) return;
 
     const wLevel = typeof waterLevel !== 'undefined' ? waterLevel : 1.0;
-    const gSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 400;
+    const gSize = typeof currentGridSize !== 'undefined' ? currentGridSize : 800;
     const tMods = typeof terrainMods !== 'undefined' ? terrainMods : null;
     const t3D = typeof tunnels3D !== 'undefined' ? tunnels3D : null;
 

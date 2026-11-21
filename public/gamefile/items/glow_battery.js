@@ -326,8 +326,13 @@ window.ItemRegistry["glow_battery"] = {
       } else {
         fillPercent = 100;
       }
-    } else if (item && typeof item.rechargeTime === "number" && window.BatterySystem) {
-      fillPercent = (item.rechargeTime / window.BatterySystem.REGEN_TIME) * 100;
+    } else if (item && window.BatterySystem) {
+      const rTime = (typeof item.rechargeTime === "number")
+        ? item.rechargeTime
+        : (typeof item.dropRechargeTime === "number" ? item.dropRechargeTime : null);
+      if (rTime !== null) {
+        fillPercent = (rTime / window.BatterySystem.REGEN_TIME) * 100;
+      }
     }
 
     const clampedPct = Math.max(0, Math.min(100, fillPercent));
@@ -340,12 +345,15 @@ window.ItemRegistry["glow_battery"] = {
     const r = (item && item.R) ? item.R : [1, 0, 0];
     const n = (item && item.normal) ? item.normal : [0, 1, 0];
     const f = (item && item.F) ? item.F : [0, 0, 1];
-    const s = isIcon ? 1.0 : ((item && item.size) ? item.size * 2.0 : 0.12);
+    const rawS = (item && typeof item.size === "number") ? item.size : 0.065;
+    const s = isIcon ? 1.0 : Math.min(rawS, 0.078);
     const yOff = isIcon ? 0.0 : 0.32;
+    const seed = (item && typeof item.seed === "number") ? item.seed : 0;
+    const basis = isIcon ? { R: r, F: f } : window.DropTemplateCache.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2));
 
     window.DropTemplateCache.render(
       key,
-      { position: p, R: r, normal: n, F: f, scale: s, yOff: yOff },
+      { position: p, R: basis.R, normal: n, F: basis.F, scale: s, yOff: yOff },
       (tv, tc, ti) => {
         const fullColor = isLow ? [0.88, 0.1, 0.1] : [0.22, 0.95, 0.88];
         const emptyColor = [0.3, 0.3, 0.3];

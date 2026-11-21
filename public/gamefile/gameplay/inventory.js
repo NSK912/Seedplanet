@@ -231,7 +231,7 @@
         if (registryKey === "obsidian_flux" || registryKey === "obsidian_flux") registryKey = "obsidian_flux_item";
 
         const handler = !isExcluded && window.ItemRegistry && window.ItemRegistry[registryKey];
-        if (handler && typeof handler.render === "function") {
+        if (handler && typeof handler.render === "function" && !handler.useCustomIconMesh) {
           // Guard and override fallback globals (temporarily force context to preview-safe values)
           const savedGlobals = {};
           const globalsToGuard = {
@@ -2353,7 +2353,7 @@
           ? options.reachOverride
           : (!isActorPlayer ? Math.max(baseReachDist, 0.75) : baseReachDist);
 
-        const basis = (actor && typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actor) : null;
+        const basis = (actor && typeof window !== "undefined" && window.ActorCore) ? window.ActorCore.getBasis(actor, { skipTerrainHeight: true }) : null;
         let nx, ny, nz, F, charPos, pScale, gSeed;
         if (basis) {
           nx = basis.normal[0]; ny = basis.normal[1]; nz = basis.normal[2];
@@ -2372,12 +2372,14 @@
           nz = sinTheta * sinPhi;
 
           gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : (typeof globalSeed !== "undefined" ? globalSeed : 0);
-          const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
           pScale = (typeof playerScale === "number") ? playerScale : 0.1;
-          const terrainRadius = RADIUS + height * HEIGHT_SCALE;
-          const actualPlayerRadius = (typeof playerCenterRadius === "number" && playerCenterRadius !== null)
-            ? playerCenterRadius
-            : (terrainRadius + 0.46 * pScale);
+          let actualPlayerRadius;
+          if (typeof playerCenterRadius === "number" && playerCenterRadius !== null && !Number.isNaN(playerCenterRadius) && playerCenterRadius > 0.001) {
+            actualPlayerRadius = playerCenterRadius;
+          } else {
+            const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
+            actualPlayerRadius = RADIUS + height * HEIGHT_SCALE + 0.46 * pScale;
+          }
           charPos = [actualPlayerRadius * nx, actualPlayerRadius * ny, actualPlayerRadius * nz];
 
           const East = [-sinPhi, 0, cosPhi];
@@ -2391,96 +2393,53 @@
           ];
         }
 
-        const hitCenter = [charPos[0], charPos[1], charPos[2]];
+        const hitCx = charPos[0], hitCy = charPos[1], hitCz = charPos[2];
+        const fx = F[0], fy = F[1], fz = F[2];
+        const reachCtx = basis || actor;
+        const useLineReach = (actionReachMode === 1 && isActorPlayer);
         let hitTarget = null;
         let minScore = Infinity;
 
-        const evalTargetHit = (nPos, physicalRadius, entityRef) => {
-          const dx = nPos[0] - hitCenter[0];
-          const dy = nPos[1] - hitCenter[1];
-          const dz = nPos[2] - hitCenter[2];
-
-          const h = dx * nx + dy * ny + dz * nz;
-          const t = dx * F[0] + dy * F[1] + dz * F[2];
-
-          const rx = dx - t * F[0];
-          const ry = dy - t * F[1];
-          const rz = dz - t * F[2];
-          const distToRaySq = rx * rx + ry * ry + rz * rz;
-          const dist3DSq = dx * dx + dy * dy + dz * dz;
-          const horizDistSq = Math.max(0, dist3DSq - h * h);
-
-          if (isOmni) {
-            // Short 360° AOE (Spinning Cyclone Skill 3 ONLY)
-            const maxR = reachDist + physicalRadius;
-            const vertLimit = (maxVert !== null ? maxVert : 0.72) + physicalRadius;
-            if (horizDistSq <= maxR * maxR && Math.abs(h) <= vertLimit) {
-              return { hit: true, score: dist3DSq };
-            }
-            return { hit: false, score: Infinity };
-          }
-
-          if (coneCos !== null) {
-            // Directional forward slash arc (Steps 1, 2, 4 — does NOT hit behind or 360°!)
-            const maxR = reachDist + physicalRadius;
-            const vertLimit = (maxVert !== null ? maxVert : 0.65) + physicalRadius;
-            if (dist3DSq > maxR * maxR || Math.abs(h) > vertLimit) {
-              return { hit: false, score: Infinity };
-            }
-            const horizLen = Math.sqrt(horizDistSq);
-            const isCloseInFront = (horizLen <= (0.26 + physicalRadius) && t >= -0.02);
-            const cosAngle = horizLen > 1e-4 ? (t / horizLen) : 1.0;
-            const effectiveCone = (lockedTarget && entityRef === lockedTarget) ? Math.min(coneCos, 0.15) : coneCos;
-            if (isCloseInFront || (t >= 0.0 && cosAngle >= effectiveCone)) {
-              const lockBonus = (lockedTarget && entityRef === lockedTarget) ? -0.35 : 0.0;
-              return { hit: true, score: dist3DSq + lockBonus };
-            }
-            return { hit: false, score: Infinity };
-          }
-
-          if (actionReachMode === 1 && isActorPlayer) {
-            const hitRadiusSq = physicalRadius * physicalRadius;
-            if (distToRaySq <= hitRadiusSq) {
-              const distanceToSurface = Math.max(0, t - physicalRadius);
-              if (t > 0.0 && distanceToSurface <= reachDist && h >= -15.0 && h <= 15.0) {
-                return { hit: true, score: distToRaySq * 2.0 + t };
-              }
-            }
-          } else {
-            const reachInfo = (typeof isTargetWithinReach === "function") ? isTargetWithinReach(nPos, reachDist + physicalRadius, basis || actor) : null;
-            if (reachInfo && reachInfo.valid) {
-              return { hit: true, score: reachInfo.perpSq };
-            }
-          }
-          return { hit: false, score: Infinity };
-        };
-
         // 1. Check amphibians (NPCs: Meganeura, Isopod, Placoderm, Georgiacetus, + butcherable corpses with Tanto)
         if (typeof amphibians !== "undefined" && Array.isArray(amphibians)) {
-          for (let npc of amphibians) {
+          const allowTantoButcher = (inferredWeaponId === "TANTO");
+          const hasTargetPtFn = (typeof window !== "undefined" && typeof window.getNPCTargetPoint === "function");
+          for (let ai = 0; ai < amphibians.length; ai++) {
+            const npc = amphibians[ai];
             const isAlive = !npc.ragdollEnabled && (npc.hp === undefined || npc.hp > 0);
-            const isButcherable = (inferredWeaponId === "TANTO") && window.isButcherableNpcCorpse(npc, "TANTO");
+            const isButcherable = allowTantoButcher && window.isButcherableNpcCorpse(npc, "TANTO");
             if (!isAlive && !isButcherable) continue;
             if (hitSet && hitSet.has(npc)) continue;
-            let nPos = (typeof window !== "undefined" && typeof window.getNPCTargetPoint === "function")
-              ? (window.getNPCTargetPoint(npc) || npc.position || [0, 0, 0])
-              : (npc.position || [0, 0, 0]);
-            if (npc.ragdollPos && npc.ragdollInitialized && (!window || typeof window.getNPCTargetPoint !== "function")) {
+            let nPos = hasTargetPtFn
+              ? (window.getNPCTargetPoint(npc) || npc.position || null)
+              : (npc.position || null);
+            if (!hasTargetPtFn && npc.ragdollPos && npc.ragdollInitialized) {
               nPos = npc.ragdollPos;
             }
+            if (!nPos) continue;
 
             const physicalRadius = window.getMeleeEntityRadius(npc);
-            const res = evalTargetHit(nPos, physicalRadius, npc);
-            if (res.hit && res.score < minScore) {
-              minScore = res.score;
+            const score = _evalMeleeNpcTargetScore(
+              nPos, physicalRadius, npc,
+              hitCx, hitCy, hitCz, nx, ny, nz, fx, fy, fz,
+              isOmni, coneCos, reachDist, maxVert, lockedTarget, useLineReach, reachCtx
+            );
+            if (score < minScore) {
+              minScore = score;
               hitTarget = { type: "amphibian", entity: npc };
             }
           }
         }
 
         // 2. Check Player Clones (only hit other actors, never self)
-        if (!hitTarget && typeof window !== "undefined" && Array.isArray(window.playerClonesState)) {
-          for (let clone of window.playerClonesState) {
+        if (!hitTarget && typeof window !== "undefined" && Array.isArray(window.playerClonesState) && window.playerClonesState.length > 0) {
+          const cloneList = window.playerClonesState;
+          const physicalRadius = 0.25 * (pScale / 0.1);
+          const coarseMaxR = reachDist + physicalRadius + 1.5;
+          const coarseMaxRSq = coarseMaxR * coarseMaxR;
+          const cPosBuf = _meleeClonePosScratch;
+          for (let ci = 0; ci < cloneList.length; ci++) {
+            const clone = cloneList[ci];
             if (!clone || (actor && actor.isClone && clone === actor.state) || (clone.hp !== undefined && clone.hp <= 0)) continue;
             if (hitSet && hitSet.has(clone)) continue;
             let cPos = clone.position;
@@ -2489,15 +2448,38 @@
               const cCosT = Math.cos(clone.theta);
               const cSinP = Math.sin(clone.phi);
               const cCosP = Math.cos(clone.phi);
-              const cR = RADIUS + ((typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(clone.theta, clone.phi, gSeed) : 0) * HEIGHT_SCALE);
-              cPos = [cR * cSinT * cCosP, cR * cCosT, cR * cSinT * cSinP];
+              const cnx = cSinT * cCosP;
+              const cny = cCosT;
+              const cnz = cSinT * cSinP;
+              let cR = (typeof clone.centerRadius === "number" && !Number.isNaN(clone.centerRadius) && clone.centerRadius > 0.001)
+                ? clone.centerRadius
+                : 0;
+              if (cR === 0) {
+                // Fast coarse distance reject before ever querying expensive terrain noise
+                const approxDx = RADIUS * cnx - hitCx;
+                const approxDy = RADIUS * cny - hitCy;
+                const approxDz = RADIUS * cnz - hitCz;
+                if (approxDx * approxDx + approxDy * approxDy + approxDz * approxDz > (coarseMaxR + 3.0) * (coarseMaxR + 3.0)) {
+                  continue;
+                }
+                cR = RADIUS + ((typeof getVisualHeightOnSphere === "function" ? getVisualHeightOnSphere(clone.theta, clone.phi, gSeed) : 0) * HEIGHT_SCALE);
+              }
+              cPosBuf[0] = cR * cnx;
+              cPosBuf[1] = cR * cny;
+              cPosBuf[2] = cR * cnz;
+              cPos = cPosBuf;
             }
             if (!cPos) continue;
+            const cdx = cPos[0] - hitCx, cdy = cPos[1] - hitCy, cdz = cPos[2] - hitCz;
+            if (cdx * cdx + cdy * cdy + cdz * cdz > coarseMaxRSq) continue;
 
-            const physicalRadius = 0.25 * (pScale / 0.1);
-            const res = evalTargetHit(cPos, physicalRadius, clone);
-            if (res.hit && res.score < minScore) {
-              minScore = res.score;
+            const score = _evalMeleeNpcTargetScore(
+              cPos, physicalRadius, clone,
+              hitCx, hitCy, hitCz, nx, ny, nz, fx, fy, fz,
+              isOmni, coneCos, reachDist, maxVert, lockedTarget, useLineReach, reachCtx
+            );
+            if (score < minScore) {
+              minScore = score;
               hitTarget = { type: "clone", entity: clone };
             }
           }
@@ -2569,9 +2551,7 @@
           }
 
           if (isShirasayaHit) {
-            if (typeof playSwordSlashSound === "function") {
-              if (typeof playChopSound === "function") playChopSound();
-            }
+            if (typeof playChopSound === "function") playChopSound();
           } else if (typeof playSplashSound === "function") {
             playSplashSound(0.8);
           } else if (typeof playChopSound === "function") {
@@ -2580,6 +2560,69 @@
           return hitTarget;
         }
         return null;
+      }
+      const _meleeClonePosScratch = [0, 0, 0];
+      function _evalMeleeNpcTargetScore(
+        nPos, physicalRadius, entityRef,
+        hitCx, hitCy, hitCz, nx, ny, nz, fx, fy, fz,
+        isOmni, coneCos, reachDist, maxVert, lockedTarget, useLineReach, reachCtx
+      ) {
+        const dx = nPos[0] - hitCx;
+        const dy = nPos[1] - hitCy;
+        const dz = nPos[2] - hitCz;
+        const dist3DSq = dx * dx + dy * dy + dz * dz;
+
+        if (isOmni) {
+          const maxR = reachDist + physicalRadius;
+          const vertLimit = (maxVert !== null ? maxVert : 0.72) + physicalRadius;
+          if (dist3DSq > (maxR + vertLimit) * (maxR + vertLimit)) return Infinity;
+          const h = dx * nx + dy * ny + dz * nz;
+          if (Math.abs(h) > vertLimit) return Infinity;
+          const horizDistSq = Math.max(0, dist3DSq - h * h);
+          return (horizDistSq <= maxR * maxR) ? dist3DSq : Infinity;
+        }
+
+        if (coneCos !== null) {
+          const maxR = reachDist + physicalRadius;
+          if (dist3DSq > maxR * maxR) return Infinity;
+          const h = dx * nx + dy * ny + dz * nz;
+          const vertLimit = (maxVert !== null ? maxVert : 0.65) + physicalRadius;
+          if (Math.abs(h) > vertLimit) return Infinity;
+          const t = dx * fx + dy * fy + dz * fz;
+          const horizDistSq = Math.max(0, dist3DSq - h * h);
+          const horizLen = Math.sqrt(horizDistSq);
+          const isCloseInFront = (horizLen <= (0.26 + physicalRadius) && t >= -0.02);
+          const cosAngle = horizLen > 1e-4 ? (t / horizLen) : 1.0;
+          const effectiveCone = (lockedTarget && entityRef === lockedTarget) ? Math.min(coneCos, 0.15) : coneCos;
+          if (isCloseInFront || (t >= 0.0 && cosAngle >= effectiveCone)) {
+            const lockBonus = (lockedTarget && entityRef === lockedTarget) ? -0.35 : 0.0;
+            return dist3DSq + lockBonus;
+          }
+          return Infinity;
+        }
+
+        const t = dx * fx + dy * fy + dz * fz;
+        if (useLineReach) {
+          if (t <= 0.0) return Infinity;
+          const distanceToSurface = Math.max(0, t - physicalRadius);
+          if (distanceToSurface > reachDist) return Infinity;
+          const rx = dx - t * fx;
+          const ry = dy - t * fy;
+          const rz = dz - t * fz;
+          const distToRaySq = rx * rx + ry * ry + rz * rz;
+          if (distToRaySq <= physicalRadius * physicalRadius) {
+            const h = dx * nx + dy * ny + dz * nz;
+            if (h >= -15.0 && h <= 15.0) {
+              return distToRaySq * 2.0 + t;
+            }
+          }
+          return Infinity;
+        }
+
+        const maxReachTotal = reachDist + physicalRadius;
+        if (dist3DSq > (maxReachTotal + 2.0) * (maxReachTotal + 2.0)) return Infinity;
+        const reachInfo = (typeof isTargetWithinReach === "function") ? isTargetWithinReach(nPos, maxReachTotal, reachCtx) : null;
+        return (reachInfo && reachInfo.valid) ? reachInfo.perpSq : Infinity;
       }
       window.checkNpcMeleeHit = checkNpcMeleeHit;
 
@@ -2707,7 +2750,19 @@
       ];
     }
     
-    const hitCenter = [charPos[0], charPos[1], charPos[2]];
+    const hitCx = charPos[0], hitCy = charPos[1], hitCz = charPos[2];
+    const fx = F[0], fy = F[1], fz = F[2];
+    const minCloneReach = (options && typeof options.reachOverride === "number") ? options.reachOverride : 0.75;
+    const baseRoughReach = Math.max(actionReachDistance, !isActorPlayer ? minCloneReach : 0);
+
+    // Precompute allowed obstacle types ONCE per click (avoids calling checkToolTargetValid + getItemDefinition 1000+ times in loop)
+    const hasToolValidFn = (typeof window.checkToolTargetValid === "function");
+    const allowTree = hasToolValidFn ? window.checkToolTargetValid(toolType, "tree") : (toolType === "AXE" || toolType === "TANTO" || toolType === "AEGIS_SHIFT" || toolType === "HAND");
+    const allowRock = hasToolValidFn ? window.checkToolTargetValid(toolType, "rock") : (toolType === "PICKAXE" || toolType === "AEGIS_SHIFT" || toolType === "HAND");
+    const allowIron = hasToolValidFn ? window.checkToolTargetValid(toolType, "iron_ore") : (toolType === "PICKAXE" || toolType === "AEGIS_SHIFT" || toolType === "HAND");
+    const allowGold = hasToolValidFn ? window.checkToolTargetValid(toolType, "gold_ore") : (toolType === "PICKAXE" || toolType === "AEGIS_SHIFT" || toolType === "HAND");
+    const allowGlow = hasToolValidFn ? window.checkToolTargetValid(toolType, "glow_ore") : (toolType === "PICKAXE" || toolType === "AEGIS_SHIFT" || toolType === "HAND");
+    const useLineMode = (actionReachMode === 1 && isActorPlayer);
     
     let bestIndex = -1;
     let bestType = null;
@@ -2715,43 +2770,47 @@
     
     for (let i = 0; i < natureObstacles.length; i++) {
        const obs = natureObstacles[i];
-        if (obs.type === "tree" || obs.type === "rock" || obs.type === "iron_ore" || obs.type === "gold_ore" || obs.type === "glow_ore") {
-          if (typeof window.checkToolTargetValid === "function") {
-            if (!window.checkToolTargetValid(toolType, obs.type)) continue;
-          } else {
-            if ((toolType === "AXE" || toolType === "TANTO") && obs.type !== "tree") continue;
-            if (toolType === "PICKAXE" && obs.type === "tree") continue;
-          }
-          
-          const dx = obs.position[0] - hitCenter[0];
-          const dy = obs.position[1] - hitCenter[1];
-          const dz = obs.position[2] - hitCenter[2];
-          
-          const h = dx * obs.normal[0] + dy * obs.normal[1] + dz * obs.normal[2];
-          const t = dx * F[0] + dy * F[1] + dz * F[2];
-          
-          const rx = dx - t * F[0];
-          const ry = dy - t * F[1];
-          const rz = dz - t * F[2];
-          const distToRaySq = rx * rx + ry * ry + rz * rz;
-          
-          const physicalRadius = obs.type === "tree" ? (obs.radius / 5.0) : obs.radius;
+       if (!obs || obs.isWildRelocatedTreeCollider) continue;
+       const oType = obs.type;
+       if (
+         (oType === "tree" && allowTree) ||
+         (oType === "rock" && allowRock) ||
+         (oType === "iron_ore" && allowIron) ||
+         (oType === "gold_ore" && allowGold) ||
+         (oType === "glow_ore" && allowGlow)
+       ) {
+          const dx = obs.position[0] - hitCx;
+          const dy = obs.position[1] - hitCy;
+          const dz = obs.position[2] - hitCz;
+
+          // Coarse 3D distance reject eliminates ~99% of distant obstacles before ray/reach math
           const hitRadius = obs.radius;
-          const hitRadiusSq = hitRadius * hitRadius;
+          const coarseR = baseRoughReach + hitRadius + 3.0;
+          if (dx * dx + dy * dy + dz * dz > coarseR * coarseR) continue;
           
+          const physicalRadius = oType === "tree" ? (hitRadius / 5.0) : hitRadius;
           let isHit = false;
           let score = Infinity;
           
-          if (actionReachMode === 1 && isActorPlayer) {
-              if (distToRaySq <= hitRadiusSq) {
+          if (useLineMode) {
+              const t = dx * fx + dy * fy + dz * fz;
+              if (t > 0.0) {
                   const distanceToSurface = Math.max(0, t - physicalRadius);
-                  if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
-                      isHit = true;
-                      score = distToRaySq * 2.0 + t;
+                  if (distanceToSurface <= actionReachDistance) {
+                      const rx = dx - t * fx;
+                      const ry = dy - t * fy;
+                      const rz = dz - t * fz;
+                      const distToRaySq = rx * rx + ry * ry + rz * rz;
+                      if (distToRaySq <= hitRadius * hitRadius) {
+                          const h = dx * obs.normal[0] + dy * obs.normal[1] + dz * obs.normal[2];
+                          if (h >= -15.0 && h <= 15.0) {
+                              isHit = true;
+                              score = distToRaySq * 2.0 + t;
+                          }
+                      }
                   }
               }
           } else {
-              const minCloneReach = (options && typeof options.reachOverride === "number") ? options.reachOverride : 0.75;
               const effectiveReach = (!isActorPlayer && preferredTarget && obs === preferredTarget)
                 ? Math.max(actionReachDistance, minCloneReach)
                 : actionReachDistance;
@@ -2765,7 +2824,7 @@
           if (isHit && score < minScore) {
               minScore = score;
               bestIndex = i;
-              bestType = obs.type;
+              bestType = oType;
           }
        }
     }
@@ -2776,51 +2835,53 @@
 
     if (toolType === "AXE" || toolType === "HAND" || toolType === "TANTO" || toolType === "AEGIS_SHIFT") {
        const plantCandidates = (typeof collectibles !== "undefined" && collectibles) ? collectibles : [];
+       const effectivePlanterReach = !isActorPlayer ? Math.max(actionReachDistance, minCloneReach) : actionReachDistance;
+       const planterCoarseRSq = (baseRoughReach + 2.5) * (baseRoughReach + 2.5);
        for (let i = 0; i < plantCandidates.length; i++) {
           const c = plantCandidates[i];
-          if (!c || !c.active || c.isPreview || c.type !== "wood_planter_box" || !c.plantData || !c.position) continue;
+          if (!c || !c.active || c.isPreview || (c.type !== "wood_planter_box" && c.type !== "wild_growing_plant") || !c.plantData || !c.position) continue;
           const pData = c.plantData;
           const sType = String(pData.seedType || "").toUpperCase();
           if (!sType.includes("DRAGON") && !sType.includes("BRANCH")) continue;
 
           const cNorm = (c.normal && c.normal.length === 3) ? c.normal : [0, 1, 0];
-          const treePos = [
-             c.position[0] + cNorm[0] * 0.15,
-             c.position[1] + cNorm[1] * 0.15,
-             c.position[2] + cNorm[2] * 0.15
-          ];
+          const treePosX = c.position[0] + cNorm[0] * 0.15;
+          const treePosY = c.position[1] + cNorm[1] * 0.15;
+          const treePosZ = c.position[2] + cNorm[2] * 0.15;
 
-          const dx = treePos[0] - hitCenter[0];
-          const dy = treePos[1] - hitCenter[1];
-          const dz = treePos[2] - hitCenter[2];
-
-          const h = dx * cNorm[0] + dy * cNorm[1] + dz * cNorm[2];
-          const t = dx * F[0] + dy * F[1] + dz * F[2];
-
-          const rx = dx - t * F[0];
-          const ry = dy - t * F[1];
-          const rz = dz - t * F[2];
-          const distToRaySq = rx * rx + ry * ry + rz * rz;
+          const dx = treePosX - hitCx;
+          const dy = treePosY - hitCy;
+          const dz = treePosZ - hitCz;
+          if (dx * dx + dy * dy + dz * dz > planterCoarseRSq) continue;
 
           const treeRadius = 0.28;
           const physicalRadius = treeRadius / 4.0;
-          const hitRadiusSq = treeRadius * treeRadius;
-
           let isHit = false;
           let score = Infinity;
 
-          if (actionReachMode === 1 && isActorPlayer) {
-             if (distToRaySq <= hitRadiusSq) {
+          if (useLineMode) {
+             const t = dx * fx + dy * fy + dz * fz;
+             if (t > 0.0) {
                 const distanceToSurface = Math.max(0, t - physicalRadius);
-                if (t > 0.0 && distanceToSurface <= actionReachDistance && h >= -15.0 && h <= 15.0) {
-                   isHit = true;
-                   score = distToRaySq * 2.0 + t;
+                if (distanceToSurface <= actionReachDistance) {
+                   const rx = dx - t * fx;
+                   const ry = dy - t * fy;
+                   const rz = dz - t * fz;
+                   const distToRaySq = rx * rx + ry * ry + rz * rz;
+                   if (distToRaySq <= treeRadius * treeRadius) {
+                      const h = dx * cNorm[0] + dy * cNorm[1] + dz * cNorm[2];
+                      if (h >= -15.0 && h <= 15.0) {
+                         isHit = true;
+                         score = distToRaySq * 2.0 + t;
+                      }
+                   }
                 }
              }
           } else {
+             const treePos = [treePosX, treePosY, treePosZ];
              const reachInfo = (typeof isTargetWithinReach === "function")
-                ? isTargetWithinReach(treePos, actionReachDistance + physicalRadius, basis || actor)
-                : { valid: Math.hypot(dx, dy, dz) <= (actionReachDistance + physicalRadius), perpSq: dx*dx + dy*dy + dz*dz };
+                ? isTargetWithinReach(treePos, effectivePlanterReach + physicalRadius, basis || actor)
+                : { valid: Math.hypot(dx, dy, dz) <= (effectivePlanterReach + physicalRadius), perpSq: dx*dx + dy*dy + dz*dz };
              if (reachInfo.valid) {
                 isHit = true;
                 score = reachInfo.perpSq;
@@ -2835,23 +2896,29 @@
     }
 
     if (bestPlanterTree && minPlanterScore < minScore) {
-       if (isActorPlayer && toolType === "AEGIS_SHIFT" && typeof window !== "undefined" && window.aegisShiftState) {
-         window.aegisShiftState.toolMode = "axe";
+       if (toolType === "AEGIS_SHIFT") {
+         if (isActorPlayer && typeof window !== "undefined" && window.aegisShiftState) {
+           window.aegisShiftState.toolMode = "axe";
+         } else if (!isActorPlayer && actor && actor.state) {
+           actor.state.aegisToolMode = "axe";
+         }
        }
        const pData = bestPlanterTree.plantData;
-       if (!pData.watered || !pData.plantTime) {
+       const isWildGrowingTree = (bestPlanterTree.type === "wild_growing_plant");
+       if (!isWildGrowingTree && (!pData.watered || !pData.plantTime)) {
           if (isActorPlayer && typeof showNotice === "function") {
              showNotice(`💧 ต้นอ่อนยังไม่ได้รดน้ำ! กรุณาใช้ถังใส่น้ำ (Water Bucket) มารดน้ำเพื่อเริ่มเติบโต`);
           }
           return true;
        }
-       const elapsed = (Date.now() - pData.plantTime) / 1000;
-       const isMature = elapsed >= (pData.growthDuration || 300);
+       const defaultTreeDur = isWildGrowingTree ? 600 : 300;
+       const elapsed = pData.plantTime ? (Date.now() - pData.plantTime) / 1000 : 0;
+       const isMature = (pData.mature === true) || (elapsed >= (pData.growthDuration || defaultTreeDur));
 
        if (!isMature) {
           if (typeof playChopSound === "function") playChopSound(bestPlanterTree.position);
           if (isActorPlayer && typeof showNotice === "function") {
-             const rem = Math.ceil((pData.growthDuration || 300) - elapsed);
+             const rem = Math.ceil((pData.growthDuration || defaultTreeDur) - elapsed);
              const m = Math.floor(rem / 60);
              const s = rem % 60;
              showNotice(`⏳ ต้นไม้กำลังเติบโต เหลืออีก ${m}:${s < 10 ? '0' : ''}${s} นาที (ยังตัดไม่ได้)`);
@@ -2931,7 +2998,23 @@
              }
           }
 
-          bestPlanterTree.plantData = null;
+          if (bestPlanterTree.type === "wild_growing_plant") {
+             // ต้นไม้ป่าที่งอกใหม่ถูกตัด -> ลบตัวชนลำต้นและเริ่มนับเวลา 10 นาทีใหม่แบบแยกต้น
+             if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onWildTreeChopped === "function") {
+                window.WildPlantGrowthSystem.onWildTreeChopped(bestPlanterTree);
+             } else {
+                pData.plantTime = Date.now();
+                pData.growthDuration = 600;
+                pData.stage = 0;
+                pData.progress = 0;
+                pData.mature = false;
+                pData.hits = 0;
+                pData.handHits = 0;
+                bestPlanterTree._matureFinalized = false;
+             }
+          } else {
+             bestPlanterTree.plantData = null;
+          }
           bestPlanterTree.isDynamic = false;
           if (typeof window !== "undefined") {
              window.pendingDynamicCollectibleRefresh = true;
@@ -2950,8 +3033,13 @@
        const isAegisHit = (toolType === "AEGIS_SHIFT");
        const isEffectiveAxe = (toolType === "AXE" || (isAegisHit && hitType === "tree"));
        const isEffectivePick = (toolType === "PICKAXE" || (isAegisHit && (hitType === "rock" || hitType === "iron_ore" || hitType === "gold_ore" || hitType === "glow_ore")));
-       if (isActorPlayer && isAegisHit && typeof window !== "undefined" && window.aegisShiftState) {
-         window.aegisShiftState.toolMode = (hitType === "tree") ? "axe" : "pickaxe";
+       if (isAegisHit) {
+         const nextAegisMode = (hitType === "tree") ? "axe" : "pickaxe";
+         if (isActorPlayer && typeof window !== "undefined" && window.aegisShiftState) {
+           window.aegisShiftState.toolMode = nextAegisMode;
+         } else if (!isActorPlayer && actor && actor.state) {
+           actor.state.aegisToolMode = nextAegisMode;
+         }
        }
        
        if (hitType === "tree" && obs.isWhiteRedTree) {
@@ -3024,6 +3112,9 @@
            }
 
            if (hitType === "tree" && obs.isWhiteRedTree) {
+             if (Array.isArray(obs.fruitPositions) && obs.fruitPositions.length > 0 && !obs._origFruitPositions) {
+               obs._origFruitPositions = obs.fruitPositions.map(f => ({ ...f }));
+             }
              if (typeof window.detachTreeAttachedFruits === "function") {
                window.detachTreeAttachedFruits(obs);
              }
@@ -3042,14 +3133,25 @@
            
            natureObstacles.splice(hitIndex, 1);
            
+           let treeOrigVertsBackup = null;
            if (obs.meshStart !== undefined && obs.meshEnd !== undefined) {
                const startF = obs.meshStart * 3;
                const endF = obs.meshEnd * 3;
+               if (hitType === "tree" && natureRawVertices && endF <= natureRawVertices.length) {
+                   treeOrigVertsBackup = new Float32Array(
+                     typeof natureRawVertices.subarray === "function"
+                       ? natureRawVertices.subarray(startF, endF)
+                       : natureRawVertices.slice(startF, endF)
+                   );
+               }
                for (let j = startF; j < endF; j++) {
                    natureRawVertices[j] = 0;
                }
                gl.bindBuffer(gl.ARRAY_BUFFER, natureVertexBuffer);
                gl.bufferSubData(gl.ARRAY_BUFFER, startF * 4, new Float32Array(natureRawVertices.slice(startF, endF)));
+           }
+           if (hitType === "tree" && typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onTreeDestroyed === "function") {
+               window.WildPlantGrowthSystem.onTreeDestroyed(obs, false, treeOrigVertsBackup);
            }
            if (typeof saveSettingsToLocalStorage === "function") {
                saveSettingsToLocalStorage();
@@ -3082,7 +3184,6 @@ function spawnDrop(pos, type, normal, tangent, bitangent, color, size, isHand = 
         scatterRadius: 0.002 + Math.random() * 0.005,
         scatterLift: 0.005 + Math.random() * 0.01
       });
-      window.spawnDrop = spawnDrop;
       return drop;
    }
    return null;
@@ -3318,12 +3419,21 @@ function cancelFloorPlacement() {
 
                       if (!seenTuftStarts.has(tuftStart)) {
                           seenTuftStarts.add(tuftStart);
-                          candidateTufts.push({
-                              tuftStart,
-                              tuftEnd,
-                              center: [bx, by, bz],
-                              score
-                          });
+                          const isImmatureGrass = (
+                              typeof window !== "undefined" &&
+                              window.WildPlantGrowthSystem &&
+                              typeof window.WildPlantGrowthSystem.isGrassSlotImmature === "function" &&
+                              window.WildPlantGrowthSystem.isGrassSlotImmature(tuftStart, tuftEnd)
+                          );
+                          if (!isImmatureGrass) {
+                              candidateTufts.push({
+                                  tuftStart,
+                                  tuftEnd,
+                                  chunkIndex: cIdx,
+                                  center: [bx, by, bz],
+                                  score
+                              });
+                          }
                       }
                       // ข้ามไปหลังจบกอนี้เลยเพื่อไม่ต้องเช็คใบซ้ำในกอเดิม
                       j = tuftEnd - 9;
@@ -3331,7 +3441,12 @@ function cancelFloorPlacement() {
               }
           }
 
-          if (candidateTufts.length === 0) return false;
+          if (candidateTufts.length === 0) {
+              if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.tryCutRelocatedWildGrass === "function") {
+                  return window.WildPlantGrowthSystem.tryCutRelocatedWildGrass(charPos, slashReach, actor, directCollect);
+              }
+              return false;
+          }
           candidateTufts.sort((a, b) => a.score - b.score);
 
           const tuftsToCut = candidateTufts.slice(0, maxTufts);
@@ -3352,6 +3467,13 @@ function cancelFloorPlacement() {
               const groundColor = (surfData && surfData.color) ? surfData.color : null;
 
               const numBladesInTuft = Math.round((tuft.tuftEnd - tuft.tuftStart) / 9);
+              const grassOrigVertsBackup = (natureRawVertices && tuft.tuftEnd <= natureRawVertices.length)
+                ? new Float32Array(
+                    typeof natureRawVertices.subarray === "function"
+                      ? natureRawVertices.subarray(tuft.tuftStart, tuft.tuftEnd)
+                      : natureRawVertices.slice(tuft.tuftStart, tuft.tuftEnd)
+                  )
+                : null;
 
               for (let k = tuft.tuftStart, bIdx = 0; k < tuft.tuftEnd; k += 9, bIdx++) {
                   const p1x = natureRawVertices[k],     p1y = natureRawVertices[k + 1], p1z = natureRawVertices[k + 2];
@@ -3462,13 +3584,12 @@ function cancelFloorPlacement() {
                   }
               }
 
-              // อัปเดตเฉพาะช่วงของกอหญ้าที่ถูกตัดใน GPU VBO ทันที
+              // อัปเดตเฉพาะช่วงของกอหญ้าที่ถูกตัดใน GPU VBO ทันที (zero-copy subarray)
               gl.bindBuffer(gl.ARRAY_BUFFER, natureVertexBuffer);
-              gl.bufferSubData(
-                  gl.ARRAY_BUFFER,
-                  tuft.tuftStart * 4,
-                  new Float32Array(natureRawVertices.slice(tuft.tuftStart, tuft.tuftEnd))
-              );
+              const tuftSliceView = (typeof natureRawVertices.subarray === "function")
+                ? natureRawVertices.subarray(tuft.tuftStart, tuft.tuftEnd)
+                : new Float32Array(natureRawVertices.slice(tuft.tuftStart, tuft.tuftEnd));
+              gl.bufferSubData(gl.ARRAY_BUFFER, tuft.tuftStart * 4, tuftSliceView);
 
               if (!window.cutGrassPositions) window.cutGrassPositions = [];
               window.cutGrassPositions.push([
@@ -3476,6 +3597,16 @@ function cancelFloorPlacement() {
                   Number(gCenter[1].toFixed(3)),
                   Number(gCenter[2].toFixed(3))
               ]);
+
+              if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onGrassTuftCut === "function") {
+                  window.WildPlantGrowthSystem.onGrassTuftCut({
+                      center: gCenter,
+                      tuftStart: tuft.tuftStart,
+                      tuftEnd: tuft.tuftEnd,
+                      chunkIndex: tuft.chunkIndex,
+                      origVerts: grassOrigVertsBackup
+                  });
+              }
           }
 
           if (totalBladesCut > 0) {
@@ -3530,6 +3661,9 @@ function cancelFloorPlacement() {
         if (placingItemName === "STONE_FLOOR" || placingItemName === "WOOD_FLOOR" || placingItemName === "THIN_WOOD_FLOOR" || placingItemName === "WOOD_ROOF" || placingItemName === "WOOD_WALL" || placingItemName === "WOOD_WINDOW" || placingItemName === "WOOD_DOOR" || placingItemName === "CAMPFIRE") {
             const rad = getSuppressRadius(placingItemName, floorPreviewCollectible.size);
             suppressGrassUnder(floorPreviewCollectible.position, rad);
+            if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onStructurePlaced === "function") {
+                window.WildPlantGrowthSystem.onStructurePlaced(floorPreviewCollectible.position, rad);
+            }
         }
 
         if (placingItemName === "STONE_FLOOR") {
@@ -3540,7 +3674,7 @@ function cancelFloorPlacement() {
             const nObs = (typeof natureObstacles !== "undefined" && natureObstacles) ? natureObstacles : (window.natureObstacles || []);
             for (let i = nObs.length - 1; i >= 0; i--) {
                 const obs = nObs[i];
-                if (!obs || !obs.position) continue;
+                if (!obs || !obs.position || obs.isWildRelocatedTreeCollider) continue;
                 const dx = obs.position[0] - fpPos[0];
                 const dy = obs.position[1] - fpPos[1];
                 const dz = obs.position[2] - fpPos[2];
@@ -3569,7 +3703,14 @@ function cancelFloorPlacement() {
 
                     nObs.splice(i, 1);
                     obstaclesChanged = true;
+                    if (obs.type === "tree" && typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onTreeDestroyed === "function") {
+                        window.WildPlantGrowthSystem.onTreeDestroyed(obs, true, null);
+                    }
                 }
+            }
+
+            if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onStructurePlaced === "function") {
+                window.WildPlantGrowthSystem.onStructurePlaced(fpPos, 3.2);
             }
 
             // if (obstaclesChanged && typeof refreshCollectiblesVBO === "function") {
@@ -3668,7 +3809,7 @@ function cancelFloorPlacement() {
               : collectibles;
             for (let bi = 0; bi < boatCands.length; bi++) {
               const c = boatCands[bi];
-              if (c && c.active && !c.isPreview && c.type === "wood_boat" && c.position) {
+              if (c && c.active && !c.isPreview && !c.isGroundDrop && c.type === "wood_boat" && c.position) {
                 const dx = c.position[0] - floorPreviewCollectible.position[0];
                 const dy = c.position[1] - floorPreviewCollectible.position[1];
                 const dz = c.position[2] - floorPreviewCollectible.position[2];
@@ -4390,6 +4531,9 @@ function cancelFloorPlacement() {
         };
         
         collectibles.push(arrowCollectible);
+        if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.insert === "function") {
+          SpatialGrid.insert(arrowCollectible);
+        }
         window.pendingDynamicCollectibleRefresh = true;
         
         if (typeof playPlaceSound === "function") {
@@ -4438,39 +4582,44 @@ function cancelFloorPlacement() {
         slotIndex: -1
       };
 
+      function _isMeleeSkillTargetValid(t, allowTantoButcher) {
+        return !!(
+          t && t.position && (
+            (!t.ragdollEnabled && (t.hp === undefined || t.hp > 0)) ||
+            (allowTantoButcher && typeof window.isButcherableNpcCorpse === "function" && window.isButcherableNpcCorpse(t, "TANTO"))
+          )
+        );
+      }
+
       window.findTantoBestTarget = function(maxDist = window.getUnifiedMeleeReach(), weaponId = "TANTO") {
         const sinT = Math.sin(charTheta), cosT = Math.cos(charTheta);
         const sinP = Math.sin(charPhi), cosP = Math.cos(charPhi);
         const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
-        const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
-        const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
-        const pScale = (typeof playerScale === "number") ? playerScale : 0.1;
-        const pRad = (typeof playerCenterRadius === "number" && playerCenterRadius !== null)
-          ? playerCenterRadius
-          : (RADIUS + height * HEIGHT_SCALE + 0.46 * pScale);
-        const pPos = [pRad * nx, pRad * ny, pRad * nz];
+        let pRad;
+        if (typeof playerCenterRadius === "number" && playerCenterRadius !== null && !Number.isNaN(playerCenterRadius) && playerCenterRadius > 0.001) {
+          pRad = playerCenterRadius;
+        } else {
+          const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+          const height = (typeof getHeightOnSphere === "function") ? getHeightOnSphere(charTheta, charPhi, gSeed) : 0;
+          const pScale = (typeof playerScale === "number") ? playerScale : 0.1;
+          pRad = RADIUS + height * HEIGHT_SCALE + 0.46 * pScale;
+        }
+        const px = pRad * nx, py = pRad * ny, pz = pRad * nz;
 
-        const East = [-sinP, 0, cosP];
-        const North = [-cosT * cosP, sinT, -cosT * sinP];
         const lookYaw = (typeof rotationY === "number") ? rotationY : ((typeof charHeading === "number") ? charHeading : 0);
-        const F = [
-          North[0] * Math.cos(lookYaw) + East[0] * Math.sin(lookYaw),
-          North[1] * Math.cos(lookYaw) + East[1] * Math.sin(lookYaw),
-          North[2] * Math.cos(lookYaw) + East[2] * Math.sin(lookYaw)
-        ];
+        const cosLY = Math.cos(lookYaw), sinLY = Math.sin(lookYaw);
+        const fx = (-cosT * cosP) * cosLY + (-sinP) * sinLY;
+        const fy = sinT * cosLY;
+        const fz = (-cosT * sinP) * cosLY + cosP * sinLY;
 
-        const normWeapon = weaponId ? String(weaponId).toUpperCase() : "TANTO";
-        const isValidTarget = (t) => !!(
-          t && t.position && (
-            (!t.ragdollEnabled && (t.hp === undefined || t.hp > 0)) ||
-            (normWeapon === "TANTO" && typeof window.isButcherableNpcCorpse === "function" && window.isButcherableNpcCorpse(t, "TANTO"))
-          )
-        );
-        if (typeof activeTargetNPC !== "undefined" && isValidTarget(activeTargetNPC)) {
-          const tp = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(activeTargetNPC) : null) || activeTargetNPC.position;
-          const d3 = Math.hypot(tp[0] - pPos[0], tp[1] - pPos[1], tp[2] - pPos[2]);
+        const allowTantoButcher = (weaponId ? String(weaponId).toUpperCase() : "TANTO") === "TANTO";
+        const hasTargetPtFn = (typeof window.getNPCTargetPoint === "function");
+        if (typeof activeTargetNPC !== "undefined" && _isMeleeSkillTargetValid(activeTargetNPC, allowTantoButcher)) {
+          const tp = (hasTargetPtFn ? window.getNPCTargetPoint(activeTargetNPC) : null) || activeTargetNPC.position;
+          const dx = tp[0] - px, dy = tp[1] - py, dz = tp[2] - pz;
           const radBonus = window.getMeleeEntityRadius(activeTargetNPC);
-          if (d3 <= maxDist * 1.1 + radBonus) {
+          const lim = maxDist * 1.1 + radBonus;
+          if (dx * dx + dy * dy + dz * dz <= lim * lim) {
             return activeTargetNPC;
           }
         }
@@ -4478,16 +4627,19 @@ function cancelFloorPlacement() {
         let best = null;
         let bestScore = Infinity;
         if (typeof amphibians !== "undefined" && Array.isArray(amphibians)) {
-          for (let npc of amphibians) {
-            if (!isValidTarget(npc)) continue;
-            const tp = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(npc) : null) || npc.position;
-            const dx = tp[0] - pPos[0], dy = tp[1] - pPos[1], dz = tp[2] - pPos[2];
-            const dist3D = Math.hypot(dx, dy, dz);
+          for (let i = 0; i < amphibians.length; i++) {
+            const npc = amphibians[i];
+            if (!_isMeleeSkillTargetValid(npc, allowTantoButcher)) continue;
+            const tp = (hasTargetPtFn ? window.getNPCTargetPoint(npc) : null) || npc.position;
+            const dx = tp[0] - px, dy = tp[1] - py, dz = tp[2] - pz;
+            const distSq = dx * dx + dy * dy + dz * dz;
             const npcRad = window.getMeleeEntityRadius(npc);
-            if (dist3D > maxDist + npcRad) continue;
+            const maxAllow = maxDist + npcRad;
+            if (distSq > maxAllow * maxAllow) continue;
+            const dist3D = Math.sqrt(distSq);
             const hDiff = dx * nx + dy * ny + dz * nz;
-            const horiz = Math.sqrt(Math.max(1e-6, dist3D * dist3D - hDiff * hDiff));
-            const cosF = horiz > 0.05 ? ((dx * F[0] + dy * F[1] + dz * F[2]) / horiz) : 1.0;
+            const horiz = Math.sqrt(Math.max(1e-6, distSq - hDiff * hDiff));
+            const cosF = horiz > 0.05 ? ((dx * fx + dy * fy + dz * fz) / horiz) : 1.0;
             if (dist3D > 0.65 && cosF < 0.15) continue;
             const score = (dist3D - npcRad) - cosF * 0.55;
             if (score < bestScore) {
@@ -4501,35 +4653,36 @@ function cancelFloorPlacement() {
 
       window.updateUnifiedMeleeDashTracking = function(state, step, prog, dt, opts = {}) {
         if (!state) return;
-        const weaponId = (state === window.tantoShirasayaState) ? "TANTO" : "AEGIS_SHIFT";
+        const isTanto = (state === window.tantoShirasayaState);
+        const weaponId = isTanto ? "TANTO" : "AEGIS_SHIFT";
         const turnStopBeforeEnd = (typeof opts.turnStopBeforeEnd === "number") ? opts.turnStopBeforeEnd : 0.34;
         const turnSpeed = (typeof opts.turnSpeed === "number") ? opts.turnSpeed : 15.5;
         const _sinT = Math.sin(charTheta), _cosT = Math.cos(charTheta);
         const _sinP = Math.sin(charPhi), _cosP = Math.cos(charPhi);
         const _nx = _sinT * _cosP, _ny = _cosT, _nz = _sinT * _sinP;
-        const _N = [-_cosT * _cosP, _sinT, -_cosT * _sinP];
-        const _E = [-_sinP, 0, _cosP];
+        const _N0 = -_cosT * _cosP, _N1 = _sinT, _N2 = -_cosT * _sinP;
+        const _E0 = -_sinP, _E2 = _cosP;
         const _pRad = (typeof playerCenterRadius === "number" && playerCenterRadius) ? playerCenterRadius : RADIUS;
-        const _pPos = [_pRad * _nx, _pRad * _ny, _pRad * _nz];
+        const _px = _pRad * _nx, _py = _pRad * _ny, _pz = _pRad * _nz;
 
         const _lockDistMax = window.getUnifiedMeleeReach();
         let tLocked = state.lockedTarget;
-        const isStillTargetable = (t) => !!(
-          t && t.position && (
-            (!t.ragdollEnabled && (t.hp === undefined || t.hp > 0)) ||
-            (weaponId === "TANTO" && typeof window.isButcherableNpcCorpse === "function" && window.isButcherableNpcCorpse(t, "TANTO"))
-          )
-        );
-        if (!isStillTargetable(tLocked)) {
+        if (!_isMeleeSkillTargetValid(tLocked, isTanto)) {
           tLocked = null;
         } else if (tLocked) {
           const tpChk = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(tLocked) : null) || tLocked.position;
-          const dChk = Math.hypot(tpChk[0] - _pPos[0], tpChk[1] - _pPos[1], tpChk[2] - _pPos[2]);
+          const dxC = tpChk[0] - _px, dyC = tpChk[1] - _py, dzC = tpChk[2] - _pz;
           const radChk = window.getMeleeEntityRadius(tLocked);
-          if (dChk > (_lockDistMax + radChk) * 1.15) tLocked = null;
+          const maxHold = (_lockDistMax + radChk) * 1.15;
+          if (dxC * dxC + dyC * dyC + dzC * dzC > maxHold * maxHold) tLocked = null;
         }
         if (!tLocked && typeof window.findTantoBestTarget === "function") {
-          tLocked = window.findTantoBestTarget(_lockDistMax, weaponId);
+          // Throttle open-air re-acquisition scans to ~12Hz (80ms) instead of 60Hz
+          const nowMs = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          if (nowMs - (state._lastDashTargetScanMs || 0) >= 80) {
+            state._lastDashTargetScanMs = nowMs;
+            tLocked = window.findTantoBestTarget(_lockDistMax, weaponId);
+          }
         }
         state.lockedTarget = tLocked;
         if (tLocked && typeof activeTargetNPC !== "undefined") {
@@ -4538,9 +4691,9 @@ function cancelFloorPlacement() {
 
         if (tLocked && tLocked.position) {
           const tp = (typeof window.getNPCTargetPoint === "function" ? window.getNPCTargetPoint(tLocked) : null) || tLocked.position;
-          const dx = tp[0] - _pPos[0], dy = tp[1] - _pPos[1], dz = tp[2] - _pPos[2];
-          const tN = dx * _N[0] + dy * _N[1] + dz * _N[2];
-          const tE = dx * _E[0] + dy * _E[1] + dz * _E[2];
+          const dx = tp[0] - _px, dy = tp[1] - _py, dz = tp[2] - _pz;
+          const tN = dx * _N0 + dy * _N1 + dz * _N2;
+          const tE = dx * _E0 + dz * _E2;
           const horizDist = Math.hypot(tN, tE);
 
           if (horizDist > 0.08 && (step !== 4 || prog < turnStopBeforeEnd)) {
@@ -4571,7 +4724,12 @@ function cancelFloorPlacement() {
       window.performUnifiedMeleeSkillHit = function(dmg, label, options = {}) {
         const reachDist = window.getUnifiedMeleeReach();
         if (window.tantoShirasayaState && window.tantoShirasayaState.mode === "dashing" && typeof window.cutGrassWithKnife === "function") {
-          window.cutGrassWithKnife({ omni: !!options.omni, maxTufts: 2 });
+          const nowMs = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+          const lastCutMs = window.tantoShirasayaState._lastGrassCutMs || 0;
+          if (nowMs - lastCutMs >= 120) {
+            window.tantoShirasayaState._lastGrassCutMs = nowMs;
+            window.cutGrassWithKnife({ omni: !!options.omni, maxTufts: 2 });
+          }
         }
         const skillWeaponId = (options && options.weaponId)
           ? options.weaponId
@@ -4605,6 +4763,8 @@ function cancelFloorPlacement() {
         st.visualAirLift = 0.0;
         st.postGraceTimer = 0.0;
         st.slotIndex = -1;
+        st._lastGrassCutMs = 0;
+        st._lastDashTargetScanMs = 0;
       }
 
       function _startMeleeChargeSkillCommon(st, item, slotIndex, validNames, resetPostGrace) {
@@ -4761,6 +4921,8 @@ function cancelFloorPlacement() {
         st.hitEntities = new Set();
         st.impactPlayed = false;
         st.stopForwardMove = false;
+        st._lastGrassCutMs = 0;
+        st._lastDashTargetScanMs = 0;
         if (cfg.alwaysClearAirLift || stepNum !== 4) {
           st.visualAirLift = 0.0;
         }
@@ -4852,7 +5014,6 @@ function cancelFloorPlacement() {
         holdThreshold: 0.15,
         comboChargeTrigger: 0.22,
         toolMode: "pickaxe", // "pickaxe" | "axe"
-        toolModeTimer: 0.0,
         dashTimer: 0.0,
         dashDuration: 0.38,
         dashSpeed: 0.023,
@@ -6542,9 +6703,10 @@ function cancelFloorPlacement() {
         trashConfirmBtn?.addEventListener("touchend", cancelTrashHold);
         trashConfirmBtn?.addEventListener("touchcancel", cancelTrashHold);
 
-        // Setup 3 Bottom Inventory Buttons (Action UI, Split, Destroy)
+        // Setup 4 Bottom Inventory Buttons (Action UI, Split, Drop, Destroy)
         const btnActionUI = document.getElementById("btnInventoryActionUI");
         const btnSplit = document.getElementById("btnInventorySplit");
+        const btnDrop = document.getElementById("btnInventoryDrop");
         const btnDestroy = document.getElementById("btnInventoryDestroy");
 
         window.selectedInventorySlot = null; // { source, index, item }
@@ -6554,8 +6716,9 @@ function cancelFloorPlacement() {
           st.id = "inventorySelectedSlotStyles";
           st.textContent = `
             .inventory-slot.item-selected, .action-slot.item-selected {
-              border-color: #dfb76c !important;
-              box-shadow: inset 0 0 0 2px #dfb76c, inset 0 0 0.75rem rgba(223, 183, 108, 0.4) !important;
+              --cut-border: #dfb76c !important;
+              --cut-bw: 2px !important;
+              box-shadow: inset 0 0 0.75rem rgba(223, 183, 108, 0.38) !important;
               background: rgba(223, 183, 108, 0.16) !important;
             }
           `;
@@ -6598,6 +6761,11 @@ function cancelFloorPlacement() {
               btnSplit.style.cursor = canSplit ? "pointer" : "not-allowed";
               btnSplit.style.boxShadow = canSplit ? "0 0 0.625rem rgba(56, 189, 248, 0.35)" : "none";
             }
+            if (btnDrop) {
+              btnDrop.style.opacity = "1";
+              btnDrop.style.cursor = "pointer";
+              btnDrop.style.boxShadow = "0 0 0.625rem rgba(251, 146, 60, 0.35)";
+            }
             if (btnDestroy) {
               btnDestroy.style.opacity = "1";
               btnDestroy.style.cursor = "pointer";
@@ -6613,6 +6781,11 @@ function cancelFloorPlacement() {
               btnSplit.style.opacity = "0.38";
               btnSplit.style.cursor = "not-allowed";
               btnSplit.style.boxShadow = "none";
+            }
+            if (btnDrop) {
+              btnDrop.style.opacity = "0.38";
+              btnDrop.style.cursor = "not-allowed";
+              btnDrop.style.boxShadow = "none";
             }
             if (btnDestroy) {
               btnDestroy.style.opacity = "0.38";
@@ -6710,6 +6883,208 @@ function cancelFloorPlacement() {
           window.updateSelectedSlotVisuals();
           window.updateBottomButtonsState();
         });
+
+        function resolveGroundDropTypeForInventoryItem(item) {
+          const rawName = String((item && (item.name || item.label || item.type)) || "").toUpperCase();
+          if (!rawName) return "branch";
+          let key = rawName.toLowerCase();
+          if (key === "meganeura") key = "meganeura_item";
+          else if (key === "isopod") key = "isopod_item";
+          else if (key === "obsidian_cube") key = "obsidian_cube_item";
+          else if (key === "obsidian_flux") key = "obsidian_flux_item";
+          else if (key === "obsidian_pad_warp" || key === "obsidian_compass_pad") key = "obsidian_pad_warp_item";
+          return key;
+        }
+
+        function dropInventoryItemToGround(source, index) {
+          const item = getSlotItem(source, index);
+          if (!item) return false;
+
+          // Resolve player's world position and local surface basis using existing ActorCore
+          let originPos = null;
+          let normal = [0, 1, 0];
+          let rightVec = [1, 0, 0];
+          let fwdVec = [0, 0, 1];
+          let pScaleVal = (typeof playerScale === "number" && playerScale > 0) ? playerScale : 0.1;
+
+          if (typeof window !== "undefined" && window.ActorCore && typeof window.ActorCore.getActorBasis === "function") {
+            const pActor = typeof window.ActorCore.getPlayerActor === "function" ? window.ActorCore.getPlayerActor() : null;
+            const basis = pActor ? window.ActorCore.getActorBasis(pActor) : null;
+            if (basis && basis.pos) {
+              originPos = basis.pos;
+              normal = basis.N || normal;
+              rightVec = basis.R || rightVec;
+              fwdVec = basis.F || fwdVec;
+              if (typeof basis.pScale === "number" && basis.pScale > 0) pScaleVal = basis.pScale;
+            }
+          }
+
+          if (!originPos) {
+            const theta = (typeof charTheta === "number") ? charTheta : Math.PI / 2;
+            const phi = (typeof charPhi === "number") ? charPhi : 0;
+            const heading = (typeof charHeading === "number") ? charHeading : 0;
+            const sinT = Math.sin(theta), cosT = Math.cos(theta);
+            const sinP = Math.sin(phi), cosP = Math.cos(phi);
+            const nx = sinT * cosP, ny = cosT, nz = sinT * sinP;
+            const east = [-sinP, 0, cosP];
+            const north = [-cosT * cosP, sinT, -cosT * sinP];
+            const cosH = Math.cos(heading), sinH = Math.sin(heading);
+            normal = [nx, ny, nz];
+            rightVec = [east[0] * cosH - north[0] * sinH, east[1] * cosH - north[1] * sinH, east[2] * cosH - north[2] * sinH];
+            fwdVec = [north[0] * cosH + east[0] * sinH, north[1] * cosH + east[1] * sinH, north[2] * cosH + east[2] * sinH];
+            const pRad = (typeof RADIUS === "number") ? RADIUS : 64.0;
+            const hScale = (typeof HEIGHT_SCALE === "number") ? HEIGHT_SCALE : 1.0;
+            const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
+            const surfH = (typeof getVisualHeightOnSphere === "function")
+              ? getVisualHeightOnSphere(theta, phi, gSeed)
+              : ((typeof getHeightOnSphere === "function") ? getHeightOnSphere(theta, phi, gSeed) : 0);
+            const baseR = (typeof playerCenterRadius === "number" && playerCenterRadius > 0.1)
+              ? playerCenterRadius
+              : (pRad + surfH * hScale);
+            originPos = [nx * baseR, ny * baseR, nz * baseR];
+          }
+
+          const scaleRatio = pScaleVal / 0.1;
+          const forwardDist = 0.14 * scaleRatio;
+          const liftDist = 0.06 * scaleRatio;
+          const dropOrigin = [
+            originPos[0] + fwdVec[0] * forwardDist + normal[0] * liftDist,
+            originPos[1] + fwdVec[1] * forwardDist + normal[1] * liftDist,
+            originPos[2] + fwdVec[2] * forwardDist + normal[2] * liftDist
+          ];
+
+          const dropType = resolveGroundDropTypeForInventoryItem(item);
+          const dropCount = Math.max(1, Math.floor(item.count || 1));
+          const extraMeta = {
+            dropItemName: item.name || item.label || dropType.toUpperCase(),
+            dropItemIcon: item.icon || "📦",
+            dropItemLabel: item.label || item.name || dropType.toUpperCase(),
+            isPlayerDropped: true
+          };
+          if (typeof item.rechargeTime === "number") {
+            extraMeta.dropRechargeTime = item.rechargeTime;
+          }
+
+          let spawned = [];
+          if (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.spawnBatch === "function") {
+            spawned = window.GroundDropSystem.spawnBatch(
+              dropOrigin,
+              [{ type: dropType, count: dropCount, extra: extraMeta }],
+              {
+                normal: normal,
+                R: rightVec,
+                F: fwdVec,
+                ringScatter: dropCount > 1 && dropCount <= 5,
+                baseRadius: 0.035 * scaleRatio,
+                ringStep: 0.02 * scaleRatio,
+                lift: 0.015 * scaleRatio,
+                popOut: 0.0022,
+                popUp: 0.0032
+              }
+            );
+          } else if (typeof window.spawnDrop === "function") {
+            for (let k = 0; k < dropCount; k++) {
+              const d = window.spawnDrop(dropOrigin, dropType, normal, rightVec, fwdVec, null, undefined, false);
+              if (d) {
+                Object.assign(d, extraMeta);
+                spawned.push(d);
+              }
+            }
+          }
+
+          if (!spawned || spawned.length === 0) {
+            return false;
+          }
+
+          // Remove from source slot
+          if (source === "inventory" || source === "chestPlayerInventory") {
+            inventory[index] = null;
+          } else if (source === "action") {
+            actionSlotsItems[index] = null;
+          } else if (source === "equip") {
+            equipSlotsItems[index] = null;
+            if (typeof refreshCharacterAppearanceNow === "function") {
+              refreshCharacterAppearanceNow();
+            }
+          } else if (source === "chest") {
+            if (currentOpenChest) currentOpenChest.storage[index] = null;
+          }
+
+          window.selectedInventorySlot = null;
+
+          if (typeof renderChest === "function" && currentOpenChest) renderChest();
+          renderInventory();
+          renderActionSlots();
+          if (typeof renderEquipSlots === "function") renderEquipSlots();
+          updateBadge();
+          window.updateSelectedSlotVisuals();
+          window.updateBottomButtonsState();
+          saveSettingsToLocalStorage();
+          if (typeof playPlaceSound === "function") {
+            playPlaceSound();
+          } else if (typeof playCollectSound === "function") {
+            playCollectSound();
+          }
+
+          const dName = typeof getItemDisplayName === "function"
+            ? getItemDisplayName(item.name || item.label)
+            : (item.name || item.label);
+          const countText = dropCount > 1 ? ` x${dropCount}` : "";
+          if (typeof showNotice === "function") {
+            const curLang = typeof getGameLanguage === "function" ? getGameLanguage() : "th";
+            const msg = curLang === "en"
+              ? `📦 Dropped ${item.icon || "📦"} ${dName}${countText} on the ground`
+              : `📦 ทิ้ง ${item.icon || "📦"} ${dName}${countText} ลงพื้นแล้ว`;
+            showNotice(msg);
+          }
+          return true;
+        }
+        window.dropInventoryItemToGround = dropInventoryItemToGround;
+
+        btnDrop?.addEventListener("click", () => {
+          if (!window.selectedInventorySlot || !window.selectedInventorySlot.item) {
+            if (typeof showNotice === "function") {
+              showNotice("⚠️ กรุณาคลิกเลือกไอเทมในกระเป๋าก่อนทิ้งลงพื้น");
+            }
+            return;
+          }
+          const { source, index } = window.selectedInventorySlot;
+          dropInventoryItemToGround(source, index);
+        });
+
+        if (btnDrop) {
+          btnDrop.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            btnDrop.style.background = "rgba(251, 146, 60, 0.35)";
+            btnDrop.style.borderColor = "#fb923c";
+          });
+          btnDrop.addEventListener("dragleave", () => {
+            btnDrop.style.background = "rgba(251, 146, 60, 0.12)";
+            btnDrop.style.borderColor = "rgba(251, 146, 60, 0.45)";
+          });
+          btnDrop.addEventListener("drop", (e) => {
+            e.preventDefault();
+            btnDrop.style.background = "rgba(251, 146, 60, 0.12)";
+            btnDrop.style.borderColor = "rgba(251, 146, 60, 0.45)";
+            try {
+              let source = e.dataTransfer.getData("source");
+              let sourceIndex = parseInt(e.dataTransfer.getData("index"), 10);
+              if (!source) {
+                const dataStr = e.dataTransfer.getData("text/plain");
+                if (dataStr) {
+                  const data = JSON.parse(dataStr);
+                  source = data.source;
+                  sourceIndex = data.index;
+                }
+              }
+              if (source && !isNaN(sourceIndex)) {
+                dropInventoryItemToGround(source, sourceIndex);
+              }
+            } catch (err) {
+              console.error("Ground drop error", err);
+            }
+          });
+        }
 
         btnDestroy?.addEventListener("click", () => {
           if (!window.selectedInventorySlot || !window.selectedInventorySlot.item) {

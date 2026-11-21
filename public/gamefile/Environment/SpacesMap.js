@@ -491,7 +491,7 @@
 
       // รีเซ็ตการสร้างพื้นผิวดาวดวงใหม่มาวางที่พิกัด [0, 0, 0] ของเครื่องเล่น
       if (typeof global.buildPlanetAsync === "function") {
-        const curGrid = typeof global.currentGridSize !== "undefined" ? global.currentGridSize : 400;
+        const curGrid = typeof global.currentGridSize !== "undefined" ? global.currentGridSize : 800;
         const curSeed = typeof global.globalSeed !== "undefined" ? global.globalSeed : 13585;
         
         global.buildPlanetAsync(curGrid, curSeed, function(percent, statusText, logLine) {

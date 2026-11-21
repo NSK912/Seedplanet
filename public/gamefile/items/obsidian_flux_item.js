@@ -3,7 +3,7 @@
 // Crafted from 1x Obsidian Cube + 1x Glow Ore -> 5x Obsidian Ball
 
 (function() {
-  function _buildObsidianFluxLocal(isIconMode, localVerts, localCols, localIndices) {
+  function _buildObsidianFluxLocal(isIconMode, localVerts, localCols, localIndices, isDropLowPoly) {
 
     const unitRadius = 0.26;
     const cosRy = Math.cos(2.0);
@@ -35,8 +35,8 @@
     const cy = az * bx - ax * bz;
     const cz = ax * by - ay * bx;
 
-    const segsLat = 40;
-    const segsLon = 48;
+    const segsLat = isDropLowPoly ? 16 : 40;
+    const segsLon = isDropLowPoly ? 20 : 48;
     const lx = -0.35, ly = 0.62, lz = -0.70;
 
     function makeLocalVertex(theta, phi, rScale) {
@@ -211,11 +211,14 @@
     const itemN = N || [0, 1, 0];
     const itemF = F || [0, 0, 1];
     const isIconPreview = Boolean(c && c.isIconPreview);
+    const isDropMode = Boolean(c && c._isGroundDropRender);
     const s = scaleMultiplier || 1.0;
+    const yOff = isDropMode ? 0.26 : 0;
 
+    const tplKey = isIconPreview ? "obsidian_flux_icon" : (isDropMode ? "obsidian_flux_drop" : "obsidian_flux_std");
     const tpl = window.DropTemplateCache.getOrBake(
-      isIconPreview ? "obsidian_flux_icon" : "obsidian_flux_std",
-      (tv, tc, ti) => _buildObsidianFluxLocal(isIconPreview, tv, tc, ti)
+      tplKey,
+      (tv, tc, ti) => _buildObsidianFluxLocal(isIconPreview, tv, tc, ti, isDropMode)
     );
     if (!tpl) return;
 
@@ -250,7 +253,7 @@
         itemN,
         itemF,
         s,
-        0,
+        yOff,
         vertices,
         colors,
         indices,
@@ -261,39 +264,51 @@
 
   const renderHandler = {
     render: function(item, vertices, colors, indices, targetBuffer) {
-      const p = item.position || [0, 0, 0];
-      const itemR = item.R || [1, 0, 0];
-      const itemF = item.F || [0, 0, 1];
-      const itemN = item.normal || [0, 1, 0];
-      const isPreview = item.isPreview;
-      const isValid = item.isValidPlacement !== false;
+      const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
+      const isPreview = !!(item && item.isPreview);
+      const p = (item && item.position) ? item.position : [0, 0, 0];
+      const itemR = (item && item.R) ? item.R : [1, 0, 0];
+      const itemF = (item && item.F) ? item.F : [0, 0, 1];
+      const itemN = (item && item.normal) ? item.normal : [0, 1, 0];
+      const isValid = !(item && item.isValidPlacement === false);
 
       let overrideColors = null;
       if (isPreview) {
         overrideColors = isValid ? [0.95, 0.85, 0.45] : [0.9, 0.2, 0.2];
       }
 
+      const isDrop = !isIcon && !isPreview;
+      const seed = (item && typeof item.seed === "number") ? item.seed : 1234;
+      const scale = isDrop
+        ? (item && typeof item.scaleMultiplier === "number"
+            ? item.scaleMultiplier
+            : Math.min((item && typeof item.size === "number") ? item.size : 0.078, 0.095))
+        : ((item && item.scaleMultiplier) || 1.0);
+      const basis = isDrop
+        ? window.DropTemplateCache.rotateBasis(itemR, itemF, (seed * 6.28318) % (Math.PI * 2))
+        : { R: itemR, F: itemF };
+      const ctxItem = isDrop
+        ? Object.assign({}, item, { _isGroundDropRender: true })
+        : item;
+
       window.buildObsidianFluxModel(
-        item.seed || 1234,
+        seed,
         0,
         false,
         false,
-        item.scaleMultiplier || 1.0,
+        scale,
         p,
-        itemR, itemN, itemF,
+        basis.R, itemN, basis.F,
         vertices, colors, indices,
         overrideColors,
         null,
         null,
-        item
+        ctxItem
       );
     }
   };
 
   window.ItemRegistry = window.ItemRegistry || {};
-  window.ItemRegistry["obsidian_flux_item"] = renderHandler;
-  window.ItemRegistry["obsidian_flux"] = renderHandler;
-  window.ItemRegistry["OBSIDIAN_FLUX"] = renderHandler;
   window.ItemRegistry["obsidian_flux_item"] = renderHandler;
   window.ItemRegistry["obsidian_flux"] = renderHandler;
   window.ItemRegistry["OBSIDIAN_FLUX"] = renderHandler;

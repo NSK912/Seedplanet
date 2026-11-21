@@ -220,6 +220,15 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
           });
           rebuildTunnelBuffers();
 
+          // Capture dug grass before suppressing so it can relocate and regrow nearby over 10 minutes
+          if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onGrassDugAt === "function") {
+              const digGrassCenters = [[tx, ty, tz]];
+              if (Math.hypot(surfX - tx, surfY - ty, surfZ - tz) > 0.01) {
+                  digGrassCenters.push([surfX, surfY, surfZ]);
+              }
+              window.WildPlantGrowthSystem.onGrassDugAt(digGrassCenters, tr * 1.05);
+          }
+
           // Destroy grass overlapping the dug hole
           const suppressGrassFn = typeof suppressGrassUnder === "function" ? suppressGrassUnder : (typeof window !== "undefined" ? window.suppressGrassUnder : null);
           if (suppressGrassFn) {
@@ -238,7 +247,7 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
           if (nObs && Array.isArray(nObs)) {
               for (let i = nObs.length - 1; i >= 0; i--) {
                   const obs = nObs[i];
-                  if (!obs || !obs.position) continue;
+                  if (!obs || !obs.position || obs.isWildRelocatedTreeCollider) continue;
                   const objRadius = obs.type === "tree"
                       ? (obs.trunkBaseRadius ? Math.max(0.08, obs.trunkBaseRadius) : Math.max(0.08, (obs.radius || 0.4) * 0.15))
                       : Math.min(0.22, (obs.radius || 0.15) * 0.7);
@@ -275,6 +284,9 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
                       }
                       nObs.splice(i, 1);
                       destroyedAnyNature = true;
+                      if (obs.type === "tree" && typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onTreeDestroyed === "function") {
+                          window.WildPlantGrowthSystem.onTreeDestroyed(obs, true, null);
+                      }
                   }
               }
           }
@@ -290,7 +302,7 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
               for (let i = 0; i < cols.length; i++) {
                   const c = cols[i];
                   if (!c || !c.active || c.isPreview || !c.position) continue;
-                  if (c.type === "planet_core" || c.type === "stone_floor") continue;
+                  if (c.type === "planet_core" || c.type === "stone_floor" || c.type === "wild_growing_plant") continue;
                   if (c.isHouse || c.isProceduralHouse || c.isHouseChest) continue;
                   if (c === ridingBoat || c === ridingMech) continue;
 
@@ -377,8 +389,16 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
                               }
                           }
                       }
+                      if (!c.isGroundDrop && !c.isPlayerDropped && (c.type === "cotton_plant" || c.type === "crown_flower") &&
+                          typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onShrubCollectedOrDestroyed === "function") {
+                          window.WildPlantGrowthSystem.onShrubCollectedOrDestroyed(c, true);
+                      }
                   }
               }
+          }
+
+          if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onTerrainDug === "function") {
+              window.WildPlantGrowthSystem.onTerrainDug([tx, ty, tz], [surfX, surfY, surfZ], tr);
           }
 
           if (destroyedAnyCollectible) {

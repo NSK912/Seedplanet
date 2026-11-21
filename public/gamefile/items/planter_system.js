@@ -75,6 +75,11 @@
   let _lastStageCheck = 0;
   let _cachedOverlay = null;
   let _planterSignIdSeq = 1;
+  let _cachedPlanterBoxes = [];
+  let _cachedPlanterSrc = null;
+  let _cachedPlanterSrcLen = -1;
+  let _cachedPlanterTopoVer = -1;
+  let _cachedPlanterGridVer = -1;
 
   function getCurLang() {
     if (typeof window.getGameLanguage === "function") return window.getGameLanguage();
@@ -144,12 +149,38 @@
         ? getVisualHeightOnSphere
         : (typeof getHeightOnSphere === "function" ? getHeightOnSphere : null);
 
-      // Single pass to gather active planter boxes; only verify ground height ONCE per planter box (_groundHeightVerified)
+      // Cache active wood_planter_box entries so we don't scan thousands of collectibles every frame at 60 FPS
+      const curTopoVer = (typeof window !== "undefined" && typeof window._collectiblesTopologyVersion === "number")
+        ? window._collectiblesTopologyVersion
+        : 0;
+      const curGridVer = (typeof SpatialGrid !== "undefined" && SpatialGrid && typeof SpatialGrid.version === "number")
+        ? SpatialGrid.version
+        : 0;
+
+      if (
+        _cachedPlanterSrc !== collectibles ||
+        _cachedPlanterSrcLen !== collectibles.length ||
+        _cachedPlanterTopoVer !== curTopoVer ||
+        _cachedPlanterGridVer !== curGridVer
+      ) {
+        _cachedPlanterBoxes = [];
+        for (let i = 0; i < collectibles.length; i++) {
+          const c = collectibles[i];
+          if (c && c.type === "wood_planter_box") {
+            _cachedPlanterBoxes.push(c);
+          }
+        }
+        _cachedPlanterSrc = collectibles;
+        _cachedPlanterSrcLen = collectibles.length;
+        _cachedPlanterTopoVer = curTopoVer;
+        _cachedPlanterGridVer = curGridVer;
+      }
+
       const planterBoxes = [];
       let snappedAnyGroundPlanter = false;
 
-      for (let i = 0; i < collectibles.length; i++) {
-        const c = collectibles[i];
+      for (let i = 0; i < _cachedPlanterBoxes.length; i++) {
+        const c = _cachedPlanterBoxes[i];
         if (!c || !c.active || c.isPreview || c.type !== "wood_planter_box" || !c.position) continue;
         planterBoxes.push(c);
 
@@ -160,9 +191,12 @@
           c._groundHeightVerified = true;
           if (!c.isFloorSnapped) {
             let onConstructedFloor = false;
-            for (let j = 0; j < collectibles.length; j++) {
-              const other = collectibles[j];
-              if (!other || !other.active || other.isPreview) continue;
+            const floorCandidates = (typeof SpatialGrid !== "undefined" && SpatialGrid && typeof SpatialGrid.queryRadius === "function")
+              ? SpatialGrid.queryRadius(c.position[0], c.position[1], c.position[2], 2.5)
+              : collectibles;
+            for (let j = 0; j < floorCandidates.length; j++) {
+              const other = floorCandidates[j];
+              if (!other || !other.active || other.isPreview || !other.position) continue;
               if (other.type === "wood_floor" || other.type === "thin_wood_floor" || other.type === "stone_floor") {
                 const dx = c.position[0] - other.position[0];
                 const dy = c.position[1] - other.position[1];
@@ -384,7 +418,10 @@
           const c = planterBoxes[i];
           if (c.plantData && c.plantData.watered && c.plantData.plantTime > 0) {
             const elapsed = (now - c.plantData.plantTime) / 1000;
-            const curStage = Math.min(5, Math.floor(elapsed / 60));
+            const totalDur = (typeof c.plantData.growthDuration === "number" && c.plantData.growthDuration > 0)
+              ? c.plantData.growthDuration
+              : GROWTH_TIME_SECONDS;
+            const curStage = Math.min(5, Math.floor((elapsed / totalDur) * 5));
             if (c.plantData.stage !== curStage) {
               c.plantData.stage = curStage;
               anyGrowing = true;

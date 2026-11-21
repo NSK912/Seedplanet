@@ -386,13 +386,13 @@
   // =========================================================================
   // 3. SHARED SPHERICAL TRANSFORM BASIS FOR ANY ACTOR
   // =========================================================================
-  function getActorBasis(actorOrEntity) {
+  function getActorBasis(actorOrEntity, opts = null) {
     const actor = resolveActor(actorOrEntity);
     const theta = actor.getTheta();
     const phi = actor.getPhi();
     const heading = actor.getHeading();
     const pScale = actor.getScale();
-    const pRad = (typeof RADIUS !== "undefined") ? RADIUS : 32.0;
+    const pRad = (typeof RADIUS !== "undefined") ? RADIUS : 64.0;
     const hScale = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
     const gSeed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined")
       ? window.globalSeed
@@ -423,14 +423,20 @@
       East[2] * cosH - North[2] * sinH
     ];
 
-    const h = (typeof getVisualHeightOnSphere === "function")
-      ? getVisualHeightOnSphere(theta, phi, gSeed)
-      : ((typeof getHeightOnSphere === "function") ? getHeightOnSphere(theta, phi, gSeed) : 0);
-    const terrainRadius = pRad + h * hScale;
     const cRadRaw = actor.getCenterRadius();
-    const centerRadius = (typeof cRadRaw === "number" && !Number.isNaN(cRadRaw) && cRadRaw > 0.001)
-      ? cRadRaw
-      : (terrainRadius + 0.46 * pScale);
+    const hasValidCenterRad = (typeof cRadRaw === "number" && !Number.isNaN(cRadRaw) && cRadRaw > 0.001);
+    let terrainRadius;
+    let centerRadius;
+    if (hasValidCenterRad && opts && opts.skipTerrainHeight) {
+      centerRadius = cRadRaw;
+      terrainRadius = cRadRaw - 0.46 * pScale;
+    } else {
+      const h = (typeof getVisualHeightOnSphere === "function")
+        ? getVisualHeightOnSphere(theta, phi, gSeed)
+        : ((typeof getHeightOnSphere === "function") ? getHeightOnSphere(theta, phi, gSeed) : 0);
+      terrainRadius = pRad + h * hScale;
+      centerRadius = hasValidCenterRad ? cRadRaw : (terrainRadius + 0.46 * pScale);
+    }
 
     return {
       actor,
@@ -541,7 +547,7 @@
           ? window.getUnifiedMeleeReach()
           : (typeof meleeLockDistance === "number" ? meleeLockDistance : 0.25);
         const lockedNow = actor.isPlayer
-          ? ((typeof window.findTantoBestTarget === "function") ? window.findTantoBestTarget(lockDist) : null)
+          ? ((typeof window.findTantoBestTarget === "function") ? window.findTantoBestTarget(lockDist, canonicalId) : null)
           : ((opts && opts.targetEntity) ? opts.targetEntity : null);
         if (actor.isPlayer && lockedNow && typeof activeTargetNPC !== "undefined") {
           activeTargetNPC = lockedNow;
@@ -555,7 +561,8 @@
           coneCos: cfg ? cfg.coneCos : null,
           maxVert: cfg ? cfg.maxVert : null,
           lockedTarget: lockedNow,
-          targetEntity: opts ? opts.targetEntity : null
+          targetEntity: opts ? opts.targetEntity : null,
+          weaponId: canonicalId
         });
         if (!hitNpc && typeof playChopSound === "function") {
           playChopSound(opts && opts.targetPos ? opts.targetPos : undefined);
@@ -1035,7 +1042,7 @@
   // Shared water-contact depth helper (works identically in open ocean and cave water)
   function checkWaterContact(theta, phi, feetRadius = null, planetRadius = null, depthFactor = 0.35) {
     if (typeof waterEnabled !== "undefined" && !waterEnabled) return false;
-    const pRad = planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+    const pRad = planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 64.0);
     const hs = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
     const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
     const pScale = (typeof playerScale !== "undefined") ? playerScale : 0.1;
@@ -1072,7 +1079,7 @@
     const attachWheel = (opts.attachCarriedParts !== false) && actor.getItemCount("WOOD_WHEEL") > 0 && actor.consumeItem("WOOD_WHEEL", 1);
     const attachEngine = (opts.attachCarriedParts !== false) && actor.getItemCount("ELECTRIC_ENGINE") > 0 && actor.consumeItem("ELECTRIC_ENGINE", 1);
 
-    const pRad = opts.planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+    const pRad = opts.planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 64.0);
     const seed = (typeof window !== "undefined" && typeof window.globalSeed !== "undefined") ? window.globalSeed : 0;
     const hs = (typeof HEIGHT_SCALE !== "undefined") ? HEIGHT_SCALE : 1.0;
     const wl = (typeof waterLevel !== "undefined") ? waterLevel : 0.0;
@@ -1199,7 +1206,7 @@
     const actor = resolveActor(actorOrEntity);
     if (!actor) return { actualMoveDist: 0, blockedRatio: 0 };
 
-    const pRad = opts.planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+    const pRad = opts.planetRadius || (typeof RADIUS !== "undefined" ? RADIUS : 64.0);
     const hScale = opts.heightScale || (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1.0);
     const seedVal = (typeof opts.seed === "number")
       ? opts.seed

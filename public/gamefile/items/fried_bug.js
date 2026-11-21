@@ -79,10 +79,13 @@ window.ItemRegistry["fried_bug"] = {
     const r = (item && item.R) ? item.R : [1, 0, 0];
     const n = (item && item.normal) ? item.normal : [0, 1, 0];
     const f = (item && item.F) ? item.F : [0, 0, 1];
-    const s = isIcon ? 1.0 : ((item && typeof item.size === "number") ? item.size * 3.0 : 0.24);
-    const lift = isIcon ? 0.0 : 0.08;
+    const rawS = (item && typeof item.size === "number") ? item.size : 0.072;
+    const s = isIcon ? 1.0 : Math.min(rawS, 0.085);
+    const lift = isIcon ? 0.0 : 0.045;
+    const seed = (item && typeof item.seed === "number") ? item.seed : 1234;
+    const basis = isIcon ? { R: r, F: f } : window.DropTemplateCache.rotateBasis(r, f, (seed * 6.28318) % (Math.PI * 2));
     const pos = [p[0] + n[0] * lift * s, p[1] + n[1] * lift * s, p[2] + n[2] * lift * s];
-    window.buildFriedBugModel(item && item.seed ? item.seed : 1234, s, pos, r, n, f, vertices, colors, indices);
+    window.buildFriedBugModel(seed, s, pos, basis.R, n, basis.F, vertices, colors, indices);
   }
 };
 window.ItemRegistry["FRIED_BUG"] = window.ItemRegistry["fried_bug"];

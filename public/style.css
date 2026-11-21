@@ -17,10 +17,16 @@
         text-size-adjust: 100%;
       }
       :root {
+        --cut-sm: 0.375rem;
+        --cut-md: 0.5rem;
+        --cut-lg: 0.875rem;
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: transparent;
         --ui-slot-size: 4.5rem;
         --ui-slot-icon-size: 2.5rem;
         --ui-slot-bar-h: 1.0625rem;
-        --ui-slot-cut: 0.375rem;
+        --ui-slot-cut: var(--cut-sm);
       }
       * {
         margin: 0;
@@ -1307,51 +1313,74 @@
         position: relative;
         background: transparent;
         z-index: 10;
-        height: 2.25rem;
+        height: 2.75rem;
         flex-shrink: 0;
         box-sizing: border-box;
       }
       .inventory-tabs {
         display: flex;
-        gap: 1rem;
+        gap: 0.5rem;
         flex-wrap: nowrap;
         align-items: center;
-        height: 2.25rem;
+        height: 2rem;
       }
       .inventory-header h2 {
+        position: relative;
+        z-index: 0;
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
         font-size: 0.8125rem;
         font-weight: 500;
         letter-spacing: 0.0938rem;
-        color: rgba(255, 255, 255, 0.4);
+        color: rgba(255, 255, 255, 0.48);
         font-family: 'Google Sans', sans-serif;
         text-transform: uppercase;
         cursor: pointer;
-        transition: all 0.25s ease-in-out;
+        transition: color 0.2s ease, background-color 0.2s ease, text-shadow 0.2s ease;
         margin: 0;
-        height: 2.25rem;
-        padding-bottom: 0;
+        height: 2rem;
+        padding: 0 0.75rem;
         box-sizing: border-box;
-        border-bottom: 2px solid transparent;
+        outline: none !important;
+        background: transparent;
         white-space: nowrap;
+        --cut: var(--cut-sm);
+        --cut-bw: 1.5px;
+        --cut-border: transparent;
       }
-      .inventory-header h2:hover {
-        color: #ffffff;
-        text-shadow: 0 0 0.5rem rgba(255, 255, 255, 0.3);
+      .inventory-header h2 > * {
+        position: relative;
+        z-index: 1;
+      }
+      .inventory-header h2:hover,
+      .inventory-header h2.virtual-hover,
+      .inventory-header h2.gamepad-focused {
+        color: #ffffff !important;
+        --cut-border: rgba(255, 255, 255, 0.92);
+        background: rgba(18, 20, 26, 0.92);
+        text-shadow: 0 0 0.5rem rgba(255, 255, 255, 0.32) !important;
+        box-shadow: inset 0 0 0.5rem rgba(255, 255, 255, 0.12) !important;
+        outline: none !important;
+        animation: none !important;
       }
       .inventory-header h2.active {
         color: #dfb76c;
-        border-bottom-color: #dfb76c;
-        text-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.4);
+        --cut-border: #dfb76c;
+        background: rgba(26, 21, 13, 0.94);
+        text-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.4);
+        box-shadow: inset 0 0 0.5rem rgba(223, 183, 108, 0.16);
       }
-      .inventory-header h2.gamepad-focused {
-        color: #ffffff !important;
-        border-bottom: 2px solid #fef08a !important;
-        text-shadow: 0 0 0.75rem rgba(254, 240, 138, 0.9) !important;
-        box-shadow: 0 0.125rem 0.75rem rgba(250, 204, 21, 0.5) !important;
+      .inventory-header h2.active:hover,
+      .inventory-header h2.active.virtual-hover,
+      .inventory-header h2.active.gamepad-focused {
+        color: #f5d896 !important;
+        --cut-border: #f0cd84;
+        background: rgba(34, 27, 16, 0.96);
+        text-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.55) !important;
+        box-shadow: inset 0 0 0.625rem rgba(223, 183, 108, 0.24) !important;
         outline: none !important;
+        animation: none !important;
       }
       .gamepad-tab-bumper {
         display: inline-flex;
@@ -2156,17 +2185,621 @@
       }
 
       :root {
-        --cut: 0.5rem;
         --game-ui-clip: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
         --game-title-size: clamp(16px, min(8.8vw, 19vh), 180px);
       }
       .game-ui {
-        clip-path: var(--game-ui-clip);
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        clip-path: polygon(0 0, calc(100% - var(--cut, var(--cut-sm))) 0, 100% var(--cut, var(--cut-sm)), 100% 100%, var(--cut, var(--cut-sm)) 100%, 0 calc(100% - var(--cut, var(--cut-sm))));
         border-radius: 0 !important;
       }
-      .game-ui.sm { --cut: 0.375rem; }
-      .game-ui.lg { --cut: 0.75rem; }
-      .game-ui.xl { --cut: 1rem; }
+      .game-ui.sm { --cut: var(--cut-sm); }
+      .game-ui.md { --cut: var(--cut-md); }
+      .game-ui.lg,
+      .game-ui.xl { --cut: var(--cut-lg); }
+      #inventoryBottomButtons,
+      .top-left-menu {
+        clip-path: none !important;
+      }
+
+      /* ============================================
+         UNIFIED CHAMFERED UI FRAME SYSTEM (Single Source of Truth)
+         3 standard cut sizes: --cut-sm (6px), --cut-md (8px), --cut-lg (14px)
+         Unbroken 6-edge border ring via single ::before polygon (no sheared corners)
+         ============================================ */
+
+      /* Group A: Token-driven chamfered frames (--cut-border) */
+      .cut-frame,
+      .inventory-panel,
+      .seedian-modal-box,
+      .crafting-recipe-card,
+      .inventory-header h2,
+      .inventory-header .close-btn,
+      .craft-tile,
+      .inventory-slot,
+      .action-slot,
+      .touch-btn,
+      .mech-stand-slot,
+      .custom-scrollbar-track,
+      .custom-scrollbar-thumb,
+      .seedian-footer-btn,
+      .seedian-cut-box,
+      .seedian-card,
+      #inventoryBottomButtons > button {
+        border: none !important;
+        border-radius: 0 !important;
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--cut, var(--cut-md))) 0,
+          100% var(--cut, var(--cut-md)),
+          100% 100%,
+          var(--cut, var(--cut-md)) 100%,
+          0 calc(100% - var(--cut, var(--cut-md)))
+        ) !important;
+      }
+
+      /* Group B: Inline/JS border-color-driven chamfered frames (Start, HUD, Settings, Keybinds, Confirm, Save Slots, Select) */
+      .start-btn,
+      .inventory-btn,
+      .inventory-action-btn,
+      .fps-counter,
+      #gameplayFullscreenBtn,
+      #interactPrompt,
+      #trashConfirmOverlay > .game-ui,
+      #trashConfirmOverlay > .game-ui > .game-ui,
+      #saveLoadingIndicator,
+      #inventorySettings button.game-ui,
+      .key-bind-btn,
+      .gp-bind-btn,
+      .fixed-bind-badge,
+      .key-bind-row-wrapper,
+      #chestTakeAllBtn,
+      #trashCancelBtn,
+      #trashConfirmBtn,
+      #antialiasCancelBtn,
+      #antialiasConfirmBtn,
+      .antialias-confirm-box,
+      .save-slot-card,
+      .save-slot-delete-btn,
+      #btnSaveSelectBack,
+      .custom-select-display,
+      .custom-select-list {
+        border-width: 0 !important;
+        border-radius: 0 !important;
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--cut, var(--cut-sm))) 0,
+          100% var(--cut, var(--cut-sm)),
+          100% 100%,
+          var(--cut, var(--cut-sm)) 100%,
+          0 calc(100% - var(--cut, var(--cut-sm)))
+        ) !important;
+      }
+
+      .cut-frame,
+      .seedian-modal-box,
+      .crafting-recipe-card,
+      .inventory-header .close-btn,
+      .seedian-footer-btn,
+      .seedian-cut-box,
+      .seedian-card,
+      #inventoryBottomButtons > button,
+      .inventory-action-btn,
+      #trashConfirmOverlay > .game-ui > .game-ui,
+      #saveLoadingIndicator,
+      #inventorySettings button.game-ui,
+      .key-bind-btn,
+      .gp-bind-btn,
+      .fixed-bind-badge,
+      .key-bind-row-wrapper,
+      #chestTakeAllBtn,
+      #trashCancelBtn,
+      #trashConfirmBtn,
+      #antialiasCancelBtn,
+      #antialiasConfirmBtn,
+      .antialias-confirm-box,
+      .save-slot-card,
+      .save-slot-delete-btn,
+      #btnSaveSelectBack,
+      .custom-select-display {
+        position: relative;
+      }
+
+      /* Shared 14-point hollow 6-edge chamfered border ring geometry */
+      .cut-frame::before,
+      .inventory-panel::before,
+      .seedian-modal-box::before,
+      .crafting-recipe-card::before,
+      .inventory-header h2::before,
+      .inventory-header .close-btn::before,
+      .craft-tile::before,
+      .inventory-slot::before,
+      .action-slot::before,
+      .touch-btn::before,
+      .mech-stand-slot::before,
+      .custom-scrollbar-track::before,
+      .custom-scrollbar-thumb::before,
+      .seedian-footer-btn::before,
+      .seedian-cut-box::before,
+      .seedian-card::before,
+      #inventoryBottomButtons > button::before,
+      .start-btn::before,
+      .inventory-btn::before,
+      .inventory-action-btn::before,
+      .fps-counter::before,
+      #gameplayFullscreenBtn::before,
+      #interactPrompt::before,
+      #trashConfirmOverlay > .game-ui::before,
+      #trashConfirmOverlay > .game-ui > .game-ui::before,
+      #saveLoadingIndicator::before,
+      #inventorySettings button.game-ui::before,
+      .key-bind-btn::before,
+      .gp-bind-btn::before,
+      .fixed-bind-badge::before,
+      .key-bind-row-wrapper::before,
+      #chestTakeAllBtn::before,
+      #trashCancelBtn::before,
+      #trashConfirmBtn::before,
+      #antialiasCancelBtn::before,
+      #antialiasConfirmBtn::before,
+      .antialias-confirm-box::before,
+      .save-slot-card::before,
+      .save-slot-delete-btn::before,
+      #btnSaveSelectBack::before,
+      .custom-select-display::before,
+      .custom-select-list::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+        box-sizing: border-box;
+        --_cut: var(--cut, var(--cut-sm));
+        --_bw: var(--cut-bw, 1px);
+        --_ds: calc(var(--_bw) * 0.41421356);
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--_cut)) 0,
+          100% var(--_cut),
+          100% 100%,
+          var(--_cut) 100%,
+          0 calc(100% - var(--_cut)),
+          0 var(--_bw),
+          var(--_bw) var(--_bw),
+          var(--_bw) calc(100% - var(--_cut) - var(--_ds)),
+          calc(var(--_cut) + var(--_ds)) calc(100% - var(--_bw)),
+          calc(100% - var(--_bw)) calc(100% - var(--_bw)),
+          calc(100% - var(--_bw)) calc(var(--_cut) + var(--_ds)),
+          calc(100% - var(--_cut) - var(--_ds)) var(--_bw),
+          0 var(--_bw)
+        );
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+      }
+
+      /* Group A paint: explicit --cut-border token */
+      .cut-frame::before,
+      .inventory-panel::before,
+      .seedian-modal-box::before,
+      .crafting-recipe-card::before,
+      .inventory-header h2::before,
+      .inventory-header .close-btn::before,
+      .craft-tile::before,
+      .inventory-slot::before,
+      .action-slot::before,
+      .touch-btn::before,
+      .mech-stand-slot::before,
+      .custom-scrollbar-track::before,
+      .custom-scrollbar-thumb::before,
+      .seedian-footer-btn::before,
+      .seedian-cut-box::before,
+      .seedian-card::before,
+      #inventoryBottomButtons > button::before {
+        background: var(--cut-border, transparent);
+      }
+
+      /* Group B paint: automatically inherits live CSS/JS border-color from host */
+      .start-btn::before,
+      .inventory-btn::before,
+      .inventory-action-btn::before,
+      .fps-counter::before,
+      #gameplayFullscreenBtn::before,
+      #interactPrompt::before,
+      #trashConfirmOverlay > .game-ui::before,
+      #trashConfirmOverlay > .game-ui > .game-ui::before,
+      #saveLoadingIndicator::before,
+      #inventorySettings button.game-ui::before,
+      .key-bind-btn::before,
+      .gp-bind-btn::before,
+      .fixed-bind-badge::before,
+      .key-bind-row-wrapper::before,
+      #chestTakeAllBtn::before,
+      #trashCancelBtn::before,
+      #trashConfirmBtn::before,
+      #antialiasCancelBtn::before,
+      #antialiasConfirmBtn::before,
+      .antialias-confirm-box::before,
+      .save-slot-card::before,
+      .save-slot-delete-btn::before,
+      #btnSaveSelectBack::before,
+      .custom-select-display::before,
+      .custom-select-list::before {
+        background: transparent;
+        border-style: solid;
+        border-color: inherit;
+        border-width: calc(var(--_cut) + var(--_bw) + 1px);
+      }
+
+      /* Tier 1: Large panels & modals (--cut-lg: 14px) */
+      .inventory-panel {
+        --cut: var(--cut-lg);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.45);
+      }
+      .inventory-panel::before {
+        z-index: 60;
+      }
+      .seedian-modal-box {
+        --cut: var(--cut-lg);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.55);
+      }
+      .seedian-modal-box::before {
+        z-index: 60;
+      }
+      .antialias-confirm-box,
+      #trashConfirmOverlay > .game-ui {
+        --cut: var(--cut-lg);
+        --cut-bw: 1px;
+      }
+      .antialias-confirm-box::before,
+      #trashConfirmOverlay > .game-ui::before {
+        z-index: 60;
+      }
+
+      /* Tier 2: Cards & primary action buttons (--cut-md: 8px) */
+      .crafting-recipe-card {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.12);
+      }
+      .crafting-recipe-card:hover,
+      .crafting-recipe-card.virtual-hover {
+        --cut-border: rgba(223, 183, 108, 0.45);
+      }
+      .crafting-recipe-card.crafting-card-selected,
+      .crafting-recipe-card.touch-preview-active,
+      .crafting-recipe-card.gamepad-focused {
+        --cut-border: #dfb76c !important;
+        --cut-bw: 1.5px;
+      }
+
+      .start-btn,
+      #inventoryBottomButtons > button,
+      #btnRestoreDefaults,
+      #btnExitToMenu,
+      .save-slot-card,
+      #btnSaveSelectBack,
+      #saveLoadingIndicator {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+      }
+      #btnInventoryActionUI {
+        --cut-border: rgba(223, 183, 108, 0.5);
+      }
+      #btnInventoryActionUI:hover,
+      #btnInventoryActionUI.virtual-hover,
+      #btnInventoryActionUI.gamepad-focused {
+        --cut-border: #dfb76c;
+        --cut-bw: 1.5px;
+      }
+      #btnInventorySplit {
+        --cut-border: rgba(56, 189, 248, 0.5);
+      }
+      #btnInventorySplit:hover,
+      #btnInventorySplit.virtual-hover,
+      #btnInventorySplit.gamepad-focused {
+        --cut-border: #38bdf8;
+        --cut-bw: 1.5px;
+      }
+      #btnInventoryDrop {
+        --cut-border: rgba(251, 146, 60, 0.5);
+      }
+      #btnInventoryDrop:hover,
+      #btnInventoryDrop.virtual-hover,
+      #btnInventoryDrop.gamepad-focused {
+        --cut-border: #fb923c;
+        --cut-bw: 1.5px;
+      }
+      #btnInventoryDestroy {
+        --cut-border: rgba(239, 68, 68, 0.5);
+      }
+      #btnInventoryDestroy:hover,
+      #btnInventoryDestroy.virtual-hover,
+      #btnInventoryDestroy.gamepad-focused {
+        --cut-border: #ef4444;
+        --cut-bw: 1.5px;
+      }
+
+      .seedian-footer-btn {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: #dfb76c;
+      }
+      .seedian-cut-box {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.25);
+      }
+
+      /* Tier 3: Slots, tiles, close button, HUD, settings & compact controls (--cut-sm: 6px) */
+      .inventory-btn,
+      .inventory-action-btn,
+      .fps-counter,
+      #gameplayFullscreenBtn,
+      #interactPrompt,
+      #trashConfirmOverlay > .game-ui > .game-ui,
+      #inventorySettings button.game-ui,
+      .key-bind-btn,
+      .gp-bind-btn,
+      .fixed-bind-badge,
+      .key-bind-row-wrapper,
+      #chestTakeAllBtn,
+      #trashCancelBtn,
+      #trashConfirmBtn,
+      #antialiasCancelBtn,
+      #antialiasConfirmBtn,
+      .save-slot-delete-btn,
+      .custom-select-display,
+      .custom-select-list {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+      }
+      .inventory-badge {
+        --cut: 0.1875rem;
+      }
+      /* Keep full-width Settings action buttons at Tier 2 (--cut-md: 8px) */
+      #inventorySettings #btnRestoreDefaults,
+      #inventorySettings #btnExitToMenu {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+      }
+
+      .inventory-header .close-btn {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.14);
+      }
+      .inventory-header .close-btn:hover,
+      .inventory-header .close-btn.virtual-hover,
+      .inventory-header .close-btn.gamepad-focused {
+        --cut-border: #ef4444;
+        --cut-bw: 1.5px;
+      }
+
+      .craft-tile {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+      }
+      .craft-tile-gold {
+        --cut-border: #dfb76c;
+      }
+      .craft-tile-gold:hover:not(.craft-tile-disabled),
+      .craft-tile-gold.virtual-hover:not(.craft-tile-disabled),
+      .craft-tile-gold.gamepad-focused:not(.craft-tile-disabled) {
+        --cut-border: #fef08a;
+        --cut-bw: 1.5px;
+      }
+      .craft-tile-gold.craft-tile-disabled {
+        --cut-border: rgba(223, 183, 108, 0.35);
+      }
+      .craft-tile-white {
+        --cut-border: rgba(255, 255, 255, 0.72);
+      }
+      .craft-tile-white:hover,
+      .craft-tile-white.virtual-hover {
+        --cut-border: #ffffff;
+      }
+
+      .inventory-slot {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.08);
+      }
+      .inventory-slot:hover:not(.locked),
+      .inventory-slot.virtual-hover:not(.locked) {
+        --cut-border: rgba(255, 255, 255, 0.42);
+      }
+      .inventory-slot.locked {
+        --cut-border: rgba(255, 255, 255, 0.04);
+      }
+      .inventory-slot.dragover,
+      .action-slot.dragover {
+        --cut-border: #dfb76c !important;
+        --cut-bw: 1.5px !important;
+      }
+      .inventory-slot.dragging-active,
+      .action-slot.dragging-active {
+        --cut-border: rgba(255, 255, 255, 0.4) !important;
+      }
+      .inventory-slot.dragging,
+      .action-slot.dragging {
+        --cut-border: #dfb76c !important;
+        --cut-bw: 2px !important;
+      }
+
+      .action-slot {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.3);
+      }
+      .action-slot:hover,
+      .action-slot.virtual-hover,
+      .action-slot.selected {
+        --cut-border: #dfb76c;
+      }
+
+      .touch-btn {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.3);
+      }
+      .touch-btn:hover,
+      .touch-btn.virtual-hover,
+      .touch-btn.active,
+      .touch-btn:active {
+        --cut-border: #dfb76c;
+      }
+
+      .mech-stand-slot {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.1);
+      }
+      .mech-stand-slot:hover,
+      .mech-stand-slot.virtual-hover,
+      .mech-stand-slot.equipped {
+        --cut-border: #dfb76c;
+      }
+      .mech-stand-slot.equipped:hover {
+        --cut-border: #ffe090;
+      }
+
+      .seedian-card {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.25);
+      }
+      .seedian-card:hover,
+      .seedian-card.virtual-hover {
+        --cut-border: #dfb76c;
+      }
+
+      /* Scrollbar: unified top-right & bottom-left direction, proportional to narrow 10px width */
+      .custom-scrollbar-track {
+        --cut: 0.25rem;
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.35);
+      }
+      .custom-scrollbar-thumb {
+        --cut: 0.1875rem;
+        --cut-bw: 1px;
+        --cut-border: rgba(254, 240, 138, 0.85);
+      }
+      .custom-scrollbar-thumb:hover,
+      .custom-scrollbar-thumb.dragging,
+      .custom-scrollbar-thumb.virtual-hover {
+        --cut-border: #ffffff;
+      }
+
+      /* Hover & focus border thickness boost for Group B inline-bordered controls */
+      .start-btn:hover,
+      .start-btn.virtual-hover,
+      .inventory-btn:hover,
+      .inventory-btn.virtual-hover,
+      #gameplayFullscreenBtn:hover,
+      #gameplayFullscreenBtn.virtual-hover,
+      #inventorySettings button.game-ui:hover,
+      #inventorySettings button.game-ui.virtual-hover,
+      .key-bind-btn:hover,
+      .key-bind-btn.virtual-hover,
+      .gp-bind-btn:hover,
+      .gp-bind-btn.virtual-hover,
+      #chestTakeAllBtn:hover,
+      #chestTakeAllBtn.virtual-hover,
+      #trashCancelBtn:hover,
+      #trashCancelBtn.virtual-hover,
+      #trashConfirmBtn:hover,
+      #trashConfirmBtn.virtual-hover,
+      #antialiasCancelBtn:hover,
+      #antialiasCancelBtn.virtual-hover,
+      #antialiasConfirmBtn:hover,
+      #antialiasConfirmBtn.virtual-hover,
+      .save-slot-card:hover,
+      .save-slot-card.virtual-hover,
+      .save-slot-delete-btn:hover,
+      .save-slot-delete-btn.virtual-hover,
+      #btnSaveSelectBack:hover,
+      #btnSaveSelectBack.virtual-hover,
+      .custom-select-display:hover,
+      .custom-select-display.virtual-hover {
+        --cut-bw: 1.5px;
+      }
+      .start-btn:hover,
+      .start-btn.virtual-hover {
+        border-color: rgba(255, 255, 255, 0.9) !important;
+      }
+
+      /* Suppress rectangular 90-degree outline on chamfered frames for Gamepad Focus & Virtual Hover */
+      .cut-frame.gamepad-focused,
+      .crafting-recipe-card.gamepad-focused,
+      .inventory-header .close-btn.gamepad-focused,
+      .craft-tile.gamepad-focused,
+      .inventory-slot.gamepad-focused,
+      .action-slot.gamepad-focused,
+      .touch-btn.gamepad-focused,
+      .mech-stand-slot.gamepad-focused,
+      .seedian-footer-btn.gamepad-focused,
+      .seedian-card.gamepad-focused,
+      #inventoryBottomButtons > button.gamepad-focused {
+        outline: none !important;
+        box-shadow: inset 0 0 0.625rem rgba(254, 240, 138, 0.35) !important;
+        animation: none !important;
+        --cut-border: #fef08a !important;
+        --cut-bw: 1.5px !important;
+      }
+      #startMenuButtonsContainer .start-btn.gamepad-focused,
+      .start-btn.gamepad-focused,
+      .inventory-btn.gamepad-focused,
+      #gameplayFullscreenBtn.gamepad-focused,
+      #inventorySettings button.game-ui.gamepad-focused,
+      .key-bind-btn.gamepad-focused,
+      .gp-bind-btn.gamepad-focused,
+      #chestTakeAllBtn.gamepad-focused,
+      #trashCancelBtn.gamepad-focused,
+      #trashConfirmBtn.gamepad-focused,
+      #antialiasCancelBtn.gamepad-focused,
+      #antialiasConfirmBtn.gamepad-focused,
+      .save-slot-card.gamepad-focused,
+      .save-slot-delete-btn.gamepad-focused,
+      #btnSaveSelectBack.gamepad-focused,
+      .custom-select-display.gamepad-focused {
+        outline: none !important;
+        box-shadow: inset 0 0 0.75rem rgba(254, 240, 138, 0.38) !important;
+        animation: none !important;
+        border-color: #fef08a !important;
+        --cut-bw: 1.5px !important;
+      }
+      .cut-frame.virtual-hover,
+      .crafting-recipe-card.virtual-hover,
+      .inventory-header .close-btn.virtual-hover,
+      .craft-tile.virtual-hover,
+      .inventory-slot.virtual-hover,
+      .action-slot.virtual-hover,
+      .touch-btn.virtual-hover,
+      .mech-stand-slot.virtual-hover,
+      .custom-scrollbar-track.virtual-hover,
+      .custom-scrollbar-thumb.virtual-hover,
+      .seedian-footer-btn.virtual-hover,
+      .seedian-card.virtual-hover,
+      #inventoryBottomButtons > button.virtual-hover,
+      .start-btn.virtual-hover,
+      .inventory-btn.virtual-hover,
+      #gameplayFullscreenBtn.virtual-hover,
+      #inventorySettings button.game-ui.virtual-hover,
+      .key-bind-btn.virtual-hover,
+      .gp-bind-btn.virtual-hover,
+      #chestTakeAllBtn.virtual-hover,
+      #trashCancelBtn.virtual-hover,
+      #trashConfirmBtn.virtual-hover,
+      #antialiasCancelBtn.virtual-hover,
+      #antialiasConfirmBtn.virtual-hover,
+      .save-slot-card.virtual-hover,
+      .save-slot-delete-btn.virtual-hover,
+      #btnSaveSelectBack.virtual-hover,
+      .custom-select-display.virtual-hover {
+        outline: none !important;
+      }
 
       /* AAA Progressive Loading Screen styles */
       .aaa-loading-overlay {

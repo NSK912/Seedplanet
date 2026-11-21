@@ -1457,8 +1457,8 @@ window.characterVertexShaderSource = `#version 300 es
         };
       }
 
-      var RADIUS = 32.0;
-      var HEIGHT_SCALE = 0.6 * Math.pow(32.0 / 8.0, 0.70);
+      var RADIUS = 64.0;
+      var HEIGHT_SCALE = 0.6 * Math.pow(64.0 / 8.0, 0.70);
       var globalSeed = 0;
 
       // COLLISION_LAYERS is already declared globally in collision.js
@@ -1999,7 +1999,7 @@ window.characterVertexShaderSource = `#version 300 es
           vkR: 0,
         };
 
-        if (typeof initChibiRagdollPhysics === "function") {
+        if (typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi" && typeof initChibiRagdollPhysics === "function") {
           initChibiRagdollPhysics(phase, (typeof isWalking !== "undefined" && isWalking), (typeof isSprinting !== "undefined" && isSprinting));
         }
 
@@ -2036,16 +2036,12 @@ window.characterVertexShaderSource = `#version 300 es
         const nz = sinTheta * sinPhi;
         const waterRadius = RADIUS + waterLevel * 0.15;
 
-        let wRadiusLocal = typeof getWaterRadiusAt === "function"
-          ? getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore)
-          : waterRadius;
         const caveData = typeof getTerrainSurfaceAndCeiling === "function"
           ? getTerrainSurfaceAndCeiling(nx, ny, nz, dist)
           : { ground: RADIUS + height * HEIGHT_SCALE, insideTunnel: false, ceiling: Infinity };
-
-        if (caveData.insideTunnel && wRadiusLocal === 0) {
-            wRadiusLocal = waterRadius;
-        }
+        let wRadiusLocal = typeof getWaterRadiusAt === "function"
+          ? getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore, caveData)
+          : waterRadius;
 
         if (typeof getWaterRadiusAt !== "function") {
           const latCharForSwim = Math.round((charTheta / Math.PI) * Math.min(currentGridSize, 200));
@@ -2525,7 +2521,7 @@ window.characterVertexShaderSource = `#version 300 es
         
         // Collision with chests and boats for ragdoll
         for (let item of collectibles) {
-          if (item.active && (item.type === "wood_chest" || item.type === "wood_boat") && !item.isPreview) {
+          if (item.active && !item.isGroundDrop && (item.type === "wood_chest" || item.type === "wood_boat") && !item.isPreview) {
             const sP = item.position;
             const sR = item.R;
             const sN = item.normal;
@@ -2639,8 +2635,8 @@ window.characterVertexShaderSource = `#version 300 es
           ragdollLimbs.vkR = r.v;
         }
 
-        // Option 2: Step procedural GLB bone ragdoll physics simulation with full impact impulse
-        if (typeof updateChibiRagdollPhysics === "function") {
+        // Option 2: Step procedural GLB bone ragdoll physics simulation (disabled when GLB_DISABLED)
+        if (typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi" && typeof updateChibiRagdollPhysics === "function") {
           updateChibiRagdollPhysics(dt, isRagdollOnGround, impactDeltaV);
         }
       }
@@ -3928,7 +3924,9 @@ window.characterVertexShaderSource = `#version 300 es
             colors: posColors,
             indices: posIndices,
             outVertices: new Float32Array(posVerts.length),
-            outNormals: new Float32Array(posNorms.length)
+            outNormals: new Float32Array(posNorms.length),
+            cloneOutVertices: new Float32Array(posVerts.length),
+            cloneOutNormals: new Float32Array(posNorms.length)
           },
           neg: {
             key: templateKey + ":neg",
@@ -3937,7 +3935,9 @@ window.characterVertexShaderSource = `#version 300 es
             colors: negColors,
             indices: negIndices,
             outVertices: new Float32Array(negVerts.length),
-            outNormals: new Float32Array(negNormals.length)
+            outNormals: new Float32Array(negNormals.length),
+            cloneOutVertices: new Float32Array(negVerts.length),
+            cloneOutNormals: new Float32Array(negNormals.length)
           }
         };
         _heldFlatTemplateCache[templateKey] = entry;
@@ -3954,8 +3954,8 @@ window.characterVertexShaderSource = `#version 300 es
         const srcV = variant.vertices;
         const srcN = variant.normals;
         const vLen = srcV.length;
-        const outV = isClone ? new Float32Array(vLen) : variant.outVertices;
-        const outN = isClone ? new Float32Array(vLen) : variant.outNormals;
+        const outV = isClone ? variant.cloneOutVertices : variant.outVertices;
+        const outN = isClone ? variant.cloneOutNormals : variant.outNormals;
         const sux = ux * scale, suy = uy * scale, suz = uz * scale;
         const svx = vx * scale, svy = vy * scale, svz = vz * scale;
         const swx = wx * scale, swy = wy * scale, swz = wz * scale;
@@ -3996,14 +3996,118 @@ window.characterVertexShaderSource = `#version 300 es
         }
 
         if (!equipIndexBuffer) equipIndexBuffer = activeGl.createBuffer();
-        if (!tplKey || equipIndexBuffer._templateKey !== tplKey || equipIndexBuffer._uploadedCount !== equipIndicesLength) {
+        const isSeq = !!(flatEquip._isSequentialIndices || tplKey);
+        const canReuseIdx = isSeq
+          ? (equipIndexBuffer._isSequential && equipIndexBuffer._uploadedCount === equipIndicesLength)
+          : false;
+        if (!canReuseIdx) {
           const idxData = (equipIndicesLength > 65535)
             ? (flatEquip.indices instanceof Uint32Array ? flatEquip.indices : new Uint32Array(flatEquip.indices))
             : (flatEquip.indices instanceof Uint16Array ? flatEquip.indices : new Uint16Array(flatEquip.indices));
           uploadDynamicBuffer(activeGl, equipIndexBuffer, activeGl.ELEMENT_ARRAY_BUFFER, idxData);
           equipIndexBuffer._uploadedCount = equipIndicesLength;
           equipIndexBuffer._templateKey = tplKey;
+          equipIndexBuffer._isSequential = isSeq;
         }
+      }
+
+      let _dashEquipScratchV = null;
+      let _dashEquipScratchN = null;
+      let _dashEquipScratchC = null;
+      let _dashEquipScratchI16 = null;
+      let _dashEquipScratchI32 = null;
+      let _dashEquipSeqFilled16 = 0;
+      let _dashEquipSeqFilled32 = 0;
+
+      const _SHIRA_SPIKE_DIRS = [
+        [-0.55, 0.65, 0.52], [-0.82, 0.42, 0.22], [-0.42, 0.78, -0.35],
+        [0.58, 0.62, 0.48], [0.85, 0.45, 0.18], [0.38, 0.82, -0.30],
+        [0.02, 0.88, 0.45]
+      ];
+      const _AEGIS_STEP1_SPIKE_DIRS = [
+        [-0.55, 0.65, 0.52], [-0.82, 0.42, 0.22], [-0.42, 0.78, -0.35],
+        [0.58, 0.62, 0.48], [0.85, 0.45, 0.18], [0.38, 0.82, -0.30],
+        [0.02, 0.88, 0.45]
+      ];
+      const _AEGIS_STEP4_SPIKE_DIRS = [
+        [-0.65, 0.62, 0.44], [-0.88, 0.38, 0.15], [-0.45, 0.78, -0.32],
+        [0.65, 0.62, 0.44], [0.88, 0.38, 0.15], [0.45, 0.78, -0.32],
+        [0.0, 0.92, 0.38], [-0.25, 0.75, 0.60], [0.25, 0.75, 0.60]
+      ];
+      const _AEGIS_CARRY_HILT_REL = [-0.020, -0.090, 0.180];
+      const _AEGIS_CARRY_BLADE_DIR = _v3Nrm([-0.38, -0.44, 0.81]);
+      const _AEGIS_CARRY_EDGE_R = _v3Nrm([0.65, -0.20, 0.73]);
+      const _AEGIS_CARRY_EDGE_L = _v3Nrm([-0.88, 0.33, 0.33]);
+      const _AEGIS_CARRY_EDGE_PERP = _v3Perp(_AEGIS_CARRY_EDGE_R, _AEGIS_CARRY_BLADE_DIR, [0, -1, 0]);
+      const _AEGIS_POST_PALM_R = _v3Nrm(_v3Crs(_AEGIS_CARRY_BLADE_DIR, _AEGIS_CARRY_EDGE_PERP), [1, 0, 0]);
+      const _AEGIS_POST_EDIR_L = _v3Perp(_AEGIS_CARRY_EDGE_L, _AEGIS_CARRY_BLADE_DIR, [-0.5, -0.5, 0.7]);
+      const _AEGIS_POST_PALM_L = _v3Nrm(_v3Crs(_AEGIS_POST_EDIR_L, _AEGIS_CARRY_BLADE_DIR), [-1, 0, 0]);
+      const _AEGIS_GS_N1 = _v3Nrm([-0.92, -0.32, 0.22]);
+      const _AEGIS_GS_N2 = _v3Nrm([-0.52, 0.42, -0.74]);
+      const _AEGIS_GS_N3 = [0, 1, 0];
+      const _AEGIS_POLE_R_DEF = [-0.78, -0.42, -0.25];
+      const _AEGIS_POLE_L_DEF = [0.78, -0.42, -0.25];
+
+      function _combineFlatEquipWithRawVfx(baseFlat, rawV, rawC, rawI) {
+        if (!rawI || rawI.length === 0) return baseFlat;
+        // Pass useCache = true so makeFlatShadedGeometry reuses scratch buffers instead of allocating 4 TypedArrays per frame
+        const vfxFlat = makeFlatShadedGeometry(rawV, rawC, rawI, true);
+        if (!vfxFlat || !vfxFlat.indices || vfxFlat.indices.length === 0) return baseFlat;
+
+        const baseVLen = baseFlat.vertices.length;
+        const vfxVLen = vfxFlat.vertices.length;
+        const totalVLen = baseVLen + vfxVLen;
+        if (!_dashEquipScratchV || _dashEquipScratchV.length < totalVLen) {
+          const cap = Math.max(totalVLen, 4096);
+          _dashEquipScratchV = new Float32Array(cap);
+          _dashEquipScratchN = new Float32Array(cap);
+          _dashEquipScratchC = new Float32Array(cap);
+        }
+        const outV = _dashEquipScratchV.subarray(0, totalVLen);
+        const outN = _dashEquipScratchN.subarray(0, totalVLen);
+        const outC = _dashEquipScratchC.subarray(0, totalVLen);
+        outV.set(baseFlat.vertices, 0);
+        outV.set(vfxFlat.vertices, baseVLen);
+        outN.set(baseFlat.normals, 0);
+        outN.set(vfxFlat.normals, baseVLen);
+        outC.set(baseFlat.colors, 0);
+        outC.set(vfxFlat.colors, baseVLen);
+
+        const totalILen = baseFlat.indices.length + vfxFlat.indices.length;
+        let outI;
+        if (totalVLen / 3 > 65535) {
+          if (!_dashEquipScratchI32 || _dashEquipScratchI32.length < totalILen) {
+            _dashEquipScratchI32 = new Uint32Array(Math.max(totalILen, 4096));
+            _dashEquipSeqFilled32 = 0;
+          }
+          if (_dashEquipSeqFilled32 < totalILen) {
+            for (let i = _dashEquipSeqFilled32; i < totalILen; i++) {
+              _dashEquipScratchI32[i] = i;
+            }
+            _dashEquipSeqFilled32 = totalILen;
+          }
+          outI = _dashEquipScratchI32.subarray(0, totalILen);
+        } else {
+          if (!_dashEquipScratchI16 || _dashEquipScratchI16.length < totalILen) {
+            _dashEquipScratchI16 = new Uint16Array(Math.max(totalILen, 4096));
+            _dashEquipSeqFilled16 = 0;
+          }
+          if (_dashEquipSeqFilled16 < totalILen) {
+            for (let i = _dashEquipSeqFilled16; i < totalILen; i++) {
+              _dashEquipScratchI16[i] = i;
+            }
+            _dashEquipSeqFilled16 = totalILen;
+          }
+          outI = _dashEquipScratchI16.subarray(0, totalILen);
+        }
+        return {
+          _templateKey: null,
+          _isSequentialIndices: true,
+          vertices: outV,
+          normals: outN,
+          colors: outC,
+          indices: outI
+        };
       }
 
       function _updateArmCannonWorldAim(pElbow, pHand, itemScale) {
@@ -4107,6 +4211,7 @@ window.characterVertexShaderSource = `#version 300 es
       }
 
       function updateChibiEquipMesh() {
+        if (typeof window !== "undefined" && window.GLB_DISABLED) return;
         const activeGl = (typeof gl !== "undefined" && gl) || (typeof window !== "undefined" && window.gl ? window.gl : null);
         if (!activeGl) return;
         if (typeof gl === "undefined" || !gl) gl = activeGl;
@@ -4403,10 +4508,23 @@ window.characterVertexShaderSource = `#version 300 es
           if (cloneWalkBlend <= 0.001) {
             phase = 0.0;
           }
+        } else if (isClone && cloneState && !effectiveRidingBoat && effectiveUseAnimTimer <= 0.01) {
+          // Smooth 24-frame walk-cycle quantization at LOD 0 so clustered village clones share GPU mesh buffers instead of rebuilding every tick
+          const tau = Math.PI * 2.0;
+          let wPh = (phase || 0.0) % tau;
+          if (wPh < 0.0) wPh += tau;
+          const step0 = tau / 24.0;
+          phase = (Math.round(wPh / step0) % 24) * step0;
+          cloneWalkBlend = cloneWalkBlend <= 0.01 ? 0.0 : (Math.round(Math.max(0.0, Math.min(1.0, cloneWalkBlend)) * 6.0) / 6.0);
+          cloneSwimFactor = cloneSwimFactor <= 0.01 ? 0.0 : (Math.round(Math.max(0.0, Math.min(1.0, cloneSwimFactor)) * 6.0) / 6.0);
+          cloneSwimMove = cloneSwimMove <= 0.01 ? 0.0 : (Math.round(Math.max(0.0, Math.min(1.0, cloneSwimMove)) * 4.0) / 4.0);
+          if (cloneWalkBlend <= 0.001 && cloneSwimFactor <= 0.001) {
+            phase = 0.0;
+          }
         }
 
         const isCloneIdleSettled = isClone && cloneWalkBlend <= 0.01 && cloneSwimFactor <= 0.01 && !effectiveRidingBoat && (!heldItem || effectiveUseAnimTimer <= 0.01);
-        const canUseSharedCloneBodyCache = !!(isClone && cloneState && !effectiveRidingBoat && (cloneLodLevel >= 1 || isCloneIdleSettled));
+        const canUseSharedCloneBodyCache = !!(isClone && cloneState && !effectiveRidingBoat && (cloneLodLevel >= 1 || isCloneIdleSettled || effectiveUseAnimTimer <= 0.01));
         let cloneBodyCacheKey = null;
         if (canUseSharedCloneBodyCache) {
           if (!window._cloneBodyBufferCache) window._cloneBodyBufferCache = new Map();
@@ -4418,12 +4536,15 @@ window.characterVertexShaderSource = `#version 300 es
           const tau = Math.PI * 2.0;
           let wPhCl = (phase || 0.0) % tau;
           if (wPhCl < 0.0) wPhCl += tau;
-          const phQ = (cloneWalkBlend <= 0.01) ? 0 : Math.round(wPhCl * 100);
+          const phQ = (cloneWalkBlend <= 0.01 && cloneSwimFactor <= 0.01) ? 0 : Math.round(wPhCl * 100);
           const wkQ = Math.round(cloneWalkBlend * 20);
           const swQ = Math.round(cloneSwimFactor * 10);
           const swmQ = Math.round(cloneSwimMove * 10);
-          const heldKey = heldItem ? (String(heldItem.name || "item") + "_" + Math.round(effectiveUseAnimTimer * 10)) : "none";
-          const brBucket = (cloneLodLevel >= 1) ? 0 : Math.round((Math.sin(waterAnimTime * 2.5) + 1.0) * 6);
+          const cloneAegisSuffix = (heldItem && (heldItem.name === "AEGIS_SHIFT" || heldItem.name === "aegis_shift"))
+            ? ("_" + ((cloneState && cloneState.aegisToolMode === "axe") ? "axe" : "pickaxe"))
+            : "";
+          const heldKey = heldItem ? (String(heldItem.name || "item") + cloneAegisSuffix + "_" + Math.round(effectiveUseAnimTimer * 10)) : "none";
+          const brBucket = (cloneLodLevel >= 1 || cloneWalkBlend > 0.01) ? 0 : Math.round((Math.sin(waterAnimTime * 2.5) + 1.0) * 3);
           const scQ = Math.round(((typeof charScale === "number" ? charScale : 0.1) || 0.1) * 1000);
           cloneBodyCacheKey = `cb_${eqKeyCl}_${hoodFlagCl}_${cloneLodLevel}_${phQ}_${wkQ}_${swQ}_${swmQ}_${heldKey}_${brBucket}_${scQ}`;
 
@@ -6015,29 +6136,27 @@ window.characterVertexShaderSource = `#version 300 es
                          0.5 * (leftArmPivot[1] + rightArmPivot[1]),
                          0.5 * (leftArmPivot[2] + rightArmPivot[2])
                      ];
-                     const carryHiltRel = [-0.020, -0.090, 0.180];
-                     const carryBladeDir = nrmGs([-0.38, -0.44, 0.81]);
-                     const carryEdgeRightDir = nrmGs([0.65, -0.20, 0.73]);
-                     const carryEdgeLeftDir = nrmGs([-0.88, 0.33, 0.33]);
+                     const carryHiltRel = _AEGIS_CARRY_HILT_REL;
+                     const carryBladeDir = _AEGIS_CARRY_BLADE_DIR;
+                     const carryEdgeRightDir = _AEGIS_CARRY_EDGE_R;
 
                      let targetHiltRel = carryHiltRel;
                      let targetBladeDir = carryBladeDir;
-                     let trueEdge = perpGs(carryEdgeRightDir, carryBladeDir, [0, -1, 0]);
+                     let trueEdge = _AEGIS_CARRY_EDGE_PERP;
                      let edgeWeightR = 0.85;
-                     let poleRight = [-0.78, -0.42, -0.25];
-                     let poleLeft = [0.78, -0.42, -0.25];
+                     let poleRight = _AEGIS_POLE_R_DEF;
+                     let poleLeft = _AEGIS_POLE_L_DEF;
 
-                     const gsN1 = nrmGs([-0.92, -0.32, 0.22]);
-                     const gsN2 = nrmGs([-0.52, 0.42, -0.74]);
-                     const gsN3 = [0, 1, 0];
+                     const gsN1 = _AEGIS_GS_N1;
+                     const gsN2 = _AEGIS_GS_N2;
+                     const gsN3 = _AEGIS_GS_N3;
 
                      if (aegisMode === "charging") {
                          const sCh = aegisChargeSmooth;
                          targetHiltRel = lerpV3(carryHiltRel, [-0.030, -0.045, 0.165], sCh);
                          targetBladeDir = nrmGs(lerpV3(carryBladeDir, [-0.34, 0.36, 0.87], sCh));
-                         const carryEdgePerp = perpGs(carryEdgeRightDir, carryBladeDir, [0, -1, 0]);
                          const guardEdge = perpGs(crsGs(targetBladeDir, gsN1), targetBladeDir, [0.4, -0.8, 0.4]);
-                         trueEdge = perpGs(lerpV3(carryEdgePerp, guardEdge, sCh), targetBladeDir, guardEdge);
+                         trueEdge = perpGs(lerpV3(_AEGIS_CARRY_EDGE_PERP, guardEdge, sCh), targetBladeDir, guardEdge);
                          edgeWeightR = 0.85;
                      } else if (aegisMode === "dashing") {
                          if (aegisStep === 1) {
@@ -6196,11 +6315,11 @@ window.characterVertexShaderSource = `#version 300 es
 
                      let eDirR, palmRight, eDirL, palmLeft, activeSwordEdge;
                      if (aegisMode === "post_skill") {
-                         // Preserve verified downward carry grip orientations unchanged
-                         eDirR = perpGs(carryEdgeRightDir, bDir, [0, -1, 0]);
-                         palmRight = nrmGs(crsGs(bDir, eDirR), [1, 0, 0]);
-                         eDirL = perpGs(carryEdgeLeftDir, bDir, [-0.5, -0.5, 0.7]);
-                         palmLeft = nrmGs(crsGs(eDirL, bDir), [-1, 0, 0]);
+                         // Reuse precomputed verified downward carry grip orientations
+                         eDirR = _AEGIS_CARRY_EDGE_PERP;
+                         palmRight = _AEGIS_POST_PALM_R;
+                         eDirL = _AEGIS_POST_EDIR_L;
+                         palmLeft = _AEGIS_POST_PALM_L;
                      } else {
                          // Forearm-safe two-handed grip + exact slash-plane sword cutting edge (zero wrist twist, 100% true edge orientation)
                          const roughIKR = solveSwordIK(leftArmPivot, upperGripCenter, 0.132, 0.128, poleRight);
@@ -7168,7 +7287,7 @@ window.characterVertexShaderSource = `#version 300 es
             clonePhysN = [cNx, cNy, cNz];
             clonePhysR = [cEast[0] * cCosH - cNorth[0] * cSinH, cEast[1] * cCosH - cNorth[1] * cSinH, cEast[2] * cCosH - cNorth[2] * cSinH];
             clonePhysF = [cNorth[0] * cCosH + cEast[0] * cSinH, cNorth[1] * cCosH + cEast[1] * cSinH, cNorth[2] * cCosH + cEast[2] * cSinH];
-            const rad = cloneState.centerRadius || (typeof RADIUS !== "undefined" ? RADIUS : 32.0);
+            const rad = cloneState.centerRadius || (typeof RADIUS !== "undefined" ? RADIUS : 64.0);
             cloneWorldPos = [rad * cNx, rad * cNy, rad * cNz];
           }
 
@@ -7444,7 +7563,6 @@ window.characterVertexShaderSource = `#version 300 es
         
         const isWateringBucketAnim = (!isClone && typeof window.bucketWaterTimer === "number" && window.bucketWaterTimer > 0);
         if (heldItem || isWateringBucketAnim) {
-            const charMat = (!isClone && typeof getCharacterMatrix === "function") ? getCharacterMatrix() : null;
             const transformPt = (p) => {
                 if (!p) return [0, 0, 0];
                 return [p[0], p[1], p[2]];
@@ -7460,23 +7578,26 @@ window.characterVertexShaderSource = `#version 300 es
 
             if (!isClone && heldItem && (heldItem.name === "WOODEN_ARM_CANNON" || heldItem.name === "ARM_CANNON")) {
                 _updateArmCannonWorldAim(rightElbowRot, rightHandRot, itemScale);
-            } else if (!isClone && heldItem && heldItem.name === "BOW" && !effectiveArrowShot && effectiveUseAnimTimer > 0 && charMat) {
-                const wGrip = transformPt(bowGripRot);
-                const wNock = transformPt(getHandGripFrame(rightElbowRot, rightHandRot, false).gripCenter);
-                const arrowDir = [wGrip[0] - wNock[0], wGrip[1] - wNock[1], wGrip[2] - wNock[2]];
-                const arrowLen = Math.hypot(arrowDir[0], arrowDir[1], arrowDir[2]);
-                if (arrowLen > 0.001) {
-                    arrowDir[0] /= arrowLen; arrowDir[1] /= arrowLen; arrowDir[2] /= arrowLen;
-                    window.lastBowGripPos = [
-                        charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
-                        charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
-                        charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
-                    ];
-                    window.lastBowAimDir = [
-                        charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
-                        charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
-                        charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
-                    ];
+            } else if (!isClone && heldItem && heldItem.name === "BOW" && !effectiveArrowShot && effectiveUseAnimTimer > 0 && typeof getCharacterMatrix === "function") {
+                const charMat = getCharacterMatrix();
+                if (charMat) {
+                    const wGrip = transformPt(bowGripRot);
+                    const wNock = transformPt(getHandGripFrame(rightElbowRot, rightHandRot, false).gripCenter);
+                    const arrowDir = [wGrip[0] - wNock[0], wGrip[1] - wNock[1], wGrip[2] - wNock[2]];
+                    const arrowLen = Math.hypot(arrowDir[0], arrowDir[1], arrowDir[2]);
+                    if (arrowLen > 0.001) {
+                        arrowDir[0] /= arrowLen; arrowDir[1] /= arrowLen; arrowDir[2] /= arrowLen;
+                        window.lastBowGripPos = [
+                            charMat[0]*wGrip[0] + charMat[4]*wGrip[1] + charMat[8]*wGrip[2] + charMat[12],
+                            charMat[1]*wGrip[0] + charMat[5]*wGrip[1] + charMat[9]*wGrip[2] + charMat[13],
+                            charMat[2]*wGrip[0] + charMat[6]*wGrip[1] + charMat[10]*wGrip[2] + charMat[14]
+                        ];
+                        window.lastBowAimDir = [
+                            charMat[0]*arrowDir[0] + charMat[4]*arrowDir[1] + charMat[8]*arrowDir[2],
+                            charMat[1]*arrowDir[0] + charMat[5]*arrowDir[1] + charMat[9]*arrowDir[2],
+                            charMat[2]*arrowDir[0] + charMat[6]*arrowDir[1] + charMat[10]*arrowDir[2]
+                        ];
+                    }
                 }
             }
 
@@ -7507,20 +7628,22 @@ window.characterVertexShaderSource = `#version 300 es
                 const le = leftElbowRot || [0, 0, 0];
                 const lh = leftHandRot || [0, 0, 0];
 
+                const isStaticEquipSkillMode = (shirasayaMode === "idle" || shirasayaMode === "post_skill") && (aegisMode === "idle" || aegisMode === "post_skill");
                 if (
                     _lastEquipRenderMode === "capsule" &&
                     equipIndicesLength > 0 &&
                     _lastCapsuleEquipSig &&
                     !isWateringBucketAnim &&
                     bScoop === 0 &&
-                    shirasayaMode === "idle" &&
-                    aegisMode === "idle" &&
+                    isStaticEquipSkillMode &&
                     !bowVibe
                 ) {
                     const s = _lastCapsuleEquipSig;
                     if (
                         s.name === heldName &&
                         s.subToolMode === subToolMode &&
+                        s.shirasayaMode === shirasayaMode &&
+                        s.aegisMode === aegisMode &&
                         s.hasWater === !!(heldItem && heldItem.hasWater) &&
                         s.arrowShot === !!effectiveArrowShot &&
                         Math.abs(s.useTimer - effectiveUseAnimTimer) < 1e-5 &&
@@ -7542,6 +7665,8 @@ window.characterVertexShaderSource = `#version 300 es
                     _lastCapsuleEquipSig = {
                         name: heldName,
                         subToolMode: subToolMode,
+                        shirasayaMode: shirasayaMode,
+                        aegisMode: aegisMode,
                         hasWater: !!(heldItem && heldItem.hasWater),
                         arrowShot: !!effectiveArrowShot,
                         useTimer: effectiveUseAnimTimer,
@@ -7796,7 +7921,11 @@ window.characterVertexShaderSource = `#version 300 es
                         const wAxisAlong = xformDir(localAxisAlong);
                         const wEdgeUp = xformDir(localEdgeUp);
                         const wThickRight = xformDir(localThickRight);
-                        window.buildShirasayaModel(0.31 * itemScale, wGripPos, wAxisAlong, wEdgeUp, wThickRight, rawV, rawC, rawI);
+                        const baseShiraFlat = _getTransformedHeldFlatEquip(
+                          "SHIRASAYA",
+                          (v, c, idx) => window.buildShirasayaModel(1.0, [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], v, c, idx),
+                          wGripPos, wAxisAlong, wEdgeUp, wThickRight, 0.31 * itemScale, isClone
+                        );
 
                         const fadeOut = Math.max(0.0, Math.min(1.0, (1.0 - shirasayaDashProg) / 0.28));
                         if (shirasayaStep === 1 && shirasayaDashProg > 0.05 && shirasayaDashProg < 0.94) {
@@ -7860,15 +7989,11 @@ window.characterVertexShaderSource = `#version 300 es
                           if (shirasayaDashProg >= 0.26) {
                             const waveProg = Math.min(1.0, (shirasayaDashProg - 0.26) / 0.22);
                             const tipImpact = transformPt([-0.09, -0.34, 0.56]);
-                            const spikeDirs = [
-                              [-0.55, 0.65, 0.52], [-0.82, 0.42, 0.22], [-0.42, 0.78, -0.35],
-                              [0.58, 0.62, 0.48], [0.85, 0.45, 0.18], [0.38, 0.82, -0.30],
-                              [0.02, 0.88, 0.45]
-                            ];
                             const spScale = (0.12 + 0.14 * waveProg) * Math.max(0.25, fadeOut);
-                            _emitGroundShatterSpikes(addWedge, tipImpact, spikeDirs, spScale, 0.032, 0.002, 0.014, [0.78, 0.96, 1.0], [0.22, 0.76, 1.0]);
+                            _emitGroundShatterSpikes(addWedge, tipImpact, _SHIRA_SPIKE_DIRS, spScale, 0.032, 0.002, 0.014, [0.78, 0.96, 1.0], [0.22, 0.76, 1.0]);
                           }
                         }
+                        flatEquip = _combineFlatEquipWithRawVfx(baseShiraFlat, rawV, rawC, rawI);
                       }
                     } else {
                       const wGripPos = transformPt(rightGripPos);
@@ -7919,7 +8044,11 @@ window.characterVertexShaderSource = `#version 300 es
                       const wGripPos = transformPt(modelBaseLocal);
 
                       if (aegisMode === "dashing") {
-                        window.buildAegisShiftModel(gsScale, wGripPos, xformDir(curAlong), xformDir(curEdge), xformDir(curThick), rawV, rawC, rawI, "greatsword");
+                        const baseAegisFlat = _getTransformedHeldFlatEquip(
+                          "AEGIS_SHIFT:greatsword",
+                          (v, c, idx) => window.buildAegisShiftModel(1.0, [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], v, c, idx, "greatsword"),
+                          wGripPos, xformDir(curAlong), xformDir(curEdge), xformDir(curThick), gsScale, isClone
+                        );
                         const fadeOutGs = Math.max(0.0, Math.min(1.0, (1.0 - aegisDashProg) / 0.32));
                         const gsC = [0.86, 0.99, 1.0], gsRim = [0.20, 0.86, 1.0];
 
@@ -7933,25 +8062,20 @@ window.characterVertexShaderSource = `#version 300 es
                           if (aegisDashProg >= 0.32) {
                             const waveGs = Math.min(1.0, (aegisDashProg - 0.32) / 0.22);
                             const tipImpactGs = transformPt([0.04, -0.34, 0.58]);
-                            const spikeDirsGs = [
-                              [-0.55, 0.65, 0.52], [-0.82, 0.42, 0.22], [-0.42, 0.78, -0.35],
-                              [0.58, 0.62, 0.48], [0.85, 0.45, 0.18], [0.38, 0.82, -0.30],
-                              [0.02, 0.88, 0.45]
-                            ];
                             const spScaleGs = (0.14 + 0.16 * waveGs) * Math.max(0.25, fadeOutGs);
-                            _emitGroundShatterSpikes(addWedge, tipImpactGs, spikeDirsGs, spScaleGs, 0.036, 0.002, 0.016, [0.78, 0.96, 1.0], [0.22, 0.76, 1.0]);
+                            _emitGroundShatterSpikes(addWedge, tipImpactGs, _AEGIS_STEP1_SPIKE_DIRS, spScaleGs, 0.036, 0.002, 0.016, [0.78, 0.96, 1.0], [0.22, 0.76, 1.0]);
                           }
                         } else if (aegisStep === 2 && aegisDashProg >= 0.12 && aegisDashProg < 0.94) {
                           const arcGrow2 = Math.min(1.0, (aegisDashProg - 0.12) / 0.34);
                           const gsCenter2 = transformPt([0.0, 0.02 + bOffset, 0.14]);
-                          const gsN2 = normalize([-0.52, 0.42, -0.74]);
-                          const gsU2 = normalize([0.0, 0.0, 1.0]);
+                          const gsN2 = _AEGIS_GS_N2;
+                          const gsU2 = [0.0, 0.0, 1.0];
                           const gsV2 = normalize(cross(gsN2, gsU2));
                           _addSlashArcRibbon(rawV, rawC, rawI, gsCenter2, gsU2, gsV2, gsN2, 0.28, 0.28 + 0.44 * fadeOutGs, -1.05, -1.05 + 2.05 * arcGrow2, 24, 0.017, gsC, gsRim, 0.7, 0.3);
                         } else if (aegisStep === 3 && aegisDashProg >= 0.12 && aegisDashProg < 0.94) {
                           const arcGrow3 = Math.min(1.0, (aegisDashProg - 0.12) / 0.34);
                           const gsCenter3 = transformPt([0.0, -0.02 + bOffset, 0.10]);
-                          const gsN3 = [0, 1, 0];
+                          const gsN3 = _AEGIS_GS_N3;
                           const gsU3 = [0, 0, 1];
                           const gsV3 = [-1, 0, 0];
                           _addSlashArcRibbon(rawV, rawC, rawI, gsCenter3, gsU3, gsV3, gsN3, 0.30, 0.30 + 0.46 * fadeOutGs, -0.95, -0.95 + 2.10 * arcGrow3, 26, 0.018, gsC, gsRim, 0.7, 0.3);
@@ -7966,15 +8090,11 @@ window.characterVertexShaderSource = `#version 300 es
                           if (aegisDashProg >= 0.38) {
                             const wave4 = Math.min(1.0, (aegisDashProg - 0.38) / 0.22);
                             const tipImpact4 = transformPt([0.0, -0.34, 0.62]);
-                            const spikeDirs4 = [
-                              [-0.65, 0.62, 0.44], [-0.88, 0.38, 0.15], [-0.45, 0.78, -0.32],
-                              [0.65, 0.62, 0.44], [0.88, 0.38, 0.15], [0.45, 0.78, -0.32],
-                              [0.0, 0.92, 0.38], [-0.25, 0.75, 0.60], [0.25, 0.75, 0.60]
-                            ];
                             const spScale4 = (0.18 + 0.20 * wave4) * Math.max(0.25, fadeOutGs);
-                            _emitGroundShatterSpikes(addWedge, tipImpact4, spikeDirs4, spScale4, 0.044, 0.003, 0.020, [0.82, 0.98, 1.0], [0.20, 0.78, 1.0]);
+                            _emitGroundShatterSpikes(addWedge, tipImpact4, _AEGIS_STEP4_SPIKE_DIRS, spScale4, 0.044, 0.003, 0.020, [0.82, 0.98, 1.0], [0.20, 0.78, 1.0]);
                           }
                         }
+                        flatEquip = _combineFlatEquipWithRawVfx(baseAegisFlat, rawV, rawC, rawI);
                       } else {
                         flatEquip = _getTransformedHeldFlatEquip(
                           "AEGIS_SHIFT:greatsword",
@@ -7983,8 +8103,9 @@ window.characterVertexShaderSource = `#version 300 es
                         );
                       }
                     } else {
-                      const aStTool = (typeof window.aegisShiftState === "object") ? window.aegisShiftState : null;
-                      const subToolMode = (aStTool && aStTool.toolMode === "axe") ? "axe" : "pickaxe";
+                      const subToolMode = isClone
+                        ? ((cloneState && cloneState.aegisToolMode === "axe") ? "axe" : "pickaxe")
+                        : ((typeof window.aegisShiftState === "object" && window.aegisShiftState && window.aegisShiftState.toolMode === "axe") ? "axe" : "pickaxe");
                       const wGripPos = transformPt(rightGripPos);
                       const wAxisAlong = xformDir(rightKnuckleDir);
                       const wEdgeUp = xformDir(rightArmDir);
@@ -8192,7 +8313,7 @@ window.characterVertexShaderSource = `#version 300 es
               sharedBufSet.isSharedCache = true;
               sharedBufSet.headP1 = [headP1[0], headP1[1], headP1[2]];
               sharedBufSet.scale = scaleFactor;
-              if (window._cloneBodyBufferCache.size >= 192) {
+              if (window._cloneBodyBufferCache.size >= 320) {
                 const oldestKey = window._cloneBodyBufferCache.keys().next().value;
                 if (oldestKey !== undefined) window._cloneBodyBufferCache.delete(oldestKey);
               }
@@ -8803,7 +8924,8 @@ window.characterVertexShaderSource = `#version 300 es
           N = [0, 1, 0],
           F = [0, 0, 1],
           R = [1, 0, 0],
-          baseGroundRadius = 20.0
+          baseGroundRadius = 20.0,
+          caveData = null
         } = opts;
 
         let groundRadius = baseGroundRadius;
@@ -8812,16 +8934,35 @@ window.characterVertexShaderSource = `#version 300 es
         let finalR = [R[0], R[1], R[2]];
 
         if (swimFactor > 0.0) {
-          const targetSwimRadius = waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
+          const rawSwimRadius = waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
+          const targetSwimRadius = (typeof window !== "undefined" && typeof window.getEffectiveSwimTopRadius === "function")
+            ? window.getEffectiveSwimTopRadius(waterRadius, swimMovementFactor, charScale, caveData)
+            : ((caveData && caveData.insideTunnel && caveData.ceiling !== Infinity)
+              ? Math.min(rawSwimRadius, caveData.ceiling - 0.46 * charScale)
+              : rawSwimRadius);
+          const cappedByCeiling = (targetSwimRadius < rawSwimRadius - 1e-6);
           const subSwimRadius = targetSwimRadius - diveDepth;
           groundRadius = groundRadius * (1.0 - swimFactor) + subSwimRadius * swimFactor;
 
-          // Gentle water bobbing
-          const bobSpeed = isWalking ? 4.0 : 2.0;
-          const bobAmp = isWalking ? 0.02 : 0.04;
-          const bobFactor = Math.max(0, 1.0 - diveDepth / (0.1 * charScale));
-          const bobbing = Math.sin(waterTime * bobSpeed) * bobAmp * charScale * bobFactor;
-          groundRadius += bobbing;
+          // Gentle water bobbing (suppressed when diving deeply or pressed against a cave ceiling)
+          if (!cappedByCeiling) {
+            const bobSpeed = isWalking ? 4.0 : 2.0;
+            const bobAmp = isWalking ? 0.02 : 0.04;
+            const bobFactor = Math.max(0, 1.0 - diveDepth / (0.1 * charScale));
+            const bobbing = Math.sin(waterTime * bobSpeed) * bobAmp * charScale * bobFactor;
+            groundRadius += bobbing;
+          }
+
+          // Unified floor & ceiling clamping for both surface water and cave tunnels
+          if (caveData && caveData.insideTunnel) {
+            const minCenter = caveData.ground + 0.46 * charScale;
+            const maxCenter = (caveData.ceiling !== Infinity) ? (caveData.ceiling - 0.46 * charScale) : Infinity;
+            if (groundRadius < minCenter) groundRadius = minCenter;
+            if (groundRadius > maxCenter) groundRadius = maxCenter;
+          } else if (typeof terrainRadius === "number" && !Number.isNaN(terrainRadius)) {
+            const minCenter = terrainRadius + 0.46 * charScale;
+            if (groundRadius < minCenter) groundRadius = minCenter;
+          }
 
           // Forward swimming horizontal tilt
           const tiltAngle = swimFactor * (Math.PI * 0.03 + swimMovementFactor * (Math.PI * 0.39));
@@ -9138,7 +9279,8 @@ window.characterVertexShaderSource = `#version 300 es
               // 2. Action Reach check for other collectibles
               for (let item of collectibles) {
                 if (!item.active) continue;
-                if (item.type === "planet_core" || item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (item.type === "planet_core") continue;
+                if (!item.isGroundDrop && (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wild_growing_plant" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_"))) continue;
                 
                 const checkDist = (item.type === "cotton_plant" || item.type === "crown_flower" || item.type === "grass") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -9153,41 +9295,34 @@ window.characterVertexShaderSource = `#version 300 es
             }
 
             if (bestItem) {
-              let item = bestItem;
-              let icon = "🌿";
-              let label = "BRANCH";
-              if (typeof window !== "undefined" && window.GroundDropSystem && window.GroundDropSystem.isGroundDropType(item.type)) {
-                const meta = window.GroundDropSystem.getMeta(item.type);
-                icon = meta.icon;
-                label = meta.label;
-              } else if (item.type === "plank" || item.type === "wood_floor" || item.type === "thin_wood_floor") { icon = "🪵"; label = item.type === "thin_wood_floor" ? "THIN_WOOD_FLOOR" : "WOOD_FLOOR"; }
-              else if (item.type === "stone_floor") { icon = "🪨"; label = "STONE_FLOOR"; }
-              else if (item.type === "campfire") { icon = "🔥"; label = "CAMPFIRE"; }
-              else if (item.type === "wood_boat") { icon = "🛶"; label = "WOOD_BOAT"; }
-              else if (item.type === "robot_stand") { icon = "🏗️"; label = "ROBOT_STAND"; }
-              else if (item.type === "robot_cockpit") { icon = "🤖"; label = "ROBOT_COCKPIT"; }
-              else if (item.type === "robot_left_arm") { icon = "🦾"; label = "ROBOT_LEFT_ARM"; }
-              else if (item.type === "robot_right_arm") { icon = "🦾"; label = "ROBOT_RIGHT_ARM"; }
-              else if (item.type === "robot_left_leg") { icon = "🦿"; label = "ROBOT_LEFT_LEG"; }
-              else if (item.type === "robot_right_leg") { icon = "🦿"; label = "ROBOT_RIGHT_LEG"; }
-              else if (item.type === "wood_wheel") { icon = "🛞"; label = "WOOD_WHEEL"; }
-              else if (item.type === "electric_engine") { icon = "🔋"; label = "ELECTRIC_ENGINE"; }
-              else if (item.type === "boat_wing") { icon = "🪽"; label = "BOAT_WING"; }
-              else if (item.type === "wooden_arm_cannon") { icon = "🪵🦾"; label = "WOODEN_ARM_CANNON"; }
-              
-              const dropTotal = Math.max(1, Math.floor(item.count || 1));
+              const item = bestItem;
+              const resolved = (typeof window !== "undefined" && window.GroundDropSystem && typeof window.GroundDropSystem.resolveDropItemData === "function")
+                ? window.GroundDropSystem.resolveDropItemData(item)
+                : null;
+              const resolvedData = resolved && resolved.itemData ? resolved.itemData : {
+                name: item.dropItemName || (item.type === "arrow" && item.ammoType ? item.ammoType : String(item.type || "BRANCH").toUpperCase()),
+                icon: item.dropItemIcon || "🌿",
+                label: item.dropItemLabel || item.dropItemName || "BRANCH",
+                count: Math.max(1, Math.floor(item.count || 1))
+              };
+
+              const restoredName = resolvedData.name;
+              const dropTotal = resolvedData.count;
               const availSpace = (dropTotal > 1 && typeof window.getAvailableInventorySpace === "function")
-                ? window.getAvailableInventorySpace(label)
+                ? window.getAvailableInventorySpace(restoredName)
                 : dropTotal;
               const takeCount = dropTotal > 1 ? Math.min(dropTotal, availSpace) : 1;
 
               if (takeCount > 0) {
                 const itemData = {
-                  icon: icon,
-                  label: label,
-                  name: label,
+                  icon: resolvedData.icon,
+                  label: resolvedData.label,
+                  name: restoredName,
                   count: takeCount
                 };
+                if (typeof resolvedData.rechargeTime === "number") {
+                  itemData.rechargeTime = resolvedData.rechargeTime;
+                }
 
                 if (addItemToInventory(itemData)) {
                   collectedCount[item.type] = (collectedCount[item.type] || 0) + takeCount;

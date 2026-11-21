@@ -4484,6 +4484,246 @@ window.cloud3DProgram = cloud3DProgram;
         }).catch(() => {});
       }
 
+      // Hoisted unified melee skill tick helpers & static configs (avoids allocating closures/objects 60x/sec inside render())
+      function _smoothStepMelee(a, b, x) {
+        const t = Math.max(0.0, Math.min(1.0, (x - a) / Math.max(1e-4, b - a)));
+        return t * t * (3.0 - 2.0 * t);
+      }
+      function _finishMeleeComboOrStep(st) {
+        if (st.isAerialCombo) {
+          window._shiraLandSafeTimer = 2.5;
+          window._playerHighestAirRadius = null;
+        }
+        st.mode = "post_skill";
+        st.comboActive = false;
+        st.comboStep = 1;
+        st.isAerialCombo = false;
+        st.aerialTarget = null;
+        st.aerialBaseRadius = null;
+        st.dashTimer = 0.0;
+        st.postGraceTimer = 0.14;
+      }
+      const _TANTO_MELEE_TICK_CFG = {
+        weaponId: "TANTO",
+        resetFnName: "resetTantoShirasayaState",
+        execFnName: "executeTantoSkillStep",
+        releaseFnName: "releaseTantoChargeSkill",
+        defaultDur: 0.27,
+        turnStop: 0.32,
+        turnSpeed: 16.0,
+        dmg: 1,
+        omniStep3: true,
+        coneMap: { 1: 0.48, 2: 0.12, 3: null, 4: 0.42 },
+        defaultCone: null,
+        vertMap: { 1: 0.65, 2: 0.55, 3: 0.72, 4: 0.75 },
+        defaultVert: 0.65,
+        labelMap: {
+          1: "⚡🗡️ ชิราซายะ [1/4: พุ่งฟัน]",
+          2: "⚡🗡️ ชิราซายะ [2/4: ตวัดล่าง]",
+          3: "🌪️🗡️ ชิราซายะ [3/4: หมุนกลางอากาศ]",
+          4: "💥🗡️ ชิราซายะ [4/4: ฟันกระแทกพื้น]"
+        },
+        fallbackLabel: "⚡🗡️ ชิราซายะ",
+        lowHungerComboNotice: "⚠️ ความหิวไม่พอสำหรับคอมโบ! ใช้เฉพาะสกิลพุ่ง (1 HP)",
+        outOfHungerNotice: "⚠️ ความหิวหมดแล้ว! จบคอมโบชิราซายะ",
+        keepLiftOnStep3End: true,
+        canHit: function(step, prog) { return (step !== 4 || prog >= 0.25); },
+        onDashFrame: function(st, step, prog) {
+          if (step === 1) {
+            st.visualAirLift = 0.0;
+            st.visualSpinYaw = 0.0;
+          } else if (step === 2) {
+            st.visualAirLift = 0.0;
+            st.visualSpinYaw = Math.sin(Math.min(1.0, prog / 0.55) * Math.PI) * 0.38;
+          } else if (step === 3) {
+            const spinE = prog * prog * (3.0 - 2.0 * prog);
+            const endLift = st.comboActive ? 0.16 : 0.0;
+            st.visualAirLift = st.isAerialCombo
+              ? (Math.sin(prog * Math.PI) * 0.16)
+              : (Math.sin(prog * Math.PI) * 0.54 * (1.0 - 0.18 * prog) + endLift * (prog * prog));
+            st.visualSpinYaw = spinE * Math.PI * 2.0;
+          } else {
+            const dropT = Math.min(1.0, prog / 0.30);
+            const dropE = dropT * dropT * (3.0 - 2.0 * dropT);
+            st.visualAirLift = st.isAerialCombo ? 0.0 : Math.max(0.0, 0.16 * (1.0 - dropE));
+            st.visualSpinYaw = 0.0;
+            if (prog >= 0.35 && !st.impactPlayed) {
+              st.impactPlayed = true;
+              if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
+              else if (typeof playChopSound === "function") playChopSound();
+            }
+          }
+        }
+      };
+      const _AEGIS_MELEE_TICK_CFG = {
+        weaponId: "AEGIS_SHIFT",
+        resetFnName: "resetAegisShiftState",
+        execFnName: "executeAegisSkillStep",
+        releaseFnName: "releaseAegisChargeSkill",
+        defaultDur: 0.38,
+        turnStop: 0.36,
+        turnSpeed: 15.0,
+        dmg: 2,
+        omniStep3: false,
+        coneMap: { 1: 0.25, 2: 0.20, 3: -0.15, 4: 0.22 },
+        defaultCone: 0.25,
+        vertMap: { 1: 0.72, 2: 0.78, 3: 0.72, 4: 0.85 },
+        defaultVert: 0.72,
+        labelMap: {
+          1: "⚔️⚡ Aegis-Shift [1/4: พุ่งฟัน]",
+          2: "⚔️🔥 Aegis-Shift [2/4: ฟันเสยเฉียง]",
+          3: "⚔️💨 Aegis-Shift [3/4: กวาดแนวขวาง]",
+          4: "⚔️💥 Aegis-Shift [4/4: ผ่าปฐพี]"
+        },
+        fallbackLabel: "⚔️⚡ ดาบใหญ่ Aegis-Shift",
+        lowHungerComboNotice: "⚠️ ความหิวไม่พอสำหรับคอมโบ! ใช้เฉพาะสกิลพุ่ง (2 HP)",
+        outOfHungerNotice: "⚠️ ความหิวหมดแล้ว! จบคอมโบดาบใหญ่ Aegis-Shift",
+        keepLiftOnStep3End: false,
+        canHit: function(step, prog) { return (step === 1 ? prog >= 0.20 : (step === 4 ? prog >= 0.28 : prog >= 0.16)); },
+        onDashFrame: function(aSt, step, prog) {
+          if (step === 1) {
+            const windTwist = _smoothStepMelee(0.0, 0.18, prog);
+            const cleaveTwist = _smoothStepMelee(0.16, 0.54, prog);
+            const settleTwist = _smoothStepMelee(0.64, 1.0, prog);
+            aSt.visualSpinYaw = (-0.26 * windTwist * (1.0 - cleaveTwist) + 0.30 * cleaveTwist) * (1.0 - settleTwist);
+            aSt.visualAirLift = 0.0;
+            if (prog >= 0.34 && !aSt.impactPlayed) {
+              aSt.impactPlayed = true;
+              if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
+            }
+          } else if (step === 2) {
+            const wind2 = _smoothStepMelee(0.0, 0.16, prog);
+            const slash2 = _smoothStepMelee(0.14, 0.56, prog);
+            const settle2 = _smoothStepMelee(0.72, 1.0, prog);
+            aSt.visualSpinYaw = (-0.24 * wind2 * (1.0 - slash2) + 0.24 * slash2) * (1.0 - settle2);
+            aSt.visualAirLift = 0.0;
+          } else if (step === 3) {
+            const wind3 = _smoothStepMelee(0.0, 0.16, prog);
+            const slash3 = _smoothStepMelee(0.14, 0.58, prog);
+            const settle3 = _smoothStepMelee(0.76, 1.0, prog);
+            aSt.visualSpinYaw = (0.22 * wind3 * (1.0 - slash3) - 0.30 * slash3) * (1.0 - settle3);
+            aSt.visualAirLift = 0.0;
+          } else {
+            const lift4 = Math.sin(Math.min(1.0, prog / 0.38) * Math.PI);
+            aSt.visualAirLift = aSt.isAerialCombo ? 0.0 : (lift4 * 0.09);
+            aSt.visualSpinYaw = 0.0;
+            if (prog >= 0.38 && !aSt.impactPlayed) {
+              aSt.impactPlayed = true;
+              if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
+              else if (typeof playChopSound === "function") playChopSound();
+            }
+          }
+        }
+      };
+      const _meleeDashTrackOpts = { turnStopBeforeEnd: 0.34, turnSpeed: 15.5 };
+      const _meleeSkillHitOpts = { hitSet: null, omni: false, coneCos: null, maxVert: 0.72, lockedTarget: null, weaponId: "AEGIS_SHIFT" };
+      function _updateUnifiedMeleeSkillTick(st, isHoldingWeapon, cfg, dt, isUIOpen, isVehicleOrRag, moveForwardInput, moveSidewaysInput) {
+        if (!st) return;
+        const resetFn = window[cfg.resetFnName];
+        if (!isHoldingWeapon || isUIOpen || isVehicleOrRag) {
+          if (st.mode !== "idle" && typeof resetFn === "function") {
+            resetFn();
+          }
+          return;
+        }
+        if (st.mode === "idle") return;
+        const execFn = window[cfg.execFnName];
+        const releaseFn = window[cfg.releaseFnName];
+        if (st.mode === "charging") {
+          st.chargeTime += dt;
+          const _sinT = Math.sin(charTheta), _cosT = Math.cos(charTheta);
+          const _sinP = Math.sin(charPhi), _cosP = Math.cos(charPhi);
+          const _nx = _sinT * _cosP, _ny = _cosT, _nz = _sinT * _sinP;
+          const _N0 = -_cosT * _cosP, _N1 = _sinT, _N2 = -_cosT * _sinP;
+          const _E0 = -_sinP, _E2 = _cosP;
+          const _pRad = playerCenterRadius || RADIUS;
+          const _isChargeButcherTarget = (st === window.tantoShirasayaState && typeof window.isButcherableNpcCorpse === "function" && window.isButcherableNpcCorpse(st.lockedTarget, "TANTO"));
+          if (st.lockedTarget && (((!st.lockedTarget.ragdollEnabled && (st.lockedTarget.hp === undefined || st.lockedTarget.hp > 0)) || _isChargeButcherTarget)) && st.lockedTarget.position) {
+            const tp = getNPCTargetPoint(st.lockedTarget) || st.lockedTarget.position;
+            const dx = tp[0] - _pRad * _nx, dy = tp[1] - _pRad * _ny, dz = tp[2] - _pRad * _nz;
+            const tN = dx * _N0 + dy * _N1 + dz * _N2;
+            const tE = dx * _E0 + dz * _E2;
+            if (Math.hypot(tN, tE) > 0.06) {
+              const aimH = Math.atan2(tE, tN);
+              const hDiff = Math.atan2(Math.sin(aimH - charHeading), Math.cos(aimH - charHeading));
+              charHeading += hDiff * Math.min(1.0, dt * 14.0);
+            }
+          } else if (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") {
+            charHeading = rotationY;
+          }
+          if (st.chargeTime >= st.comboChargeTrigger && window.isAltActionDown) {
+            const curH = (typeof playerHunger === "number")
+              ? playerHunger
+              : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
+            if (curH >= 1 && typeof execFn === "function") {
+              st.comboActive = true;
+              execFn(1, true);
+            } else if (typeof execFn === "function") {
+              st.comboActive = false;
+              if (typeof showNotice === "function") {
+                showNotice(cfg.lowHungerComboNotice);
+              }
+              execFn(1, false);
+            }
+          } else if (!window.isAltActionDown && st.chargeTime > 0.03 && typeof releaseFn === "function") {
+            releaseFn();
+          }
+        } else if (st.mode === "dashing") {
+          st.dashTimer -= dt;
+          const dur = Math.max(0.01, st.dashDuration || cfg.defaultDur);
+          const prog = 1.0 - Math.max(0.0, Math.min(1.0, st.dashTimer / dur));
+          const step = st.comboStep || 1;
+
+          if (typeof window.updateUnifiedMeleeDashTracking === "function") {
+            _meleeDashTrackOpts.turnStopBeforeEnd = cfg.turnStop;
+            _meleeDashTrackOpts.turnSpeed = cfg.turnSpeed;
+            window.updateUnifiedMeleeDashTracking(st, step, prog, dt, _meleeDashTrackOpts);
+          }
+
+          cfg.onDashFrame(st, step, prog);
+
+          if (cfg.canHit(step, prog) && typeof window.performUnifiedMeleeSkillHit === "function") {
+            _meleeSkillHitOpts.hitSet = st.hitEntities;
+            _meleeSkillHitOpts.omni = !!(cfg.omniStep3 && step === 3);
+            _meleeSkillHitOpts.coneCos = cfg.coneMap[step] !== undefined ? cfg.coneMap[step] : cfg.defaultCone;
+            _meleeSkillHitOpts.maxVert = cfg.vertMap[step] || cfg.defaultVert;
+            _meleeSkillHitOpts.lockedTarget = st.lockedTarget;
+            _meleeSkillHitOpts.weaponId = cfg.weaponId;
+            window.performUnifiedMeleeSkillHit(cfg.dmg, cfg.labelMap[step] || cfg.fallbackLabel, _meleeSkillHitOpts);
+          }
+
+          if (st.dashTimer <= 0) {
+            st.visualSpinYaw = 0.0;
+            st.stopForwardMove = false;
+            st.visualAirLift = (cfg.keepLiftOnStep3End && st.comboActive && step === 3 && !st.isAerialCombo) ? 0.16 : 0.0;
+            if (st.comboActive && step < 4 && typeof execFn === "function") {
+              execFn(step + 1, false);
+            } else if (st.comboActive && step === 4) {
+              const curH = (typeof playerHunger === "number")
+                ? playerHunger
+                : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
+              if (window.isAltActionDown && curH >= 1 && typeof execFn === "function") {
+                execFn(1, true);
+              } else {
+                if (window.isAltActionDown && curH < 1 && typeof showNotice === "function") {
+                  showNotice(cfg.outOfHungerNotice);
+                }
+                _finishMeleeComboOrStep(st);
+              }
+            } else {
+              _finishMeleeComboOrStep(st);
+            }
+          }
+        } else if (st.mode === "post_skill") {
+          st.postGraceTimer = Math.max(0.0, st.postGraceTimer - dt);
+          if (st.postGraceTimer <= 0 && (Math.abs(moveForwardInput) > 0.05 || Math.abs(moveSidewaysInput) > 0.05)) {
+            if (typeof resetFn === "function") {
+              resetFn();
+            }
+          }
+        }
+      }
+
       function render(timestamp, forceDraw = false) {
         if (lastFrameTime === 0) {
           lastFrameTime = timestamp;
@@ -5183,256 +5423,26 @@ window.cloud3DProgram = cloud3DProgram;
         moveForwardInput = Math.max(-1, Math.min(1, moveForwardInput));
         moveSidewaysInput = Math.max(-1, Math.min(1, moveSidewaysInput));
 
-        if (window.tantoShirasayaState || window.aegisShiftState) {
+        const _tantoStTick = window.tantoShirasayaState;
+        const _aegisStTick = window.aegisShiftState;
+        if (_tantoStTick || _aegisStTick) {
           const heldSlotItem = (typeof selectedActionSlotIndex !== "undefined" && selectedActionSlotIndex !== -1 && typeof actionSlotsItems !== "undefined" && actionSlotsItems)
             ? actionSlotsItems[selectedActionSlotIndex]
             : null;
           const heldItemName = heldSlotItem ? heldSlotItem.name : "";
           const isVehicleOrRag = isRidingBoat || (typeof activeRidingMech !== "undefined" && !!activeRidingMech) || (typeof ragdollEnabled !== "undefined" && !!ragdollEnabled);
 
-          const _finishMeleeComboOrStep = (st) => {
-            if (st.isAerialCombo) {
-              window._shiraLandSafeTimer = 2.5;
-              window._playerHighestAirRadius = null;
+          if (_tantoStTick) {
+            const isHoldingTanto = (heldItemName === "TANTO" || heldItemName === "tanto");
+            if (isHoldingTanto || _tantoStTick.mode !== "idle") {
+              _updateUnifiedMeleeSkillTick(_tantoStTick, isHoldingTanto, _TANTO_MELEE_TICK_CFG, dt, isUIOpen, isVehicleOrRag, moveForwardInput, moveSidewaysInput);
             }
-            st.mode = "post_skill";
-            st.comboActive = false;
-            st.comboStep = 1;
-            st.isAerialCombo = false;
-            st.aerialTarget = null;
-            st.aerialBaseRadius = null;
-            st.dashTimer = 0.0;
-            st.postGraceTimer = 0.14;
-          };
-
-          const _updateUnifiedMeleeSkillTick = (st, isHoldingWeapon, cfg) => {
-            if (!st) return;
-            if (!isHoldingWeapon || isUIOpen || isVehicleOrRag) {
-              if (st.mode !== "idle" && typeof cfg.resetFn === "function") {
-                cfg.resetFn();
-              }
-              return;
-            }
-            if (st.mode === "charging") {
-              st.chargeTime += dt;
-              const _sinT = Math.sin(charTheta), _cosT = Math.cos(charTheta);
-              const _sinP = Math.sin(charPhi), _cosP = Math.cos(charPhi);
-              const _nx = _sinT * _cosP, _ny = _cosT, _nz = _sinT * _sinP;
-              const _N = [-_cosT * _cosP, _sinT, -_cosT * _sinP];
-              const _E = [-_sinP, 0, _cosP];
-              const _pRad = playerCenterRadius || RADIUS;
-              const _isChargeButcherTarget = (st === window.tantoShirasayaState && typeof window.isButcherableNpcCorpse === "function" && window.isButcherableNpcCorpse(st.lockedTarget, "TANTO"));
-              if (st.lockedTarget && (((!st.lockedTarget.ragdollEnabled && (st.lockedTarget.hp === undefined || st.lockedTarget.hp > 0)) || _isChargeButcherTarget)) && st.lockedTarget.position) {
-                const tp = getNPCTargetPoint(st.lockedTarget) || st.lockedTarget.position;
-                const dx = tp[0] - _pRad * _nx, dy = tp[1] - _pRad * _ny, dz = tp[2] - _pRad * _nz;
-                const tN = dx * _N[0] + dy * _N[1] + dz * _N[2];
-                const tE = dx * _E[0] + dy * _E[1] + dz * _E[2];
-                if (Math.hypot(tN, tE) > 0.06) {
-                  const aimH = Math.atan2(tE, tN);
-                  const hDiff = Math.atan2(Math.sin(aimH - charHeading), Math.cos(aimH - charHeading));
-                  charHeading += hDiff * Math.min(1.0, dt * 14.0);
-                }
-              } else if (cameraMode === "tps" || cameraMode === "thirdperson" || cameraMode === "fps") {
-                charHeading = rotationY;
-              }
-              if (st.chargeTime >= st.comboChargeTrigger && window.isAltActionDown) {
-                const curH = (typeof playerHunger === "number")
-                  ? playerHunger
-                  : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
-                if (curH >= 1 && typeof cfg.execFn === "function") {
-                  st.comboActive = true;
-                  cfg.execFn(1, true);
-                } else if (typeof cfg.execFn === "function") {
-                  st.comboActive = false;
-                  if (typeof showNotice === "function") {
-                    showNotice(cfg.lowHungerComboNotice);
-                  }
-                  cfg.execFn(1, false);
-                }
-              } else if (!window.isAltActionDown && st.chargeTime > 0.03 && typeof cfg.releaseFn === "function") {
-                cfg.releaseFn();
-              }
-            } else if (st.mode === "dashing") {
-              st.dashTimer -= dt;
-              const dur = Math.max(0.01, st.dashDuration || cfg.defaultDur);
-              const prog = 1.0 - Math.max(0.0, Math.min(1.0, st.dashTimer / dur));
-              const step = st.comboStep || 1;
-
-              if (typeof window.updateUnifiedMeleeDashTracking === "function") {
-                window.updateUnifiedMeleeDashTracking(st, step, prog, dt, { turnStopBeforeEnd: cfg.turnStop, turnSpeed: cfg.turnSpeed });
-              }
-
-              cfg.onDashFrame(st, step, prog);
-
-              if (cfg.canHit(step, prog) && typeof window.performUnifiedMeleeSkillHit === "function") {
-                window.performUnifiedMeleeSkillHit(cfg.dmg, cfg.labelMap[step] || cfg.fallbackLabel, {
-                  hitSet: st.hitEntities,
-                  omni: !!(cfg.omniStep3 && step === 3),
-                  coneCos: cfg.coneMap[step] !== undefined ? cfg.coneMap[step] : cfg.defaultCone,
-                  maxVert: cfg.vertMap[step] || cfg.defaultVert,
-                  lockedTarget: st.lockedTarget,
-                  weaponId: (st === window.tantoShirasayaState) ? "TANTO" : "AEGIS_SHIFT"
-                });
-              }
-
-              if (st.dashTimer <= 0) {
-                st.visualSpinYaw = 0.0;
-                st.stopForwardMove = false;
-                st.visualAirLift = (cfg.keepLiftOnStep3End && st.comboActive && step === 3 && !st.isAerialCombo) ? 0.16 : 0.0;
-                if (st.comboActive && step < 4 && typeof cfg.execFn === "function") {
-                  cfg.execFn(step + 1, false);
-                } else if (st.comboActive && step === 4) {
-                  const curH = (typeof playerHunger === "number")
-                    ? playerHunger
-                    : (typeof window.playerHunger === "number" ? window.playerHunger : 5);
-                  if (window.isAltActionDown && curH >= 1 && typeof cfg.execFn === "function") {
-                    cfg.execFn(1, true);
-                  } else {
-                    if (window.isAltActionDown && curH < 1 && typeof showNotice === "function") {
-                      showNotice(cfg.outOfHungerNotice);
-                    }
-                    _finishMeleeComboOrStep(st);
-                  }
-                } else {
-                  _finishMeleeComboOrStep(st);
-                }
-              }
-            } else if (st.mode === "post_skill") {
-              st.postGraceTimer = Math.max(0.0, st.postGraceTimer - dt);
-              if (st.postGraceTimer <= 0 && (Math.abs(moveForwardInput) > 0.05 || Math.abs(moveSidewaysInput) > 0.05)) {
-                if (typeof cfg.resetFn === "function") {
-                  cfg.resetFn();
-                }
-              }
-            }
-          };
-
-          if (typeof window.tantoShirasayaState === "object" && window.tantoShirasayaState) {
-            _updateUnifiedMeleeSkillTick(
-              window.tantoShirasayaState,
-              (heldItemName === "TANTO" || heldItemName === "tanto"),
-              {
-                resetFn: window.resetTantoShirasayaState,
-                execFn: window.executeTantoSkillStep,
-                releaseFn: window.releaseTantoChargeSkill,
-                defaultDur: 0.27,
-                turnStop: 0.32,
-                turnSpeed: 16.0,
-                dmg: 1,
-                omniStep3: true,
-                coneMap: { 1: 0.48, 2: 0.12, 3: null, 4: 0.42 },
-                defaultCone: null,
-                vertMap: { 1: 0.65, 2: 0.55, 3: 0.72, 4: 0.75 },
-                defaultVert: 0.65,
-                labelMap: {
-                  1: "⚡🗡️ ชิราซายะ [1/4: พุ่งฟัน]",
-                  2: "⚡🗡️ ชิราซายะ [2/4: ตวัดล่าง]",
-                  3: "🌪️🗡️ ชิราซายะ [3/4: หมุนกลางอากาศ]",
-                  4: "💥🗡️ ชิราซายะ [4/4: ฟันกระแทกพื้น]"
-                },
-                fallbackLabel: "⚡🗡️ ชิราซายะ",
-                lowHungerComboNotice: "⚠️ ความหิวไม่พอสำหรับคอมโบ! ใช้เฉพาะสกิลพุ่ง (1 HP)",
-                outOfHungerNotice: "⚠️ ความหิวหมดแล้ว! จบคอมโบชิราซายะ",
-                keepLiftOnStep3End: true,
-                canHit: (step, prog) => (step !== 4 || prog >= 0.25),
-                onDashFrame: (st, step, prog) => {
-                  if (step === 1) {
-                    st.visualAirLift = 0.0;
-                    st.visualSpinYaw = 0.0;
-                  } else if (step === 2) {
-                    st.visualAirLift = 0.0;
-                    st.visualSpinYaw = Math.sin(Math.min(1.0, prog / 0.55) * Math.PI) * 0.38;
-                  } else if (step === 3) {
-                    const spinE = prog * prog * (3.0 - 2.0 * prog);
-                    const endLift = st.comboActive ? 0.16 : 0.0;
-                    st.visualAirLift = st.isAerialCombo
-                      ? (Math.sin(prog * Math.PI) * 0.16)
-                      : (Math.sin(prog * Math.PI) * 0.54 * (1.0 - 0.18 * prog) + endLift * (prog * prog));
-                    st.visualSpinYaw = spinE * Math.PI * 2.0;
-                  } else {
-                    const dropT = Math.min(1.0, prog / 0.30);
-                    const dropE = dropT * dropT * (3.0 - 2.0 * dropT);
-                    st.visualAirLift = st.isAerialCombo ? 0.0 : Math.max(0.0, 0.16 * (1.0 - dropE));
-                    st.visualSpinYaw = 0.0;
-                    if (prog >= 0.35 && !st.impactPlayed) {
-                      st.impactPlayed = true;
-                      if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
-                      else if (typeof playChopSound === "function") playChopSound();
-                    }
-                  }
-                }
-              }
-            );
           }
-
-          if (typeof window.aegisShiftState === "object" && window.aegisShiftState) {
-            const smA = (a, b, x) => {
-              const t = Math.max(0.0, Math.min(1.0, (x - a) / Math.max(1e-4, b - a)));
-              return t * t * (3.0 - 2.0 * t);
-            };
-            _updateUnifiedMeleeSkillTick(
-              window.aegisShiftState,
-              (heldItemName === "AEGIS_SHIFT" || heldItemName === "aegis_shift"),
-              {
-                resetFn: window.resetAegisShiftState,
-                execFn: window.executeAegisSkillStep,
-                releaseFn: window.releaseAegisChargeSkill,
-                defaultDur: 0.38,
-                turnStop: 0.36,
-                turnSpeed: 15.0,
-                dmg: 2,
-                omniStep3: false,
-                coneMap: { 1: 0.25, 2: 0.20, 3: -0.15, 4: 0.22 },
-                defaultCone: 0.25,
-                vertMap: { 1: 0.72, 2: 0.78, 3: 0.72, 4: 0.85 },
-                defaultVert: 0.72,
-                labelMap: {
-                  1: "⚔️⚡ Aegis-Shift [1/4: พุ่งฟัน]",
-                  2: "⚔️🔥 Aegis-Shift [2/4: ฟันเสยเฉียง]",
-                  3: "⚔️💨 Aegis-Shift [3/4: กวาดแนวขวาง]",
-                  4: "⚔️💥 Aegis-Shift [4/4: ผ่าปฐพี]"
-                },
-                fallbackLabel: "⚔️⚡ ดาบใหญ่ Aegis-Shift",
-                lowHungerComboNotice: "⚠️ ความหิวไม่พอสำหรับคอมโบ! ใช้เฉพาะสกิลพุ่ง (2 HP)",
-                outOfHungerNotice: "⚠️ ความหิวหมดแล้ว! จบคอมโบดาบใหญ่ Aegis-Shift",
-                keepLiftOnStep3End: false,
-                canHit: (step, prog) => (step === 1 ? prog >= 0.20 : (step === 4 ? prog >= 0.28 : prog >= 0.16)),
-                onDashFrame: (aSt, step, prog) => {
-                  if (step === 1) {
-                    const windTwist = smA(0.0, 0.18, prog);
-                    const cleaveTwist = smA(0.16, 0.54, prog);
-                    const settleTwist = smA(0.64, 1.0, prog);
-                    aSt.visualSpinYaw = (-0.26 * windTwist * (1.0 - cleaveTwist) + 0.30 * cleaveTwist) * (1.0 - settleTwist);
-                    aSt.visualAirLift = 0.0;
-                    if (prog >= 0.34 && !aSt.impactPlayed) {
-                      aSt.impactPlayed = true;
-                      if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
-                    }
-                  } else if (step === 2) {
-                    const wind2 = smA(0.0, 0.16, prog);
-                    const slash2 = smA(0.14, 0.56, prog);
-                    const settle2 = smA(0.72, 1.0, prog);
-                    aSt.visualSpinYaw = (-0.24 * wind2 * (1.0 - slash2) + 0.24 * slash2) * (1.0 - settle2);
-                    aSt.visualAirLift = 0.0;
-                  } else if (step === 3) {
-                    const wind3 = smA(0.0, 0.16, prog);
-                    const slash3 = smA(0.14, 0.58, prog);
-                    const settle3 = smA(0.76, 1.0, prog);
-                    aSt.visualSpinYaw = (0.22 * wind3 * (1.0 - slash3) - 0.30 * slash3) * (1.0 - settle3);
-                    aSt.visualAirLift = 0.0;
-                  } else {
-                    const lift4 = Math.sin(Math.min(1.0, prog / 0.38) * Math.PI);
-                    aSt.visualAirLift = aSt.isAerialCombo ? 0.0 : (lift4 * 0.09);
-                    aSt.visualSpinYaw = 0.0;
-                    if (prog >= 0.38 && !aSt.impactPlayed) {
-                      aSt.impactPlayed = true;
-                      if (typeof playSwordSlamImpactSound === "function") playSwordSlamImpactSound();
-                      else if (typeof playChopSound === "function") playChopSound();
-                    }
-                  }
-                }
-              }
-            );
+          if (_aegisStTick) {
+            const isHoldingAegis = (heldItemName === "AEGIS_SHIFT" || heldItemName === "aegis_shift");
+            if (isHoldingAegis || _aegisStTick.mode !== "idle") {
+              _updateUnifiedMeleeSkillTick(_aegisStTick, isHoldingAegis, _AEGIS_MELEE_TICK_CFG, dt, isUIOpen, isVehicleOrRag, moveForwardInput, moveSidewaysInput);
+            }
           }
         }
 
@@ -5571,15 +5581,20 @@ window.cloud3DProgram = cloud3DProgram;
             if (charPhi < 0) charPhi += Math.PI * 2;
 
             const charScale_sync = playerScale;
+            const caveData_sync = typeof getTerrainSurfaceAndCeiling === "function"
+              ? getTerrainSurfaceAndCeiling(ux, uy, uz, dLen - 0.46 * charScale_sync)
+              : null;
             const terrainRadius_sync = getFloorTopRadiusAt(
               ux, uy, uz,
-              RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE
+              (caveData_sync && caveData_sync.insideTunnel)
+                ? caveData_sync.ground
+                : (RADIUS + getHeightOnSphere(charTheta, charPhi, (typeof window !== "undefined" && typeof window.globalSeed !== "undefined" ? window.globalSeed : 0)) * HEIGHT_SCALE)
             );
-            const waterRadius_sync = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
-            if (waterEnabled && terrainRadius_sync < waterRadius_sync) {
-              const targetSwimRadius_sync =
-                waterRadius_sync +
-                (-0.22 + swimMovementFactor * 0.27) * charScale_sync;
+            const wRadius_sync = getWaterRadiusAt(pelvisPos[0], pelvisPos[1], pelvisPos[2], caveData_sync);
+            if (waterEnabled && wRadius_sync > 0 && terrainRadius_sync < wRadius_sync) {
+              const targetSwimRadius_sync = (typeof window !== "undefined" && typeof window.getEffectiveSwimTopRadius === "function")
+                ? window.getEffectiveSwimTopRadius(wRadius_sync, swimMovementFactor, charScale_sync, caveData_sync)
+                : (wRadius_sync + (-0.22 + swimMovementFactor * 0.27) * charScale_sync);
               playerDiveDepth = Math.max(0, targetSwimRadius_sync - dLen);
             }
           }
@@ -5594,6 +5609,9 @@ window.cloud3DProgram = cloud3DProgram;
         updateCollectibles(dt);
         if (window.PlanterSystem && typeof window.PlanterSystem.update === "function") {
           window.PlanterSystem.update(dt);
+        }
+        if (window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.update === "function") {
+          window.WildPlantGrowthSystem.update(dt);
         }
 
         let sinTheta = Math.sin(charTheta);
@@ -5616,16 +5634,10 @@ window.cloud3DProgram = cloud3DProgram;
         const caveData = typeof getTerrainSurfaceAndCeiling === "function" ? getTerrainSurfaceAndCeiling(nx, ny, nz, feetRadiusBefore) : { ground: RADIUS + charHeight * HEIGHT_SCALE, ceiling: Infinity, insideTunnel: false };
         let terrainRadius = caveData.ground;
         const waterRadius = RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15);
-        let wRadiusLocal = getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore);
-        if (caveData.insideTunnel && wRadiusLocal === 0) {
-            wRadiusLocal = waterRadius;
-        }
-        
-        // if (caveData.insideTunnel) { wRadiusLocal = 0; } // Disabled: allow water in caves
-        
+        const wRadiusLocal = getWaterRadiusAt(nx * feetRadiusBefore, ny * feetRadiusBefore, nz * feetRadiusBefore, caveData);
         let currentFeetRadius = (playerCenterRadius !== null) ? (playerCenterRadius - (activeRidingMech ? mechOffset : 0.46 * charScale)) : terrainRadius;
 
-        // เรียกใช้ฟังก์ชันควบคุมการว่ายน้ำและดำน้ำจาก ui.js เพื่อลดความซ้ำซ้อนของโค้ด
+        // เรียกใช้ฟังก์ชันควบคุมการว่ายน้ำและดำน้ำชุดเดียว (ใช้ร่วมกันทั้งผิวน้ำและในถ้ำ)
         updatePlayerSwimmingAndDiving(
           currentFeetRadius,
           wRadiusLocal,
@@ -5633,7 +5645,8 @@ window.cloud3DProgram = cloud3DProgram;
           terrainRadius,
           charScale,
           rotationX,
-          moveForwardInput
+          moveForwardInput,
+          caveData
         );
 
         // Initialize playerCenterRadius if null
@@ -5659,42 +5672,22 @@ window.cloud3DProgram = cloud3DProgram;
         } else if (activeRidingMech) {
           standGroundRadius = terrainRadius + mechOffset;
         } else if (currentSwimFactor > 0.0) {
-          const targetSwimRadius =
-            waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
-          const subSwimRadius = targetSwimRadius - playerDiveDepth;
-          standGroundRadius =
-            standGroundRadius * (1.0 - currentSwimFactor) +
-            subSwimRadius * currentSwimFactor;
-
-          // Enforce floor/ceiling limits on the standGroundRadius
-          if (typeof caveData !== 'undefined' && caveData) {
-            if (caveData.insideTunnel) {
-              const minCenter = caveData.ground + 0.46 * charScale;
-              const maxCenter = (caveData.ceiling !== Infinity) ? (caveData.ceiling - 0.46 * charScale) : Infinity;
-              if (standGroundRadius < minCenter) {
-                standGroundRadius = minCenter;
-              }
-              if (standGroundRadius > maxCenter) {
-                standGroundRadius = maxCenter;
-              }
-            } else {
-              const minCenter = terrainRadius + 0.46 * charScale;
-              if (standGroundRadius < minCenter) {
-                standGroundRadius = minCenter;
-              }
-            }
+          const effWaterRad = wRadiusLocal > 0 ? wRadiusLocal : waterRadius;
+          if (typeof window !== "undefined" && typeof window.computeSwimmingTransform === "function") {
+            const swimRes = window.computeSwimmingTransform({
+              swimFactor: currentSwimFactor,
+              swimMovementFactor,
+              diveDepth: playerDiveDepth,
+              waterRadius: effWaterRad,
+              terrainRadius,
+              charScale,
+              isWalking,
+              waterTime,
+              baseGroundRadius: standGroundRadius,
+              caveData
+            });
+            standGroundRadius = swimRes.groundRadius;
           }
-
-          // Add gentle water bobbing (only if not diving deeply)
-          const bobSpeed = isWalking ? 4.0 : 2.0;
-          const bobAmp = isWalking ? 0.02 : 0.04;
-          const bobFactor = Math.max(
-            0,
-            1.0 - playerDiveDepth / (0.1 * charScale),
-          );
-          const bobbing =
-            Math.sin(waterTime * bobSpeed) * bobAmp * charScale * bobFactor;
-          standGroundRadius += bobbing;
         }
 
         // Simulate vertical physics (gravity/falling)
@@ -5887,20 +5880,31 @@ window.cloud3DProgram = cloud3DProgram;
 
 
 
-        // Synchronize playerDiveDepth with actual position to prevent sudden snapping/springing
-        if (currentSwimFactor >= 0.99 && typeof caveData !== 'undefined' && caveData && playerCenterRadius !== null) {
-          const targetSwimRadius = waterRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
-          const actualDepth = targetSwimRadius - playerCenterRadius;
+        // Synchronize playerDiveDepth with actual position using the single unified helper
+        // (identical on ocean surface & in caves; never auto-activates isDivingMode)
+        if (currentSwimFactor >= 0.99 && playerCenterRadius !== null && typeof window !== "undefined" && typeof window.getEffectiveSwimTopRadius === "function") {
+          const effWaterRadSync = wRadiusLocal > 0 ? wRadiusLocal : waterRadius;
+          const targetSwimRadius = window.getEffectiveSwimTopRadius(effWaterRadSync, swimMovementFactor, charScale, caveData);
           const currentExpectedRadius = targetSwimRadius - playerDiveDepth;
-          // Synchronize anytime we are in a cave tunnel, or when physical position differs significantly from expected depth.
-          // We use a larger threshold on the surface (0.3) than in caves (0.05) to prevent false-positive dive triggers
-          // during swimMovementFactor transitions or water wave bobbing.
-          const syncThreshold = (caveData.insideTunnel ? 0.05 : 0.3) * charScale;
-          if (caveData.insideTunnel || Math.abs(playerCenterRadius - currentExpectedRadius) > syncThreshold) {
-            const bottomRadius = terrainRadius + 0.46 * charScale;
-            const maxDiveDepth = Math.max(0, targetSwimRadius - bottomRadius);
-            playerDiveDepth = Math.max(0.0, Math.min(maxDiveDepth, actualDepth));
-            isDivingMode = playerDiveDepth > 0.015 * charScale;
+          const syncThreshold = 0.3 * charScale;
+          if (Math.abs(playerCenterRadius - currentExpectedRadius) > syncThreshold) {
+            const syncState = {
+              swimMovementFactor,
+              diveDepth: playerDiveDepth,
+              isDivingMode
+            };
+            const pressingDiveDownSync = (typeof keysPressed !== "undefined" && typeof currentKeyBindings !== "undefined" && !!keysPressed[currentKeyBindings.diveDown]);
+            window.syncEntityDiveStateFromRadius(
+              syncState,
+              playerCenterRadius,
+              effWaterRadSync,
+              terrainRadius,
+              charScale,
+              caveData,
+              pressingDiveDownSync
+            );
+            playerDiveDepth = syncState.diveDepth;
+            isDivingMode = syncState.isDivingMode;
           }
         }
 
@@ -6247,10 +6251,11 @@ window.cloud3DProgram = cloud3DProgram;
               playerCenterRadius,
               charScale,
               collisionSwimFactor,
-              waterRadius,
+              wRadiusLocal,
               playerDiveDepth,
               swimMovementFactor,
-              charHeight
+              charHeight,
+              { isDivingMode }
             );
             
             if (collisionResult.playerCenterRadius > playerCenterRadius + 0.0001 && playerVerticalVel < 0) {
@@ -6352,11 +6357,9 @@ window.cloud3DProgram = cloud3DProgram;
                 feetRadiusBeforeForSwim = playerCenterRadius - 0.46 * charScale;
               }
             }
-            let wRadius = getWaterRadiusAt(nx * feetRadiusBeforeForSwim, ny * feetRadiusBeforeForSwim, nz * feetRadiusBeforeForSwim);
-            if (caveDataForSwim.insideTunnel && wRadius === 0) {
-                wRadius = waterRadius;
-            }
+            const wRadius = getWaterRadiusAt(nx * feetRadiusBeforeForSwim, ny * feetRadiusBeforeForSwim, nz * feetRadiusBeforeForSwim, caveDataForSwim);
             
+            // Post-move re-clamp pass only (applyInput = false so diving speed/pitch/buoyancy are never doubled)
             updatePlayerSwimmingAndDiving(
               feetRadiusBeforeForSwim,
               wRadius,
@@ -6364,12 +6367,14 @@ window.cloud3DProgram = cloud3DProgram;
               tRadius,
               charScale,
               rotationX,
-              moveForwardInput
+              moveForwardInput,
+              caveDataForSwim,
+              false
             );
 
             if (activeRidingBoat) {
-              let baseRadius = (waterEnabled && tRadius < wRadius) ? wRadius : tRadius;
-              if (waterEnabled && tRadius < wRadius) {
+              let baseRadius = (waterEnabled && wRadius > 0 && tRadius < wRadius) ? wRadius : tRadius;
+              if (waterEnabled && wRadius > 0 && tRadius < wRadius) {
                   const wave = getWaterWave(nx * wRadius, ny * wRadius, nz * wRadius, waterAnimTime, waveStrength);
                   let depth = wRadius - tRadius;
                   let fade = Math.min(1.0, Math.max(0.0, depth / 0.1));
@@ -6386,27 +6391,20 @@ window.cloud3DProgram = cloud3DProgram;
               groundRadius = tRadius + 0.46 * charScale;
             }
             
-            if (currentSwimFactor > 0.0) {
-              const targetSwimRadius =
-                wRadius + (-0.22 + swimMovementFactor * 0.27) * charScale;
-              const subSwimRadius = targetSwimRadius - playerDiveDepth;
-              groundRadius =
-                groundRadius * (1.0 - currentSwimFactor) +
-                subSwimRadius * currentSwimFactor;
-
-              // Add gentle water bobbing (only if not diving deeply)
-              const bobSpeed = isWalking ? 4.0 : 2.0;
-              const bobAmp = isWalking ? 0.02 : 0.04;
-              const bobFactor = Math.max(
-                0,
-                1.0 - playerDiveDepth / (0.1 * charScale),
-              );
-              const bobbing =
-                Math.sin(waterAnimTime * bobSpeed) *
-                bobAmp *
-                charScale *
-                bobFactor;
-              groundRadius += bobbing;
+            if (currentSwimFactor > 0.0 && typeof window !== "undefined" && typeof window.computeSwimmingTransform === "function") {
+              const swimResMoving = window.computeSwimmingTransform({
+                swimFactor: currentSwimFactor,
+                swimMovementFactor,
+                diveDepth: playerDiveDepth,
+                waterRadius: wRadius > 0 ? wRadius : waterRadius,
+                terrainRadius: tRadius,
+                charScale,
+                isWalking,
+                waterTime: waterAnimTime,
+                baseGroundRadius: groundRadius,
+                caveData: caveDataForSwim
+              });
+              groundRadius = swimResMoving.groundRadius;
             }
 
             const maxStepDown = 0.20 * charScale;
@@ -6464,10 +6462,11 @@ window.cloud3DProgram = cloud3DProgram;
               playerCenterRadius,
               charScale,
               collisionSwimFactor,
-              waterRadius,
+              wRadiusLocal,
               playerDiveDepth,
               swimMovementFactor,
-              charHeight
+              charHeight,
+              { isDivingMode }
             );
             
             playerCenterRadius = collisionResult.playerCenterRadius;
@@ -7225,9 +7224,14 @@ window.cloud3DProgram = cloud3DProgram;
         const playerActionTransition = (isPlayerActionAnimActive !== !!window._wasPlayerActionAnimActive);
         window._wasPlayerActionAnimActive = isPlayerActionAnimActive;
 
-        // Only ragdoll physics, high-speed melee dash skills, or exact action start/end transitions need immediate player mesh refresh;
+        const dashTransition = (isHighSpeedDashSkill !== !!window._wasHighSpeedDashSkill);
+        window._wasHighSpeedDashSkill = isHighSpeedDashSkill;
+        const dashInterval = Math.min(charInterval, 1000 / 40);
+        const isDashIntervalDue = isHighSpeedDashSkill && (dashTransition || (timestamp - (window._lastDashMeshTime || 0) >= dashInterval));
+
+        // Only ragdoll physics, throttled dash skills (max 40Hz), or exact action transitions need off-cadence player mesh refresh;
         // normal bare-hand / axe / pickaxe / shovel / bow / bucket animations smoothly follow charAnimFps just like walk/run/swim.
-        const playerNeedsEveryFrame = ragdollEnabled || isHighSpeedDashSkill || playerActionTransition;
+        const playerNeedsRefresh = ragdollEnabled || isDashIntervalDue || playerActionTransition || dashTransition;
         const isCharIntervalDue = (timestamp - lastCharAnimTime >= charInterval);
         
         if (!isPlayerGrounded && !ragdollEnabled && !activeRidingBoat && !activeRidingMech && currentSwimFactor === 0.0) {
@@ -7241,8 +7245,11 @@ window.cloud3DProgram = cloud3DProgram;
           window.updatePlayerClones(dt);
         }
 
-        if (playerNeedsEveryFrame || isCharIntervalDue) {
+        if (playerNeedsRefresh || isCharIntervalDue) {
           updateCharacterMesh(walkPhase);
+          if (isHighSpeedDashSkill) {
+            window._lastDashMeshTime = timestamp;
+          }
         }
 
         // Clones ALWAYS follow charAnimFps independently — never dragged into 60Hz by player swings or ragdoll!
@@ -7258,6 +7265,10 @@ window.cloud3DProgram = cloud3DProgram;
               const cloneMaxDistSq = cloneMaxRenderDist * cloneMaxRenderDist;
               window._cloneMeshFrameCounter = ((window._cloneMeshFrameCounter || 0) + 1) | 0;
               const frameTick = window._cloneMeshFrameCounter;
+
+              const hasFrustumCull = !!(frustumPlanes && typeof FrustumCullingSystem !== "undefined" && typeof FrustumCullingSystem.isSphereInFrustum === "function");
+              const cloneCullRad = Math.max(0.32, sVal * 3.0);
+              let lod0NearCount = 0;
 
               for (let ci = 0; ci < window.playerClonesState.length; ci++) {
                 const cs = window.playerClonesState[ci];
@@ -7275,6 +7286,9 @@ window.cloud3DProgram = cloud3DProgram;
                 if (isDistCullOn && hasMeshBuf && distSq > cloneMaxDistSq) {
                   continue;
                 }
+                if (hasFrustumCull && hasMeshBuf && !FrustumCullingSystem.isSphereInFrustum(wx, wy, wz, cloneCullRad, frustumPlanes)) {
+                  continue;
+                }
 
                 const prevLod = (typeof cs._lod === "number") ? cs._lod : 0;
                 const lodInfo = lodFn
@@ -7282,12 +7296,17 @@ window.cloud3DProgram = cloud3DProgram;
                   : { lod: 0, phaseBuckets: 0, walkBuckets: 0, updateStride: 1, enableSpringPhysics: true, enableBodyCollider: true, enableHairSway: true, enableHairBodyCollider: true };
                 cs._lodInfo = lodInfo;
                 cs._lod = lodInfo.lod;
+                if (lodInfo.lod === 0) lod0NearCount++;
 
-                const appSig = `${cs.hoodOpen ? 1 : 0}_${cs.equippedTool || ""}_${cs.activeItem ? cs.activeItem.name : ""}_${cs.ridingBoat && cs.ridingBoat.active ? 1 : 0}`;
+                const appSig = `${cs.hoodOpen ? 1 : 0}_${cs.equippedTool || ""}_${cs.activeItem ? cs.activeItem.name : ""}_${cs.aegisToolMode || ""}_${cs.ridingBoat && cs.ridingBoat.active ? 1 : 0}`;
                 const isCloneSwinging = !!(cs.actionAnim && cs.actionAnim > 0.01);
-                const effectiveStride = isCloneSwinging
+                let effectiveStride = isCloneSwinging
                   ? (lodInfo.lod === 0 ? 1 : (lodInfo.lod === 1 ? 2 : 4))
                   : (lodInfo.updateStride || 1);
+                // When 3+ village clones crowd into LOD 0 simultaneously, stagger non-swinging updates across anim ticks
+                if (!isCloneSwinging && lodInfo.lod === 0 && lod0NearCount >= 3) {
+                  effectiveStride = Math.max(effectiveStride, 2);
+                }
                 const forceNeedUpdate = !hasMeshBuf || cs._lastAppSig !== appSig || lodInfo.lod < prevLod;
                 if (!forceNeedUpdate && effectiveStride > 1 && ((frameTick + ci) % effectiveStride) !== 0) {
                   continue;
@@ -8272,7 +8291,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_")) continue;
+                if (!item.isGroundDrop && (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_"))) continue;
                 
                 const checkDist = (item.type === "cotton_plant" || item.type === "crown_flower" || item.type === "grass") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -8309,7 +8328,7 @@ if (prompt._lastHTML !== _newHtml_2) {
               let bestBoatT = Infinity;
               let candidateBoat = null;
               for (let item of nearbyCandidates) {
-                if (item.active && (item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat"))) && !item.isPreview) {
+                if (item.active && !item.isGroundDrop && (item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat"))) && !item.isPreview) {
                   const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.22 * (playerScale / 0.1)));
                   if (reachInfo.valid) {
                     if (reachInfo.t < bestBoatT) {
@@ -8336,16 +8355,16 @@ if (prompt._lastHTML !== _newHtml_2) {
                 let candidateMechTargetPos = null;
                 const cockpitsToCheck = [];
                 for (let item of nearbyCandidates) {
-                  if (item.active && item.type === "robot_cockpit" && !item.isPreview) {
+                  if (item.active && !item.isGroundDrop && item.type === "robot_cockpit" && !item.isPreview) {
                     cockpitsToCheck.push(item);
                   }
                 }
                 if (cockpitsToCheck.length === 0) {
                   const mechScanCandidates = (typeof SpatialGrid !== "undefined")
-                    ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], 6.0, item => item.active && item.type === "robot_cockpit" && !item.isPreview)
+                    ? SpatialGrid.queryRadius(pVec[0], pVec[1], pVec[2], 6.0, item => item.active && !item.isGroundDrop && item.type === "robot_cockpit" && !item.isPreview)
                     : ((typeof collectibles !== "undefined" && Array.isArray(collectibles)) ? collectibles : []);
                   for (let item of mechScanCandidates) {
-                    if (item.active && item.type === "robot_cockpit" && !item.isPreview) {
+                    if (item.active && !item.isGroundDrop && item.type === "robot_cockpit" && !item.isPreview) {
                       const dx = item.position[0] - pVec[0];
                       const dy = item.position[1] - pVec[1];
                       const dz = item.position[2] - pVec[2];
@@ -8400,7 +8419,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                 let bestChestT = Infinity;
                 let candidateChest = null;
                 for (let item of nearbyCandidates) {
-                  if (item.active && item.type === "wood_chest" && !item.isPreview) {
+                  if (item.active && !item.isGroundDrop && item.type === "wood_chest" && !item.isPreview) {
                     const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
                     if (reachInfo.valid) {
                       if (reachInfo.t < bestChestT) {
@@ -8414,7 +8433,7 @@ if (prompt._lastHTML !== _newHtml_2) {
                 let bestCampfireT = Infinity;
                 let candidateCampfire = null;
                 for (let item of nearbyCandidates) {
-                  if (item.active && item.type === "campfire" && !item.isPreview) {
+                  if (item.active && !item.isGroundDrop && item.type === "campfire" && !item.isPreview) {
                     const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.15 * (playerScale / 0.1)));
                     if (reachInfo.valid) {
                       if (reachInfo.t < bestCampfireT) {
@@ -9199,6 +9218,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             const _canLockButcherCorpse = !isAimingRanged && (_isActiveTantoReticle || _isIdleHoldingTanto) && typeof window.isButcherableNpcCorpse === "function";
             const _isTargetAllowedForReticle = (npc) => {
               if (!npc || !npc.position) return false;
+              if (!_canLockAlive && (!npc.ragdollEnabled || npc._corpseButchered)) return false;
               const alive = (npc.hp === undefined || npc.hp > 0);
               if (_canLockAlive && !npc.ragdollEnabled && alive) return true;
               if (_canLockButcherCorpse && window.isButcherableNpcCorpse(npc, "TANTO")) return true;
@@ -9234,7 +9254,15 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             }
 
             // 2. Look for closest target to screen center using true 3D chest position
-            if (!activeTargetNPC && typeof amphibians !== 'undefined' && amphibians.length > 0) {
+            // Throttle open-air reticle scans: ~10Hz (100ms) for idle Tanto corpse scan, ~15Hz (65ms) for active melee weapons
+            const _reticleScanInterval = _isIdleHoldingTanto ? 100 : (isUsingMeleeReticle ? 65 : 0);
+            const _shouldScanReticleTargets = !activeTargetNPC && typeof amphibians !== 'undefined' && amphibians.length > 0 && (
+              _reticleScanInterval === 0 || (timestamp - (window._lastMeleeReticleScanTime || 0) >= _reticleScanInterval)
+            );
+            if (_shouldScanReticleTargets) {
+                if (_reticleScanInterval > 0) {
+                    window._lastMeleeReticleScanTime = timestamp;
+                }
                 let minScreenDistSq = Infinity;
                 let closest = null;
                 const halfW = window.innerWidth / 2;
@@ -9456,7 +9484,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
         }
 
-        const curPlanetRad = (typeof RADIUS === "number" && RADIUS > 1.0) ? RADIUS : 32.0;
+        const curPlanetRad = (typeof RADIUS === "number" && RADIUS > 1.0) ? RADIUS : 64.0;
         const lightNearPlane = 0.1;
         let lightDistance = Math.max(orthoSize * 2.0, curPlanetRad + orthoSize);
         let lightFarPlane = lightDistance * 2.0;
@@ -9920,7 +9948,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
 
           // Player clones depth shadow pass
           if (typeof window.renderPlayerClonesShadow === "function") {
-            window.renderPlayerClonesShadow(gl, depthModelLoc, charIndicesLength, supportUint32, depthPosLoc);
+            window.renderPlayerClonesShadow(gl, depthModelLoc, charIndicesLength, supportUint32, depthPosLoc, eyePos);
           }
         }
 
@@ -10433,7 +10461,8 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
               const nearArr = [];
               for (let k = 0; k < activePointLightCount; k++) {
                 const pl = _pointLightCandidates[k];
-                const found = SpatialGrid.queryRadius(pl.x, pl.y, pl.z, 3.2);
+                const obbQueryRad = Math.min(3.2, Math.max(0.95, (pl.rad || 0.65) + 0.65));
+                const found = SpatialGrid.queryRadius(pl.x, pl.y, pl.z, obbQueryRad);
                 for (let fi = 0; fi < found.length; fi++) {
                   const item = found[fi];
                   if (item && !nearSet.has(item)) {
@@ -10579,12 +10608,13 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                   0.25
                 );
               } else if (t === "wood_floor" || t === "thin_wood_floor") {
-                // Include all connected house floor tiles within 3.2m of any active point light
+                // Include connected house floor tiles within effective light radius + tile half-size
                 let nearLight = false;
                 for (let k = 0; k < activePointLightCount; k++) {
                   const pl = _pointLightCandidates[k];
+                  const lim = Math.min(3.2, Math.max(0.95, (pl.rad || 0.65) + 0.65));
                   const dx = pl.x - p[0], dy = pl.y - p[1], dz = pl.z - p[2];
-                  if (dx * dx + dy * dy + dz * dz < 10.24) { nearLight = true; break; }
+                  if (dx * dx + dy * dy + dz * dz < lim * lim) { nearLight = true; break; }
                 }
                 if (nearLight) {
                   const sz = c.size || 0.25;
@@ -10598,8 +10628,9 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
                 let nearLight = false;
                 for (let k = 0; k < activePointLightCount; k++) {
                   const pl = _pointLightCandidates[k];
+                  const lim = Math.min(3.2, Math.max(0.95, (pl.rad || 0.65) + 0.65));
                   const dx = pl.x - p[0], dy = pl.y - p[1], dz = pl.z - p[2];
-                  if (dx * dx + dy * dy + dz * dz < 10.24) { nearLight = true; break; }
+                  if (dx * dx + dy * dy + dz * dz < lim * lim) { nearLight = true; break; }
                 }
                 if (!nearLight) continue;
 
@@ -11197,6 +11228,7 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             window.renderPlayerClones(gl, {
               viewMatrix,
               eyePos,
+              frustumPlanes,
               charProgram,
               charMVLoc,
               charModelMatrixLoc,

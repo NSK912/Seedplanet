@@ -265,7 +265,7 @@
       return alphabetList.map(letter => {
         const svgIcon = getSingleLetterSVG(letter, "1.875rem", "#dfb76c");
         return `
-          <div class="seedian-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(223,183,108,0.25); padding: 0.75rem 0.5rem; gap: 0.5rem; --cut: 0.375rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); transition: transform 0.2s, border-color 0.2s;">
+          <div class="seedian-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); padding: 0.75rem 0.5rem; gap: 0.5rem; transition: transform 0.2s;">
             <div style="width: 2.125rem; height: 2.125rem; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 0.375rem rgba(223,183,108,0.4));">
               ${svgIcon}
             </div>
@@ -282,19 +282,21 @@
         <!-- Scrollable Body -->
         <div class="seedian-modal-body" style="padding-top: 1.25rem;">
           <!-- Live Interactive Translator -->
-          <div style="background: rgba(223,183,108,0.05); border: 1px solid rgba(223,183,108,0.25); --cut: 0.625rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); padding: 0.875rem; margin-bottom: 1rem;">
+          <div class="seedian-cut-box" style="background: rgba(223,183,108,0.05); padding: 0.875rem; margin-bottom: 1rem;">
             <div style="font-size: 0.8125rem; font-weight: 700; color: #dfb76c; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.375rem; font-family: 'Google Sans', sans-serif; letter-spacing: 0.08em; text-shadow: 0 0 0.375rem rgba(223,183,108,0.3);">
               <span>✦</span> ${toSeedian("TRY TYPING")} (พิมพ์ข้อความ A-Z)
             </div>
             <div style="display: flex; gap: 0.625rem; flex-direction: column;">
-              <input
-                id="seedianLiveInput"
-                type="text"
-                placeholder="พิมพ์ข้อความภาษาอังกฤษ เช่น SEEDPLANET / HELLO..."
-                value="SEEDPLANET"
-                style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem 0.75rem; color: #ffffff; font-size: 0.875rem; font-family: 'Google Sans', sans-serif; outline: none; --cut: 0.375rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));"
-              />
-              <div style="background: rgba(0,0,0,0.7); border: 1px solid #dfb76c; padding: 0.75rem 0.875rem; min-height: 3rem; display: flex; align-items: center; gap: 0.625rem; --cut: 0.375rem; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));">
+              <div class="cut-frame" style="--cut: var(--cut-sm); --cut-border: rgba(255,255,255,0.22); background: rgba(0,0,0,0.5);">
+                <input
+                  id="seedianLiveInput"
+                  type="text"
+                  placeholder="พิมพ์ข้อความภาษาอังกฤษ เช่น SEEDPLANET / HELLO..."
+                  value="SEEDPLANET"
+                  style="width: 100%; box-sizing: border-box; background: transparent; border: none; padding: 0.5rem 0.75rem; color: #ffffff; font-size: 0.875rem; font-family: 'Google Sans', sans-serif; outline: none;"
+                />
+              </div>
+              <div class="cut-frame" style="--cut: var(--cut-sm); --cut-border: #dfb76c; background: rgba(0,0,0,0.7); padding: 0.75rem 0.875rem; min-height: 3rem; display: flex; align-items: center; gap: 0.625rem;">
                 <div id="seedianLiveOutput" style="font-size: 1.5rem; color: #dfb76c; display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; word-break: break-all; filter: drop-shadow(0 0 0.5rem rgba(223,183,108,0.5));">
                   ${toSeedian("SEEDPLANET")}
                 </div>

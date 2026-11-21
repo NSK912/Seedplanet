@@ -1,12 +1,14 @@
 // === SEEDPLANET MODULE: JS/ITEMS/ISOPOD_ITEM.JS ===
+window.ItemRegistry = window.ItemRegistry || {};
 window.ItemRegistry["isopod_item"] = {
   render: function(item, vertices, colors, indices, targetBuffer) {
     if (typeof window.buildIsopodModel !== "function") return;
+    const isIcon = (targetBuffer === "preview" || !!(item && item.isIconPreview));
+    const isPreview = !!(item && item.isPreview);
     const p = (item && item.position) ? item.position : [0, 0, 0];
     const itemR = (item && item.R) ? item.R : [1, 0, 0];
     const itemF = (item && item.F) ? item.F : [0, 0, 1];
     const itemN = (item && item.normal) ? item.normal : [0, 1, 0];
-    const isPreview = !!(item && item.isPreview);
     const isValid = !(item && item.isValidPlacement === false);
 
     let overrideColors = null;
@@ -16,10 +18,16 @@ window.ItemRegistry["isopod_item"] = {
 
     const seed = (item && typeof item.seed === "number") ? item.seed : 1234;
     const variantIdx = Math.floor(Math.abs(Math.sin(seed * 8371.19)) * 100) % 3;
+    const isDrop = !isIcon && !isPreview;
+    const scale = isDrop ? Math.min((item && typeof item.size === "number") ? item.size : 0.20, 0.24) : 1.1;
+    const yOff = isDrop ? 0.025 : 0;
+    const basis = isDrop
+      ? window.DropTemplateCache.rotateBasis(itemR, itemF, (seed * 6.28318) % (Math.PI * 2))
+      : { R: itemR, F: itemF };
 
     window.DropTemplateCache.render(
       `isopod_v${variantIdx}`,
-      { position: p, R: itemR, normal: itemN, F: itemF, scale: 1.1, yOff: 0, colorTransform: overrideColors },
+      { position: p, R: basis.R, normal: itemN, F: basis.F, scale: scale, yOff: yOff, colorTransform: overrideColors },
       (tv, tc, ti) => {
         window.buildIsopodModel(
           variantIdx * 173 + 11,
@@ -39,3 +47,5 @@ window.ItemRegistry["isopod_item"] = {
     );
   }
 };
+window.ItemRegistry["isopod"] = window.ItemRegistry["isopod_item"];
+window.ItemRegistry["ISOPOD"] = window.ItemRegistry["isopod_item"];
