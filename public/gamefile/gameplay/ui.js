@@ -2289,6 +2289,14 @@ document.body.insertAdjacentHTML("afterbegin", `<div
         <label>ขนาดย่อขยายล้อ (Scale) <span id="devWheelScaleLabel">0.56</span>x</label>
         <input type="range" id="devWheelScaleSlider" min="10" max="300" value="56" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.625rem;" />
 
+        <div style="font-weight: bold; color: #ff6b6b; margin-bottom: 0.25rem;">🏎️ ปรับสเกลล้อรถไซเบอร์ (Cyber Car Wheels)</div>
+        <label>สเกลล้อหน้า (Front Wheel Scale) <span id="devCyberFrontWheelScaleLabel">0.71</span>x</label>
+        <input type="range" id="devCyberFrontWheelScaleSlider" min="30" max="250" value="71" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.375rem;" />
+        <label>สเกลล้อหลัง (Rear Wheel Scale) <span id="devCyberRearWheelScaleLabel">0.80</span>x</label>
+        <input type="range" id="devCyberRearWheelScaleSlider" min="30" max="250" value="80" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.375rem;" />
+        <label>ความกว้างล้อหลัง (Rear Wheel Width) <span id="devCyberRearWheelWidthLabel">1.00</span>x</label>
+        <input type="range" id="devCyberRearWheelWidthSlider" min="30" max="250" value="100" style="width: 100%; margin-top: 0.125rem; margin-bottom: 0.625rem;" />
+
         <div style="font-weight: bold; color: #dfb76c; margin-bottom: 0.25rem;">🔋 ปรับเครื่องยนต์ไฟฟ้า (Electric Engine)</div>
         <label>ขนาดเครื่องยนต์ (Scale) <span id="devElectricEngineScaleLabel">0.36</span>x</label>
         <input type="range" id="devElectricEngineScaleSlider" min="10" max="300" value="36" style="width: 100%; margin-top: 0.125rem;" />

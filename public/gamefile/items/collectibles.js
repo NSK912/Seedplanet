@@ -197,6 +197,11 @@ window.syncTreeAttachedFruits = syncTreeAttachedFruits;
     boat_wing:                { label: "BOAT_WING",         icon: "🪽", size: 0.068, color: [0.86, 0.80, 0.68], floatInWater: true,  mockSize: 0.25 },
     wood_wheel:               { label: "WOOD_WHEEL",        icon: "🛞", size: 0.052, color: [0.55, 0.38, 0.22], floatInWater: true,  mockSize: 0.25 },
     electric_engine:          { label: "ELECTRIC_ENGINE",   icon: "⚙️", size: 0.054, color: [0.75, 0.75, 0.78], floatInWater: false, mockSize: 0.25 },
+    cyber_car:                { label: "CYBER_CAR",         icon: "🏎️", size: 0.074, color: [0.58, 0.60, 0.64], floatInWater: false, mockSize: 0.25 },
+    cyber_car_door:           { label: "CYBER_CAR_DOOR",    icon: "🚪", size: 0.056, color: [0.58, 0.60, 0.64], floatInWater: false, mockSize: 0.25 },
+    cyber_car_seat:           { label: "CYBER_CAR_SEAT",    icon: "💺", size: 0.054, color: [0.16, 0.17, 0.20], floatInWater: false, mockSize: 0.25 },
+    airless_wheel:            { label: "AIRLESS_WHEEL",     icon: "🛞", size: 0.054, color: [0.60, 0.44, 0.32], floatInWater: false, mockSize: 0.25 },
+    cyber_engine:             { label: "CYBER_ENGINE",      icon: "⚡", size: 0.056, color: [0.54, 0.56, 0.60], floatInWater: false, mockSize: 0.25 },
     robot_stand:              { label: "ROBOT_STAND",       icon: "🤖", size: 0.066, color: [0.22, 0.22, 0.25], floatInWater: false, mockSize: 0.25 },
     robot_cockpit:            { label: "ROBOT_COCKPIT",     icon: "🤖", size: 0.066, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
     robot_left_arm:           { label: "ROBOT_LEFT_ARM",    icon: "🦾", size: 0.062, color: [0.52, 0.35, 0.18], floatInWater: false, mockSize: 0.25 },
@@ -4828,10 +4833,11 @@ function buildCollectibles(count, seed) {
         const allowHudNotice = inputState.silentNotice !== true;
         const shouldConsumeBattery = inputState.consumeBattery !== false;
 
-        const hasWing = !!(boat.hasWing || boat.hasWings);
-        const hasWheels = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
+        const isCyberCar = boat.type === "cyber_car";
+        const hasWing = !isCyberCar && !!(boat.hasWing || boat.hasWings);
+        const hasWheels = !!(boat.hasWheel || boat.hasWheels || boat.hasAirlessWheel || (boat.wheelCount && boat.wheelCount > 0));
         const isLandBoat = hasWheels || hasWing;
-        const hasEngine = !!boat.hasEngine;
+        const hasEngine = !!(boat.hasEngine || boat.hasCyberEngine);
         const hasBattery = (typeof inputState.hasBattery === "boolean")
           ? inputState.hasBattery
           : (typeof window.BatterySystem !== "undefined" && window.BatterySystem.hasActiveBattery());
@@ -4841,6 +4847,18 @@ function buildCollectibles(count, seed) {
         let moveNorthFactor = 0;
         let moveEastFactor = 0;
         let currentSpeedVal = 0;
+
+        if (isCyberCar) {
+            const targetThrottle = Math.max(-1, Math.min(1, moveForwardInput));
+            const targetStickSteer = Math.max(-1, Math.min(1, moveSidewaysInput)); // -1 = Left (A), +1 = Right (D)
+            const blend = Math.min(1.0, 0.28 * dt);
+            let curThr = (typeof boat.stickThrottle === "number" ? boat.stickThrottle : 0) + (targetThrottle - (typeof boat.stickThrottle === "number" ? boat.stickThrottle : 0)) * blend;
+            let curStr = (typeof boat.stickSteer === "number" ? boat.stickSteer : 0) + (targetStickSteer - (typeof boat.stickSteer === "number" ? boat.stickSteer : 0)) * blend;
+            if (Math.abs(curThr) < 0.002 && targetThrottle === 0) curThr = 0;
+            if (Math.abs(curStr) < 0.002 && targetStickSteer === 0) curStr = 0;
+            boat.stickThrottle = curThr;
+            boat.stickSteer = curStr;
+        }
 
         if (isLandBoat) {
             // === 1. FRONT WHEEL STEERING ANGLE ===
@@ -4854,9 +4872,12 @@ function buildCollectibles(count, seed) {
 
             // === 2. ACCELERATION, BRAKING, REVERSING & HANDBRAKE ===
             let vehSpeed = boat.vehicleSpeed || 0;
-            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * 5.0 : (hasEngine ? pSpeed * 0.5 : (!hasWheels && isInWater ? pSpeed * 1.5 : 0));
-            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * 2.0 : (hasEngine ? pSpeed * 0.2 : (!hasWheels && isInWater ? pSpeed * 0.8 : 0));
-            let accelPower = (hasEngine && hasBattery) ? pSpeed * 0.16 * dt : (!hasWheels && isInWater && !hasEngine ? pSpeed * 0.08 * dt : 0);
+            const fwdMult = isCyberCar ? 5.8 : 5.0;
+            const revMult = isCyberCar ? 2.4 : 2.0;
+            const accMult = isCyberCar ? 0.20 : 0.16;
+            let topFwdSpeed = (hasEngine && hasBattery) ? pSpeed * fwdMult : (hasEngine ? pSpeed * 0.5 : (!hasWheels && isInWater && !isCyberCar ? pSpeed * 1.5 : 0));
+            let topRevSpeed = (hasEngine && hasBattery) ? pSpeed * revMult : (hasEngine ? pSpeed * 0.2 : (!hasWheels && isInWater && !isCyberCar ? pSpeed * 0.8 : 0));
+            let accelPower = (hasEngine && hasBattery) ? pSpeed * accMult * dt : (!hasWheels && isInWater && !hasEngine && !isCyberCar ? pSpeed * 0.08 * dt : 0);
             let brakePower = pSpeed * 0.30 * dt;
             let coastFriction = Math.pow(isInWater ? 0.96 : ((isAirborne || boat.isFlying) && hasWing ? 0.995 : 0.985), dt);
 
@@ -4865,7 +4886,7 @@ function buildCollectibles(count, seed) {
                 accelPower = Math.max(accelPower, pSpeed * 0.16 * dt);
             }
 
-            const canAccelerate = (hasEngine && hasBattery) || (!hasWheels && isInWater && !hasEngine);
+            const canAccelerate = (hasEngine && hasBattery) || (!hasWheels && isInWater && !hasEngine && !isCyberCar);
 
             // Feedback notices
             if (allowHudNotice) {
@@ -4873,7 +4894,9 @@ function buildCollectibles(count, seed) {
                     const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
                     if (typeof showNotice === "function" && (!boat._lastEngineNotice || nowTime - boat._lastEngineNotice > 3000)) {
                         boat._lastEngineNotice = nowTime;
-                        showNotice("เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
+                        showNotice(isCyberCar
+                          ? "⚡ รถไซเบอร์ต้องติดตั้ง Swingarm-Mounted Engine ก่อนจึงจะขับเคลื่อนได้! (Attach Swingarm-Mounted Engine to drive)"
+                          : "เรือติดล้อต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะขับเคลื่อนได้! (Attach Electric Engine to drive wheeled boat)");
                     }
                 } else if (hasEngine && !hasBattery && (Math.abs(moveForwardInput) > 0.1 || (boat.isFlying && isShiftHeld))) {
                     if (typeof window.BatterySystem !== "undefined") {
@@ -4984,8 +5007,8 @@ function buildCollectibles(count, seed) {
             }
             currentSpeedVal = Math.abs(vehSpeed);
         } else {
-            // Water-only boat (no wheels and no wings)
-            let canRow = isInWater;
+            // Water-only boat (no wheels and no wings) — cyber_car cannot row on water or land without airless wheels
+            let canRow = !isCyberCar && isInWater;
             if (canRow) {
                 heading += -moveSidewaysInput * 0.05 * dt;
                 moveNorthFactor = Math.cos(heading) * moveForwardInput;
@@ -5000,7 +5023,9 @@ function buildCollectibles(count, seed) {
                     const nowTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
                     if (typeof showNotice === "function" && (!boat._lastLandNotice || nowTime - boat._lastLandNotice > 3000)) {
                         boat._lastLandNotice = nowTime;
-                        showNotice("เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
+                        showNotice(isCyberCar
+                          ? "🛞 โครงรถไซเบอร์ต้องติดตั้งล้อแบบไม่ใช้ลมและ Swingarm-Mounted Engine ก่อนจึงจะขับได้! (Attach Airless Wheels & Swingarm-Mounted Engine)"
+                          : "เรือต้องอยู่บนน้ำ หรือติดล้อไม้เพื่อวิ่งบนบก! (Attach Wooden Wheel to drive on land)");
                     }
                 }
             }
@@ -5034,6 +5059,11 @@ function buildCollectibles(count, seed) {
             : placingItemName === "ELECTRIC_ENGINE" ? "electric_engine"
             : placingItemName === "BOAT_WING" ? "boat_wing"
             : placingItemName === "WOOD_WHEEL" ? "wood_wheel"
+            : placingItemName === "CYBER_CAR" ? "cyber_car"
+            : placingItemName === "CYBER_CAR_DOOR" ? "cyber_car_door"
+            : placingItemName === "CYBER_CAR_SEAT" ? "cyber_car_seat"
+            : placingItemName === "AIRLESS_WHEEL" ? "airless_wheel"
+            : placingItemName === "CYBER_ENGINE" ? "cyber_engine"
             : placingItemName === "WOOD_WALL" ? "wood_wall"
             : placingItemName === "WOOD_WINDOW" ? "wood_window"
             : placingItemName === "WOOD_DOOR" ? "wood_door"
@@ -5073,7 +5103,7 @@ function buildCollectibles(count, seed) {
             collectibles.push(floorPreviewCollectible);
             floorPreviewCollectible = collectibles[collectibles.length - 1];
             window.floorPreviewCollectible = floorPreviewCollectible;
-            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+            if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace === "cyber_car" || typeToPlace === "cyber_car_door" || typeToPlace === "cyber_car_seat" || typeToPlace === "airless_wheel" || typeToPlace === "cyber_engine" || typeToPlace.startsWith("robot_")) {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
             } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof" || typeToPlace === "folding_ladder") {
               floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -6134,14 +6164,14 @@ function buildCollectibles(count, seed) {
 
             const isWater = isPointInWater(P_bottom) || isPointInWater(P_top) || isPlayerInWater;
             floorPreviewCollectible.isValidPlacement = isValid && !isWater;
-          } else if (typeToPlace === "wood_boat") {
+          } else if (typeToPlace === "wood_boat" || typeToPlace === "cyber_car") {
              floorPreviewCollectible.size = 0.25;
              pN = [pnx, pny, pnz];
              pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
              pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
 
              if (isUnderWater) {
-               floorPreviewCollectible.isValidPlacement = !isDivingMode;
+               floorPreviewCollectible.isValidPlacement = (typeToPlace === "wood_boat") && !isDivingMode;
                targetPos = [
                    pnx * (waterRadius - 0.04),
                    pny * (waterRadius - 0.04),
@@ -6222,6 +6252,69 @@ function buildCollectibles(count, seed) {
              } else {
                floorPreviewCollectible.isValidPlacement = false;
                floorPreviewCollectible.isBoatSnapped = false;
+               floorPreviewCollectible.size = 0.25;
+               pN = [pnx, pny, pnz];
+               pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
+               pF = [previewNorth[0] * cosH + previewEast[0] * sinH, previewNorth[1] * cosH + previewEast[1] * sinH, previewNorth[2] * cosH + previewEast[2] * sinH];
+             }
+          } else if (typeToPlace === "cyber_car_door" || typeToPlace === "cyber_car_seat" || typeToPlace === "airless_wheel" || typeToPlace === "cyber_engine") {
+             let nearestCar = null;
+             let bestDist = Infinity;
+             const carCandidates = (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.queryRadius === "function")
+               ? SpatialGrid.queryRadius(targetPos[0], targetPos[1], targetPos[2], 1.8)
+               : collectibles;
+             for (let i = 0; i < carCandidates.length; i++) {
+               const other = carCandidates[i];
+               if (other && other.active && other.type === "cyber_car" && !other.isPreview && !other.isGroundDrop && other.position) {
+                 const dx = other.position[0] - targetPos[0];
+                 const dy = other.position[1] - targetPos[1];
+                 const dz = other.position[2] - targetPos[2];
+                 const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                 if (dist < bestDist) {
+                   bestDist = dist;
+                   nearestCar = other;
+                 }
+               }
+             }
+
+             if (nearestCar && bestDist < 0.85) {
+               const bP = nearestCar.position;
+               const bN = nearestCar.normal || [0, 1, 0];
+               const bR = nearestCar.R || [1, 0, 0];
+               const bF = nearestCar.F || [0, 0, 1];
+               let effR = [bR[0], bR[1], bR[2]];
+               let effF = [bF[0], bF[1], bF[2]];
+               if (nearestCar.angle) {
+                 const cA = Math.cos(nearestCar.angle), sA = Math.sin(nearestCar.angle);
+                 effR = [bR[0] * cA - bF[0] * sA, bR[1] * cA - bF[1] * sA, bR[2] * cA - bF[2] * sA];
+                 effF = [bF[0] * cA + bR[0] * sA, bF[1] * cA + bR[1] * sA, bF[2] * cA + bR[2] * sA];
+               }
+
+               const alreadyInstalled =
+                 (typeToPlace === "cyber_car_door" && !!nearestCar.hasDoor) ||
+                 (typeToPlace === "cyber_car_seat" && !!nearestCar.hasSeat) ||
+                 (typeToPlace === "airless_wheel" && !!(nearestCar.hasWheel || nearestCar.hasWheels || nearestCar.hasAirlessWheel)) ||
+                 (typeToPlace === "cyber_engine" && !!(nearestCar.hasEngine || nearestCar.hasCyberEngine));
+
+               targetPos = [bP[0], bP[1], bP[2]];
+               pN = [bN[0], bN[1], bN[2]];
+               pR = effR;
+               pF = effF;
+               isSnapped = true;
+               floorPreviewCollectible.isValidPlacement = !alreadyInstalled;
+               floorPreviewCollectible.isBoatSnapped = true;
+               floorPreviewCollectible.targetBoat = nearestCar;
+               floorPreviewCollectible.size = 0.25;
+             } else {
+               // Allow standalone placement on ground or constructed floors for inspection/storage!
+               let partRad = previewGroundRadius + 0.002;
+               if (typeof Physics !== "undefined" && typeof Physics.getFloorSurfaceRadiusAt === "function") {
+                 partRad = Physics.getFloorSurfaceRadiusAt(pnx * previewGroundRadius, pny * previewGroundRadius, pnz * previewGroundRadius, partRad);
+               }
+               targetPos = [pnx * partRad, pny * partRad, pnz * partRad];
+               floorPreviewCollectible.isValidPlacement = !isDivingMode && !isUnderWater && (slopeVal < 1.5);
+               floorPreviewCollectible.isBoatSnapped = false;
+               floorPreviewCollectible.targetBoat = null;
                floorPreviewCollectible.size = 0.25;
                pN = [pnx, pny, pnz];
                pR = [previewEast[0] * cosH - previewNorth[0] * sinH, previewEast[1] * cosH - previewNorth[1] * sinH, previewEast[2] * cosH - previewNorth[2] * sinH];
@@ -8188,8 +8281,8 @@ function buildCollectibles(count, seed) {
             }
           }
 
-          // Early skip for sleeping parked boats on land until structures change
-          if (c.type === "wood_boat" && !c.isGroundDrop && c._isSleeping && !c.isInWater && !c.isFlying && !c.isAirborne && !c.isGliding) {
+          // Early skip for sleeping parked vehicles on land until structures change
+          if ((c.type === "wood_boat" || c.type === "cyber_car") && !c.isGroundDrop && c._isSleeping && !c.isInWater && !c.isFlying && !c.isAirborne && !c.isGliding) {
             const wakeTick = window._boatSleepCheckTick || 0;
             if (c._sleepWakeTick === wakeTick) {
               continue;
@@ -8761,7 +8854,7 @@ function buildCollectibles(count, seed) {
             let isLogFloat = ((c.type === "log" || c.type === "branch" || c.type === "plank" || c.type === "wood_floor" || c.type === "thin_wood_floor" || (c.type === "wood_boat" && !c.isGroundDrop)) && inWater && r <= waterRadius + 0.1);
 
             const hasWingBoat = (c.type === "wood_boat" && !c.isGroundDrop) && !!(c.hasWing || c.hasWings);
-            const isWheeledBoat = (c.type === "wood_boat" && !c.isGroundDrop) && !!(c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
+            const isWheeledBoat = ((c.type === "wood_boat" || c.type === "cyber_car") && !c.isGroundDrop) && !!(c.hasWheel || c.hasWheels || c.hasAirlessWheel || (c.wheelCount && c.wheelCount > 0));
             const groundRadCheck = inWater ? (waterRadius - 0.04) : terrainRadius;
             isAirborneWingedBoat = hasWingBoat && !inWater && (c.isFlying || c.isGliding || (r - groundRadCheck > 0.15));
 
@@ -8867,7 +8960,7 @@ function buildCollectibles(count, seed) {
           
           // Random tumbling rotation logic for the logs
           if (!c.spinAxis) {
-              if (c.type === "wood_boat" && !c.isGroundDrop) {
+              if ((c.type === "wood_boat" || c.type === "cyber_car") && !c.isGroundDrop) {
                   c.spinAxis = [0, 1, 0];
                   c.spinSpeed = 0;
               } else {
@@ -8905,8 +8998,8 @@ function buildCollectibles(count, seed) {
           let groundRadius = preInWater ? waterRadius : terrainRadius;
           let isInWater = preInWater;
           
-          let isWoodBoat = (c.type === "wood_boat" && !c.isGroundDrop);
-          let collisionRadius = groundRadius + (isWoodBoat ? (isInWater ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
+          let isWoodBoat = ((c.type === "wood_boat" || c.type === "cyber_car") && !c.isGroundDrop);
+          let collisionRadius = groundRadius + (isWoodBoat ? (isInWater && c.type === "wood_boat" ? -0.04 : 0.002) : (isItemDrop ? 0.001 : (c.size ? c.size * 0.5 : 0)));
           if (isWoodBoat && !isInWater) {
              const cPos = c.position;
              if (typeof Physics !== "undefined" && typeof Physics.getFloorSurfaceRadiusAt === "function") {
@@ -8916,7 +9009,7 @@ function buildCollectibles(count, seed) {
           let pitchGrade = 0;
           let rollGrade = 0;
           
-          let isWheeledBoat = isWoodBoat && (c.hasWheel || c.hasWheels || (c.wheelCount && c.wheelCount > 0));
+          let isWheeledBoat = isWoodBoat && (c.hasWheel || c.hasWheels || c.hasAirlessWheel || (c.wheelCount && c.wheelCount > 0));
 
           if (isWheeledBoat && !isInWater) {
               const nx = c.position[0] / (r || 1);
@@ -8941,7 +9034,8 @@ function buildCollectibles(count, seed) {
                       waterAnimTime,
                       waveStrength,
                       hasWheels: true,
-                      isInWater: false
+                      isInWater: false,
+                      vehicleType: c.type || "wood_boat"
                   });
 
                   collisionRadius = vehicleTransform.targetGroundRadius;
@@ -9467,6 +9561,66 @@ function buildCollectibles(count, seed) {
           placeType: "boat_wing",
           usage_th: "พรี-วางติดตั้งประกอบเข้ากับเรือไม้เพื่อปลดล็อกการบิน (ต้องมีเครื่องยนต์ไฟฟ้า, กด Shift เพื่อเปิดโหมดบิน)",
           usage_en: "Attach biplane wings to boat to enable flight mode (Requires Electric Engine, press Shift to fly).",
+          maxStack: 30
+        },
+        "CYBER_CAR": {
+          id: "CYBER_CAR",
+          category: [ITEM_CATEGORIES.PRE_PLACE, ITEM_CATEGORIES.VEHICLE],
+          name_th: "โครงรถไซเบอร์",
+          name_en: "Cyber Car Frame",
+          icon: "🏎️",
+          actionType: "PLACE_VEHICLE",
+          placeType: "cyber_car",
+          usage_th: "พรี-วางโครงรถไซเบอร์ 3 ล้อลงบนพื้น แล้วติดตั้งประตู ที่นั่ง ล้อแบบไม่ใช้ลม และ Swingarm-Mounted Engine เพื่อขับขี่",
+          usage_en: "Pre-place the 3-wheel Cyber Car chassis on land, then attach Doors, Seat, Airless Wheels, and Swingarm-Mounted Engine.",
+          maxStack: 30
+        },
+        "CYBER_CAR_DOOR": {
+          id: "CYBER_CAR_DOOR",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "ประตูรถไซเบอร์",
+          name_en: "Cyber Car Door",
+          icon: "🚪",
+          actionType: "PLACE_COMPONENT",
+          placeType: "cyber_car_door",
+          usage_th: "พรี-วางติดตั้งประกอบเข้ากับโครงรถไซเบอร์ หรือวางตั้งแยกบนพื้น",
+          usage_en: "Pre-place onto a Cyber Car chassis to install side doors, or place standalone on ground.",
+          maxStack: 30
+        },
+        "CYBER_CAR_SEAT": {
+          id: "CYBER_CAR_SEAT",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "ที่นั่งรถไซเบอร์",
+          name_en: "Cyber Car Seat",
+          icon: "💺",
+          actionType: "PLACE_COMPONENT",
+          placeType: "cyber_car_seat",
+          usage_th: "พรี-วางติดตั้งเบาะนั่งสปอร์ตและพวงมาลัยเข้ากับโครงรถไซเบอร์ หรือวางตั้งแยกบนพื้น",
+          usage_en: "Pre-place onto a Cyber Car chassis to install racing seat & yoke steering, or place standalone.",
+          maxStack: 30
+        },
+        "AIRLESS_WHEEL": {
+          id: "AIRLESS_WHEEL",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "ล้อและยางแบบไม่ใช้ลม",
+          name_en: "Airless Wheel & Tire",
+          icon: "🛞",
+          actionType: "PLACE_COMPONENT",
+          placeType: "airless_wheel",
+          usage_th: "พรี-วางติดตั้งชุดล้อและยางแบบไม่ใช้ลมเข้ากับโครงรถไซเบอร์ (2 ล้อหน้าเลี้ยวได้ + 1 ล้อหลังใหญ่)",
+          usage_en: "Pre-place onto a Cyber Car chassis to install the 3-wheel airless Tweel wheel & tire assembly.",
+          maxStack: 30
+        },
+        "CYBER_ENGINE": {
+          id: "CYBER_ENGINE",
+          category: ITEM_CATEGORIES.PRE_PLACE,
+          name_th: "Swingarm-Mounted Engine",
+          name_en: "Swingarm-Mounted Engine",
+          icon: "⚡",
+          actionType: "PLACE_COMPONENT",
+          placeType: "cyber_engine",
+          usage_th: "พรี-วางติดตั้งชุดเครื่องยนต์สวิงอาร์มพร้อมโช้คอัพในตัวเข้ากับด้านท้ายโครงรถไซเบอร์เพื่อขับเคลื่อนความเร็วสูง (ใช้แบตเตอรี่)",
+          usage_en: "Pre-place onto a Cyber Car chassis rear bay to mount the integrated Swingarm-Mounted Engine & twin rear coilovers for high-speed drive.",
           maxStack: 30
         },
         "MEGANEURA": {
@@ -10223,7 +10377,12 @@ function buildCollectibles(count, seed) {
         // ไอเทมระบบ (SYSTEM - ไม่นำมาสุ่มในกล่อง)
         SYSTEM: [
           "WHITE_BODYSUIT_TOP",
-          "WHITE_BODYSUIT_SHORTS"
+          "WHITE_BODYSUIT_SHORTS",
+          "CYBER_CAR",
+          "CYBER_CAR_DOOR",
+          "CYBER_CAR_SEAT",
+          "AIRLESS_WHEEL",
+          "CYBER_ENGINE"
         ],
         // ไอเทมทั่วไป (COMMON)
         COMMON: [

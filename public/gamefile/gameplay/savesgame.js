@@ -26,7 +26,8 @@
         "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table",
         "wood_chair", "lantern", "meganeura_item", "isopod_item",
         "obsidian_pad_warp_item", "obsidian_compass_pad_item", "wood_boat",
-        "wood_wheel", "electric_engine", "boat_wing"
+        "wood_wheel", "electric_engine", "boat_wing",
+        "cyber_car", "cyber_car_door", "cyber_car_seat", "airless_wheel", "cyber_engine"
       ]);
 
       function _executeSaveSettingsNow() {
@@ -1200,7 +1201,7 @@
               p.isPreview = false;
               p.isPlayerPlaced = true;
               p.isWorldGenerated = false;
-              if (p.type === "wood_boat") {
+              if (p.type === "wood_boat" || p.type === "cyber_car") {
                   p.isDynamic = true;
               } else {
                   p.isDynamic = false;

@@ -120,18 +120,23 @@
   }
 
   function setPromptLocalized(text) {
+    if (typeof isDemolishModeEnabled !== "undefined" && isDemolishModeEnabled) return;
     const prompt = document.getElementById("interactPrompt");
     if (!prompt) return;
     const lang = getCurLang();
     if (lang === "seedian" && window.Seedian && typeof window.Seedian.toSeedian === "function") {
       const html = window.Seedian.toSeedian(text);
-      if (prompt._lastSeedianHtml !== html) {
+      if (prompt._lastSeedianHtml !== html || prompt._lastHTML !== null) {
         prompt._lastSeedianHtml = html;
+        prompt._lastHTML = null;
         prompt.innerHTML = html;
       }
     } else {
       prompt._lastSeedianHtml = null;
-      if (prompt.textContent !== text) prompt.textContent = text;
+      if (prompt.textContent !== text || prompt._lastHTML !== null) {
+        prompt._lastHTML = null;
+        prompt.textContent = text;
+      }
     }
     prompt.style.display = "block";
   }
@@ -312,101 +317,118 @@
         }
       }
 
+      const inDemolishMode = (typeof isDemolishModeEnabled !== "undefined" && isDemolishModeEnabled);
+
       // Track whether player is holding a plantable seed item or watering a planter for reach circle
-      window.isHoldingPlantableSeed = !!seedCfg || isHoldingWaterBucket;
+      window.isHoldingPlantableSeed = !inDemolishMode && (!!seedCfg || isHoldingWaterBucket);
 
-      const keyName = (typeof currentKeyBindings !== "undefined" && currentKeyBindings.interact)
-        ? currentKeyBindings.interact.replace("Key", "").replace("Arrow", "")
-        : "E";
-
-      // Handle Planting Snap Preview: ONLY active when holding a plantable item AND within close reach of an empty planter box!
-      if (seedCfg && closestEmptyPlanter) {
-        window.activePlantingTargetPlanter = closestEmptyPlanter;
-        window.activePlantingSeedItem = heldItem;
-
-        // เช็คการเปลี่ยนไอเทมต่อเนื่องใน Hotbar ทันที หรือเปลี่ยนกล่อง
-        const needsUpdate = (window._currentPreviewPlanter !== closestEmptyPlanter) ||
-                            (closestEmptyPlanter.previewSeedType !== seedCfg.type) ||
-                            (!closestEmptyPlanter.isPreviewPlant) ||
-                            (closestEmptyPlanter.previewIsValid !== true);
-
-        if (needsUpdate) {
-          if (window._currentPreviewPlanter && window._currentPreviewPlanter !== closestEmptyPlanter) {
-            window._currentPreviewPlanter.isPreviewPlant = false;
-          }
-          window._currentPreviewPlanter = closestEmptyPlanter;
-          closestEmptyPlanter.isPreviewPlant = true;
-          closestEmptyPlanter.previewSeedType = seedCfg.type;
-          closestEmptyPlanter.previewIsValid = true;
-          window.pendingDynamicCollectibleRefresh = true;
-        }
-
-        const plantDisplayName = getLocalizedSeedName(seedCfg, true);
-        const text = trPlain("planter_prompt_plant", { key: keyName, plant: plantDisplayName }, `[${keyName} / คลิกซ้าย] ปลูก${plantDisplayName}`);
-        setPromptLocalized(text);
-      } else {
+      if (inDemolishMode) {
         window.activePlantingTargetPlanter = null;
         window.activePlantingSeedItem = null;
-
+        window.activeWateringTargetPlanter = null;
+        window.activeWateringBucketItem = null;
+        window.activeMatureCottonPlanter = null;
+        window.activeMatureTreePlanter = null;
         if (window._currentPreviewPlanter) {
           window._currentPreviewPlanter.isPreviewPlant = false;
           window._currentPreviewPlanter = null;
           window.pendingDynamicCollectibleRefresh = true;
-        }
-      }
-
-      // Handle Watering Target for Unwatered Planted Box (strictly within close reach)
-      if (closestUnwateredPlanter && (!seedCfg || !closestEmptyPlanter)) {
-        const uSeedCfg = getSeedConfig(closestUnwateredPlanter.plantData.seedType) || { nameTH: "ต้นอ่อน", nameEN: "Sprout" };
-        const plantDisplayName = getLocalizedSeedName(uSeedCfg, true);
-
-        if (isHoldingWaterBucket) {
-          window.activeWateringTargetPlanter = closestUnwateredPlanter;
-          window.activeWateringBucketItem = heldItem;
-          const text = trPlain("planter_prompt_water", { key: keyName, plant: plantDisplayName }, `[${keyName} / คลิกซ้าย] รดน้ำ${plantDisplayName} 🪣💧`);
-          setPromptLocalized(text);
-        } else {
-          window.activeWateringTargetPlanter = null;
-          window.activeWateringBucketItem = null;
-          const text = trPlain("planter_prompt_need_water", { plant: plantDisplayName }, `💧 ต้องใช้ถังใส่น้ำ (Water Bucket) มารดน้ำ${plantDisplayName}`);
-          setPromptLocalized(text);
+          window._forceDynamicCollectibleRefresh = true;
         }
       } else {
-        window.activeWateringTargetPlanter = null;
-        window.activeWateringBucketItem = null;
-      }
+        const keyName = (typeof currentKeyBindings !== "undefined" && currentKeyBindings.interact)
+          ? currentKeyBindings.interact.replace("Key", "").replace("Arrow", "")
+          : "E";
 
-      // Handle Mature Harvesting / Pickup Targeting (Reuses exact existing map mechanics!)
-      if (closestMaturePlanter) {
-        const pData = closestMaturePlanter.plantData;
-        const sType = String(pData.seedType || "").toUpperCase();
-        const isCotton = sType.includes("COTTON");
-        const isCrownFlower = sType.includes("CROWN");
+        // Handle Planting Snap Preview: ONLY active when holding a plantable item AND within close reach of an empty planter box!
+        if (seedCfg && closestEmptyPlanter) {
+          window.activePlantingTargetPlanter = closestEmptyPlanter;
+          window.activePlantingSeedItem = heldItem;
 
-        if (isCotton || isCrownFlower) {
-          window.activeMatureCottonPlanter = closestMaturePlanter;
-          window.activeMatureTreePlanter = null;
-          if ((!seedCfg || !closestEmptyPlanter) && !window.activeWateringTargetPlanter) {
-            const text = isCrownFlower
-              ? trPlain("planter_prompt_harvest_crown_flower", { key: keyName }, `[${keyName}] เก็บต้นรัก`)
-              : trPlain("planter_prompt_harvest_cotton", { key: keyName }, `[${keyName}] เก็บต้นฝ้าย`);
+          // เช็คการเปลี่ยนไอเทมต่อเนื่องใน Hotbar ทันที หรือเปลี่ยนกล่อง
+          const needsUpdate = (window._currentPreviewPlanter !== closestEmptyPlanter) ||
+                              (closestEmptyPlanter.previewSeedType !== seedCfg.type) ||
+                              (!closestEmptyPlanter.isPreviewPlant) ||
+                              (closestEmptyPlanter.previewIsValid !== true);
+
+          if (needsUpdate) {
+            if (window._currentPreviewPlanter && window._currentPreviewPlanter !== closestEmptyPlanter) {
+              window._currentPreviewPlanter.isPreviewPlant = false;
+            }
+            window._currentPreviewPlanter = closestEmptyPlanter;
+            closestEmptyPlanter.isPreviewPlant = true;
+            closestEmptyPlanter.previewSeedType = seedCfg.type;
+            closestEmptyPlanter.previewIsValid = true;
+            window.pendingDynamicCollectibleRefresh = true;
+          }
+
+          const plantDisplayName = getLocalizedSeedName(seedCfg, true);
+          const text = trPlain("planter_prompt_plant", { key: keyName, plant: plantDisplayName }, `[${keyName} / คลิกซ้าย] ปลูก${plantDisplayName}`);
+          setPromptLocalized(text);
+        } else {
+          window.activePlantingTargetPlanter = null;
+          window.activePlantingSeedItem = null;
+
+          if (window._currentPreviewPlanter) {
+            window._currentPreviewPlanter.isPreviewPlant = false;
+            window._currentPreviewPlanter = null;
+            window.pendingDynamicCollectibleRefresh = true;
+          }
+        }
+
+        // Handle Watering Target for Unwatered Planted Box (strictly within close reach)
+        if (closestUnwateredPlanter && (!seedCfg || !closestEmptyPlanter)) {
+          const uSeedCfg = getSeedConfig(closestUnwateredPlanter.plantData.seedType) || { nameTH: "ต้นอ่อน", nameEN: "Sprout" };
+          const plantDisplayName = getLocalizedSeedName(uSeedCfg, true);
+
+          if (isHoldingWaterBucket) {
+            window.activeWateringTargetPlanter = closestUnwateredPlanter;
+            window.activeWateringBucketItem = heldItem;
+            const text = trPlain("planter_prompt_water", { key: keyName, plant: plantDisplayName }, `[${keyName} / คลิกซ้าย] รดน้ำ${plantDisplayName} 🪣💧`);
+            setPromptLocalized(text);
+          } else {
+            window.activeWateringTargetPlanter = null;
+            window.activeWateringBucketItem = null;
+            const text = trPlain("planter_prompt_need_water", { plant: plantDisplayName }, `💧 ต้องใช้ถังใส่น้ำ (Water Bucket) มารดน้ำ${plantDisplayName}`);
             setPromptLocalized(text);
           }
         } else {
-          // Trees (Dragon Fruit / Branch): Chopped down with an Axe just like trees on the map
-          window.activeMatureCottonPlanter = null;
-          window.activeMatureTreePlanter = closestMaturePlanter;
-          if ((!seedCfg || !closestEmptyPlanter) && !window.activeWateringTargetPlanter) {
-            const isHoldingAxe = heldItem && (heldItem.name === "AXE" || heldItem.name === "axe");
-            if (isHoldingAxe) {
-              const text = trPlain("planter_prompt_chop_tree", null, `[คลิกซ้าย] ตัดต้นไม้ 🪓`);
+          window.activeWateringTargetPlanter = null;
+          window.activeWateringBucketItem = null;
+        }
+
+        // Handle Mature Harvesting / Pickup Targeting (Reuses exact existing map mechanics!)
+        if (closestMaturePlanter) {
+          const pData = closestMaturePlanter.plantData;
+          const sType = String(pData.seedType || "").toUpperCase();
+          const isCotton = sType.includes("COTTON");
+          const isCrownFlower = sType.includes("CROWN");
+
+          if (isCotton || isCrownFlower) {
+            window.activeMatureCottonPlanter = closestMaturePlanter;
+            window.activeMatureTreePlanter = null;
+            if ((!seedCfg || !closestEmptyPlanter) && !window.activeWateringTargetPlanter) {
+              const text = isCrownFlower
+                ? trPlain("planter_prompt_harvest_crown_flower", { key: keyName }, `[${keyName}] เก็บต้นรัก`)
+                : trPlain("planter_prompt_harvest_cotton", { key: keyName }, `[${keyName}] เก็บต้นฝ้าย`);
               setPromptLocalized(text);
             }
+          } else {
+            // Trees (Dragon Fruit / Branch): Chopped down with an Axe just like trees on the map
+            window.activeMatureCottonPlanter = null;
+            window.activeMatureTreePlanter = closestMaturePlanter;
+            if ((!seedCfg || !closestEmptyPlanter) && !window.activeWateringTargetPlanter) {
+              const isHoldingAxe = heldItem && (heldItem.name === "AXE" || heldItem.name === "axe");
+              if (isHoldingAxe) {
+                const text = trPlain("planter_prompt_chop_tree", null, `[คลิกซ้าย] ตัดต้นไม้ 🪓`);
+                setPromptLocalized(text);
+              }
+            }
           }
+        } else {
+          window.activeMatureCottonPlanter = null;
+          window.activeMatureTreePlanter = null;
         }
-      } else {
-        window.activeMatureCottonPlanter = null;
-        window.activeMatureTreePlanter = null;
       }
 
       // Check plant growth progress updates (refresh 3D mesh when stage increments)
@@ -706,6 +728,7 @@
     },
 
     handleInteract: function() {
+      if (typeof isDemolishModeEnabled !== "undefined" && isDemolishModeEnabled) return false;
       // 1) Planting snap target
       if (window.activePlantingTargetPlanter && window.activePlantingSeedItem) {
         return PlanterSystem.plant(window.activePlantingTargetPlanter, window.activePlantingSeedItem);
@@ -765,6 +788,7 @@
     },
 
     handleLeftClick: function() {
+      if (typeof isDemolishModeEnabled !== "undefined" && isDemolishModeEnabled) return false;
       if (window.activePlantingTargetPlanter && window.activePlantingSeedItem) {
         return PlanterSystem.plant(window.activePlantingTargetPlanter, window.activePlantingSeedItem);
       }

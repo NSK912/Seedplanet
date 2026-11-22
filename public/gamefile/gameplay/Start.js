@@ -270,7 +270,7 @@ function startGameWithSlot(loadedData, devMode = false) {
           p.isPreview = false;
           p.isPlayerPlaced = true;
           p.isWorldGenerated = false;
-          if (p.type === "wood_boat") {
+          if (p.type === "wood_boat" || p.type === "cyber_car") {
               p.isDynamic = true;
               if (!p.vel) p.vel = [0,0,0];
           } else {

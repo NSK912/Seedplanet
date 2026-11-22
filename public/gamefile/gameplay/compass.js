@@ -23,7 +23,8 @@
         'wood_wall', 'wood_window', 'wood_door', 'wood_roof',
         'wood_stairs', 'folding_ladder', 'wood_wheel', 'boat_wing',
         'electric_engine', 'wood_chest', 'chest', 'campfire',
-        'wood_boat', 'robot_stand', 'meganeura_item', 'isopod_item'
+        'wood_boat', 'cyber_car', 'cyber_car_door', 'cyber_car_seat',
+        'airless_wheel', 'cyber_engine', 'robot_stand', 'meganeura_item', 'isopod_item'
       ]
     }
   };

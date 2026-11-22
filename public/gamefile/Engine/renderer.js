@@ -2441,12 +2441,14 @@ window.World3DUI = World3DUI;
                 float glassAlpha = 1.0;
                 bool isGlass = (abs(vColor.r - 0.6) < 0.01 && abs(vColor.g - 0.8) < 0.01 && abs(vColor.b - 1.0) < 0.01);
                 if (isGlass) {
-                    glassAlpha = mix(0.35, 0.75, fresnel);
-                    finalColor += vec3(1.0, 1.0, 1.0) * spec * 1.5;
+                    glassAlpha = mix(0.14, 0.42, fresnel);
+                    vec3 glassSky = mix(finalColor, vec3(0.68, 0.84, 0.98), 0.36);
+                    finalColor = mix(glassSky, vec3(0.84, 0.93, 1.0), fresnel * 0.45);
+                    finalColor += vec3(1.0, 1.0, 1.0) * spec * 1.35;
 
                     float diagLine = fract((vWorldPos.x + vWorldPos.y + vWorldPos.z) * 6.0);
-                    float shineStripe = smoothstep(0.85, 0.92, diagLine) * smoothstep(0.99, 0.92, diagLine);
-                    finalColor += vec3(1.0, 1.0, 1.0) * shineStripe * 0.38;
+                    float shineStripe = smoothstep(0.86, 0.92, diagLine) * smoothstep(0.98, 0.92, diagLine);
+                    finalColor += vec3(1.0, 1.0, 1.0) * shineStripe * 0.22;
                 }
 
                 // Atmospheric Fog / Mist at Object Max Render Distance
@@ -4308,16 +4310,24 @@ window.cloud3DProgram = cloud3DProgram;
         const fVec = boat.F || [0, 0, 1];
         const angle = boat.angle || 0;
         const bankAngle = boat.bankAngle || 0;
-        const hasWheel = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
-        const hasEngine = !!boat.hasEngine;
+        const vehicleType = boat.type || "wood_boat";
+        const hasWheel = !!(boat.hasWheel || boat.hasWheels || boat.hasAirlessWheel || (boat.wheelCount && boat.wheelCount > 0));
+        const hasEngine = !!(boat.hasEngine || boat.hasCyberEngine);
         const hasWing = !!(boat.hasWing || boat.hasWings);
+        const hasDoor = !!boat.hasDoor;
+        const hasSeat = !!boat.hasSeat;
         const isFlying = !!(boat.isFlying || boat.isAirborne);
         const spinAngle = hasWheel
           ? (isFlying ? (boat.frozenSpinAngle !== undefined ? boat.frozenSpinAngle : (boat.spinAngle || 0)) : (boat.spinAngle || 0))
           : 0;
         const steerAngle = hasWheel ? (boat.steerAngle || 0) : 0;
-        const rowTimer = (!hasWheel && !hasEngine && typeof boatRowTimer !== "undefined") ? boatRowTimer : 0;
+        const stickThrottle = (vehicleType === "cyber_car" && typeof boat.stickThrottle === "number") ? boat.stickThrottle : 0;
+        const stickSteer = (vehicleType === "cyber_car" && typeof boat.stickSteer === "number") ? boat.stickSteer : 0;
+        const rowTimer = (vehicleType !== "cyber_car" && !hasWheel && !hasEngine && typeof boatRowTimer !== "undefined") ? boatRowTimer : 0;
         const wheelScale = (hasWheel && typeof window.wheelScaleMultiplier === "number") ? window.wheelScaleMultiplier : 1.0;
+        const cyberFrontWheelScale = (vehicleType === "cyber_car" && typeof window.cyberCarFrontWheelScale === "number") ? window.cyberCarFrontWheelScale : 0.71;
+        const cyberRearWheelScale = (vehicleType === "cyber_car" && typeof window.cyberCarRearWheelScale === "number") ? window.cyberCarRearWheelScale : 0.80;
+        const cyberRearWheelWidth = (vehicleType === "cyber_car" && typeof window.cyberCarRearWheelWidth === "number") ? window.cyberCarRearWheelWidth : 1.0;
         const engScale = (hasEngine && typeof window.electricEngineScaleMultiplier === "number") ? window.electricEngineScaleMultiplier : 0.36;
 
         const s = activeBoatLastState;
@@ -4327,9 +4337,12 @@ window.cloud3DProgram = cloud3DProgram;
           activeBoatIndexBuffer &&
           activeBoatIndicesLength > 0 &&
           s.boat === boat &&
+          s.vehicleType === vehicleType &&
           s.hasWheel === hasWheel &&
           s.hasEngine === hasEngine &&
           s.hasWing === hasWing &&
+          s.hasDoor === hasDoor &&
+          s.hasSeat === hasSeat &&
           Math.abs(p[0] - s.px) < 1e-6 &&
           Math.abs(p[1] - s.py) < 1e-6 &&
           Math.abs(p[2] - s.pz) < 1e-6 &&
@@ -4346,8 +4359,13 @@ window.cloud3DProgram = cloud3DProgram;
           Math.abs(bankAngle - s.bankAngle) < 1e-6 &&
           Math.abs(spinAngle - s.spinAngle) < 1e-6 &&
           Math.abs(steerAngle - s.steerAngle) < 1e-6 &&
+          Math.abs(stickThrottle - (s.stickThrottle || 0)) < 1e-4 &&
+          Math.abs(stickSteer - (s.stickSteer || 0)) < 1e-4 &&
           Math.abs(rowTimer - s.rowTimer) < 1e-6 &&
           Math.abs(wheelScale - s.wheelScale) < 1e-6 &&
+          Math.abs(cyberFrontWheelScale - s.cyberFrontWheelScale) < 1e-6 &&
+          Math.abs(cyberRearWheelScale - s.cyberRearWheelScale) < 1e-6 &&
+          Math.abs(cyberRearWheelWidth - s.cyberRearWheelWidth) < 1e-6 &&
           Math.abs(engScale - s.engScale) < 1e-6
         ) {
           return;
@@ -4364,8 +4382,9 @@ window.cloud3DProgram = cloud3DProgram;
         const rawColors = [];
         const rawIndices = [];
 
-        if (window.ItemRegistry && window.ItemRegistry["wood_boat"] && window.ItemRegistry["wood_boat"].render) {
-          window.ItemRegistry["wood_boat"].render(boat, rawVerts, rawColors, rawIndices, 'dynamic');
+        const regKey = (window.ItemRegistry && window.ItemRegistry[vehicleType] && window.ItemRegistry[vehicleType].render) ? vehicleType : "wood_boat";
+        if (window.ItemRegistry && window.ItemRegistry[regKey] && window.ItemRegistry[regKey].render) {
+          window.ItemRegistry[regKey].render(boat, rawVerts, rawColors, rawIndices, 'dynamic');
         }
 
         if (rawIndices.length === 0) {
@@ -4400,6 +4419,7 @@ window.cloud3DProgram = cloud3DProgram;
 
         activeBoatLastState = {
           boat,
+          vehicleType,
           px: p[0], py: p[1], pz: p[2],
           rx: rVec[0], ry: rVec[1], rz: rVec[2],
           nx: nVec[0], ny: nVec[1], nz: nVec[2],
@@ -4409,10 +4429,17 @@ window.cloud3DProgram = cloud3DProgram;
           hasWheel,
           hasEngine,
           hasWing,
+          hasDoor,
+          hasSeat,
           spinAngle,
           steerAngle,
+          stickThrottle,
+          stickSteer,
           rowTimer,
           wheelScale,
+          cyberFrontWheelScale,
+          cyberRearWheelScale,
+          cyberRearWheelWidth,
           engScale
         };
       }
@@ -4459,6 +4486,79 @@ window.cloud3DProgram = cloud3DProgram;
         gl.drawElements(gl.TRIANGLES, activeBoatIndicesLength, isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
       }
       window.drawDedicatedActiveBoatShadow = drawDedicatedActiveBoatShadow;
+
+      // Dedicated Transparent Vehicle Glass Pass (Standard see-through glass for Cyber Car windshield, door windows & rear quarter glass)
+      let vehicleGlassVBO = null;
+      let vehicleGlassColorBuffer = null;
+      let vehicleGlassNormalBuffer = null;
+      let vehicleGlassIndexBuffer = null;
+
+      function drawTransparentVehicleGlass(gl, posLoc, colorLoc, normalLoc) {
+        const hasCarEmitter = typeof window.emitCyberCarGlass === "function";
+        const hasDoorEmitter = typeof window.emitCyberCarSingleDoorGlass === "function";
+        if (!hasCarEmitter && !hasDoorEmitter) return;
+
+        const rawVerts = [];
+        const rawColors = [];
+        const rawIndices = [];
+        const activeBoatRef = (typeof activeRidingBoat !== "undefined" && activeRidingBoat) ? activeRidingBoat : null;
+
+        if (typeof collectibles !== "undefined" && Array.isArray(collectibles)) {
+          for (let i = 0; i < collectibles.length; i++) {
+            const item = collectibles[i];
+            if (!item || !item.active || item.isPreview) continue;
+            if (item === activeBoatRef) continue;
+            if (item.type === "cyber_car" && hasCarEmitter) {
+              window.emitCyberCarGlass(item, rawVerts, rawColors, rawIndices);
+            } else if (item.type === "cyber_car_door" && hasDoorEmitter) {
+              window.emitCyberCarSingleDoorGlass(item, rawVerts, rawColors, rawIndices);
+            }
+          }
+        }
+        if (activeBoatRef && activeBoatRef.type === "cyber_car" && hasCarEmitter) {
+          window.emitCyberCarGlass(activeBoatRef, rawVerts, rawColors, rawIndices);
+        }
+
+        if (rawIndices.length === 0) return;
+
+        const makeFlat = (typeof makeFlatShadedGeometry === "function")
+          ? makeFlatShadedGeometry
+          : (typeof window !== "undefined" ? window.makeFlatShadedGeometry : null);
+        if (!makeFlat) return;
+
+        const flat = makeFlat(rawVerts, rawColors, rawIndices, true);
+        if (!flat || !flat.indices || flat.indices.length === 0) return;
+
+        if (!vehicleGlassVBO) {
+          vehicleGlassVBO = gl.createBuffer();
+          vehicleGlassColorBuffer = gl.createBuffer();
+          vehicleGlassNormalBuffer = gl.createBuffer();
+          vehicleGlassIndexBuffer = gl.createBuffer();
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vehicleGlassVBO);
+        gl.bufferData(gl.ARRAY_BUFFER, flat.vertices, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vehicleGlassColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, flat.colors, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+        if (normalLoc !== -1 && vehicleGlassNormalBuffer) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, vehicleGlassNormalBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, flat.normals, gl.DYNAMIC_DRAW);
+          gl.enableVertexAttribArray(normalLoc);
+          gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
+        }
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vehicleGlassIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, flat.indices, gl.DYNAMIC_DRAW);
+
+        const isUint32 = flat.indices.length > 65535;
+        gl.drawElements(gl.TRIANGLES, flat.indices.length, isUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+      }
 
       // ============================================
       // Render - พร้อม FPS Counter และ Lock
@@ -5248,11 +5348,12 @@ window.cloud3DProgram = cloud3DProgram;
         let pendingDynamicRefresh = false;
         if (typeof pendingDynamicCollectibleRefresh !== 'undefined' && pendingDynamicCollectibleRefresh) {
           let shouldRefresh = true;
+          const forceDynRefresh = (typeof window !== "undefined" && !!window._forceDynamicCollectibleRefresh);
           const isRenderDistOn = (typeof renderDistEnabled !== "undefined"
             ? renderDistEnabled
             : (typeof window !== "undefined" && typeof window.renderDistEnabled !== "undefined" ? window.renderDistEnabled : true));
 
-          if (isRenderDistOn && (typeof activeRidingBoat === "undefined" || !activeRidingBoat)) {
+          if (!forceDynRefresh && isRenderDistOn && (typeof activeRidingBoat === "undefined" || !activeRidingBoat)) {
             const curObjectDist = typeof objectRenderDistValue !== "undefined"
               ? objectRenderDistValue
               : (typeof window !== "undefined" && typeof window.objectRenderDistValue !== "undefined"
@@ -5276,12 +5377,12 @@ window.cloud3DProgram = cloud3DProgram;
             }
             if (!hasNearDynamicItem) {
               if (typeof SpatialGrid !== "undefined") {
-                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box"));
+                const nearDyn = SpatialGrid.queryRadius(pX, pY, pZ, curObjectDist + 1.0, c => ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box" || c.type === "wild_growing_plant"));
                 hasNearDynamicItem = nearDyn.length > 0;
               } else if (typeof collectibles !== "undefined" && collectibles) {
                 for (let i = 0; i < collectibles.length; i++) {
                   const c = collectibles[i];
-                  if (c.active && ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box") && c.position) {
+                  if (c.active && ((c.isDynamic && c.type !== "wood_door" && c.type !== "wood_window") || c.type === "wood_planter_box" || c.type === "wild_growing_plant") && c.position) {
                     const dx = c.position[0] - pX;
                     const dy = c.position[1] - pY;
                     const dz = c.position[2] - pZ;
@@ -5302,6 +5403,7 @@ window.cloud3DProgram = cloud3DProgram;
             pendingDynamicRefresh = true;
           }
           if (typeof pendingDynamicCollectibleRefresh !== 'undefined') window.pendingDynamicCollectibleRefresh = false;
+          if (typeof window !== "undefined") window._forceDynamicCollectibleRefresh = false;
         }
 
         const hasPendingCollectibles = (typeof pendingCollectibleRefresh !== 'undefined' && pendingCollectibleRefresh) || (typeof window !== 'undefined' && window.pendingCollectibleRefresh);
@@ -5927,8 +6029,11 @@ window.cloud3DProgram = cloud3DProgram;
         if (typeof window !== "undefined") {
           window.isVehicleDriveable = function(vehicle, inWater = false, hasBattery = true) {
             if (!vehicle || !vehicle.active || vehicle.isPreview) return false;
-            const hasWheels = !!(vehicle.hasWheel || vehicle.hasWheels || (vehicle.wheelCount && vehicle.wheelCount > 0));
-            const hasEngine = !!vehicle.hasEngine;
+            const hasWheels = !!(vehicle.hasWheel || vehicle.hasWheels || vehicle.hasAirlessWheel || (vehicle.wheelCount && vehicle.wheelCount > 0));
+            const hasEngine = !!(vehicle.hasEngine || vehicle.hasCyberEngine);
+            if (vehicle.type === "cyber_car") {
+              return hasWheels && hasEngine && hasBattery;
+            }
             if (hasWheels) {
               return hasEngine && hasBattery;
             }
@@ -6181,7 +6286,7 @@ window.cloud3DProgram = cloud3DProgram;
           }
           const speed = currentSpeedVal / currentRadius;
           if (activeRidingBoat) {
-            let isMotorBoat = activeRidingBoat.hasEngine && !(activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0));
+            let isMotorBoat = activeRidingBoat.type === "cyber_car" || (activeRidingBoat.hasEngine && !(activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0)));
             if (!isMotorBoat) boatRowTimer += speed * 50.0;
           }
 
@@ -6647,7 +6752,8 @@ window.cloud3DProgram = cloud3DProgram;
                     waterAnimTime,
                     waveStrength,
                     hasWheels: true,
-                    isInWater: false
+                    isInWater: false,
+                    vehicleType: activeRidingBoat.type || "wood_boat"
                 });
 
                 const targetGroundRadius = vehicleTransform.targetGroundRadius;
@@ -7483,6 +7589,7 @@ window.cloud3DProgram = cloud3DProgram;
             const demolishableTypes = [
               "wood_floor", "thin_wood_floor", "stone_floor", "wood_stairs", "folding_ladder",
               "campfire", "wood_boat", "wood_wheel", "electric_engine", "boat_wing",
+              "cyber_car", "cyber_car_door", "cyber_car_seat", "airless_wheel", "cyber_engine",
               "wood_wall", "wood_window", "wood_door", "wood_roof", "wood_chest", "wood_bed", "wood_table", "wood_planter_box", "wood_chair", "lantern",
               "meganeura_item", "isopod_item", "obsidian_pad_warp_item", "obsidian_compass_pad_item",
               "robot_stand", "robot_cockpit",
@@ -7561,13 +7668,13 @@ window.cloud3DProgram = cloud3DProgram;
                   item.position[1] + n[1] * 0.06,
                   item.position[2] + n[2] * 0.06
                 ];
-              } else if (item.type === "wood_boat" || item.type.includes("boat")) {
+              } else if (item.type === "wood_boat" || item.type === "cyber_car" || item.type.includes("boat")) {
                 itemCenter = [
                   item.position[0] + n[0] * 0.20,
                   item.position[1] + n[1] * 0.20,
                   item.position[2] + n[2] * 0.20
                 ];
-              } else if (item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing") {
+              } else if (item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "cyber_car_door" || item.type === "cyber_car_seat" || item.type === "airless_wheel" || item.type === "cyber_engine") {
                 itemCenter = [
                   item.position[0] + n[0] * 0.10,
                   item.position[1] + n[1] * 0.10,
@@ -7588,7 +7695,7 @@ window.cloud3DProgram = cloud3DProgram;
               }
 
               let meshRadius = 0.20;
-              if (item.type === "wood_boat" || item.type.includes("boat")) {
+              if (item.type === "wood_boat" || item.type === "cyber_car" || item.type.includes("boat")) {
                 meshRadius = 0.85;
               } else if (item.type.includes("wall") || item.type.includes("window") || item.type.includes("door")) {
                 meshRadius = 0.26;
@@ -7608,7 +7715,7 @@ window.cloud3DProgram = cloud3DProgram;
               const dy = itemCenter[1] - pVec[1];
               const dz = itemCenter[2] - pVec[2];
               const distToPlayer = Math.hypot(dx, dy, dz);
-              const itemReach = (item.type === "wood_boat" || item.type.includes("boat")) ? (maxDemolishReach + 0.65) : maxDemolishReach;
+              const itemReach = (item.type === "wood_boat" || item.type === "cyber_car" || item.type.includes("boat")) ? (maxDemolishReach + 0.65) : maxDemolishReach;
               const effectiveDistToPlayer = Math.max(0, distToPlayer - Math.min(0.18, meshRadius * 0.6));
               if (effectiveDistToPlayer > itemReach) continue;
 
@@ -7975,6 +8082,10 @@ if (prompt._lastHTML !== _newHtml_2) {
                   boatToDismount.isDynamic = true;
                   boatToDismount._isSleeping = false;
                   boatToDismount._cachedCollisionRadius = null;
+                  if (boatToDismount.type === "cyber_car") {
+                    boatToDismount.stickThrottle = 0;
+                    boatToDismount.stickSteer = 0;
+                  }
                   const hasWingDismount = !!(boatToDismount.hasWing || boatToDismount.hasWings);
                   const wasFlyingDismount = !!(boatToDismount.isFlying || isMidAir);
                   const currentVehSpeed = boatToDismount.vehicleSpeed || 0;
@@ -8291,7 +8402,7 @@ if (prompt._lastHTML !== _newHtml_2) {
 
               for (let item of nearbyCandidates) {
                 if (!item.active) continue;
-                if (!item.isGroundDrop && (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_"))) continue;
+                if (!item.isGroundDrop && (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "cyber_car" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "cyber_car_door" || item.type === "cyber_car_seat" || item.type === "airless_wheel" || item.type === "cyber_engine" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wild_growing_plant" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_"))) continue;
                 
                 const checkDist = (item.type === "cotton_plant" || item.type === "crown_flower" || item.type === "grass") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);
@@ -8328,7 +8439,7 @@ if (prompt._lastHTML !== _newHtml_2) {
               let bestBoatT = Infinity;
               let candidateBoat = null;
               for (let item of nearbyCandidates) {
-                if (item.active && !item.isGroundDrop && (item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat"))) && !item.isPreview) {
+                if (item.active && !item.isGroundDrop && (item.type === "wood_boat" || item.type === "cyber_car" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat"))) && !item.isPreview) {
                   const reachInfo = isTargetWithinReach(item.position, Math.max(actionReachDistance, 0.22 * (playerScale / 0.1)));
                   if (reachInfo.valid) {
                     if (reachInfo.t < bestBoatT) {
@@ -12758,6 +12869,42 @@ if (npcPrompt._lastHTML !== _newHtml_11) {
             tunnels3D: tunnels3D,
             supportUint32: supportUint32
           });
+        }
+
+        // วาดกระจกรถโปร่งแสงมาตรฐาน (Transparent See-Through Vehicle Glass: Windshield, Door Windows & Quarter Glass)
+        if (typeof drawTransparentVehicleGlass === "function") {
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.enable(gl.CULL_FACE);
+          gl.frontFace(gl.CW);
+          gl.cullFace(gl.BACK);
+          gl.depthMask(false);
+
+          gl.useProgram(modelProgram);
+          gl.uniform1f(modelShadowsEnabledLoc, activeShadowQualityVal);
+          gl.uniform2f(modelShadowTexelSizeLoc, 1.0 / SHADOW_WIDTH, shadowTexelDepthBias);
+          gl.uniform3fv(modelLightDirLoc, setF32(f32_finalLightDir, finalLightDir));
+          gl.uniformMatrix4fv(modelMVLoc, false, setF32(f32_modelViewMatrix, modelViewMatrix));
+          gl.uniformMatrix4fv(modelProjLoc, false, setF32(f32_projMatrix, projMatrix));
+          gl.uniformMatrix4fv(modelLightSpaceLoc, false, setF32(f32_lightSpaceMatrix, lightSpaceMatrix));
+          gl.uniform1i(modelShadowMapLoc, 1);
+          gl.uniform1i(modelWaterMaskLoc, 2);
+          bindModelSSR();
+          gl.uniform1f(modelWaterRadiusLoc, RADIUS + waterLevel * (typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE * 0.25 : 0.15));
+          gl.uniform3fv(modelWaterColorLoc, setF32(f32_waterColor, waterColor));
+          gl.uniform1f(modelWaterOpacityLoc, waterOpacity);
+          gl.uniform1f(modelRenderDistEnabledLoc, renderDistEnabled ? 1.0 : 0.0);
+          gl.uniform1f(modelMaxRenderDistLoc, curObjectDist);
+          gl.uniform1f(modelTimeLoc, leafAnimTime);
+          gl.uniform1f(modelPlanetRadiusLoc, RADIUS);
+          gl.uniform3fv(modelCameraPosLoc, setF32(f32_eyePos, eyePos));
+          gl.uniform1f(modelSwayFactorLoc, 0.0);
+          gl.uniform1f(modelWaterSwayFactorLoc, 0.0);
+
+          drawTransparentVehicleGlass(gl, modelPosLoc, modelColorLoc, modelNormalLoc);
+
+          gl.depthMask(true);
+          gl.disable(gl.CULL_FACE);
         }
 
         // วาดชั้นบรรยากาศ (Atmosphere) - เรืองแสงฟิสิกส์ Fresnel สวยงามรอบดวงดาว

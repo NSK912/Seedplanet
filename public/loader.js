@@ -7,7 +7,7 @@
     return '';
   })();
 
-  const version = '1789500000254';
+  const version = '1789500000269';
 
   if (!document.querySelector('link[href*="style.css"]')) {
     if (document.readyState === 'loading') {
@@ -84,6 +84,11 @@
     'gamefile/items/wood_wheel.js',
     'gamefile/items/electric_engine.js',
     'gamefile/items/boat_wing.js',
+    'gamefile/items/cyber_car.js',
+    'gamefile/items/cyber_car_door.js',
+    'gamefile/items/cyber_car_seat.js',
+    'gamefile/items/airless_wheel.js',
+    'gamefile/items/cyber_engine.js',
     'gamefile/items/axe.js',
     'gamefile/items/pickaxe.js',
     'gamefile/items/shovel.js',

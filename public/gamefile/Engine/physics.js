@@ -167,7 +167,8 @@ const Physics = {
         waterAnimTime = 0,
         waveStrength = 0,
         hasWheels = true,
-        isInWater: isInWaterArg = undefined
+        isInWater: isInWaterArg = undefined,
+        vehicleType = "wood_boat"
     }) {
         const rad = typeof RADIUS !== "undefined" ? RADIUS : 100;
         const hScale = typeof HEIGHT_SCALE !== "undefined" ? HEIGHT_SCALE : 1;
@@ -249,23 +250,31 @@ const Physics = {
             };
         }
 
-        // 3. WHEELED BOAT ON LAND: Calculate wheel contact and terrain adaptation
-        const fSideOff = typeof window !== "undefined" && typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18;
-        const fFwdOff  = typeof window !== "undefined" && typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18;
-        const fUpOff   = typeof window !== "undefined" && typeof window.wheelFrontUpOffset === "number" ? window.wheelFrontUpOffset : -0.03;
-
-        const rSideOff = typeof window !== "undefined" && typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18;
-        const rFwdOff  = typeof window !== "undefined" && typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18;
-        const rUpOff   = typeof window !== "undefined" && typeof window.wheelRearUpOffset === "number" ? window.wheelRearUpOffset : -0.03;
-
+        // 3. WHEELED BOAT / CYBER CAR ON LAND: Calculate wheel contact and terrain adaptation
+        const isCyberCar = vehicleType === "cyber_car";
+        const carScale = (typeof window !== "undefined" && typeof window.CYBER_CAR_SCALE === "number") ? window.CYBER_CAR_SCALE : 0.36;
         const wheelScale = typeof window !== "undefined" && typeof window.wheelScaleMultiplier === "number" ? window.wheelScaleMultiplier : 1.0;
+        const cFrontScale = (typeof window !== "undefined" && typeof window.cyberCarFrontWheelScale === "number") ? window.cyberCarFrontWheelScale : 0.71;
+        const cRearScale  = (typeof window !== "undefined" && typeof window.cyberCarRearWheelScale === "number") ? window.cyberCarRearWheelScale : 0.80;
+        const cRearWidth  = (typeof window !== "undefined" && typeof window.cyberCarRearWheelWidth === "number") ? window.cyberCarRearWheelWidth : 1.0;
+
+        const fSideOff = isCyberCar ? ((0.254 + Math.max(-0.35, cFrontScale - 1.0) * 0.065) * carScale) : (typeof window !== "undefined" && typeof window.wheelFrontSideOffset === "number" ? window.wheelFrontSideOffset : 0.18);
+        const fFwdOff  = isCyberCar ? (0.340 * carScale) : (typeof window !== "undefined" && typeof window.wheelFrontFwdOffset  === "number" ? window.wheelFrontFwdOffset  : 0.18);
+        const fUpOff   = isCyberCar ? (-0.028 * carScale) : (typeof window !== "undefined" && typeof window.wheelFrontUpOffset === "number" ? window.wheelFrontUpOffset : -0.03);
+
+        const rSideOff = isCyberCar ? (0.089 * cRearScale * cRearWidth * carScale) : (typeof window !== "undefined" && typeof window.wheelRearSideOffset === "number" ? window.wheelRearSideOffset : 0.18);
+        const rFwdOff  = isCyberCar ? (0.415 * carScale) : (typeof window !== "undefined" && typeof window.wheelRearFwdOffset  === "number" ? window.wheelRearFwdOffset  : 0.18);
+        const rUpOff   = isCyberCar ? (0.000 * carScale) : (typeof window !== "undefined" && typeof window.wheelRearUpOffset === "number" ? window.wheelRearUpOffset : -0.03);
+
         const wheelRadius = 0.16 * wheelScale;
+        const fWheelRad = isCyberCar ? ((0.156 * cFrontScale + 0.005) * carScale) : wheelRadius;
+        const rWheelRad = isCyberCar ? ((0.184 * cRearScale + 0.005) * carScale) : wheelRadius;
 
         const wheelOffsets = [
-            { id: "FL", side: -1, fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
-            { id: "FR", side: 1,  fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff },
-            { id: "RL", side: -1, fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff },
-            { id: "RR", side: 1,  fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff }
+            { id: "FL", side: -1, fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff, wRad: fWheelRad },
+            { id: "FR", side: 1,  fwd: fFwdOff,  sOff: fSideOff, uOff: fUpOff, wRad: fWheelRad },
+            { id: "RL", side: -1, fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff, wRad: rWheelRad },
+            { id: "RR", side: 1,  fwd: -rFwdOff, sOff: rSideOff, uOff: rUpOff, wRad: rWheelRad }
         ];
 
         let maxWheelRequiredRadius = -Infinity;
@@ -307,7 +316,7 @@ const Physics = {
             wHeights.push(wSurfaceRad);
 
             let dSq = (wo.sOff * wo.sOff) + (wo.fwd * wo.fwd);
-            let wheelContactRad = wTerrainRad + wheelRadius;
+            let wheelContactRad = wTerrainRad + (wo.wRad !== undefined ? wo.wRad : wheelRadius);
             let requiredBoatRad = (wheelContactRad * wheelContactRad > dSq)
                 ? Math.sqrt(wheelContactRad * wheelContactRad - dSq) - wo.uOff
                 : wheelContactRad - wo.uOff;
@@ -318,19 +327,24 @@ const Physics = {
             reqRadii.push(requiredBoatRad);
         }
 
-        let bR_baseline = centerTerrainRad + 0.04;
+        let bR_baseline = centerTerrainRad + (isCyberCar ? 0.02 : 0.04);
         let targetGroundRadius = bR_baseline;
+        const approxWheelDist = isCyberCar ? (0.35 * carScale) : 0.35;
         if (reqRadii.length === 4) {
-            let avgWheelReq = (reqRadii[0] + reqRadii[1] + reqRadii[2] + reqRadii[3]) / 4;
+            const reqF = (reqRadii[0] + reqRadii[1]) * 0.5;
+            const reqR = (reqRadii[2] + reqRadii[3]) * 0.5;
+            const wb = fFwdOff + rFwdOff;
+            let avgWheelReq = (isCyberCar && wb > 1e-6)
+                ? ((reqF * rFwdOff + reqR * fFwdOff) / wb)
+                : ((reqRadii[0] + reqRadii[1] + reqRadii[2] + reqRadii[3]) / 4);
             const slopeDiff = avgWheelReq - centerTerrainRad;
-            const approxWheelDist = 0.35;
             if (slopeDiff > 0.01 && (slopeDiff / approxWheelDist) > 1.0) {
                 targetGroundRadius = centerTerrainRad;
             } else {
                 targetGroundRadius = Math.max(bR_baseline, avgWheelReq);
             }
         } else if (maxWheelRequiredRadius > -Infinity) {
-            if ((maxWheelRequiredRadius - centerTerrainRad) > 0.01 && ((maxWheelRequiredRadius - centerTerrainRad) / 0.35) > 1.0) {
+            if ((maxWheelRequiredRadius - centerTerrainRad) > 0.01 && ((maxWheelRequiredRadius - centerTerrainRad) / approxWheelDist) > 1.0) {
                 targetGroundRadius = centerTerrainRad;
             } else {
                 targetGroundRadius = Math.max(targetGroundRadius, maxWheelRequiredRadius);
@@ -345,8 +359,8 @@ const Physics = {
 
         if (wHeights.length === 4 && !isInWater) {
             let fl = wHeights[0], fr = wHeights[1], rl = wHeights[2], rr = wHeights[3];
-            let fAvg = (fl + fr) * 0.5;
-            let rAvg = (rl + rr) * 0.5;
+            let fAvg = isCyberCar ? ((reqRadii[0] + reqRadii[1]) * 0.5) : ((fl + fr) * 0.5);
+            let rAvg = isCyberCar ? ((reqRadii[2] + reqRadii[3]) * 0.5) : ((rl + rr) * 0.5);
             let lAvg = (fl + rl) * 0.5;
             let rSideAvg = (fr + rr) * 0.5;
 
@@ -507,7 +521,7 @@ const Physics = {
             baseRadius += wave * fade;
         }
 
-        const isWheeled = !!(boat.hasWheel || boat.hasWheels || (boat.wheelCount && boat.wheelCount > 0));
+        const isWheeled = !!(boat.hasWheel || boat.hasWheels || boat.hasAirlessWheel || (boat.wheelCount && boat.wheelCount > 0));
         let bR;
 
         if (isWheeled) {
@@ -522,7 +536,8 @@ const Physics = {
                 waterAnimTime: wAnimTime,
                 waveStrength: wStrength,
                 hasWheels: true,
-                isInWater: false
+                isInWater: false,
+                vehicleType: boat.type || "wood_boat"
             });
             const targetGroundRadius = vehicleTransform.targetGroundRadius;
             const waterDepth = (wEnabled && surf.wRadiusLocal > 0 && tRadius < wRadius) ? (wRadius - tRadius) : 0;

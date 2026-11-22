@@ -302,6 +302,7 @@
   function markDynamicRefresh() {
     if (typeof window !== "undefined") {
       window.pendingDynamicCollectibleRefresh = true;
+      window._forceDynamicCollectibleRefresh = true;
     }
     if (typeof pendingDynamicCollectibleRefresh !== "undefined") {
       pendingDynamicCollectibleRefresh = true;
@@ -739,7 +740,7 @@
   }
 
   // ย้ายพืชกำลังโตไปยังจุดพื้นผิวดาวใกล้เคียงเมื่อจุดเดิมโดนขุดหรือโดนสิ่งปลูกสร้างทับ
-  function relocateWildGrowingItem(item, resetTimer) {
+  function relocateWildGrowingItem(item, resetTimer, deferGridRebuild) {
     if (!item || !item.plantData) return false;
     removeWildTreeCollider(item);
     const pData = item.plantData;
@@ -748,6 +749,10 @@
     if (!nearby) {
       // ไม่มีพื้นที่ว่างในรัศมีใกล้เคียงเลย -> ยกเลิกต้นนี้
       removeWildGrowingItem(item);
+      if (!deferGridRebuild && typeof SpatialGrid !== "undefined" && typeof SpatialGrid.rebuild === "function") {
+        const cols = getCollectiblesArray();
+        if (cols) SpatialGrid.rebuild(cols);
+      }
       markDynamicRefresh();
       return false;
     }
@@ -772,8 +777,13 @@
     } else if (pData.mature && (seedType === "BRANCH" || seedType === "DRAGON_FRUIT")) {
       attachWildTreeCollider(item);
     }
-    if (typeof SpatialGrid !== "undefined" && typeof SpatialGrid.insert === "function") {
-      SpatialGrid.insert(item);
+    if (!deferGridRebuild && typeof SpatialGrid !== "undefined") {
+      const cols = getCollectiblesArray();
+      if (cols && typeof SpatialGrid.rebuild === "function") {
+        SpatialGrid.rebuild(cols);
+      } else if (typeof SpatialGrid.insert === "function") {
+        SpatialGrid.insert(item);
+      }
     }
     markDynamicRefresh();
     return true;
@@ -782,6 +792,7 @@
   function relocateOverlappingWildPlants(checkPts, hitR) {
     if (!Array.isArray(checkPts) || checkPts.length === 0) return;
     const hitRSq = hitR * hitR;
+    let movedAnyWild = false;
 
     // A. ย้าย wild_growing_plant ที่โดนขุดหรือโดนสิ่งปลูกสร้างทับ (วนเฉพาะ _wildGrowingItems)
     for (let i = _wildGrowingItems.length - 1; i >= 0; i--) {
@@ -797,8 +808,13 @@
         if (dx * dx + dy * dy + dz * dz <= hitRSq) { hit = true; break; }
       }
       if (hit) {
-        relocateWildGrowingItem(c, true);
+        relocateWildGrowingItem(c, true, true);
+        movedAnyWild = true;
       }
+    }
+    if (movedAnyWild && typeof SpatialGrid !== "undefined" && typeof SpatialGrid.rebuild === "function") {
+      const cols = getCollectiblesArray();
+      if (cols) SpatialGrid.rebuild(cols);
     }
 
     // B. ย้ายกอหญ้าที่กำลังงอกอยู่ใน natureRawVertices แต่โดนขุดหรือโดนสิ่งปลูกสร้างทับ
@@ -1264,9 +1280,10 @@
         if (worldMutated || stageChanged || maturingNow) {
           const stillIntact = isIntactSurfaceAt(item.position, sType, item);
           if (!stillIntact) {
-            if (relocateWildGrowingItem(item, true)) {
+            if (relocateWildGrowingItem(item, true, true)) {
               needDynamicRefresh = true;
             }
+            needGridRebuild = true;
             continue;
           }
         }

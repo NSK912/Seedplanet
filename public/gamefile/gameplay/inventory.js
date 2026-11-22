@@ -62,6 +62,11 @@
         { name: "WOOD_WHEEL", icon: "🛞" },
         { name: "BOAT_WING", icon: "🪽" },
         { name: "ELECTRIC_ENGINE", icon: "🔋" },
+        { name: "CYBER_CAR", icon: "🏎️" },
+        { name: "CYBER_CAR_DOOR", icon: "🚪" },
+        { name: "CYBER_CAR_SEAT", icon: "💺" },
+        { name: "AIRLESS_WHEEL", icon: "🛞" },
+        { name: "CYBER_ENGINE", icon: "⚡" },
         { name: "WOOD_WALL", icon: "🧱" },
         { name: "WOOD_WINDOW", icon: "🪟" },
         { name: "WOOD_DOOR", icon: "🚪" },
@@ -334,6 +339,12 @@
             scaleFactor = 1.2;
           } else if (name === "BOAT_WING") {
             scaleFactor = 1.35;
+          } else if (name === "CYBER_CAR") {
+            scaleFactor = 1.08;
+          } else if (name === "CYBER_CAR_DOOR" || name === "CYBER_CAR_SEAT") {
+            scaleFactor = 1.18;
+          } else if (name === "AIRLESS_WHEEL" || name === "CYBER_ENGINE") {
+            scaleFactor = 1.20;
           } else if (name === "MEGANEURA") {
             scaleFactor = 2.5;
             mockItem.seed = 1234;
@@ -726,9 +737,9 @@
             targetSize = 0.75;
           } else if (name === "WOOD_FLOOR" || name === "THIN_WOOD_FLOOR" || name === "STONE_FLOOR") {
             targetSize = 0.85;
-          } else if (name === "WOOD_BOAT") {
-            targetSize = 0.90; // Give the boat maximum visibility inside the slot
-          } else if (name === "BOAT_WING") {
+          } else if (name === "WOOD_BOAT" || name === "CYBER_CAR") {
+            targetSize = 0.90; // Give vehicles maximum visibility inside the slot
+          } else if (name === "BOAT_WING" || name === "CYBER_CAR_DOOR" || name === "CYBER_CAR_SEAT" || name === "AIRLESS_WHEEL" || name === "CYBER_ENGINE") {
             targetSize = 0.85;
           } else if (name === "WOOD_BED" || name === "WOOD_TABLE" || name === "WOOD_PLANTER_BOX") {
             targetSize = 0.85;
@@ -3658,12 +3669,17 @@ function cancelFloorPlacement() {
         floorPreviewCollectible.color = placingItemName === "STONE_FLOOR" ? [0.6, 0.6, 0.6] : [0.65, 0.45, 0.25]; // beautiful wood color
         
         // Remove grass under placed structure & destroy overlapping trees/rocks for stone floor without drops
+        let pendingWildPlacePos = null;
+        let pendingWildPlaceRad = 0;
+        const pendingStoneDestroyedTrees = [];
         if (placingItemName === "STONE_FLOOR" || placingItemName === "WOOD_FLOOR" || placingItemName === "THIN_WOOD_FLOOR" || placingItemName === "WOOD_ROOF" || placingItemName === "WOOD_WALL" || placingItemName === "WOOD_WINDOW" || placingItemName === "WOOD_DOOR" || placingItemName === "CAMPFIRE") {
             const rad = getSuppressRadius(placingItemName, floorPreviewCollectible.size);
             suppressGrassUnder(floorPreviewCollectible.position, rad);
-            if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onStructurePlaced === "function") {
-                window.WildPlantGrowthSystem.onStructurePlaced(floorPreviewCollectible.position, rad);
-            }
+            pendingWildPlacePos = [...floorPreviewCollectible.position];
+            pendingWildPlaceRad = rad;
+        } else if (placingItemName === "WOOD_PLANTER_BOX" || placingItemName === "WOOD_CHEST" || placingItemName === "WOOD_BED" || placingItemName === "WOOD_TABLE") {
+            pendingWildPlacePos = [...floorPreviewCollectible.position];
+            pendingWildPlaceRad = 0.45;
         }
 
         if (placingItemName === "STONE_FLOOR") {
@@ -3703,15 +3719,14 @@ function cancelFloorPlacement() {
 
                     nObs.splice(i, 1);
                     obstaclesChanged = true;
-                    if (obs.type === "tree" && typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onTreeDestroyed === "function") {
-                        window.WildPlantGrowthSystem.onTreeDestroyed(obs, true, null);
+                    if (obs.type === "tree") {
+                        pendingStoneDestroyedTrees.push(obs);
                     }
                 }
             }
 
-            if (typeof window !== "undefined" && window.WildPlantGrowthSystem && typeof window.WildPlantGrowthSystem.onStructurePlaced === "function") {
-                window.WildPlantGrowthSystem.onStructurePlaced(fpPos, 3.2);
-            }
+            pendingWildPlacePos = [...fpPos];
+            pendingWildPlaceRad = Math.max(pendingWildPlaceRad, 3.2);
 
             // if (obstaclesChanged && typeof refreshCollectiblesVBO === "function") {
             //    refreshCollectiblesVBO();
@@ -3744,6 +3759,11 @@ function cancelFloorPlacement() {
                 floorPreviewCollectible.position[1] += floorPreviewCollectible.normal[1] * 0.05;
                 floorPreviewCollectible.position[2] += floorPreviewCollectible.normal[2] * 0.05;
             }
+        } else if (placingItemName === "CYBER_CAR") {
+            floorPreviewCollectible.isDynamic = true;
+            floorPreviewCollectible.vel = [0, 0, 0];
+            floorPreviewCollectible.spinAxis = [0, 1, 0];
+            floorPreviewCollectible.spinSpeed = 0;
         }
         
         if (placingItemName === "WOOD_STAIRS" || placingItemName === "FOLDING_LADDER") {
@@ -3847,6 +3867,62 @@ function cancelFloorPlacement() {
                 } else {
                   showNotice("🪽 ติดตั้งปีกกับเรือเรียบร้อย! (ต้องติดตั้งเครื่องยนต์ไฟฟ้าก่อนจึงจะบินได้)");
                 }
+              }
+            }
+          }
+        } else if (placingItemName === "CYBER_CAR") {
+          floorPreviewCollectible.type = "cyber_car";
+          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+          floorPreviewCollectible.hasDoor = false;
+          floorPreviewCollectible.hasSeat = false;
+          floorPreviewCollectible.hasWheel = false;
+          floorPreviewCollectible.hasWheels = false;
+          floorPreviewCollectible.hasAirlessWheel = false;
+          floorPreviewCollectible.hasEngine = false;
+          floorPreviewCollectible.hasCyberEngine = false;
+        } else if (placingItemName === "CYBER_CAR_DOOR" || placingItemName === "CYBER_CAR_SEAT" || placingItemName === "AIRLESS_WHEEL" || placingItemName === "CYBER_ENGINE") {
+          floorPreviewCollectible.type = placingItemName.toLowerCase();
+          floorPreviewCollectible.angle = placementRotationAngle;
+          floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
+
+          const nearestCar = (
+            floorPreviewCollectible.isBoatSnapped &&
+            floorPreviewCollectible.targetBoat &&
+            floorPreviewCollectible.targetBoat.active &&
+            !floorPreviewCollectible.targetBoat.isPreview &&
+            floorPreviewCollectible.targetBoat.type === "cyber_car"
+          ) ? floorPreviewCollectible.targetBoat : null;
+
+          if (nearestCar) {
+            floorPreviewCollectible._attachedBoatTarget = nearestCar;
+            if (placingItemName === "CYBER_CAR_DOOR") {
+              nearestCar.hasDoor = true;
+              floorPreviewCollectible.active = false;
+              if (typeof showNotice === "function") {
+                showNotice("🚪 ติดตั้งประตูรถไซเบอร์เรียบร้อย! (Cyber Car Doors attached!)");
+              }
+            } else if (placingItemName === "CYBER_CAR_SEAT") {
+              nearestCar.hasSeat = true;
+              floorPreviewCollectible.active = false;
+              if (typeof showNotice === "function") {
+                showNotice("💺 ติดตั้งที่นั่งและพวงมาลัยรถไซเบอร์เรียบร้อย! (Cyber Car Seat attached!)");
+              }
+            } else if (placingItemName === "AIRLESS_WHEEL") {
+              nearestCar.hasWheel = true;
+              nearestCar.hasWheels = true;
+              nearestCar.hasAirlessWheel = true;
+              nearestCar._isSleeping = false;
+              floorPreviewCollectible.active = false;
+              if (typeof showNotice === "function") {
+                showNotice("🛞 ติดตั้งล้อและยางแบบไม่ใช้ลมเรียบร้อย! (Airless Wheels attached!)");
+              }
+            } else if (placingItemName === "CYBER_ENGINE") {
+              nearestCar.hasEngine = true;
+              nearestCar.hasCyberEngine = true;
+              floorPreviewCollectible.active = false;
+              if (typeof showNotice === "function") {
+                showNotice("⚡ ติดตั้ง Swingarm-Mounted Engine เรียบร้อย! (Swingarm-Mounted Engine attached!)");
               }
             }
           }
@@ -4035,6 +4111,11 @@ function cancelFloorPlacement() {
             : placingItemName === "ELECTRIC_ENGINE" ? "electric_engine"
             : placingItemName === "BOAT_WING" ? "boat_wing"
             : placingItemName === "WOOD_WHEEL" ? "wood_wheel"
+            : placingItemName === "CYBER_CAR" ? "cyber_car"
+            : placingItemName === "CYBER_CAR_DOOR" ? "cyber_car_door"
+            : placingItemName === "CYBER_CAR_SEAT" ? "cyber_car_seat"
+            : placingItemName === "AIRLESS_WHEEL" ? "airless_wheel"
+            : placingItemName === "CYBER_ENGINE" ? "cyber_engine"
             : placingItemName === "WOOD_WALL" ? "wood_wall"
             : placingItemName === "WOOD_WINDOW" ? "wood_window"
             : placingItemName === "WOOD_DOOR" ? "wood_door"
@@ -4065,7 +4146,7 @@ function cancelFloorPlacement() {
             seed: Math.random(),
             angle: placementRotationAngle
           };
-          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace.startsWith("robot_")) {
+          if (typeToPlace === "wood_wall" || typeToPlace === "wood_window" || typeToPlace === "wood_door" || typeToPlace === "wood_chest" || typeToPlace === "wood_bed" || typeToPlace === "wood_table" || typeToPlace === "wood_planter_box" || typeToPlace === "wood_chair" || typeToPlace === "lantern" || typeToPlace === "meganeura_item" || typeToPlace === "isopod_item" || typeToPlace === "obsidian_pad_warp_item" || typeToPlace === "obsidian_compass_pad_item" || typeToPlace === "wood_boat" || typeToPlace === "wood_wheel" || typeToPlace === "electric_engine" || typeToPlace === "boat_wing" || typeToPlace === "cyber_car" || typeToPlace === "cyber_car_door" || typeToPlace === "cyber_car_seat" || typeToPlace === "airless_wheel" || typeToPlace === "cyber_engine" || typeToPlace.startsWith("robot_")) {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_WALL;
           } else if (typeToPlace === "wood_floor" || typeToPlace === "thin_wood_floor" || typeToPlace === "wood_roof") {
             floorPreviewCollectible.layer = COLLISION_LAYERS.WOOD_FLOOR;
@@ -4098,6 +4179,18 @@ function cancelFloorPlacement() {
           }
         } else {
           pendingCollectibleRefresh = true;
+        }
+
+        // Notify WildPlantGrowthSystem AFTER placedItem is in collectibles & SpatialGrid so relocated plants never spawn back under the new structure
+        if (typeof window !== "undefined" && window.WildPlantGrowthSystem) {
+          if (pendingStoneDestroyedTrees.length > 0 && typeof window.WildPlantGrowthSystem.onTreeDestroyed === "function") {
+            for (let ti = 0; ti < pendingStoneDestroyedTrees.length; ti++) {
+              window.WildPlantGrowthSystem.onTreeDestroyed(pendingStoneDestroyedTrees[ti], true, null);
+            }
+          }
+          if (pendingWildPlacePos && typeof window.WildPlantGrowthSystem.onStructurePlaced === "function") {
+            window.WildPlantGrowthSystem.onStructurePlaced(pendingWildPlacePos, pendingWildPlaceRad);
+          }
         }
         if (typeof saveSettingsToLocalStorage === "function") {
           saveSettingsToLocalStorage();
@@ -7725,6 +7818,22 @@ function cancelFloorPlacement() {
           }
         }
 
+        // If it's a cyber car with attached modular parts, return all attached parts too!
+        if (closestDemolishItem.type === "cyber_car") {
+          if (closestDemolishItem.hasDoor) {
+            flatItems.push({ name: "CYBER_CAR_DOOR", icon: "🚪", label: "CYBER_CAR_DOOR" });
+          }
+          if (closestDemolishItem.hasSeat) {
+            flatItems.push({ name: "CYBER_CAR_SEAT", icon: "💺", label: "CYBER_CAR_SEAT" });
+          }
+          if (closestDemolishItem.hasWheel || closestDemolishItem.hasWheels || closestDemolishItem.hasAirlessWheel) {
+            flatItems.push({ name: "AIRLESS_WHEEL", icon: "🛞", label: "AIRLESS_WHEEL" });
+          }
+          if (closestDemolishItem.hasEngine || closestDemolishItem.hasCyberEngine) {
+            flatItems.push({ name: "CYBER_ENGINE", icon: "⚡", label: "CYBER_ENGINE" });
+          }
+        }
+
         // If it's a table with lanterns sitting on top, return those lanterns too!
         if (closestDemolishItem.type === "wood_table" && closestDemolishItem.position && typeof collectibles !== "undefined") {
           const tP = closestDemolishItem.position;
@@ -7819,6 +7928,16 @@ function cancelFloorPlacement() {
           itemData = { name: "ELECTRIC_ENGINE", icon: "🔋", label: "ELECTRIC_ENGINE" };
         } else if (closestDemolishItem.type === "boat_wing") {
           itemData = { name: "BOAT_WING", icon: "🪽", label: "BOAT_WING" };
+        } else if (closestDemolishItem.type === "cyber_car") {
+          itemData = { name: "CYBER_CAR", icon: "🏎️", label: "CYBER_CAR" };
+        } else if (closestDemolishItem.type === "cyber_car_door") {
+          itemData = { name: "CYBER_CAR_DOOR", icon: "🚪", label: "CYBER_CAR_DOOR" };
+        } else if (closestDemolishItem.type === "cyber_car_seat") {
+          itemData = { name: "CYBER_CAR_SEAT", icon: "💺", label: "CYBER_CAR_SEAT" };
+        } else if (closestDemolishItem.type === "airless_wheel") {
+          itemData = { name: "AIRLESS_WHEEL", icon: "🛞", label: "AIRLESS_WHEEL" };
+        } else if (closestDemolishItem.type === "cyber_engine") {
+          itemData = { name: "CYBER_ENGINE", icon: "⚡", label: "CYBER_ENGINE" };
         } else if (closestDemolishItem.type === "wood_wall") {
           itemData = { name: "WOOD_WALL", icon: "🧱", label: "WOOD_WALL" };
         } else if (closestDemolishItem.type === "wood_window") {
@@ -7889,6 +8008,26 @@ function cancelFloorPlacement() {
             }
             closestDemolishItem.active = false;
             closestDemolishItem.isDemolished = true;
+
+            if (closestDemolishItem.type === "wood_planter_box") {
+              closestDemolishItem.isPreviewPlant = false;
+              if (typeof window !== "undefined") {
+                if (window._currentPreviewPlanter === closestDemolishItem) window._currentPreviewPlanter = null;
+                if (window.activePlantingTargetPlanter === closestDemolishItem) {
+                  window.activePlantingTargetPlanter = null;
+                  window.activePlantingSeedItem = null;
+                }
+                if (window.activeWateringTargetPlanter === closestDemolishItem) {
+                  window.activeWateringTargetPlanter = null;
+                  window.activeWateringBucketItem = null;
+                }
+                if (window.activeMatureCottonPlanter === closestDemolishItem) window.activeMatureCottonPlanter = null;
+                if (window.activeMatureTreePlanter === closestDemolishItem) window.activeMatureTreePlanter = null;
+              }
+              if (typeof World3DUI !== "undefined" && closestDemolishItem._planterSignId && typeof World3DUI.hidePlanterBoxUI === "function") {
+                World3DUI.hidePlanterBoxUI(closestDemolishItem._planterSignId);
+              }
+            }
 
             if (typeof currentOpenChest !== "undefined" && currentOpenChest === closestDemolishItem) {
               if (typeof closeChest === "function") closeChest();

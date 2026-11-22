@@ -2521,7 +2521,7 @@ window.characterVertexShaderSource = `#version 300 es
         
         // Collision with chests and boats for ragdoll
         for (let item of collectibles) {
-          if (item.active && !item.isGroundDrop && (item.type === "wood_chest" || item.type === "wood_boat") && !item.isPreview) {
+          if (item.active && !item.isGroundDrop && (item.type === "wood_chest" || item.type === "wood_boat" || item.type === "cyber_car") && !item.isPreview) {
             const sP = item.position;
             const sR = item.R;
             const sN = item.normal;
@@ -4707,13 +4707,18 @@ window.characterVertexShaderSource = `#version 300 es
 
         if (effectiveRidingBoat) {
           // Sitting and rowing pose (shared by player and clones)
-          let isLandVehicle = effectiveRidingBoat.hasWheel || effectiveRidingBoat.hasWheels || (effectiveRidingBoat.wheelCount && effectiveRidingBoat.wheelCount > 0);
+          let isLandVehicle = effectiveRidingBoat.type === "cyber_car" || effectiveRidingBoat.hasWheel || effectiveRidingBoat.hasWheels || (effectiveRidingBoat.wheelCount && effectiveRidingBoat.wheelCount > 0);
           if (isLandVehicle) {
             armAngle = -0.4;
             leftElbowFlex = 0.5;
             rightArmAngle = -0.4;
             rightElbowFlex = 0.5;
-            torsoTilt = 0;
+            if (effectiveRidingBoat.type === "cyber_car") {
+              const cThr = typeof effectiveRidingBoat.stickThrottle === "number" ? effectiveRidingBoat.stickThrottle : 0;
+              torsoTilt = 0.03 + cThr * 0.04;
+            } else {
+              torsoTilt = 0;
+            }
           } else {
             const rowPhase = isClone
               ? (cloneState && typeof cloneState.boatRowTimer === "number" ? cloneState.boatRowTimer : phase)
@@ -5283,6 +5288,76 @@ window.characterVertexShaderSource = `#version 300 es
         if (shirasayaMode === "post_skill") {
           leftElbowRot = rotatePointZ(leftArmPivot, leftElbowRot, -0.16);
           leftHandRot = rotatePointZ(leftArmPivot, leftHandRot, -0.16);
+        }
+
+        // === CYBER CAR DUAL SIDE-STICK 2-BONE ARM IK ===
+        // Anatomical LEFT arm (rightArmPivot / +R) grips Left Stick (Throttle Forward W / Reverse S)
+        // Anatomical RIGHT arm (leftArmPivot / -R) grips Right Stick (Steering Left A / Right D)
+        if (effectiveRidingBoat && effectiveRidingBoat.type === "cyber_car") {
+          const carScaleIK = (typeof window !== "undefined" && typeof window.CYBER_CAR_SCALE === "number") ? window.CYBER_CAR_SCALE : 0.36;
+          const cScaleIK = (typeof charScale === "number" && charScale > 1e-4) ? charScale : ((typeof playerScale === "number" && playerScale > 1e-4) ? playerScale : 0.1);
+          const seatCfg = (typeof window !== "undefined" && window.CYBER_CAR_SEAT_CONFIG) ? window.CYBER_CAR_SEAT_CONFIG : null;
+          const seatRiseIK = seatCfg ? seatCfg.seatRise : 0.084;
+          const seatBackIK = seatCfg ? seatCfg.seatBack : -0.012;
+          const stickX = seatCfg ? seatCfg.stickX : 0.054;
+          const stickPivY = seatCfg ? seatCfg.stickPivY : 0.104;
+          const stickPivZ = seatCfg ? seatCfg.stickPivZ : 0.014;
+          const gripH = seatCfg ? seatCfg.gripH : 0.042;
+          const maxRad = seatCfg ? seatCfg.maxStickRad : 0.34;
+          const carToChar = carScaleIK / cScaleIK;
+          const seatOriginYCar = seatRiseIK + 0.20 * (cScaleIK / carScaleIK);
+
+          const thr = Math.max(-1, Math.min(1, typeof effectiveRidingBoat.stickThrottle === "number" ? effectiveRidingBoat.stickThrottle : 0));
+          const str = Math.max(-1, Math.min(1, typeof effectiveRidingBoat.stickSteer === "number" ? effectiveRidingBoat.stickSteer : 0));
+          const leftPitch = thr * maxRad;    // +W tilts top toward +Z
+          const rightRoll = -str * maxRad;   // A (-1) -> +maxRad tilts top toward +R (Left), D (+1) -> -maxRad toward -R (Right)
+
+          const toCharLocal = (cx, cy, cz) => [
+            cx * carToChar,
+            (cy - seatOriginYCar) * carToChar,
+            (cz - seatBackIK) * carToChar
+          ];
+
+          const solveTwoBoneArm = (S, T, L1, L2, pole) => {
+            const dx = T[0] - S[0], dy = T[1] - S[1], dz = T[2] - S[2];
+            const rawD = Math.hypot(dx, dy, dz) || 1e-5;
+            const ux = dx / rawD, uy = dy / rawD, uz = dz / rawD;
+            const d = Math.max(Math.abs(L1 - L2) + 0.015, Math.min((L1 + L2) * 0.985, rawD));
+            const H = [S[0] + ux * d, S[1] + uy * d, S[2] + uz * d];
+            const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
+            const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+            const pDot = pole[0] * ux + pole[1] * uy + pole[2] * uz;
+            let bx = pole[0] - ux * pDot;
+            let by = pole[1] - uy * pDot;
+            let bz = pole[2] - uz * pDot;
+            let bLen = Math.hypot(bx, by, bz);
+            if (bLen < 1e-5) { bx = 0; by = -1; bz = 0; bLen = 1; }
+            bx /= bLen; by /= bLen; bz /= bLen;
+            const E = [S[0] + ux * a + bx * h, S[1] + uy * a + by * h, S[2] + uz * a + bz * h];
+            return { E, H };
+          };
+
+          const armL1 = 0.120;
+          const armL2 = 0.115;
+          // Left Stick (+R side) grip target -> Anatomical LEFT arm (rightArmPivot / +X)
+          const lTarget = toCharLocal(
+            stickX,
+            stickPivY + Math.cos(leftPitch) * gripH,
+            stickPivZ + Math.sin(leftPitch) * gripH
+          );
+          const lSolved = solveTwoBoneArm(rightArmPivot, lTarget, armL1, armL2, [0.42, -0.78, -0.45]);
+          rightElbowRot = lSolved.E;
+          rightHandRot = lSolved.H;
+
+          // Right Stick (-R side) grip target -> Anatomical RIGHT arm (leftArmPivot / -X)
+          const rTarget = toCharLocal(
+            -stickX + Math.sin(rightRoll) * gripH,
+            stickPivY + Math.cos(rightRoll) * gripH,
+            stickPivZ
+          );
+          const rSolved = solveTwoBoneArm(leftArmPivot, rTarget, armL1, armL2, [-0.42, -0.78, -0.45]);
+          leftElbowRot = rSolved.E;
+          leftHandRot = rSolved.H;
         }
 
         let legAngleFwd = legAngle;
@@ -6755,7 +6830,10 @@ window.characterVertexShaderSource = `#version 300 es
         // Determine hand grip amount (0 = relaxed open hand, 0.55 = cupped orb/fruit grip, 1.0 = closed fist wrapping held handle)
         let leftHandGrip = 0.0;
         let rightHandGrip = 0.0;
-        if (heldItem || activeBucketWater > 0 || isBareHandSwing) {
+        if (effectiveRidingBoat && effectiveRidingBoat.type === "cyber_car") {
+          leftHandGrip = 1.0;
+          rightHandGrip = 1.0;
+        } else if (heldItem || activeBucketWater > 0 || isBareHandSwing) {
           if (shirasayaMode === "charging") {
             leftHandGrip = 1.0;
             rightHandGrip = 0.0;
@@ -8830,9 +8908,18 @@ window.characterVertexShaderSource = `#version 300 es
           }
 
           if (activeRidingBoat.position) {
-            px = activeRidingBoat.position[0] + finalN[0] * 0.46 * charScale;
-            py = activeRidingBoat.position[1] + finalN[1] * 0.46 * charScale;
-            pz = activeRidingBoat.position[2] + finalN[2] * 0.46 * charScale;
+            const isCyberCar = activeRidingBoat.type === "cyber_car";
+            const carScale = (typeof window !== "undefined" && typeof window.CYBER_CAR_SCALE === "number") ? window.CYBER_CAR_SCALE : 0.36;
+            const hasWheel = !!(activeRidingBoat.hasWheel || activeRidingBoat.hasWheels || activeRidingBoat.hasAirlessWheel || (activeRidingBoat.wheelCount && activeRidingBoat.wheelCount > 0));
+            const carUnwheeledLift = (isCyberCar && !hasWheel) ? (window.CYBER_CAR_UNWHEELED_LIFT || (0.085 * carScale)) : 0.0;
+            const seatCfg = (typeof window !== "undefined" && window.CYBER_CAR_SEAT_CONFIG) ? window.CYBER_CAR_SEAT_CONFIG : null;
+            const seatRise = seatCfg ? seatCfg.seatRise : 0.084;
+            const seatBackLocal = seatCfg ? seatCfg.seatBack : -0.012;
+            const seatUp = isCyberCar ? (seatRise * carScale + 0.20 * charScale + carUnwheeledLift) : (0.46 * charScale);
+            const seatBack = isCyberCar ? (seatBackLocal * carScale) : 0.0;
+            px = activeRidingBoat.position[0] + finalN[0] * seatUp + finalF[0] * seatBack;
+            py = activeRidingBoat.position[1] + finalN[1] * seatUp + finalF[1] * seatBack;
+            pz = activeRidingBoat.position[2] + finalN[2] * seatUp + finalF[2] * seatBack;
           }
         } else if (swimFactor > 0.0) {
           const isChibi = typeof window !== "undefined" && !window.GLB_DISABLED && window.characterModel === "chibi";
@@ -9280,7 +9367,7 @@ window.characterVertexShaderSource = `#version 300 es
               for (let item of collectibles) {
                 if (!item.active) continue;
                 if (item.type === "planet_core") continue;
-                if (!item.isGroundDrop && (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wild_growing_plant" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_"))) continue;
+                if (!item.isGroundDrop && (item.type === "wood_stairs" || item.type === "folding_ladder" || item.type === "wood_floor" || item.type === "thin_wood_floor" || item.type === "stone_floor" || item.type === "obsidian_pad_warp_item" || item.type === "obsidian_compass_pad_item" || item.type === "campfire" || item.type === "wood_boat" || item.type === "cyber_car" || item.type === "boat" || (typeof item.type === "string" && item.type.toLowerCase().includes("boat")) || item.type === "wood_wheel" || item.type === "electric_engine" || item.type === "boat_wing" || item.type === "cyber_car_door" || item.type === "cyber_car_seat" || item.type === "airless_wheel" || item.type === "cyber_engine" || item.type === "wood_wall" || item.type === "wood_roof" || item.type === "wood_window" || item.type === "wood_door" || item.type === "wood_chest" || item.type === "wood_bed" || item.type === "wood_table" || item.type === "wood_planter_box" || item.type === "wild_growing_plant" || item.type === "wood_chair" || item.type === "lantern" || item.type === "axe" || item.type === "pickaxe" || item.type.startsWith("robot_"))) continue;
                 
                 const checkDist = (item.type === "cotton_plant" || item.type === "crown_flower" || item.type === "grass") ? Math.max(actionReachDistance, 0.25 * (playerScale / 0.1)) : actionReachDistance;
                 const reachInfo = isTargetWithinReach(item.position, checkDist);

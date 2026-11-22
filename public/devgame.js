@@ -351,7 +351,7 @@ function modTerrainAtPlayer(delta, bypassDevCheck = false, customTargetPoint = n
                       let itemRadius = 0.05;
                       if (c.type === "big_rock") itemRadius = 0.10;
                       else if (c.type === "wood_chest" || c.type === "campfire") itemRadius = 0.14;
-                      else if (c.type === "obsidian_pad_warp_item" || c.type === "wood_boat") itemRadius = 0.25;
+                      else if (c.type === "obsidian_pad_warp_item" || c.type === "wood_boat" || c.type === "cyber_car") itemRadius = 0.25;
                       else if (c.type === "wood_stairs" || c.type === "folding_ladder") itemRadius = 0.15;
 
                       for (let p = 0; p < checkPts.length; p++) {
@@ -1222,6 +1222,9 @@ const _devCharUIInitTimer = setInterval(() => {
 // --- ระบบปรับความยาวเพาล้อและตำแหน่งล้อเรือ แยกคู่หน้า-หลัง (Front/Rear Wheel Pair Controls) ---
 (function initDevWheelAxleControls() {
   if (typeof window.wheelScaleMultiplier !== "number") window.wheelScaleMultiplier = 0.56;
+  if (typeof window.cyberCarFrontWheelScale !== "number") window.cyberCarFrontWheelScale = 0.71;
+  if (typeof window.cyberCarRearWheelScale !== "number") window.cyberCarRearWheelScale = 0.80;
+  if (typeof window.cyberCarRearWheelWidth !== "number") window.cyberCarRearWheelWidth = 1.0;
 
   if (typeof window.electricEngineScaleMultiplier !== "number") window.electricEngineScaleMultiplier = 0.36;
   if (typeof window.electricEngineFwdOffset !== "number") window.electricEngineFwdOffset = -0.11;
@@ -1265,7 +1268,26 @@ const _devCharUIInitTimer = setInterval(() => {
   }
 
   // Scale
-  bindSlider("devWheelScaleSlider", "devWheelScaleLabel", () => window.wheelScaleMultiplier, v => window.wheelScaleMultiplier = v);
+  bindSlider("devWheelScaleSlider", "devWheelScaleLabel", () => window.wheelScaleMultiplier, v => {
+    window.wheelScaleMultiplier = v;
+    window._boatSleepCheckTick = (window._boatSleepCheckTick || 0) + 1;
+    if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("dynamic");
+  });
+  bindSlider("devCyberFrontWheelScaleSlider", "devCyberFrontWheelScaleLabel", () => window.cyberCarFrontWheelScale, v => {
+    window.cyberCarFrontWheelScale = v;
+    window._boatSleepCheckTick = (window._boatSleepCheckTick || 0) + 1;
+    if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("dynamic");
+  });
+  bindSlider("devCyberRearWheelScaleSlider", "devCyberRearWheelScaleLabel", () => window.cyberCarRearWheelScale, v => {
+    window.cyberCarRearWheelScale = v;
+    window._boatSleepCheckTick = (window._boatSleepCheckTick || 0) + 1;
+    if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("dynamic");
+  });
+  bindSlider("devCyberRearWheelWidthSlider", "devCyberRearWheelWidthLabel", () => window.cyberCarRearWheelWidth, v => {
+    window.cyberCarRearWheelWidth = v;
+    window._boatSleepCheckTick = (window._boatSleepCheckTick || 0) + 1;
+    if (typeof refreshCollectiblesVBO === "function") refreshCollectiblesVBO("dynamic");
+  });
 
   // Electric Engine
   bindSlider("devElectricEngineScaleSlider", "devElectricEngineScaleLabel", () => window.electricEngineScaleMultiplier, v => window.electricEngineScaleMultiplier = v);

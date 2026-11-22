@@ -916,7 +916,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     if (r <= 0) {
-      if (obs.type === "wood_boat" || obs.type === "boat") r = 4.0;
+      if (obs.type === "wood_boat" || obs.type === "boat" || obs.type === "cyber_car") r = 4.0;
       else if (obs.type === "wood_wall" || obs.type === "wood_floor") r = 3.0;
       else if (obs.isCloud || obs.type === "cloud") r = 15.0;
       else r = CFG.defaultRadius;
