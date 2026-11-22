@@ -1,0 +1,3216 @@
+/* ============================================
+   Game Fonts & Global Styles
+   ============================================ */
+      @font-face {
+        font-family: 'Google Sans';
+        src: url('assets/GoogleSans_17pt-Medium.ttf') format('truetype'),
+             url('./assets/GoogleSans_17pt-Medium.ttf') format('truetype'),
+             url('/assets/GoogleSans_17pt-Medium.ttf') format('truetype'),
+             url('../assets/GoogleSans_17pt-Medium.ttf') format('truetype');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+      html {
+        font-size: 16px;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      :root {
+        --cut-sm: 0.375rem;
+        --cut-md: 0.5rem;
+        --cut-lg: 0.875rem;
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: transparent;
+        --ui-slot-size: 4.5rem;
+        --ui-slot-icon-size: 2.5rem;
+        --ui-slot-bar-h: 1.0625rem;
+        --ui-slot-cut: var(--cut-sm);
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body, button, input, select, textarea, div, span, p, label, a, h1, h2, h3, h4, h5, h6 {
+        font-family: 'Google Sans', sans-serif;
+      }
+      body {
+        background: #000;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        font-family: 'Google Sans', sans-serif;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+      .controls {
+        position: fixed;
+        top: 0.625rem;
+        right: 0.625rem;
+        display: none;
+        flex-direction: column;
+        gap: 0.25rem;
+        z-index: 10;
+        max-height: calc(100vh - 7.5rem);
+        padding-bottom: 2.5rem;
+        margin-bottom: 1.25rem;
+        overflow-y: auto;
+      }
+      .controls::-webkit-scrollbar {
+        width: 0.1875rem;
+      }
+      .controls::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 0.1875rem;
+      }
+
+      .control-group {
+        background: rgba(0, 0, 0, 0.85);
+        padding: 0.5rem 0.625rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(0.3125rem);
+        min-width: 8.75rem;
+        max-width: 11.25rem;
+      }
+      .control-group label {
+        color: #aaa;
+        font-size: 0.625rem;
+        letter-spacing: 0.0313rem;
+        display: block;
+        margin-bottom: 0.125rem;
+      }
+      .control-group .value-display {
+        color: #fff;
+        font-size: 0.625rem;
+        text-align: center;
+        padding: 0.0625rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.1875rem;
+        margin-top: 0.0625rem;
+      }
+      .btn-random {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.15);
+        height: 2rem;
+        padding: 0 0.625rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.375rem;
+        font-size: 0.6875rem;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s;
+        backdrop-filter: blur(0.3125rem);
+        text-align: center;
+        width: 100%;
+      }
+      .btn-random:hover {
+        background: rgba(255, 255, 255, 0.25);
+        border-color: rgba(255, 255, 255, 0.4);
+        transform: scale(1.02);
+      }
+      .btn-toggle {
+        color: #fff;
+        background: rgba(0, 100, 255, 0.2);
+        height: 2rem;
+        padding: 0 0.625rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.375rem;
+        font-size: 0.6875rem;
+        cursor: pointer;
+        border: 1px solid rgba(0, 150, 255, 0.3);
+        transition: all 0.3s;
+        text-align: center;
+        width: 100%;
+      }
+      .btn-toggle.active {
+        background: rgba(0, 200, 255, 0.3);
+        border-color: rgba(0, 200, 255, 0.5);
+        box-shadow: 0 0 0.9375rem rgba(0, 150, 255, 0.2);
+      }
+      .btn-toggle:hover {
+        background: rgba(0, 150, 255, 0.3);
+      }
+      input[type="range"] {
+        width: 100%;
+        padding: 0;
+        margin: 0.25rem 0;
+        -webkit-appearance: none;
+        appearance: none;
+        background: rgba(255, 255, 255, 0.1);
+        height: 0.25rem;
+        border-radius: 0.125rem;
+        outline: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 0.875rem;
+        height: 0.875rem;
+        border-radius: 50%;
+        background: rgba(100, 200, 255, 0.8);
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 0.875rem;
+        height: 0.875rem;
+        border-radius: 50%;
+        background: rgba(100, 200, 255, 0.8);
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      #inventorySettings input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 0;
+        background: #dfb76c;
+        border: 1px solid #ffffff;
+        box-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.6);
+        cursor: pointer;
+      }
+      #inventorySettings input[type="range"]::-moz-range-thumb {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 0;
+        background: #dfb76c;
+        border: 1px solid #ffffff;
+        box-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.6);
+        cursor: pointer;
+      }
+      .control-row {
+        display: flex;
+        gap: 0.375rem;
+        align-items: center;
+      }
+      .control-row .btn-toggle {
+        flex: 1;
+      }
+      .info {
+        position: fixed;
+        bottom: 1.25rem;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 0.5rem 1rem;
+        border-radius: 0.625rem;
+        font-size: 0.75rem;
+        text-align: center;
+        pointer-events: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 5;
+        white-space: nowrap;
+      }
+
+      .action-slots {
+        position: fixed;
+        bottom: 0.625rem;
+        right: 0.625rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        pointer-events: auto;
+        z-index: 1000; /* Same layer as top-left-menu HUD (1000) so it hides under inventory overlay (10010) */
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .action-slots.move-mode {
+        top: 50%;
+        bottom: auto;
+        right: 0.625rem;
+        left: auto;
+        transform: translateY(-50%);
+        transform-origin: right center;
+        z-index: 1000; /* Same layer as HUD */
+      }
+      .action-slots-normal {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .action-slots-touch {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .action-slots-title {
+        display: none !important;
+      }
+      .action-slots.keyboard-mode .action-slots-title {
+        display: none;
+      }
+      .action-slots.keyboard-mode .action-slots-touch {
+        display: none;
+      }
+      .action-slot {
+        position: relative;
+        width: 3.5rem;
+        height: 3.5rem;
+        box-sizing: border-box;
+        background: rgba(10, 10, 15, 0.85);
+        border: 1px solid rgba(223, 183, 108, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: rgba(223, 183, 108, 0.8);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 0.25rem 0.375rem rgba(0, 0, 0, 0.5);
+        --slot-cut: 0.375rem;
+        clip-path: polygon(0 0, calc(100% - var(--slot-cut)) 0, 100% var(--slot-cut), 100% 100%, var(--slot-cut) 100%, 0 calc(100% - var(--slot-cut)));
+      }
+      .action-slot:not(.empty) {
+        padding-bottom: 0.9375rem;
+      }
+      .action-slot .slot-content canvas {
+        max-width: 2.125rem;
+        max-height: 2.125rem;
+      }
+      .action-slot > span {
+        display: block;
+      }
+      .action-slot.selected {
+        border-color: #dfb76c;
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.4);
+        background: rgba(223, 183, 108, 0.15);
+      }
+      .action-slot:hover {
+        background: rgba(223, 183, 108, 0.15);
+        border-color: #dfb76c;
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.15);
+        color: #dfb76c;
+        transform: translateY(-0.125rem);
+      }
+
+      @keyframes ammoBadgePop {
+        0% {
+          transform: scale(0.3) rotate(-10deg);
+          opacity: 0;
+        }
+        50% {
+          transform: scale(1.15) rotate(2deg);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1) rotate(0deg);
+          opacity: 1;
+        }
+      }
+
+      .ammo-3d-popup-badge {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle, rgba(15, 25, 40, 0.95) 0%, rgba(5, 10, 20, 0.9) 100%);
+        border: 1.5px solid #00f0ff;
+        box-shadow: 0 0 0.75rem rgba(0, 240, 255, 0.8), inset 0 0 0.5rem rgba(0, 240, 255, 0.3);
+        z-index: 25;
+        pointer-events: none;
+        border-radius: 0.25rem;
+        animation: ammoBadgePop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      }
+
+      .gun-ammo-corner-badge {
+        position: absolute;
+        bottom: 0.5rem;
+        right: 0.125rem;
+        width: 1.125rem;
+        height: 1.125rem;
+        border-radius: 50%;
+        background: rgba(10, 20, 30, 0.9);
+        border: 1px solid rgba(0, 240, 255, 0.7);
+        box-shadow: 0 0 0.375rem rgba(0, 240, 255, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 12;
+        pointer-events: none;
+      }
+      .touch-btn {
+        position: relative;
+        width: 3.5rem;
+        height: 3.5rem;
+        background: rgba(10, 10, 15, 0.85);
+        border: 1px solid rgba(223, 183, 108, 0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: rgba(223, 183, 108, 0.8);
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 0.25rem 0.375rem rgba(0, 0, 0, 0.5);
+        --slot-cut: 0.375rem;
+        clip-path: polygon(0 0, calc(100% - var(--slot-cut)) 0, 100% var(--slot-cut), 100% 100%, var(--slot-cut) 100%, 0 calc(100% - var(--slot-cut)));
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .touch-btn:hover {
+        background: rgba(223, 183, 108, 0.15);
+        border-color: #dfb76c;
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.15);
+        color: #dfb76c;
+        transform: translateY(-0.125rem);
+      }
+      .touch-btn.active, .touch-btn:active {
+        border-color: #dfb76c;
+        box-shadow: 0 0 0.875rem rgba(223, 183, 108, 0.4);
+        background: rgba(223, 183, 108, 0.25);
+        transform: scale(0.95);
+      }
+      .touch-btn-key {
+        display: none !important;
+      }
+      .touch-btn-label {
+        display: none !important;
+      }
+      .touch-btn-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0;
+        color: rgba(223, 183, 108, 0.8);
+        transition: color 0.2s, transform 0.2s;
+      }
+      .touch-btn-icon svg {
+        width: 1.5rem !important;
+        height: 1.5rem !important;
+      }
+      .touch-btn:hover .touch-btn-icon {
+        color: #dfb76c;
+        transform: scale(1.12);
+      }
+
+      .warning {
+        color: #ffaa00;
+        font-size: 0.6875rem;
+        text-align: center;
+        padding: 0.25rem;
+        background: rgba(255, 170, 0, 0.1);
+        border-radius: 0.25rem;
+        margin-top: 0.25rem;
+        border: 1px solid rgba(255, 170, 0, 0.2);
+      }
+      @media (max-width: 37.5rem), (max-height: 31.25rem) {
+        .controls {
+          top: 0.625rem;
+          right: 0.625rem;
+          max-height: calc(100vh - 7.5rem);
+          padding-bottom: 1.875rem;
+          margin-bottom: 0.625rem;
+        }
+        .control-group {
+          min-width: 8.75rem;
+          padding: 0.5rem 0.75rem;
+        }
+        .btn-random {
+          padding: 0.5rem 0.875rem;
+          font-size: 0.75rem;
+        }
+        .btn-toggle {
+          padding: 0.375rem 0.75rem;
+          font-size: 0.6875rem;
+        }
+        .info {
+          font-size: 0.625rem;
+          padding: 0.25rem 0.625rem;
+          bottom: 0.5rem;
+          white-space: normal;
+        }
+        .control-group label {
+          font-size: 0.625rem;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+          width: 0.75rem;
+          height: 0.75rem;
+        }
+      }
+
+      /* ============================================
+           VIRTUAL JOYSTICK - ปุ่มเดียวลากได้
+           ============================================ */
+      .joystick-container {
+        position: fixed;
+        bottom: 0.625rem;
+        left: 0.625rem;
+        z-index: 100;
+        width: 8.125rem;
+        height: 8.125rem;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .joystick-base {
+        width: 8.125rem;
+        height: 8.125rem;
+        position: relative;
+        background: linear-gradient(135deg, rgba(223, 183, 108, 0.55), rgba(223, 183, 108, 0.25));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        backdrop-filter: blur(0.625rem);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        filter: drop-shadow(0 0 0.75rem rgba(223, 183, 108, 0.25)) drop-shadow(0 0.5rem 1.5rem rgba(0, 0, 0, 0.7));
+      }
+      .joystick-base::before {
+        content: "";
+        position: absolute;
+        top: 0.125rem;
+        left: 0.125rem;
+        right: 0.125rem;
+        bottom: 0.125rem;
+        background: radial-gradient(circle at 50% 50%, rgba(18, 18, 26, 0.88), rgba(8, 8, 12, 0.96));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        pointer-events: none;
+      }
+      .joystick-base::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 3.75rem;
+        height: 3.75rem;
+        background: rgba(223, 183, 108, 0.08);
+        border: 1px solid rgba(223, 183, 108, 0.25);
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        pointer-events: none;
+      }
+      .joystick-thumb {
+        width: 3.125rem;
+        height: 3.125rem;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, rgba(223, 183, 108, 0.75), rgba(223, 183, 108, 0.35));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        filter: drop-shadow(0 0 0.625rem rgba(223, 183, 108, 0.3));
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: filter 0.2s;
+      }
+      .joystick-thumb::before {
+        content: "";
+        position: absolute;
+        top: 0.125rem;
+        left: 0.125rem;
+        right: 0.125rem;
+        bottom: 0.125rem;
+        background: linear-gradient(135deg, rgba(32, 28, 22, 0.95), rgba(12, 12, 18, 0.95));
+        clip-path: polygon(50% 0%, 75% 6.7%, 93.3% 25%, 100% 50%, 93.3% 75%, 75% 93.3%, 50% 100%, 25% 93.3%, 6.7% 75%, 0% 50%, 6.7% 25%, 25% 6.7%);
+        pointer-events: none;
+      }
+      .joystick-thumb:active {
+        cursor: grabbing;
+      }
+      .joystick-thumb.active {
+        background: linear-gradient(135deg, #dfb76c, rgba(223, 183, 108, 0.85));
+        filter: drop-shadow(0 0 1.25rem rgba(223, 183, 108, 0.65));
+      }
+      .joystick-thumb.active::before {
+        background: linear-gradient(135deg, rgba(55, 45, 30, 0.95), rgba(24, 20, 15, 0.95));
+      }
+      .joystick-dir {
+        position: absolute;
+        color: #dfb76c;
+        opacity: 0.65;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        pointer-events: none;
+        font-family: 'Google Sans', sans-serif;
+        text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);
+      }
+      .joystick-dir.up {
+        top: 0.375rem;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .joystick-dir.down {
+        bottom: 0.375rem;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .joystick-dir.left {
+        left: 0.375rem;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      .joystick-dir.right {
+        right: 0.375rem;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      /* ============================================
+           INVENTORY STYLES
+           ============================================ */
+      .top-left-menu {
+        position: fixed;
+        top: 0.625rem;
+        left: 0.625rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        z-index: 1000;
+        pointer-events: none; /* Let clicks pass through empty spaces of container */
+      }
+      #compassContainer {
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        pointer-events: none;
+        user-select: none;
+        background: transparent !important;
+        border: none !important;
+        border-left: 1px solid rgba(223, 183, 108, 0.25) !important;
+        border-right: 1px solid rgba(223, 183, 108, 0.25) !important;
+        padding: 0 0.375rem;
+        box-shadow: none !important;
+        clip-path: none !important;
+      }
+      .top-left-menu * {
+        pointer-events: auto; /* Enable pointer events on children */
+      }
+      .inventory-btn {
+        position: relative;
+        background: rgba(0, 0, 0, 0.85);
+        color: #dfb76c;
+        border: 1px solid rgba(223, 183, 108, 0.3);
+        width: 2rem;
+        height: 2rem;
+        font-size: 1.125rem;
+        cursor: pointer;
+        backdrop-filter: blur(0.75rem);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0.25rem 1.875rem rgba(0, 0, 0, 0.3);
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .inventory-btn.demolish-active {
+        background: rgba(220, 38, 38, 0.85) !important;
+        border-color: #ef4444 !important;
+        box-shadow: 0 0 0.9375rem rgba(239, 68, 68, 0.5) !important;
+        color: #ffffff !important;
+      }
+      .inventory-btn:hover {
+        background: rgba(223, 183, 108, 0.1);
+        border-color: #dfb76c;
+        transform: scale(1.05);
+        box-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.3);
+      }
+      .inventory-btn.demolish-active:hover {
+        background: rgba(239, 68, 68, 0.95) !important;
+        border-color: #f87171 !important;
+        transform: scale(1.05);
+        box-shadow: 0 0 1.125rem rgba(239, 68, 68, 0.7) !important;
+      }
+      #craftingToggle:hover {
+        background: rgba(52, 211, 153, 0.1) !important;
+        border-color: #34d399 !important;
+        box-shadow: 0 0 0.625rem rgba(52, 211, 153, 0.3) !important;
+      }
+
+      .inventory-action-btn {
+        background: rgba(10, 10, 15, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.4);
+        height: 2rem;
+        padding: 0 0.875rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.6875rem;
+        font-family: 'Google Sans', sans-serif;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: all 0.2s;
+        }
+      .inventory-action-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.6);
+      }
+      .inventory-action-btn.active {
+        background: rgba(223, 183, 108, 0.15);
+        border-color: rgba(223, 183, 108, 0.4);
+        color: #dfb76c;
+      }
+
+      .inventory-action-slots,
+      .inventory-equip-slots {
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0;
+        pointer-events: auto;
+        z-index: 10015;
+      }
+      .inventory-overlay.open .inventory-action-slots,
+      .inventory-overlay.open .inventory-equip-slots {
+        display: flex;
+      }
+      .inventory-action-slots .action-slot,
+      .inventory-equip-slots .action-slot {
+        width: var(--ui-slot-size) !important;
+        height: var(--ui-slot-size) !important;
+        min-height: var(--ui-slot-size) !important;
+        box-sizing: border-box !important;
+      }
+      .inventory-action-slots .action-slot:not(.empty),
+      .inventory-equip-slots .action-slot {
+        padding-bottom: var(--ui-slot-bar-h);
+      }
+      .inventory-action-slots .action-slot .slot-content canvas,
+      .inventory-equip-slots .action-slot .slot-content canvas {
+        max-width: var(--ui-slot-icon-size);
+        max-height: var(--ui-slot-icon-size);
+      }
+      .inventory-action-slots .action-slot:nth-child(n+5),
+      .inventory-equip-slots .action-slot:nth-child(n+6) {
+        display: none !important;
+      }
+      .inventory-equip-slots .action-slot.empty::after {
+        display: none !important;
+      }
+
+      .inventory-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10010;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.6) !important;
+        backdrop-filter: blur(0.5rem);
+        -webkit-backdrop-filter: blur(0.5rem);
+        pointer-events: none;
+      }
+      .inventory-overlay.open {
+        display: flex;
+        pointer-events: auto;
+      }
+      .inventory-panel {
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        transform-origin: center center !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 1rem) !important;
+        height: min(var(--panel-base-h, 32.5rem), calc(100vh - 1rem)) !important;
+        min-height: 0 !important;
+        max-height: calc(100vh - 1rem) !important;
+        background: rgba(10, 10, 15, 0.96) !important;
+        border: 1px solid rgba(223, 183, 108, 0.45) !important;
+        border-radius: 0 !important;
+        --cut: 0.875rem;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))) !important;
+        margin: 0 !important;
+        padding: var(--panel-pad-y, 1.5rem) var(--panel-pad-x, 1.75rem) !important;
+        box-shadow: 0 0 2.1875rem rgba(223, 183, 108, 0.25), 0 1.25rem 3.125rem rgba(0, 0, 0, 0.85) !important;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box !important;
+        flex-shrink: 0 !important;
+      }
+      #saveSelectOverlay .inventory-panel {
+        width: min(32.5rem, calc(100vw - 1rem)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 1rem) !important;
+        height: auto !important;
+        min-height: 18rem !important;
+        max-height: min(var(--panel-base-h, 30rem), calc(100vh - 1rem)) !important;
+      }
+      #antialiasConfirmOverlay > .antialias-confirm-box {
+        min-width: 18.75rem;
+        max-width: min(21.25rem, calc(100vw - 1rem));
+      }
+      #inventoryOverlay .inventory-panel {
+        width: min(42.75rem, calc(100vw - 1rem)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 1rem) !important;
+        height: min(var(--panel-base-h, 34rem), calc(100vh - 1rem)) !important;
+      }
+      #inventoryOverlay.mode-chest .inventory-panel {
+        width: min(54.25rem, calc(100vw - 1rem)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 1rem) !important;
+        height: min(var(--panel-base-h, 34rem), calc(100vh - 1rem)) !important;
+      }
+      #inventoryOverlay.mode-chest #panelCustomScrollbar {
+        display: none !important;
+      }
+      #inventoryOverlay.mode-chest #inventoryMainLayout {
+        gap: 0.75rem !important;
+        padding-right: 0 !important;
+      }
+      #inventoryOverlay.mode-chest #chestGridWrapper {
+        display: flex !important;
+        border-right: 1px solid rgba(223, 183, 108, 0.22);
+        padding-right: 0.75rem;
+      }
+      #inventoryOverlay.mode-chest #inventoryGridChestLabel {
+        display: flex !important;
+      }
+      #inventoryOverlay.mode-chest #chestTakeAllBtn {
+        display: inline-flex !important;
+      }
+      #warpOverlay .inventory-panel {
+        width: min(28rem, calc(100vw - 1rem)) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 1rem) !important;
+        height: min(var(--panel-base-h, 26.75rem), calc(100vh - 1rem)) !important;
+      }
+      #craftingList,
+      #cookingList,
+      #inventorySettings,
+      #saveSlotsList {
+        overflow-y: auto !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        padding-right: 0.375rem !important;
+        touch-action: pan-y !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      #inventoryMainLayout {
+        overflow: auto !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        max-width: 100% !important;
+        justify-content: safe center !important;
+        padding-right: 0.375rem !important;
+        touch-action: pan-y !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      /* Custom DOM Virtual Scrollbar for Virtual Cursor & Gamepad */
+      .custom-scrollbar-track {
+        position: absolute;
+        top: 4rem;
+        bottom: 1.5rem;
+        right: 0.625rem;
+        width: 0.625rem;
+        background: rgba(10, 15, 25, 0.75);
+        border: 1px solid rgba(223, 183, 108, 0.35);
+        border-radius: 0;
+        --cut: 0.25rem;
+        clip-path: polygon(0 var(--cut), var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%);
+        z-index: 50;
+        display: none;
+        cursor: pointer;
+        user-select: none;
+        box-shadow: inset 0 0 0.375rem rgba(0, 0, 0, 0.8);
+      }
+      .custom-scrollbar-thumb {
+        position: absolute;
+        left: 0.0625rem;
+        right: 0.0625rem;
+        top: 0;
+        height: 3rem;
+        background: linear-gradient(180deg, #dfb76c 0%, #fef08a 50%, #dfb76c 100%);
+        border: 1px solid rgba(254, 240, 138, 0.85);
+        box-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.6);
+        border-radius: 0;
+        --cut: 0.1875rem;
+        clip-path: polygon(0 var(--cut), var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%);
+        cursor: grab;
+        transition: background 0.15s, box-shadow 0.15s;
+        will-change: transform;
+      }
+      .custom-scrollbar-thumb:hover,
+      .custom-scrollbar-thumb.dragging,
+      .custom-scrollbar-thumb.virtual-hover {
+        background: linear-gradient(180deg, #ffffff 0%, #fef08a 60%, #eab308 100%);
+        border-color: #ffffff;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95);
+        cursor: grabbing;
+      }
+
+      /* Hide native browser scrollbars in panels */
+      #craftingList,
+      #cookingList,
+      #inventorySettings,
+      #inventoryMainLayout,
+      #saveSlotsList,
+      .inventory-panel {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+      }
+      #craftingList::-webkit-scrollbar,
+      #cookingList::-webkit-scrollbar,
+      #inventorySettings::-webkit-scrollbar,
+      #inventoryMainLayout::-webkit-scrollbar,
+      #saveSlotsList::-webkit-scrollbar,
+      .inventory-panel::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
+
+      /* Crafting Tab: Horizontal Left-to-Right Icon Row + Bottom-Centered Output Name */
+      .crafting-recipe-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1875rem;
+        padding: 0.4375rem 0.625rem 0.25rem 0.625rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0;
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        box-sizing: border-box;
+      }
+      .craft-recipe-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .craft-recipe-output-name {
+        width: 100%;
+        text-align: center;
+        font-family: 'Google Sans', sans-serif;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: 0.02em;
+        color: #dfb76c;
+        margin: 0;
+        padding: 0;
+        pointer-events: none;
+      }
+      .crafting-recipe-card:hover {
+        border-color: rgba(223, 183, 108, 0.35);
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .crafting-recipe-card.crafting-card-selected,
+      .crafting-recipe-card.touch-preview-active,
+      .crafting-recipe-card.gamepad-focused {
+        border-color: #dfb76c !important;
+        background: rgba(223, 183, 108, 0.08) !important;
+        box-shadow: 0 0 0.875rem rgba(223, 183, 108, 0.35) !important;
+      }
+
+      .craft-tile {
+        position: relative;
+        width: var(--ui-slot-size);
+        height: var(--ui-slot-size);
+        min-width: var(--ui-slot-size);
+        min-height: var(--ui-slot-size);
+        flex: 0 0 var(--ui-slot-size);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Google Sans', sans-serif;
+        border-radius: 0;
+        user-select: none;
+        --tile-cut: var(--ui-slot-cut);
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--tile-cut)) 0,
+          100% var(--tile-cut),
+          100% 100%,
+          var(--tile-cut) 100%,
+          0 calc(100% - var(--tile-cut))
+        );
+        transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease, opacity 0.18s ease;
+      }
+
+      /* Merged Gold Craft + Output Item Button */
+      .craft-tile-gold {
+        background: linear-gradient(160deg, rgba(223, 183, 108, 0.28) 0%, rgba(168, 126, 54, 0.15) 100%);
+        border: 1px solid #dfb76c;
+        color: #f3d28c;
+        box-shadow: inset 0 0 0.625rem rgba(223, 183, 108, 0.18);
+        cursor: pointer;
+      }
+      .craft-tile-gold:hover:not(.craft-tile-disabled) {
+        background: linear-gradient(160deg, rgba(223, 183, 108, 0.44) 0%, rgba(196, 150, 68, 0.26) 100%);
+        border-color: #fef08a;
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.38), inset 0 0 0.75rem rgba(254, 240, 138, 0.24);
+      }
+      .craft-tile-gold:active:not(.craft-tile-disabled) {
+        transform: scale(0.95);
+      }
+      .craft-tile-gold.craft-tile-disabled {
+        cursor: not-allowed;
+      }
+
+      .craft-tile-output {
+        padding-bottom: var(--ui-slot-bar-h);
+      }
+      .craft-tile-craft-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: var(--ui-slot-bar-h);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.1875rem;
+        padding: 0 0.25rem 0 0.375rem;
+        box-sizing: border-box;
+        background: rgba(223, 183, 108, 0.34);
+        border-top: 1px solid rgba(223, 183, 108, 0.8);
+        color: #fef08a;
+        font-size: 0.625rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.02em;
+        text-shadow: 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.85);
+        pointer-events: none;
+        transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+      }
+      .craft-tile-gold:hover:not(.craft-tile-disabled) .craft-tile-craft-bar {
+        background: rgba(223, 183, 108, 0.56);
+        border-top-color: #fef08a;
+        color: #ffffff;
+      }
+      .craft-tile-gold.craft-tile-disabled .craft-tile-craft-bar {
+        background: rgba(20, 18, 14, 0.55);
+        border-top-color: rgba(223, 183, 108, 0.28);
+        color: rgba(243, 210, 140, 0.42);
+        opacity: 0.55;
+        text-shadow: none;
+      }
+      .craft-tile-craft-bar svg {
+        flex: 0 0 auto;
+      }
+      .craft-tile-craft-bar span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* White tiles: Required material icons */
+      .craft-tile-white {
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        color: #ffffff;
+        box-shadow: inset 0 0 0.625rem rgba(255, 255, 255, 0.1);
+      }
+      .craft-tile-material {
+        cursor: default;
+        padding: 0 0 1.0625rem 0;
+        justify-content: center;
+      }
+
+      /* Unified Item Name Bar (shared across Inventory, Items List, Chest, Action, Equip, Crafting, Mech) */
+      @keyframes item-name-bar-scroll {
+        0%, 8% {
+          transform: translateX(0);
+        }
+        60%, 76% {
+          transform: translateX(var(--marquee-shift, 0px));
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+      .item-name-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 1.0625rem;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        padding: 0 0.3125rem 0 0.4375rem;
+        box-sizing: border-box;
+        overflow: hidden;
+        background: rgba(12, 16, 24, 0.72);
+        border-top: 1px solid rgba(255, 255, 255, 0.16);
+        color: rgba(255, 255, 255, 0.88);
+        font-family: 'Google Sans', sans-serif;
+        font-size: 0.5625rem;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.02em;
+        text-shadow: 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.85);
+        pointer-events: none;
+        transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+      }
+      .item-name-bar-inner {
+        width: 100%;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .item-name-bar.is-scrolling .item-name-bar-inner {
+        justify-content: flex-start;
+      }
+      .item-name-bar-track {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        transform: translateX(0);
+        will-change: transform;
+      }
+      /* Scroll overflowing item names ONLY when hovered or selected/focused */
+      .inventory-slot:hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .inventory-slot.virtual-hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .inventory-slot.item-selected .item-name-bar.is-scrolling .item-name-bar-track,
+      .inventory-slot.gamepad-focused .item-name-bar.is-scrolling .item-name-bar-track,
+      .action-slot:hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .action-slot.virtual-hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .action-slot.selected .item-name-bar.is-scrolling .item-name-bar-track,
+      .action-slot.item-selected .item-name-bar.is-scrolling .item-name-bar-track,
+      .action-slot.gamepad-focused .item-name-bar.is-scrolling .item-name-bar-track,
+      .craft-tile:hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .craft-tile.virtual-hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .crafting-recipe-card.virtual-hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .crafting-recipe-card.crafting-card-selected .item-name-bar.is-scrolling .item-name-bar-track,
+      .crafting-recipe-card.touch-preview-active .item-name-bar.is-scrolling .item-name-bar-track,
+      .crafting-recipe-card.gamepad-focused .item-name-bar.is-scrolling .item-name-bar-track,
+      .mech-stand-slot:hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .mech-stand-slot.virtual-hover .item-name-bar.is-scrolling .item-name-bar-track,
+      .mech-stand-slot.gamepad-focused .item-name-bar.is-scrolling .item-name-bar-track {
+        animation: item-name-bar-scroll var(--marquee-duration, 4.5s) ease-in-out infinite;
+      }
+
+      /* Theme overrides per slot family */
+      .inventory-slot:hover:not(.locked) .item-name-bar {
+        border-top-color: rgba(255, 255, 255, 0.35);
+        color: #ffffff;
+      }
+      .craft-tile-white .item-name-bar {
+        background: rgba(255, 255, 255, 0.14);
+        border-top: 1px solid rgba(255, 255, 255, 0.55);
+        color: #ffffff;
+      }
+      .action-slot .item-name-bar {
+        height: 0.9375rem;
+        font-size: 0.5313rem;
+        background: rgba(223, 183, 108, 0.18);
+        border-top: 1px solid rgba(223, 183, 108, 0.55);
+        color: #f3d28c;
+      }
+      .inventory-action-slots .action-slot .item-name-bar,
+      .inventory-equip-slots .action-slot .item-name-bar {
+        height: var(--ui-slot-bar-h);
+        font-size: 0.5625rem;
+      }
+      .action-slot.selected .item-name-bar,
+      .action-slot:hover .item-name-bar {
+        background: rgba(223, 183, 108, 0.32);
+        border-top-color: #dfb76c;
+        color: #fef08a;
+      }
+      .action-slot.empty .item-name-bar {
+        background: rgba(20, 18, 14, 0.45);
+        border-top-color: rgba(223, 183, 108, 0.25);
+        color: rgba(223, 183, 108, 0.55);
+        text-shadow: none;
+      }
+      .mech-stand-slot .item-name-bar {
+        height: var(--ui-slot-bar-h);
+        font-size: 0.5625rem;
+        background: rgba(223, 183, 108, 0.2);
+        border-top: 1px solid rgba(223, 183, 108, 0.6);
+        color: #f3d28c;
+      }
+
+      .craft-materials-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        padding-left: 0.5rem;
+        border-left: 1px solid rgba(223, 183, 108, 0.25);
+        flex-wrap: nowrap;
+        min-width: 0;
+      }
+
+      .craft-tile .craft-icon,
+      .craft-tile-material .craft-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--ui-slot-icon-size);
+        height: var(--ui-slot-icon-size);
+        font-size: 1.5rem;
+        line-height: 1;
+        pointer-events: none;
+      }
+
+      /* Top-left count badge matching existing .slot-count-badge */
+      .craft-tile .slot-count-badge {
+        position: absolute;
+        top: 0.125rem;
+        left: 0.25rem;
+        font-size: 0.6875rem;
+        font-weight: bold;
+        line-height: 1.15;
+        text-shadow: 0.0625rem 0.0625rem 0.125rem #000;
+        pointer-events: none;
+      }
+      .craft-tile .slot-count-badge.is-enough {
+        color: #34d399;
+      }
+      .craft-tile .slot-count-badge.is-short {
+        color: #f87171;
+      }
+      .craft-tile .slot-count-badge.is-output {
+        color: #fef08a;
+      }
+
+      /* Gamepad Direct Slot / UI Element Focus */
+      .gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        outline-offset: -1px !important;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95), inset 0 0 0.5rem rgba(234, 179, 8, 0.45) !important;
+        border-color: #fde047 !important;
+        z-index: 25 !important;
+        position: relative !important;
+        animation: gamepad-focus-glow 1s infinite alternate ease-in-out !important;
+      }
+      #startMenuButtonsContainer .start-btn.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        border-color: #fde047 !important;
+        background: rgba(223, 183, 108, 0.3) !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 1.5rem rgba(250, 204, 21, 0.95), inset 0 0 0.75rem rgba(234, 179, 8, 0.45) !important;
+        transform: scale(1.04) !important;
+      }
+      .save-slot-card.gamepad-focused, #btnSaveSelectBack.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        border-color: #fde047 !important;
+        background: rgba(223, 183, 108, 0.22) !important;
+        box-shadow: 0 0 1.25rem rgba(250, 204, 21, 0.85) !important;
+        transform: scale(1.01) !important;
+      }
+      .save-slot-delete-btn.gamepad-focused {
+        outline: 2px solid #f87171 !important;
+        border-color: #ef4444 !important;
+        background: rgba(239, 68, 68, 0.35) !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 1.25rem rgba(239, 68, 68, 0.85), inset 0 0 0.5rem rgba(239, 68, 68, 0.5) !important;
+        transform: scale(1.04) !important;
+      }
+      #startScreenSocialBar a.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95) !important;
+        transform: scale(1.12) !important;
+      }
+      #trashCancelBtn.gamepad-focused, #trashConfirmBtn.gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        outline-offset: 2px !important;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95) !important;
+        z-index: 10 !important;
+      }
+      input[type="range"].gamepad-focused {
+        outline: 2px solid #fef08a !important;
+        outline-offset: 4px !important;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95) !important;
+        border-radius: 0px !important;
+      }
+      .key-bind-row-wrapper {
+        border-radius: 0px !important;
+      }
+      .key-bind-btn, .gp-bind-btn, .fixed-bind-badge {
+        border-radius: 0px !important;
+      }
+      .key-bind-btn.gamepad-focused, .gp-bind-btn.gamepad-focused {
+        border-radius: 0px !important;
+        outline: 2px solid #fef08a !important;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95), inset 0 0 0.5rem rgba(234, 179, 8, 0.45) !important;
+        border-color: #fde047 !important;
+        background: rgba(223, 183, 108, 0.35) !important;
+        color: #ffffff !important;
+        transform: scale(1.03) !important;
+      }
+      .key-bind-row-wrapper:has(.gamepad-focused) {
+        border-radius: 0px !important;
+        background: rgba(223, 183, 108, 0.12) !important;
+        border-color: rgba(223, 183, 108, 0.55) !important;
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.2) !important;
+      }
+      #btnBindingModeKb, #btnBindingModeGp {
+        border-radius: 0px !important;
+      }
+      #btnBindingModeKb.gamepad-focused, #btnBindingModeGp.gamepad-focused {
+        border-radius: 0px !important;
+        outline: 2px solid #fef08a !important;
+        box-shadow: 0 0 1rem rgba(250, 204, 21, 0.95) !important;
+        border-color: #fde047 !important;
+        transform: scale(1.05) !important;
+      }
+      #inventorySettings button,
+      #inventorySettings .game-ui,
+      #inventorySettings input[type="range"] {
+        border-radius: 0px !important;
+      }
+      @keyframes gamepad-focus-glow {
+        0% {
+          box-shadow: 0 0 0.625rem rgba(250, 204, 21, 0.7), inset 0 0 0.375rem rgba(234, 179, 8, 0.35);
+        }
+        100% {
+          box-shadow: 0 0 1.375rem rgba(254, 240, 138, 1), inset 0 0 0.75rem rgba(234, 179, 8, 0.65);
+        }
+      }
+
+      .inventory-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 0 0 1rem 0;
+        color: #fff;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0 0 0.75rem 0;
+        position: relative;
+        background: transparent;
+        z-index: 10;
+        height: 2.75rem;
+        flex-shrink: 0;
+        box-sizing: border-box;
+      }
+      .inventory-tabs {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+        align-items: center;
+        height: 2rem;
+      }
+      .inventory-header h2 {
+        position: relative;
+        z-index: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        letter-spacing: 0.0938rem;
+        color: rgba(255, 255, 255, 0.48);
+        font-family: 'Google Sans', sans-serif;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: color 0.2s ease, background-color 0.2s ease, text-shadow 0.2s ease;
+        margin: 0;
+        height: 2rem;
+        padding: 0 0.75rem;
+        box-sizing: border-box;
+        outline: none !important;
+        background: transparent;
+        white-space: nowrap;
+        --cut: var(--cut-sm);
+        --cut-bw: 1.5px;
+        --cut-border: transparent;
+      }
+      .inventory-header h2 > * {
+        position: relative;
+        z-index: 1;
+      }
+      .inventory-header h2:hover,
+      .inventory-header h2.virtual-hover,
+      .inventory-header h2.gamepad-focused {
+        color: #ffffff !important;
+        --cut-border: rgba(255, 255, 255, 0.92);
+        background: rgba(18, 20, 26, 0.92);
+        text-shadow: 0 0 0.5rem rgba(255, 255, 255, 0.32) !important;
+        box-shadow: inset 0 0 0.5rem rgba(255, 255, 255, 0.12) !important;
+        outline: none !important;
+        animation: none !important;
+      }
+      .inventory-header h2.active {
+        color: #dfb76c;
+        --cut-border: #dfb76c;
+        background: rgba(26, 21, 13, 0.94);
+        text-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.4);
+        box-shadow: inset 0 0 0.5rem rgba(223, 183, 108, 0.16);
+      }
+      .inventory-header h2.active:hover,
+      .inventory-header h2.active.virtual-hover,
+      .inventory-header h2.active.gamepad-focused {
+        color: #f5d896 !important;
+        --cut-border: #f0cd84;
+        background: rgba(34, 27, 16, 0.96);
+        text-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.55) !important;
+        box-shadow: inset 0 0 0.625rem rgba(223, 183, 108, 0.24) !important;
+        outline: none !important;
+        animation: none !important;
+      }
+      .gamepad-tab-bumper {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.625rem;
+        font-weight: 700;
+        font-family: 'Google Sans', sans-serif;
+        color: #dfb76c;
+        background: rgba(223, 183, 108, 0.12);
+        border: 1px solid rgba(223, 183, 108, 0.35);
+        padding: 0.125rem 0.4375rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.15s ease;
+        height: 1.375rem;
+        box-sizing: border-box;
+        letter-spacing: 0.0313rem;
+      }
+      .gamepad-tab-bumper:hover {
+        background: rgba(223, 183, 108, 0.3);
+        border-color: #dfb76c;
+        color: #ffffff;
+        box-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.5);
+      }
+      .gamepad-tab-bumper:active {
+        transform: scale(0.92);
+      }
+      .inventory-header .close-btn {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #fff;
+        width: 2rem;
+        height: 2rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Google Sans', sans-serif;
+        border-radius: 0;
+        --cut: 0.375rem;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+      }
+      .inventory-header .close-btn:hover {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: #ef4444;
+        color: #ef4444;
+      }
+      .inventory-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 4.5rem);
+        gap: 0.5rem;
+        margin: 0.25rem 0 0 0;
+        justify-content: center;
+      }
+      .inventory-slot {
+        width: var(--ui-slot-size);
+        height: var(--ui-slot-size);
+        aspect-ratio: 1;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.2);
+        font-size: 0.625rem;
+        transition: all 0.25s ease;
+        position: relative;
+        min-height: var(--ui-slot-size);
+        box-sizing: border-box;
+        font-family: 'Google Sans', sans-serif;
+        --slot-cut: var(--ui-slot-cut);
+        clip-path: polygon(0 0, calc(100% - var(--slot-cut)) 0, 100% var(--slot-cut), 100% 100%, var(--slot-cut) 100%, 0 calc(100% - var(--slot-cut)));
+      }
+      .inventory-slot:hover:not(.locked) {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+        transform: translateY(-0.0625rem);
+      }
+      .inventory-slot.locked {
+        opacity: 0.2;
+        cursor: not-allowed;
+        background: rgba(255, 255, 255, 0.01);
+        border-color: rgba(255, 255, 255, 0.02);
+      }
+      .inventory-slot.locked::after {
+        content: "◆";
+        font-size: 0.875rem;
+        opacity: 0.3;
+        color: rgba(255, 255, 255, 0.15);
+      }
+      .inventory-slot.empty {
+        color: rgba(255, 255, 255, 0.05);
+      }
+      .inventory-slot:not(.empty):not(.locked) {
+        padding-bottom: var(--ui-slot-bar-h);
+      }
+      .inventory-slot .slot-content {
+        font-size: 1.5rem;
+        line-height: 1;
+        filter: drop-shadow(0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.3));
+      }
+      .inventory-slot .slot-content canvas {
+        max-width: var(--ui-slot-icon-size);
+        max-height: var(--ui-slot-icon-size);
+      }
+      .inventory-slot .slot-label {
+        font-size: 0.5rem;
+        color: rgba(255, 255, 255, 0.35);
+        margin-top: 0.125rem;
+        letter-spacing: 0.0313rem;
+        font-weight: 300;
+        font-family: 'Google Sans', sans-serif;
+        text-transform: uppercase;
+      }
+      .inventory-badge {
+        position: absolute;
+        top: -0.125rem;
+        right: -0.125rem;
+        background: rgba(0, 0, 0, 0.9);
+        color: #dfb76c;
+        width: 1.125rem;
+        height: 1.125rem;
+        font-size: 0.5625rem;
+        font-weight: 400;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(223, 183, 108, 0.4);
+        font-family: 'Google Sans', sans-serif;
+        }
+      
+      /* Item Dragging Visual Feedback */
+      .inventory-slot.dragover,
+      .action-slot.dragover {
+        background: rgba(223, 183, 108, 0.2) !important;
+        border-color: #dfb76c !important;
+        box-shadow: inset 0 0 0.625rem rgba(223, 183, 108, 0.4), 0 0 0.75rem rgba(223, 183, 108, 0.4) !important;
+        transform: scale(1.05);
+        z-index: 10;
+      }
+      .inventory-slot.dragging-active,
+      .action-slot.dragging-active {
+        opacity: 0.3 !important;
+        border: 1px dashed rgba(255, 255, 255, 0.4) !important;
+        background: rgba(0, 0, 0, 0.4) !important;
+      }
+      .inventory-slot.dragging,
+      .action-slot.dragging {
+        border: 2px solid #dfb76c !important;
+        background: rgba(223, 183, 108, 0.25) !important;
+        box-shadow: 0 0 0.9375rem rgba(223, 183, 108, 0.6) !important;
+      }
+      .inventory-slot *,
+      .action-slot * {
+        pointer-events: none;
+      }
+      .inventory-panel::-webkit-scrollbar {
+        width: 0.1875rem;
+      }
+
+      /* ============================================
+           FPS COUNTER
+           ============================================ */
+      .fps-counter {
+        position: relative;
+        color: rgba(255, 255, 255, 0.6);
+        font-family: 'Google Sans', sans-serif;
+        font-size: 0.875rem;
+        background: rgba(0, 0, 0, 0.85); /* ธีมกระเป๋า */
+        border: 1px solid rgba(255, 255, 255, 0.2); /* ธีมกระเป๋า */
+        height: 2rem;
+        padding: 0 0.875rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        flex-shrink: 0;
+        backdrop-filter: blur(0.75rem); /* ธีมกระเป๋า */
+        box-shadow: 0 0.25rem 1.875rem rgba(0, 0, 0, 0.3); /* ธีมกระเป๋า */
+        /* ธีมกระเป๋า */
+        user-select: none;
+      }
+      .fps-counter .fps-value {
+        color: #66ff66;
+        font-weight: bold;
+      }
+      .fps-counter .fps-lock {
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 0.6875rem;
+        height: 100%;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.375rem;
+        padding-left: 0.375rem;
+        border-left: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      /* ============================================
+           Game Entry Screen Overlay
+           ============================================ */
+      .game-start-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        box-sizing: border-box;
+        background: radial-gradient(
+          circle at center,
+          rgba(10, 10, 15, 0.98) 0%,
+          rgba(3, 3, 5, 1) 100%
+        );
+        z-index: 10000;
+        font-family: 'Google Sans', sans-serif;
+        color: #fff;
+        transition:
+          opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+          transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        backdrop-filter: blur(0.75rem);
+      }
+
+      .game-start-overlay.fade-out {
+        opacity: 0;
+        transform: scale(1.05);
+        pointer-events: none;
+      }
+
+      /* Game title is anchored in the exact center and immune to push */
+      .game-start-overlay .logo-container,
+      .aaa-loading-overlay .logo-container {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100%;
+        max-width: 100vw;
+        margin: 0 !important;
+        padding: 0 1rem !important;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .game-start-overlay .logo-container *,
+      .aaa-loading-overlay .logo-container * {
+        pointer-events: auto;
+      }
+
+      /* Start menu controls sit exactly 0.5rem below the centered title and scale uniformly */
+      .start-menu-controls {
+        position: absolute;
+        top: calc(50% + (0.55 * var(--game-title-size)) + 0.75rem);
+        left: 50%;
+        transform: translateX(-50%);
+        transform-origin: top center;
+        width: max-content;
+        max-width: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        z-index: 20;
+        pointer-events: auto;
+      }
+
+      .logo-container {
+        text-align: center;
+        margin: 0;
+        z-index: 2;
+        position: relative;
+        transition: opacity 0.5s ease-in-out;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 100vw;
+        padding: 0 clamp(0.5rem, 2vw, 1.5rem);
+        box-sizing: border-box;
+        flex-shrink: 0;
+        overflow: visible;
+      }
+
+      .main-screen-title-wrapper {
+        position: relative;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        margin: 0 auto;
+        max-width: 96vw;
+        width: max-content;
+        box-sizing: border-box;
+        transform-origin: center center;
+        transition: transform 0.15s ease-out;
+      }
+
+      /* Small game title is positioned exactly 0.5rem above the big game title */
+      .main-screen-thai-svg {
+        position: absolute;
+        bottom: calc(100% + 0.5rem);
+        right: 0;
+        height: clamp(12px, min(3.2vw, 5.5vh), 52px);
+        width: auto;
+        max-width: 100%;
+        display: block;
+        user-select: none;
+        pointer-events: none;
+        margin: 0 !important;
+        padding-right: clamp(2px, 0.8vw, 16px);
+        z-index: 2;
+        filter: drop-shadow(0 0.125rem 0.375rem rgba(0, 0, 0, 0.9));
+      }
+
+      .main-screen-thai-title {
+        position: absolute;
+        bottom: calc(100% + 0.5rem);
+        right: 0;
+        font-family: 'Google Sans', sans-serif;
+        font-size: clamp(12px, min(2.8vw, 4.8vh), 42px);
+        font-weight: 800;
+        letter-spacing: clamp(0.04em, 0.1vw, 0.14em);
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin: 0 !important;
+        padding-right: clamp(2px, 0.8vw, 16px);
+        z-index: 2;
+        filter: drop-shadow(0 0.125rem 0.375rem rgba(0, 0, 0, 0.9));
+      }
+
+      /* Seedian Astral Language Font & Visuals */
+      body.lang-seedian,
+      body.lang-seedian button,
+      body.lang-seedian [data-i18n],
+      body.lang-seedian .game-ui,
+      .seedian-font {
+        font-family: 'Google Sans', sans-serif !important;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        vertical-align: middle;
+      }
+      body.lang-seedian button.game-ui {
+        font-family: 'Google Sans', sans-serif !important;
+        letter-spacing: 0.1em;
+        font-weight: 700;
+      }
+
+      /* Seedian Lexicon Modal Styles (Game Chamfered Cut-Corner UI) */
+      .seedian-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20000;
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(0.625rem);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease-out;
+      }
+      .seedian-modal-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .seedian-modal-box {
+        width: 100%;
+        max-width: 51.25rem;
+        max-height: 88vh;
+        background: rgba(10, 12, 18, 0.98);
+        border: 1px solid rgba(223, 183, 108, 0.55);
+        box-shadow: 0 0 3.125rem rgba(0, 0, 0, 0.95), 0 0 1.875rem rgba(223, 183, 108, 0.25);
+        --cut: 1rem;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transform: scale(0.95);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .seedian-modal-overlay.active .seedian-modal-box {
+        transform: scale(1);
+      }
+      .seedian-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.875rem 1.25rem;
+        background: rgba(223, 183, 108, 0.08);
+        border-bottom: 1px solid rgba(223, 183, 108, 0.25);
+      }
+      .seedian-modal-body {
+        padding: 1.125rem 1.25rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.125rem;
+        flex: 1;
+        min-height: 0;
+      }
+      .seedian-modal-body::-webkit-scrollbar {
+        width: 0.3125rem;
+      }
+      .seedian-modal-body::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .seedian-modal-body::-webkit-scrollbar-thumb {
+        background: rgba(223, 183, 108, 0.3);
+        border-radius: 0.125rem;
+      }
+      .seedian-modal-footer {
+        flex-shrink: 0;
+        z-index: 15;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.875rem 1.25rem;
+        background: rgba(8, 10, 15, 0.98);
+        border-top: 1px solid rgba(223, 183, 108, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .seedian-close-btn,
+      .seedian-footer-btn {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .seedian-footer-btn {
+        padding: 0.625rem 2.5rem;
+        background: rgba(223, 183, 108, 0.2) !important;
+        border: 1px solid #dfb76c !important;
+        color: #dfb76c !important;
+        font-size: 0.875rem !important;
+        font-weight: 700 !important;
+        font-family: 'Google Sans', sans-serif !important;
+        --cut: 0.5rem;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))) !important;
+        text-shadow: 0 0 0.5rem rgba(223, 183, 108, 0.5);
+        box-shadow: 0 0 1rem rgba(223, 183, 108, 0.2);
+        transition: all 0.2s ease;
+      }
+      .seedian-footer-btn:hover {
+        background: rgba(223, 183, 108, 0.38) !important;
+        box-shadow: 0 0 1.5rem rgba(223, 183, 108, 0.5) !important;
+        transform: translateY(-0.0625rem);
+      }
+      .seedian-cut-box {
+        --cut: 0.625rem;
+        clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+      }
+      .seedian-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(4.875rem, 1fr));
+        gap: 0.5rem;
+      }
+      .seedian-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        --card-cut: 0.375rem;
+        clip-path: polygon(0 0, calc(100% - var(--card-cut)) 0, 100% var(--card-cut), 100% 100%, var(--card-cut) 100%, 0 calc(100% - var(--card-cut)));
+        padding: 0.375rem 0.625rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.15s ease;
+      }
+      .seedian-card:hover {
+        background: rgba(223, 183, 108, 0.15);
+        border-color: #dfb76c;
+        transform: translateY(-0.0625rem);
+        box-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.2);
+      }
+      .seedian-card .th-char {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.7);
+        font-family: 'Google Sans', sans-serif;
+      }
+      .seedian-card .sd-char {
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: #dfb76c;
+        font-family: 'Google Sans', sans-serif;
+        text-shadow: 0 0 0.375rem rgba(223, 183, 108, 0.4);
+      }
+
+      .main-screen-title {
+        font-family: 'Google Sans', sans-serif;
+        font-size: var(--game-title-size, clamp(16px, min(8.8vw, 19vh), 180px));
+        font-weight: 900;
+        letter-spacing: clamp(0.03em, 0.08vw, 0.08em);
+        text-transform: uppercase;
+        color: #ffffff;
+        background: transparent;
+        margin: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(4px, 1.4vw, 26px);
+        text-align: center;
+        user-select: none;
+        pointer-events: auto;
+        line-height: 1.05;
+        text-shadow: none;
+        filter: none;
+        flex-shrink: 0;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+
+      .main-screen-title span {
+        font-family: inherit;
+        font-size: inherit;
+        font-weight: inherit;
+        letter-spacing: inherit;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
+      }
+
+      .main-screen-title-icon {
+        height: 1em;
+        width: 1em;
+        object-fit: contain;
+        display: inline-block;
+        vertical-align: middle;
+        flex-shrink: 0;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .seedian-svg-glyph {
+        display: inline-block;
+        vertical-align: middle;
+        flex-shrink: 0;
+      }
+
+      .title-accent-red {
+        color: #ff3b47;
+        font-family: inherit;
+        font-weight: inherit;
+        font-size: inherit;
+        letter-spacing: inherit;
+        text-shadow: none;
+      }
+
+      .thai-title-gold,
+      .title-accent-gold {
+        color: #dfb76c;
+        background: linear-gradient(135deg, #fff5db 0%, #dfb76c 50%, #a87d30 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        display: inline-block;
+        font-family: inherit;
+        font-weight: inherit;
+        font-size: inherit;
+        letter-spacing: inherit;
+      }
+
+      .main-screen-logo {
+        max-width: 17.5rem;
+        width: 70vw;
+        height: auto;
+        margin: 0 auto 1rem auto;
+        display: block;
+        user-select: none;
+        pointer-events: auto;
+      }
+
+      .logo-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: 0.1875rem;
+        text-transform: lowercase;
+        color: #ffffff;
+        text-shadow: 0 0 1.25rem rgba(255, 255, 255, 0.5);
+        margin-top: 0px;
+        margin-bottom: 0.75rem;
+        font-family: 'Google Sans', sans-serif;
+        animation: logoGlow 4s ease-in-out infinite alternate;
+      }
+
+      @keyframes logoGlow {
+        0% {
+          filter: drop-shadow(0 0 0.5rem rgba(255, 255, 255, 0.25));
+        }
+        100% {
+          filter: drop-shadow(0 0 1.125rem rgba(255, 255, 255, 0.6));
+        }
+      }
+
+      .logo-subtitle {
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.7);
+        letter-spacing: 0.375rem;
+        text-transform: uppercase;
+        font-weight: 500;
+        font-family: 'Google Sans', sans-serif;
+        text-shadow: 0 0 0.5rem rgba(255, 255, 255, 0.2);
+      }
+
+      .start-btn {
+        position: relative;
+        z-index: 2;
+        width: auto;
+        min-width: 10.25rem;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        color: #ffffff;
+        padding: 0.875rem 2.25rem;
+        font-size: 1rem;
+        font-weight: bold;
+        font-family: 'Google Sans', sans-serif;
+        cursor: pointer;
+        box-shadow:
+          0 0 1.5625rem rgba(255, 255, 255, 0.1),
+          inset 0 0.0625rem 0 rgba(255, 255, 255, 0.05);
+        transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+        outline: none;
+        letter-spacing: 0.125rem;
+        text-shadow: 0 0 0.5rem rgba(255, 255, 255, 0.4);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        transform: none;
+      }
+
+      .start-btn:hover {
+        transform: none !important;
+        box-shadow:
+          0 0 2.8125rem rgba(255, 255, 255, 0.25),
+          inset 0 0.0625rem 0 rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.8);
+      }
+
+      .start-btn:active {
+        transform: none !important;
+        box-shadow: 0 0 1.25rem rgba(255, 255, 255, 0.15);
+      }
+
+      #startMenuButtonsContainer .start-btn,
+      #startMenuButtonsContainer .start-btn:hover,
+      #startMenuButtonsContainer .start-btn:active,
+      #startMenuButtonsContainer .start-btn:focus {
+        transform: none !important;
+      }
+
+      .game-ui {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 0.5s ease-in-out !important;
+      }
+      .game-ui.visible,
+      #gameplayFullscreenBtn,
+      #gameStartOverlay .game-ui,
+      .inventory-overlay.open .game-ui,
+      .seedian-modal-overlay .game-ui,
+      .seedian-modal-box .game-ui,
+      #npcHpOverlay .game-ui {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+      @keyframes spin-square-1 {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes spin-square-2 {
+        0% {
+          transform: rotate(45deg);
+        }
+        100% {
+          transform: rotate(405deg);
+        }
+      }
+      .loading-squares {
+        position: relative;
+        width: 1rem;
+        height: 1rem;
+        display: inline-block;
+      }
+      .loading-square {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border: 2px solid #dfb76c;
+        box-sizing: border-box;
+      }
+      .loading-square:nth-child(1) {
+        animation: spin-square-1 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .loading-square:nth-child(2) {
+        animation: spin-square-2 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        border-color: rgba(223, 183, 108, 0.4);
+      }
+
+      /* Custom Player HP + Compass + Hunger Unified Bottom-Center HUD */
+      .player-hp-vertical-container {
+        position: fixed;
+        bottom: calc(0.625rem + var(--ui-margin, 0rem));
+        left: 50%;
+        transform: translateX(-50%);
+        transform-origin: bottom center;
+        width: 25rem;
+        height: 2rem;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0 0.625rem;
+        background: rgba(0, 0, 0, 0.85);
+        border: 1px solid rgba(223, 183, 108, 0.35);
+        backdrop-filter: blur(0.75rem);
+        -webkit-backdrop-filter: blur(0.75rem);
+        pointer-events: none;
+        user-select: none;
+        z-index: 1000;
+        box-shadow: 0 0.25rem 1.875rem rgba(0, 0, 0, 0.35);
+      }
+      .player-hp-slots-group,
+      .player-hunger-slots-group {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.1875rem;
+        flex-shrink: 0;
+      }
+      .player-hp-slot-minimal {
+        width: 0.75rem;
+        height: 0.5rem;
+        background: rgba(255, 51, 51, 0.14); /* transparent red */
+        border: 1px solid rgba(255, 51, 51, 0.45);
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+      }
+      .player-hp-slot-minimal.filled {
+        background: #ff3333; /* solid bright red */
+        border-color: #ff6666;
+        box-shadow: 0 0 0.3125rem rgba(255, 51, 51, 0.75);
+      }
+      .player-hunger-slot-minimal {
+        width: 0.75rem;
+        height: 0.5rem;
+        background: rgba(255, 255, 255, 0.14); /* transparent white */
+        border: 1px solid rgba(255, 255, 255, 0.38);
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+      }
+      .player-hunger-slot-minimal.filled {
+        background: #ffffff; /* solid bright white */
+        border-color: #ffffff;
+        box-shadow: 0 0 0.3125rem rgba(255, 255, 255, 0.85);
+      }
+
+      /* Floating NPC HP UI Styles */
+      .npc-hp-bar {
+        position: absolute;
+        display: flex;
+        gap: 0.125rem;
+        background: rgba(10, 10, 15, 0.85);
+        border: 1px solid rgba(223, 183, 108, 0.4);
+        padding: 0.1875rem 0.25rem;
+        backdrop-filter: blur(0.25rem);
+        transform: translate(-50%, -100%);
+        transition: opacity 0.15s ease;
+        pointer-events: none;
+        }
+      .npc-hp-slot {
+        width: 0.5rem;
+        height: 0.25rem; /* Half square - rectangular */
+        background: rgba(255, 255, 255, 0.15); /* Translucent white */
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-sizing: border-box;
+      }
+      .npc-hp-slot.filled {
+        background: #ffffff; /* White color */
+        border-color: #ffffff;
+        box-shadow: 0 0 0.1875rem rgba(255, 255, 255, 0.8);
+      }
+
+      :root {
+        --game-ui-clip: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+        --game-title-size: clamp(16px, min(8.8vw, 19vh), 180px);
+      }
+      .game-ui {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        clip-path: polygon(0 0, calc(100% - var(--cut, var(--cut-sm))) 0, 100% var(--cut, var(--cut-sm)), 100% 100%, var(--cut, var(--cut-sm)) 100%, 0 calc(100% - var(--cut, var(--cut-sm))));
+        border-radius: 0 !important;
+      }
+      .game-ui.sm { --cut: var(--cut-sm); }
+      .game-ui.md { --cut: var(--cut-md); }
+      .game-ui.lg,
+      .game-ui.xl { --cut: var(--cut-lg); }
+      #inventoryBottomButtons,
+      .top-left-menu {
+        clip-path: none !important;
+      }
+
+      /* ============================================
+         UNIFIED CHAMFERED UI FRAME SYSTEM (Single Source of Truth)
+         3 standard cut sizes: --cut-sm (6px), --cut-md (8px), --cut-lg (14px)
+         Unbroken 6-edge border ring via single ::before polygon (no sheared corners)
+         ============================================ */
+
+      /* Group A: Token-driven chamfered frames (--cut-border) */
+      .cut-frame,
+      .inventory-panel,
+      .seedian-modal-box,
+      .crafting-recipe-card,
+      .inventory-header h2,
+      .inventory-header .close-btn,
+      .craft-tile,
+      .inventory-slot,
+      .action-slot,
+      .touch-btn,
+      .mech-stand-slot,
+      .custom-scrollbar-track,
+      .custom-scrollbar-thumb,
+      .seedian-footer-btn,
+      .seedian-cut-box,
+      .seedian-card,
+      #inventoryBottomButtons > button {
+        border: none !important;
+        border-radius: 0 !important;
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--cut, var(--cut-md))) 0,
+          100% var(--cut, var(--cut-md)),
+          100% 100%,
+          var(--cut, var(--cut-md)) 100%,
+          0 calc(100% - var(--cut, var(--cut-md)))
+        ) !important;
+      }
+
+      /* Group B: Inline/JS border-color-driven chamfered frames (Start, HUD, Settings, Keybinds, Confirm, Save Slots, Select) */
+      .start-btn,
+      .inventory-btn,
+      .inventory-action-btn,
+      .fps-counter,
+      #gameplayFullscreenBtn,
+      #interactPrompt,
+      #trashConfirmOverlay > .game-ui,
+      #trashConfirmOverlay > .game-ui > .game-ui,
+      #saveLoadingIndicator,
+      #inventorySettings button.game-ui,
+      .key-bind-btn,
+      .gp-bind-btn,
+      .fixed-bind-badge,
+      .key-bind-row-wrapper,
+      #chestTakeAllBtn,
+      #trashCancelBtn,
+      #trashConfirmBtn,
+      #antialiasCancelBtn,
+      #antialiasConfirmBtn,
+      .antialias-confirm-box,
+      .save-slot-card,
+      .save-slot-delete-btn,
+      #btnSaveSelectBack,
+      .custom-select-display,
+      .custom-select-list {
+        border-width: 0 !important;
+        border-radius: 0 !important;
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--cut, var(--cut-sm))) 0,
+          100% var(--cut, var(--cut-sm)),
+          100% 100%,
+          var(--cut, var(--cut-sm)) 100%,
+          0 calc(100% - var(--cut, var(--cut-sm)))
+        ) !important;
+      }
+
+      .cut-frame,
+      .seedian-modal-box,
+      .crafting-recipe-card,
+      .inventory-header .close-btn,
+      .seedian-footer-btn,
+      .seedian-cut-box,
+      .seedian-card,
+      #inventoryBottomButtons > button,
+      .inventory-action-btn,
+      #trashConfirmOverlay > .game-ui > .game-ui,
+      #saveLoadingIndicator,
+      #inventorySettings button.game-ui,
+      .key-bind-btn,
+      .gp-bind-btn,
+      .fixed-bind-badge,
+      .key-bind-row-wrapper,
+      #chestTakeAllBtn,
+      #trashCancelBtn,
+      #trashConfirmBtn,
+      #antialiasCancelBtn,
+      #antialiasConfirmBtn,
+      .antialias-confirm-box,
+      .save-slot-card,
+      .save-slot-delete-btn,
+      #btnSaveSelectBack,
+      .custom-select-display {
+        position: relative;
+      }
+
+      /* Shared 14-point hollow 6-edge chamfered border ring geometry */
+      .cut-frame::before,
+      .inventory-panel::before,
+      .seedian-modal-box::before,
+      .crafting-recipe-card::before,
+      .inventory-header h2::before,
+      .inventory-header .close-btn::before,
+      .craft-tile::before,
+      .inventory-slot::before,
+      .action-slot::before,
+      .touch-btn::before,
+      .mech-stand-slot::before,
+      .custom-scrollbar-track::before,
+      .custom-scrollbar-thumb::before,
+      .seedian-footer-btn::before,
+      .seedian-cut-box::before,
+      .seedian-card::before,
+      #inventoryBottomButtons > button::before,
+      .start-btn::before,
+      .inventory-btn::before,
+      .inventory-action-btn::before,
+      .fps-counter::before,
+      #gameplayFullscreenBtn::before,
+      #interactPrompt::before,
+      #trashConfirmOverlay > .game-ui::before,
+      #trashConfirmOverlay > .game-ui > .game-ui::before,
+      #saveLoadingIndicator::before,
+      #inventorySettings button.game-ui::before,
+      .key-bind-btn::before,
+      .gp-bind-btn::before,
+      .fixed-bind-badge::before,
+      .key-bind-row-wrapper::before,
+      #chestTakeAllBtn::before,
+      #trashCancelBtn::before,
+      #trashConfirmBtn::before,
+      #antialiasCancelBtn::before,
+      #antialiasConfirmBtn::before,
+      .antialias-confirm-box::before,
+      .save-slot-card::before,
+      .save-slot-delete-btn::before,
+      #btnSaveSelectBack::before,
+      .custom-select-display::before,
+      .custom-select-list::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+        box-sizing: border-box;
+        --_cut: var(--cut, var(--cut-sm));
+        --_bw: var(--cut-bw, 1px);
+        --_ds: calc(var(--_bw) * 0.41421356);
+        clip-path: polygon(
+          0 0,
+          calc(100% - var(--_cut)) 0,
+          100% var(--_cut),
+          100% 100%,
+          var(--_cut) 100%,
+          0 calc(100% - var(--_cut)),
+          0 var(--_bw),
+          var(--_bw) var(--_bw),
+          var(--_bw) calc(100% - var(--_cut) - var(--_ds)),
+          calc(var(--_cut) + var(--_ds)) calc(100% - var(--_bw)),
+          calc(100% - var(--_bw)) calc(100% - var(--_bw)),
+          calc(100% - var(--_bw)) calc(var(--_cut) + var(--_ds)),
+          calc(100% - var(--_cut) - var(--_ds)) var(--_bw),
+          0 var(--_bw)
+        );
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+      }
+
+      /* Group A paint: explicit --cut-border token */
+      .cut-frame::before,
+      .inventory-panel::before,
+      .seedian-modal-box::before,
+      .crafting-recipe-card::before,
+      .inventory-header h2::before,
+      .inventory-header .close-btn::before,
+      .craft-tile::before,
+      .inventory-slot::before,
+      .action-slot::before,
+      .touch-btn::before,
+      .mech-stand-slot::before,
+      .custom-scrollbar-track::before,
+      .custom-scrollbar-thumb::before,
+      .seedian-footer-btn::before,
+      .seedian-cut-box::before,
+      .seedian-card::before,
+      #inventoryBottomButtons > button::before {
+        background: var(--cut-border, transparent);
+      }
+
+      /* Group B paint: automatically inherits live CSS/JS border-color from host */
+      .start-btn::before,
+      .inventory-btn::before,
+      .inventory-action-btn::before,
+      .fps-counter::before,
+      #gameplayFullscreenBtn::before,
+      #interactPrompt::before,
+      #trashConfirmOverlay > .game-ui::before,
+      #trashConfirmOverlay > .game-ui > .game-ui::before,
+      #saveLoadingIndicator::before,
+      #inventorySettings button.game-ui::before,
+      .key-bind-btn::before,
+      .gp-bind-btn::before,
+      .fixed-bind-badge::before,
+      .key-bind-row-wrapper::before,
+      #chestTakeAllBtn::before,
+      #trashCancelBtn::before,
+      #trashConfirmBtn::before,
+      #antialiasCancelBtn::before,
+      #antialiasConfirmBtn::before,
+      .antialias-confirm-box::before,
+      .save-slot-card::before,
+      .save-slot-delete-btn::before,
+      #btnSaveSelectBack::before,
+      .custom-select-display::before,
+      .custom-select-list::before {
+        background: transparent;
+        border-style: solid;
+        border-color: inherit;
+        border-width: calc(var(--_cut) + var(--_bw) + 1px);
+      }
+
+      /* Tier 1: Large panels & modals (--cut-lg: 14px) */
+      .inventory-panel {
+        --cut: var(--cut-lg);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.45);
+      }
+      .inventory-panel::before {
+        z-index: 60;
+      }
+      .seedian-modal-box {
+        --cut: var(--cut-lg);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.55);
+      }
+      .seedian-modal-box::before {
+        z-index: 60;
+      }
+      .antialias-confirm-box,
+      #trashConfirmOverlay > .game-ui {
+        --cut: var(--cut-lg);
+        --cut-bw: 1px;
+      }
+      .antialias-confirm-box::before,
+      #trashConfirmOverlay > .game-ui::before {
+        z-index: 60;
+      }
+
+      /* Tier 2: Cards & primary action buttons (--cut-md: 8px) */
+      .crafting-recipe-card {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.12);
+      }
+      .crafting-recipe-card:hover,
+      .crafting-recipe-card.virtual-hover {
+        --cut-border: rgba(223, 183, 108, 0.45);
+      }
+      .crafting-recipe-card.crafting-card-selected,
+      .crafting-recipe-card.touch-preview-active,
+      .crafting-recipe-card.gamepad-focused {
+        --cut-border: #dfb76c !important;
+        --cut-bw: 1.5px;
+      }
+
+      .start-btn,
+      #inventoryBottomButtons > button,
+      #btnRestoreDefaults,
+      #btnExitToMenu,
+      .save-slot-card,
+      #btnSaveSelectBack,
+      #saveLoadingIndicator {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+      }
+      #btnInventoryActionUI {
+        --cut-border: rgba(223, 183, 108, 0.5);
+      }
+      #btnInventoryActionUI:hover,
+      #btnInventoryActionUI.virtual-hover,
+      #btnInventoryActionUI.gamepad-focused {
+        --cut-border: #dfb76c;
+        --cut-bw: 1.5px;
+      }
+      #btnInventorySplit {
+        --cut-border: rgba(56, 189, 248, 0.5);
+      }
+      #btnInventorySplit:hover,
+      #btnInventorySplit.virtual-hover,
+      #btnInventorySplit.gamepad-focused {
+        --cut-border: #38bdf8;
+        --cut-bw: 1.5px;
+      }
+      #btnInventoryDrop {
+        --cut-border: rgba(251, 146, 60, 0.5);
+      }
+      #btnInventoryDrop:hover,
+      #btnInventoryDrop.virtual-hover,
+      #btnInventoryDrop.gamepad-focused {
+        --cut-border: #fb923c;
+        --cut-bw: 1.5px;
+      }
+      #btnInventoryDestroy {
+        --cut-border: rgba(239, 68, 68, 0.5);
+      }
+      #btnInventoryDestroy:hover,
+      #btnInventoryDestroy.virtual-hover,
+      #btnInventoryDestroy.gamepad-focused {
+        --cut-border: #ef4444;
+        --cut-bw: 1.5px;
+      }
+
+      .seedian-footer-btn {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: #dfb76c;
+      }
+      .seedian-cut-box {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.25);
+      }
+
+      /* Tier 3: Slots, tiles, close button, HUD, settings & compact controls (--cut-sm: 6px) */
+      .inventory-btn,
+      .inventory-action-btn,
+      .fps-counter,
+      #gameplayFullscreenBtn,
+      #interactPrompt,
+      #trashConfirmOverlay > .game-ui > .game-ui,
+      #inventorySettings button.game-ui,
+      .key-bind-btn,
+      .gp-bind-btn,
+      .fixed-bind-badge,
+      .key-bind-row-wrapper,
+      #chestTakeAllBtn,
+      #trashCancelBtn,
+      #trashConfirmBtn,
+      #antialiasCancelBtn,
+      #antialiasConfirmBtn,
+      .save-slot-delete-btn,
+      .custom-select-display,
+      .custom-select-list {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+      }
+      .inventory-badge {
+        --cut: 0.1875rem;
+      }
+      /* Keep full-width Settings action buttons at Tier 2 (--cut-md: 8px) */
+      #inventorySettings #btnRestoreDefaults,
+      #inventorySettings #btnExitToMenu {
+        --cut: var(--cut-md);
+        --cut-bw: 1px;
+      }
+
+      .inventory-header .close-btn {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.14);
+      }
+      .inventory-header .close-btn:hover,
+      .inventory-header .close-btn.virtual-hover,
+      .inventory-header .close-btn.gamepad-focused {
+        --cut-border: #ef4444;
+        --cut-bw: 1.5px;
+      }
+
+      .craft-tile {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+      }
+      .craft-tile-gold {
+        --cut-border: #dfb76c;
+      }
+      .craft-tile-gold:hover:not(.craft-tile-disabled),
+      .craft-tile-gold.virtual-hover:not(.craft-tile-disabled),
+      .craft-tile-gold.gamepad-focused:not(.craft-tile-disabled) {
+        --cut-border: #fef08a;
+        --cut-bw: 1.5px;
+      }
+      .craft-tile-gold.craft-tile-disabled {
+        --cut-border: rgba(223, 183, 108, 0.35);
+      }
+      .craft-tile-white {
+        --cut-border: rgba(255, 255, 255, 0.72);
+      }
+      .craft-tile-white:hover,
+      .craft-tile-white.virtual-hover {
+        --cut-border: #ffffff;
+      }
+
+      .inventory-slot {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.08);
+      }
+      .inventory-slot:hover:not(.locked),
+      .inventory-slot.virtual-hover:not(.locked) {
+        --cut-border: rgba(255, 255, 255, 0.42);
+      }
+      .inventory-slot.locked {
+        --cut-border: rgba(255, 255, 255, 0.04);
+      }
+      .inventory-slot.dragover,
+      .action-slot.dragover {
+        --cut-border: #dfb76c !important;
+        --cut-bw: 1.5px !important;
+      }
+      .inventory-slot.dragging-active,
+      .action-slot.dragging-active {
+        --cut-border: rgba(255, 255, 255, 0.4) !important;
+      }
+      .inventory-slot.dragging,
+      .action-slot.dragging {
+        --cut-border: #dfb76c !important;
+        --cut-bw: 2px !important;
+      }
+
+      .action-slot {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.3);
+      }
+      .action-slot:hover,
+      .action-slot.virtual-hover,
+      .action-slot.selected {
+        --cut-border: #dfb76c;
+      }
+
+      .touch-btn {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.3);
+      }
+      .touch-btn:hover,
+      .touch-btn.virtual-hover,
+      .touch-btn.active,
+      .touch-btn:active {
+        --cut-border: #dfb76c;
+      }
+
+      .mech-stand-slot {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(255, 255, 255, 0.1);
+      }
+      .mech-stand-slot:hover,
+      .mech-stand-slot.virtual-hover,
+      .mech-stand-slot.equipped {
+        --cut-border: #dfb76c;
+      }
+      .mech-stand-slot.equipped:hover {
+        --cut-border: #ffe090;
+      }
+
+      .seedian-card {
+        --cut: var(--cut-sm);
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.25);
+      }
+      .seedian-card:hover,
+      .seedian-card.virtual-hover {
+        --cut-border: #dfb76c;
+      }
+
+      /* Scrollbar: unified top-right & bottom-left direction, proportional to narrow 10px width */
+      .custom-scrollbar-track {
+        --cut: 0.25rem;
+        --cut-bw: 1px;
+        --cut-border: rgba(223, 183, 108, 0.35);
+      }
+      .custom-scrollbar-thumb {
+        --cut: 0.1875rem;
+        --cut-bw: 1px;
+        --cut-border: rgba(254, 240, 138, 0.85);
+      }
+      .custom-scrollbar-thumb:hover,
+      .custom-scrollbar-thumb.dragging,
+      .custom-scrollbar-thumb.virtual-hover {
+        --cut-border: #ffffff;
+      }
+
+      /* Hover & focus border thickness boost for Group B inline-bordered controls */
+      .start-btn:hover,
+      .start-btn.virtual-hover,
+      .inventory-btn:hover,
+      .inventory-btn.virtual-hover,
+      #gameplayFullscreenBtn:hover,
+      #gameplayFullscreenBtn.virtual-hover,
+      #inventorySettings button.game-ui:hover,
+      #inventorySettings button.game-ui.virtual-hover,
+      .key-bind-btn:hover,
+      .key-bind-btn.virtual-hover,
+      .gp-bind-btn:hover,
+      .gp-bind-btn.virtual-hover,
+      #chestTakeAllBtn:hover,
+      #chestTakeAllBtn.virtual-hover,
+      #trashCancelBtn:hover,
+      #trashCancelBtn.virtual-hover,
+      #trashConfirmBtn:hover,
+      #trashConfirmBtn.virtual-hover,
+      #antialiasCancelBtn:hover,
+      #antialiasCancelBtn.virtual-hover,
+      #antialiasConfirmBtn:hover,
+      #antialiasConfirmBtn.virtual-hover,
+      .save-slot-card:hover,
+      .save-slot-card.virtual-hover,
+      .save-slot-delete-btn:hover,
+      .save-slot-delete-btn.virtual-hover,
+      #btnSaveSelectBack:hover,
+      #btnSaveSelectBack.virtual-hover,
+      .custom-select-display:hover,
+      .custom-select-display.virtual-hover {
+        --cut-bw: 1.5px;
+      }
+      .start-btn:hover,
+      .start-btn.virtual-hover {
+        border-color: rgba(255, 255, 255, 0.9) !important;
+      }
+
+      /* Suppress rectangular 90-degree outline on chamfered frames for Gamepad Focus & Virtual Hover */
+      .cut-frame.gamepad-focused,
+      .crafting-recipe-card.gamepad-focused,
+      .inventory-header .close-btn.gamepad-focused,
+      .craft-tile.gamepad-focused,
+      .inventory-slot.gamepad-focused,
+      .action-slot.gamepad-focused,
+      .touch-btn.gamepad-focused,
+      .mech-stand-slot.gamepad-focused,
+      .seedian-footer-btn.gamepad-focused,
+      .seedian-card.gamepad-focused,
+      #inventoryBottomButtons > button.gamepad-focused {
+        outline: none !important;
+        box-shadow: inset 0 0 0.625rem rgba(254, 240, 138, 0.35) !important;
+        animation: none !important;
+        --cut-border: #fef08a !important;
+        --cut-bw: 1.5px !important;
+      }
+      #startMenuButtonsContainer .start-btn.gamepad-focused,
+      .start-btn.gamepad-focused,
+      .inventory-btn.gamepad-focused,
+      #gameplayFullscreenBtn.gamepad-focused,
+      #inventorySettings button.game-ui.gamepad-focused,
+      .key-bind-btn.gamepad-focused,
+      .gp-bind-btn.gamepad-focused,
+      #chestTakeAllBtn.gamepad-focused,
+      #trashCancelBtn.gamepad-focused,
+      #trashConfirmBtn.gamepad-focused,
+      #antialiasCancelBtn.gamepad-focused,
+      #antialiasConfirmBtn.gamepad-focused,
+      .save-slot-card.gamepad-focused,
+      .save-slot-delete-btn.gamepad-focused,
+      #btnSaveSelectBack.gamepad-focused,
+      .custom-select-display.gamepad-focused {
+        outline: none !important;
+        box-shadow: inset 0 0 0.75rem rgba(254, 240, 138, 0.38) !important;
+        animation: none !important;
+        border-color: #fef08a !important;
+        --cut-bw: 1.5px !important;
+      }
+      .cut-frame.virtual-hover,
+      .crafting-recipe-card.virtual-hover,
+      .inventory-header .close-btn.virtual-hover,
+      .craft-tile.virtual-hover,
+      .inventory-slot.virtual-hover,
+      .action-slot.virtual-hover,
+      .touch-btn.virtual-hover,
+      .mech-stand-slot.virtual-hover,
+      .custom-scrollbar-track.virtual-hover,
+      .custom-scrollbar-thumb.virtual-hover,
+      .seedian-footer-btn.virtual-hover,
+      .seedian-card.virtual-hover,
+      #inventoryBottomButtons > button.virtual-hover,
+      .start-btn.virtual-hover,
+      .inventory-btn.virtual-hover,
+      #gameplayFullscreenBtn.virtual-hover,
+      #inventorySettings button.game-ui.virtual-hover,
+      .key-bind-btn.virtual-hover,
+      .gp-bind-btn.virtual-hover,
+      #chestTakeAllBtn.virtual-hover,
+      #trashCancelBtn.virtual-hover,
+      #trashConfirmBtn.virtual-hover,
+      #antialiasCancelBtn.virtual-hover,
+      #antialiasConfirmBtn.virtual-hover,
+      .save-slot-card.virtual-hover,
+      .save-slot-delete-btn.virtual-hover,
+      #btnSaveSelectBack.virtual-hover,
+      .custom-select-display.virtual-hover {
+        outline: none !important;
+      }
+
+      /* AAA Progressive Loading Screen styles */
+      .aaa-loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        box-sizing: border-box;
+        background: radial-gradient(circle at center, #111115 0%, #070709 100%);
+        z-index: 20000;
+        display: none;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+          transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        color: #dfb76c;
+        font-family: 'Google Sans', sans-serif;
+        overflow: hidden;
+      }
+      .aaa-loading-overlay.active {
+        display: block;
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .aaa-loading-overlay.fade-out {
+        opacity: 0 !important;
+        transform: scale(1.04);
+        pointer-events: none !important;
+        transition:
+          opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important,
+          transform 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+      .aaa-loading-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: block;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+      .aaa-loading-content {
+        position: absolute;
+        top: calc(50% + (0.55 * var(--game-title-size)) + 0.75rem);
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100%;
+        max-width: min(92vw, 53.75rem);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        text-align: center;
+        z-index: 20;
+        box-sizing: border-box;
+        pointer-events: auto;
+      }
+      .aaa-loading-bar-bg,
+      .aaa-loading-percentage,
+      .aaa-loading-tech-logs {
+        width: 100%;
+        box-sizing: border-box;
+        flex-shrink: 0;
+      }
+      .aaa-loading-title,
+      .aaa-loading-status {
+        display: none !important;
+      }
+      .aaa-loading-title {
+        font-size: clamp(1.25rem, 2.6vw, 2rem);
+        font-weight: 800;
+        letter-spacing: 0.375rem;
+        text-transform: uppercase;
+        margin: 0;
+        color: #ffffff;
+        text-shadow: 0 0 1.25rem rgba(223, 183, 108, 0.6), 0 0 2.5rem rgba(223, 183, 108, 0.25);
+      }
+      .aaa-loading-status {
+        font-size: clamp(0.6875rem, 1.2vw, 0.875rem);
+        letter-spacing: 0.1563rem;
+        text-transform: uppercase;
+        color: rgba(245, 235, 220, 0.85);
+        min-height: 1.125rem;
+        margin: 0;
+        font-weight: 500;
+      }
+      .aaa-loading-bar-bg {
+        width: 100%;
+        height: 1.375rem;
+        background: rgba(10, 10, 15, 0.85);
+        border-radius: 0;
+        transform: skewX(-20deg);
+        overflow: hidden;
+        position: relative;
+        border: 1.5px solid rgba(223, 183, 108, 0.65);
+        box-shadow: inset 0 0.125rem 0.375rem rgba(0, 0, 0, 0.7), 0 0 0.875rem rgba(223, 183, 108, 0.25);
+        margin: 0.375rem 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .aaa-loading-bar-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #b88628 0%, #dfb76c 40%, #f5e2b8 80%, #ffffff 100%);
+        border-radius: 0;
+        transition: width 0.1s ease-out;
+        box-shadow: 0 0 1rem rgba(223, 183, 108, 0.7), inset 0 0.0625rem 0.0625rem rgba(255, 255, 255, 0.5);
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+      }
+      .aaa-loading-percentage {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) skewX(20deg);
+        z-index: 2;
+        font-size: 0.8125rem;
+        font-weight: 800;
+        color: #ffffff;
+        text-shadow: 0 0 0.25rem #000000, 0 0.0625rem 0.1875rem #000000, 0 0 0.5rem #000000;
+        margin: 0;
+        letter-spacing: 0.0625rem;
+        line-height: 1;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .aaa-loading-tech-logs {
+        font-size: clamp(0.625rem, 0.95vw, 0.75rem);
+        color: rgba(230, 225, 215, 0.65);
+        text-align: left;
+        height: 6.25rem;
+        min-height: 6.25rem;
+        max-height: 6.25rem;
+        box-sizing: border-box;
+        overflow: hidden;
+        border-top: 1px dashed rgba(223, 183, 108, 0.2);
+        padding-top: 0.5rem;
+        margin-top: 0.25rem;
+        line-height: 1.5;
+        font-family: 'Consolas', 'Courier New', monospace;
+      }
+
+      /* Hide screen mode settings by default, show in Electron */
+      #screenModeSettingContainer {
+        display: none !important;
+      }
+      body.electron-mode #screenModeSettingContainer {
+        display: flex !important;
+      }
+
+      /* Hide quit game button by default, show in Electron */
+      #quitGameBtn {
+        display: none !important;
+      }
+      body.electron-mode #quitGameBtn {
+        display: flex !important;
+      }
+      body.electron-mode #quitGameBtn.quit-btn-hidden {
+        display: none !important;
+      }
+
+      /* Gameplay fullscreen button on top-right: hidden in touch mode or Electron, visible in keyboard/mouse mode */
+      body.touch-mode #gameplayFullscreenBtn,
+      body.electron-mode #gameplayFullscreenBtn {
+        display: none !important;
+      }
+      body.keyboard-mode:not(.electron-mode) #gameplayFullscreenBtn {
+        display: flex !important;
+      }
+
+      /* Colorblind Mode Daltonization Filters */
+      body[data-colorblind-mode="protanopia"] canvas#glcanvas,
+      body[data-colorblind-mode="protanopia"] .action-slot canvas,
+      body[data-colorblind-mode="protanopia"] .inventory-slot canvas,
+      body[data-colorblind-mode="protanopia"] .craft-icon canvas,
+      body[data-colorblind-mode="protanopia"] .item-list-card canvas {
+        filter: url(#cb-filter-protanopia) !important;
+      }
+      body[data-colorblind-mode="deuteranopia"] canvas#glcanvas,
+      body[data-colorblind-mode="deuteranopia"] .action-slot canvas,
+      body[data-colorblind-mode="deuteranopia"] .inventory-slot canvas,
+      body[data-colorblind-mode="deuteranopia"] .craft-icon canvas,
+      body[data-colorblind-mode="deuteranopia"] .item-list-card canvas {
+        filter: url(#cb-filter-deuteranopia) !important;
+      }
+      body[data-colorblind-mode="tritanopia"] canvas#glcanvas,
+      body[data-colorblind-mode="tritanopia"] .action-slot canvas,
+      body[data-colorblind-mode="tritanopia"] .inventory-slot canvas,
+      body[data-colorblind-mode="tritanopia"] .craft-icon canvas,
+      body[data-colorblind-mode="tritanopia"] .item-list-card canvas {
+        filter: url(#cb-filter-tritanopia) !important;
+      }
+
+      /* Mech Stand 8-Slot UI System (Replaced by genuine 3D WebGL World UI Sign) */
+      .mech-stand-container {
+        display: none !important;
+      }
+
+      .mech-stand-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin-bottom: 0.625rem;
+        padding-bottom: 0.375rem;
+        border-bottom: 1px solid rgba(223, 183, 108, 0.25);
+      }
+
+      .mech-stand-title {
+        font-family: 'Google Sans', sans-serif;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: #dfb76c;
+        letter-spacing: 0.0938rem;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-shadow: 0 0 0.625rem rgba(223, 183, 108, 0.4);
+      }
+
+      .mech-stand-status {
+        font-size: 0.6875rem;
+        font-family: 'Google Sans', sans-serif;
+        padding: 0.125rem 0.5rem;
+        background: rgba(223, 183, 108, 0.1);
+        color: #dfb76c;
+        border: 1px solid rgba(223, 183, 108, 0.3);
+      }
+
+      .mech-stand-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+        gap: 0.5rem;
+      }
+
+      .mech-stand-slot {
+        position: relative;
+        width: var(--ui-slot-size);
+        height: var(--ui-slot-size);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        overflow: hidden;
+        box-sizing: border-box;
+        --slot-cut: var(--ui-slot-cut);
+        clip-path: polygon(0 0, calc(100% - var(--slot-cut)) 0, 100% var(--slot-cut), 100% 100%, var(--slot-cut) 100%, 0 calc(100% - var(--slot-cut)));
+      }
+
+      .mech-stand-slot:hover {
+        border-color: #dfb76c;
+        background: rgba(223, 183, 108, 0.12);
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.3);
+      }
+
+      .mech-stand-slot.equipped {
+        border: 1px solid #dfb76c;
+        background: rgba(223, 183, 108, 0.18);
+        box-shadow: 0 0 0.75rem rgba(223, 183, 108, 0.35);
+        padding-bottom: var(--ui-slot-bar-h);
+        box-sizing: border-box;
+      }
+
+      .mech-stand-slot.equipped:hover {
+        border-color: #ffe090;
+        background: rgba(223, 183, 108, 0.28);
+        box-shadow: 0 0 1rem rgba(223, 183, 108, 0.5);
+      }
+
+      .mech-slot-number {
+        position: absolute;
+        top: 0.1875rem;
+        left: 0.25rem;
+        font-size: 0.5625rem;
+        font-family: 'Google Sans', sans-serif;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      .mech-slot-icon {
+        width: var(--ui-slot-icon-size);
+        height: var(--ui-slot-icon-size);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.125rem;
+        filter: drop-shadow(0 0.125rem 0.25rem rgba(0,0,0,0.6));
+      }
+
+      .mech-slot-icon canvas,
+      .mech-slot-icon img {
+        width: var(--ui-slot-icon-size) !important;
+        height: var(--ui-slot-icon-size) !important;
+        object-fit: contain;
+        display: block;
+      }
+
+      .mech-slot-label {
+        font-size: 0.5625rem;
+        font-family: 'Google Sans', sans-serif;
+        font-weight: 500;
+        color: #dfb76c;
+        margin-top: 0.125rem;
+        text-align: center;
+        white-space: nowrap;
+        max-width: 3.625rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mech-slot-status {
+        font-size: 0.5rem;
+        font-family: 'Google Sans', sans-serif;
+        color: #4cd964;
+        margin-top: 0.0625rem;
+      }
+
+      .mech-slot-status.empty {
+        color: rgba(255, 255, 255, 0.3);
+      }
+
+      /* Floating Planter Box 5-Slot HP-Style Growth UI */
+      .planter-growth-overlay {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.1875rem;
+        transform: translate(-50%, -100%);
+        pointer-events: none;
+        z-index: 10004;
+        transition: opacity 0.15s ease;
+      }
+      .planter-growth-card {
+        background: rgba(10, 14, 22, 0.90);
+        border: 1px solid rgba(223, 183, 108, 0.45);
+        box-shadow: 0 0.25rem 0.875rem rgba(0, 0, 0, 0.65), 0 0 0.5rem rgba(46, 204, 113, 0.2);
+        padding: 0.3125rem 0.5rem;
+        backdrop-filter: blur(0.5rem);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.1875rem;
+      }
+      .planter-growth-card.mature {
+        border-color: rgba(241, 196, 15, 0.7);
+        box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.7), 0 0 0.75rem rgba(241, 196, 15, 0.45);
+        animation: planterMaturePulse 2s infinite ease-in-out;
+      }
+      @keyframes planterMaturePulse {
+        0%, 100% { border-color: rgba(241, 196, 15, 0.7); box-shadow: 0 0 0.625rem rgba(241, 196, 15, 0.35); }
+        50% { border-color: rgba(243, 156, 18, 1.0); box-shadow: 0 0 1rem rgba(241, 196, 15, 0.7); }
+      }
+      .planter-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-family: 'Google Sans', monospace, sans-serif;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: #f1f2f6;
+      }
+      .planter-icon {
+        font-size: 0.8125rem;
+      }
+      .planter-timer {
+        font-size: 0.625rem;
+        color: #dfb76c;
+        margin-left: 0.125rem;
+      }
+      .planter-slots-row {
+        display: flex;
+        gap: 0.1875rem;
+        margin-top: 0.0625rem;
+      }
+      .planter-hp-slot {
+        width: 0.875rem;
+        height: 0.375rem;
+        background: rgba(46, 204, 113, 0.15);
+        border: 1px solid rgba(46, 204, 113, 0.4);
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+      }
+      .planter-hp-slot.filled {
+        background: #2ecc71;
+        border-color: #58d68d;
+        box-shadow: 0 0 0.25rem rgba(46, 204, 113, 0.85);
+      }
+      .planter-growth-card.mature .planter-hp-slot.filled {
+        background: #f1c40f;
+        border-color: #f39c12;
+        box-shadow: 0 0 0.3125rem rgba(241, 196, 15, 0.9);
+      }
+      .planter-status-text {
+        font-size: 0.5625rem;
+        color: #ced6e0;
+        font-family: monospace;
+        text-align: center;
+      }
+      .planter-growth-card.mature .planter-status-text {
+        color: #f1c40f;
+        font-weight: 700;
+      }
